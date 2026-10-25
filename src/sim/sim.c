@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "sim.h"
+#include "internal.h"
 
 #define DAYS_PER_MONTH		30
 #define DAYS_PER_YEAR		360
@@ -354,6 +354,57 @@ div256(int v)
 	return (v >= 0 ? v / 256 : -((-v + 255) / 256));
 }
 
+int
+sim_sine_mul(const struct world *w, int heading, int v)
+{
+	return (div256(sine(w, heading) * v));
+}
+
+int
+sim_div16(int a, int b)
+{
+	if (a == 0 || b == 0 || a < b)
+		return (0);
+	return (a / b);
+}
+
+/*
+ * The game's bearing: the angle of the smaller axis over the larger one
+ * from a polynomial approximation of the arc tangent, in 1/65536 turn,
+ * placed in its octant, then scaled to 256 per turn.
+ */
+int
+sim_bearing(int dx, int dy)
+{
+	int p1 = dx, p2 = -dy;	/* east and north components */
+	int a, b, swap, ratio, t;
+	unsigned ang;
+
+	if (p1 == 0)
+		return (p2 < 1 ? 0x80 : 0);
+	if (p2 == 0)
+		return (p1 < 1 ? 0xC0 : 0x40);
+	a = abs(p1);
+	b = abs(p2);
+	swap = b < a;		/* the ratio is then north over east */
+	ratio = swap ? (b << 14) / a : (a << 14) / b;
+	t = abs(ratio - 0x1333);
+	ang = (unsigned)(((0x2800 - (t * 0xb00 >> 14)) * ratio) >> 14) &
+	    0xFFFF;
+	if (p1 < 1) {
+		if (p2 < 1)
+			ang = swap ? 0xC000 - ang : ang + 0x8000;
+		else
+			ang = swap ? ang + 0xC000 : 0x10000 - ang;
+	} else {
+		if (p2 < 1)
+			ang = swap ? ang + 0x4000 : 0x8000 - ang;
+		else
+			ang = swap ? 0x4000 - ang : ang;
+	}
+	return ((int)((ang & 0xFFFF) >> 8));
+}
+
 static int
 ship_class(const struct sim_fleet *f)
 {
@@ -439,8 +490,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 	*town = -1;
 	if (s->world == NULL)
 		return (SAIL_TICKS);
-	if (s->encounter.stage != ENC_NONE)
-		return (SAIL_ENCOUNTER);	/* answer it first */
+	if (s->encounter.stage != ENC_NONE || s->battle.active)
+		return (SAIL_ENCOUNTER);	/* answer or fight it first */
 	turn = turn < 0 ? -1 : turn > 0 ? 1 : 0;
 	while (ticks-- > 0) {
 		f->ticks++;
@@ -550,6 +601,8 @@ pick_ship(struct sim *s, int town, int dist)
 	e->crew = rec[2];
 	e->guns = rec[3];
 	e->role = rec[4];
+	e->cargo = rec[5];
+	e->gold = rec[6];
 	e->hostile = e->role > 5 && s->standing[e->nation] < 0;
 	e->town = town;
 }
@@ -593,11 +646,21 @@ end_encounter(struct sim *s, enum encounter_result r)
 	return (r);
 }
 
+/* The dialogs end in a sea battle against the encounter's ship. */
+static enum encounter_result
+to_battle(struct sim *s, enum encounter_result r)
+{
+	sim_battle_start(s);
+	return (end_encounter(s, r));
+}
+
 enum encounter_result
 sim_encounter_act(struct sim *s, enum encounter_action action)
 {
 	struct sim_encounter *e = &s->encounter;
 
+	if (s->battle.active)
+		return (RES_BATTLE);	/* fight it out first */
 	switch (e->stage) {
 	case ENC_SIGHTED:
 		if (action == ACT_IGNORE)
@@ -613,12 +676,13 @@ sim_encounter_act(struct sim *s, enum encounter_action action)
 	case ENC_COLOURS:
 		if (action != ACT_BATTLE && e->hostile &&
 		    rng_below(&s->rng, 3) < s->player.difficulty)
-			return (end_encounter(s, RES_OVERTAKEN));
+			return (to_battle(s, RES_OVERTAKEN));
 		if (action == ACT_BATTLE)
-			return (end_encounter(s, RES_BATTLE));
+			return (to_battle(s, RES_BATTLE));
+		if (action == ACT_HAIL && s->standing[e->nation] < -3)
+			return (to_battle(s, RES_UNANSWERED));
 		if (action == ACT_HAIL)
-			return (end_encounter(s, s->standing[e->nation] < -3 ?
-			    RES_UNANSWERED : RES_NEWS));
+			return (end_encounter(s, RES_NEWS));
 		return (end_encounter(s, RES_ESCAPED));
 	default:
 		return (RES_ESCAPED);

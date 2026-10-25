@@ -315,6 +315,136 @@ Where the original's behaviour is not traced yet, the engine does this:
     original composites them with `BASEFLAG.PCX` (VA `0x108cf`), not
     reproduced yet.
 
+## Sea battles (VA `0xe245`; loop at VA `0x7db8`)
+
+Helper names below are those `tools/ghidra/RegParams.java` gives:
+`div16(a, b)` is `a / b`, or 0 when `a < b` or `b == 0`; `sine_mul`
+and `cosine_mul` are the sailing sine products.
+
+### Setup (VA `0x9832`)
+
+- **Flagship:** the ship that fights is the first of the fleet. With
+  several ships, the player first picks which one leads (VA `0xf246`).
+  Its type byte holds the class (`& 7`) and the hull damage it already
+  has (`& 0xF8`).
+- **Player crew aboard:** `min(crew + 8 - 8 x ships, (class + 2) x 32)`.
+  The rest stays with the fleet.
+- **Player guns:** `min(guns, crew aboard / 4, (class + 2) x 4)`.
+- **Gunnery `g`:** `clamp(block[0x18] / 2 + 4, 0, 16)`, from the
+  player block (field not identified). Reloading takes
+  `|144 - 8 x g|` ticks.
+- **Enemy:** from the encounter record: guns = byte 3, crew = byte 2 x
+  4, class = byte 0, role = byte 4.
+- **Turn rate, both ships:** `t = 3 - (class + 2) / 4`. Small ships turn
+  and gain speed in wind differently from big ones.
+- **Positions:** the ships start mirrored about (240, 240): each axis
+  offset by `rand(16) + 32` pixels, sign random.
+- **Headings:** the player faces the enemy's side (east or west, 45°
+  toward it when not level); the enemy heading is random within ±56° of
+  the player's.
+- **Battle state:** the wind keeps its direction from sailing, with
+  strength `w = rand(3)` rolled during the encounter (VA `0xd1fc`).
+  Both ships start with battle sails.
+- **Enemy reload:** `|144 - 8 x role|` ticks.
+
+### Each tick
+
+- **Steering:** the player's heading changes by 16 x turn input every
+  8 ticks.
+- **Sails:** changing sails takes 160 ticks. Full sails then multiply
+  the speed by 1.5.
+- **Speed:**
+  - Start from `(speed_table[class][sector] x 4 - damage / 4)`, with
+    `sector = ((heading + 8 - wind) >> 4) & 15`.
+  - Full sails multiply it by 1.5.
+  - The speed is then `div16(that x 8, 8 - (3 - t) x w)`, clamped to
+    40. In stronger wind, big ships go faster.
+  - For the enemy, a table value equal to the difficulty counts one
+    less (as traced; purpose unknown).
+- **Movement:** a position in 1/256 pixels gains
+  `sine_mul(heading, speed) x 4` on x and loses
+  `cosine_mul(heading, speed) x 4` on y.
+- **Firing:**
+  - The player fires on demand when reloaded and with guns.
+  - The enemy fires when the player is within 6 of abeam (90° off its
+    bow) and it is reloaded.
+  - A shot flies abeam, toward the target's side, at
+    `sine_mul(h, 0x80) x 4` per tick, for `d / 2` ticks with
+    `d = max(|dx|, |dy|) + min(|dx|, |dy|) / 4`, at least 16.
+- **Hits:** when the shot lands, it hits if it is inside the target's
+  box.
+  - Half sizes by type: 20 x 10 (0-2), 30 x 20 (3-5), 40 x 30 (6-8).
+  - The player's shots see the enemy's box widened by 3, 2, 1, 1 or 1
+    quarter sizes for difficulty 0 to 4.
+- **Damage of a hit by guns `G` on class `c`:**
+  - **Hull:** `max(1, div16(G x 4, c + 2))`. It is halved when the
+    target has battle sails. Shots from the player gain half again at
+    difficulty 0.
+  - **Crew lost:** `((rand & 63) + 4 x div16(crew x G, c + 3)) >> 6`. The
+    player keeps at least 1 and at most 999.
+  - **Guns lost:** `((rand & 63) + div16(guns x 4 x G, c + 3)) >> 6`.
+- **Damage levels:** `damage / 16` (0-4), shown with CSTN group 14.
+  Level 4 sinks the ship: the player's (CSTR 167) or the enemy's
+  (CSTR 168, she blows up).
+- **Wind:** every 512 ticks it may shift by one sixteenth either way,
+  and its strength by one step.
+
+### Enemy decisions (every 64 ticks)
+
+1. Compare the two ships, with `eff = crew x role >> 3`:
+
+| Test | Adds |
+|---|---|
+| enemy damage < player damage / 2 + 1 | 9 |
+| enemy damage < player damage x 2 | 9 |
+| enemy guns > player guns / 2 + 1 | 3 |
+| enemy guns > player guns x 2 | 3 |
+| enemy eff > player crew / 2 + 1 | 1 |
+| enemy eff > player crew x 2 | 1 |
+
+2. Look the total (0-26) up in the era block at offset `0x80`:
+   - 0: close in, full sails;
+   - 1: take a broadside position, battle sails;
+   - 2: flee, full sails.
+
+   A total of 0 (hopeless) with the ships alongside: the enemy strikes
+   its colours (CSTR 170).
+3. Target heading:
+   - for 0 and 2, the bearing to the player plus `decision x 0x40`,
+     clamped to within 0x50 of downwind;
+   - for 1, the bearing plus 0x40, turned half round when that is more
+     than 0x40 from the current heading or 0x5F from the wind.
+
+   The enemy then turns toward the target by `t` every 8 ticks.
+
+### End of battle
+
+| Outcome | When | What follows |
+|---|---|---|
+| boarding | quarter-size boxes touch | CSTR 171, then a sword fight |
+| escape | the ships are more than 240 pixels apart on either axis | the encounter ends; possible loss of a slow ship (CSTR 172) |
+| sunset | 4500 ticks | CSTR 169 |
+| surrender | as above | CSTR 170, then capture (CSTR 164: keep her or plunder and sink her) |
+| player sunk | damage level 4 | CSTR 167; the fleet loses the ship; with no ship left, marooned (CSTR 161) |
+| enemy sunk | damage level 4 | CSTR 168 |
+
+Afterwards the flagship's crew and guns, and its damage (in the type
+byte), return to the fleet.
+
+### Engine choices until more is traced
+
+- **Boarding:** the larger crew wins, standing in for the sword fight.
+  A win counts as a surrender.
+- **Prize:** a captured ship pays the encounter record's byte 6 x 10
+  gold, standing in for cargo and treasure. Kept, she joins the fleet
+  with her guns.
+- **Marooned:** with no ship left, the player gets a pinnace and at
+  least 8 men.
+- **Not done yet:** choosing the flagship among several ships, and the
+  loss of a slow ship on escape (CSTR 172).
+- The engine keeps hull damage beside each ship rather than packed in
+  the type byte.
+
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 
 When a career ends:

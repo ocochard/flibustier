@@ -5,7 +5,8 @@
 # Copyright (c) 2026, Olivier Cochard-Labbé
 #
 # Analyse PIRATESG.EXE with Ghidra headless: carve the flat 32-bit X-32
-# image, import it as raw i386 at base 0, then decompile every function.
+# image, import it as raw i386 at base 0, give the register-argument
+# helpers their signatures (RegParams.java), then decompile every function.
 # Output goes to <outdir>, which must stay outside the repository: the
 # decompiled code is derived from the original program.
 #
@@ -35,6 +36,7 @@ tail -c +$((IMAGE_OFFSET + 1)) "$exe" > "$out/pirates_flat.bin"
     -import "$out/pirates_flat.bin" -overwrite \
     -loader BinaryLoader -loader-baseAddr 0x0 \
     -processor x86:LE:32:default -cspec gcc \
-    -scriptPath "$here" -postScript DumpAll.java "$out" "$lo" "$hi" \
+    -scriptPath "$here" -postScript RegParams.java \
+    -postScript DumpAll.java "$out" "$lo" "$hi" \
     > "$out/headless.log" 2>&1
 grep "functions:" "$out/headless.log"

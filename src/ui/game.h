@@ -16,6 +16,7 @@
 #include "data/pack.h"
 #include "assets/image.h"
 #include "assets/sprite.h"
+#include "assets/tileset.h"
 #include "assets/world.h"
 #include "gfx/sea.h"
 #include "gfx/fb.h"
@@ -105,6 +106,12 @@ struct game {
 	int			 view_x, view_y;	/* sailing view origin, pixels */
 	int			 turn;		/* steering input: -1, 0, +1 */
 	int			 enc_result;	/* -1 while the dialogs go on */
+	struct sprite_bank	 btl_ship[2][2];	/* [you, foe][A, B] */
+	struct sprite_bank	 btl_damage[2];	/* damage pictures */
+	struct tileset		 btl_tiles;	/* 32 x 32 battle tiles */
+	int			 btl_fire, btl_sails;	/* pending inputs */
+	int			 btl_stage;	/* 0 fight, 1 outcome, 2 prize */
+	int			 btl_final;	/* outcome after sim_battle_finish */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

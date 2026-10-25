@@ -212,8 +212,7 @@ Status (2026-10-26): first slice done.
 Encounters done (2026-10-26): sightings as the game rolls them, the
 ship picked from the era's records, and the "Sail ho!" dialogs over the
 lookout picture, the ship's portrait and her flag, with sailing away,
-hailing for news, or closing for battle (until phase 6, a battle ends
-the encounter).
+hailing for news, or closing for battle.
 
 Still to do: shoals and running aground, storms (the speed effects of
 VA `0x4d292`), food, night, the overview map and landing parties.
@@ -231,6 +230,16 @@ VA `0x4d292`), food, night, the overview map and landing parties.
 - Town wealth, population and nation changes, and town attacks.
 
 ### Phase 6: combat
+
+Status (2026-10-26): sea battles done.
+- **Traced:** setup, speed, steering, sails, gunnery, hit boxes,
+  damage, the enemy's decisions and the outcomes (see game-rules).
+- **Implemented:** in the simulation (`battle` and `finish` commands)
+  and on the battle screen: the encounter's corner of the map in battle
+  tiles, both ships, shots, and the side panel with men, guns, sails,
+  damage pictures and the wind.
+- **Stand-ins:** boarding is decided by crews, and prizes pay a fixed
+  sum, until sword fights and cargo exist.
 
 - Sea battle: BATTLE.IMB tiles, the `*BTL.CUR` ships, broadsides, damage.
 - Boarding, leading into sword fighting: GRP composition and the 16 moves.

@@ -22,6 +22,9 @@
 #define ENCOUNTER_NATIONS	4
 #define ENCOUNTER_SHIPS		5
 #define ENCOUNTER_LEN		7
+#define BATTLE_AI_CASES		27
+#define BATTLE_TYPES		10	/* 9 ship types and the fort */
+#define BATTLE_LEVELS		5
 
 /* Terrain classes of map pixel colours. */
 enum terrain {
@@ -47,6 +50,12 @@ struct world {
 	 * guns, role and two bytes not decoded (game-rules.md). */
 	uint8_t		encounter[ENCOUNTER_NATIONS][ENCOUNTER_SHIPS]
 			    [ENCOUNTER_LEN];
+	/* Sea battles: the enemy's decision per strength comparison, and
+	 * hit boxes (half sizes per ship type; widening per difficulty). */
+	uint8_t		battle_ai[BATTLE_AI_CASES];
+	int16_t		half_w[BATTLE_TYPES];
+	int16_t		half_h[BATTLE_TYPES];
+	int16_t		hit_steps[BATTLE_LEVELS];
 };
 
 /* Returns 0, or -1 with a message in "err". */

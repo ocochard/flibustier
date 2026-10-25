@@ -28,6 +28,9 @@ struct exe_layout {
 	uint32_t	 sine_va;		/* 128 bytes: half-circle sine */
 	uint32_t	 colour_class_va;	/* 256 bytes: terrain per colour */
 	uint32_t	 era_block_va;		/* 0x200 bytes per era: speeds */
+	uint32_t	 hit_steps_va;		/* 5 x u16: hit box widening */
+	uint32_t	 half_w_va;		/* 10 x u16: hit box half widths */
+	uint32_t	 half_h_va;		/* 10 x u16: hit box half heights */
 };
 
 /* Returns the layout of a known build, or NULL. */

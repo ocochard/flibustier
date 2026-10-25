@@ -15,6 +15,7 @@
 
 #define ERA_BLOCK_LEN	0x200
 #define ENCOUNTER_OFF	0x100	/* in the era block */
+#define BATTLE_AI_OFF	0x80
 
 int
 world_terrain(const struct world *w, int x, int y)
@@ -82,6 +83,20 @@ load_map(struct world *w, struct packs *packs, int era, char *err,
 	return (0);
 }
 
+static int
+read_words(const struct exe_layout *layout, const uint8_t *exe, size_t len,
+    uint32_t va, int16_t *out, size_t n)
+{
+	const uint8_t *p;
+	size_t i;
+
+	if ((p = exe_at(layout, exe, len, va, 2 * n)) == NULL)
+		return (-1);
+	for (i = 0; i < n; i++)
+		out[i] = (int16_t)(p[2 * i] | p[2 * i + 1] << 8);
+	return (0);
+}
+
 int
 world_load(struct world *w, struct packs *packs,
     const struct exe_layout *layout, const uint8_t *exe, size_t len,
@@ -117,6 +132,17 @@ world_load(struct world *w, struct packs *packs,
 	    sizeof(w->encounter))) == NULL)
 		goto bad;
 	memcpy(w->encounter, p, sizeof(w->encounter));
+	if ((p = exe_at(layout, exe, len, layout->era_block_va +
+	    (uint32_t)block * ERA_BLOCK_LEN + BATTLE_AI_OFF,
+	    sizeof(w->battle_ai))) == NULL)
+		goto bad;
+	memcpy(w->battle_ai, p, sizeof(w->battle_ai));
+	if (read_words(layout, exe, len, layout->half_w_va, w->half_w,
+	    BATTLE_TYPES) != 0 || read_words(layout, exe, len,
+	    layout->half_h_va, w->half_h, BATTLE_TYPES) != 0 ||
+	    read_words(layout, exe, len, layout->hit_steps_va, w->hit_steps,
+	    BATTLE_LEVELS) != 0)
+		goto bad;
 	return (0);
 bad:
 	snprintf(err, errlen, "tables missing from the executable");

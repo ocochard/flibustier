@@ -126,6 +126,13 @@ game_free(struct game *g)
 	image_free(&g->bg);
 	bank_free(&g->portrait);
 	bank_free(&g->ship);
+	bank_free(&g->btl_ship[0][0]);
+	bank_free(&g->btl_ship[0][1]);
+	bank_free(&g->btl_ship[1][0]);
+	bank_free(&g->btl_ship[1][1]);
+	bank_free(&g->btl_damage[0]);
+	bank_free(&g->btl_damage[1]);
+	tileset_free(&g->btl_tiles);
 	free(g->world);
 	free(g->exe);
 }

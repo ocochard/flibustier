@@ -458,6 +458,17 @@ make_world(struct world *w)
 			r[3] = 8;
 			r[4] = x == 1 ? 7 : 4;
 		}
+	/* Battles: always broadside; hit boxes as the game's. */
+	memset(w->battle_ai, 1, sizeof(w->battle_ai));
+	for (i = 0; i < BATTLE_TYPES; i++) {
+		w->half_w[i] = (int16_t)(20 + 10 * (i / 3 < 3 ? i / 3 : 3));
+		w->half_h[i] = (int16_t)(10 + 10 * (i / 3 < 3 ? i / 3 : 3));
+	}
+	w->half_w[9] = 40;
+	w->half_h[9] = 10;
+	w->hit_steps[0] = 3;
+	w->hit_steps[1] = 2;
+	w->hit_steps[2] = w->hit_steps[3] = w->hit_steps[4] = 1;
 }
 
 static int
@@ -666,8 +677,13 @@ test_encounters(void)
 	s.encounter.stage = ENC_COLOURS;
 	s.standing[1] = -4;
 	CHECK(sim_encounter_act(&s, ACT_HAIL) == RES_UNANSWERED);
+	CHECK(s.battle.active);		/* she opens fire */
+	s.battle.active = 0;
 	s.encounter.stage = ENC_COLOURS;
 	CHECK(sim_encounter_act(&s, ACT_BATTLE) == RES_BATTLE);
+	CHECK(s.battle.active && s.encounter.stage == ENC_NONE);
+	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_ENCOUNTER);	/* fight! */
+	s.battle.active = 0;
 
 	/* A hunter cannot be avoided once seen; at the hardest level she
 	 * catches a fleeing player 2 times in 3. */
@@ -679,6 +695,7 @@ test_encounters(void)
 		s.encounter.stage = ENC_COLOURS;
 		r = sim_encounter_act(&s, ACT_IGNORE);
 		hostile += r == RES_OVERTAKEN;
+		s.battle.active = 0;
 	}
 	CHECK(hostile == 300);	/* rand(3) < 3 always */
 	s.player.difficulty = 0;
@@ -687,6 +704,249 @@ test_encounters(void)
 		hostile += sim_encounter_act(&s, ACT_IGNORE) == RES_OVERTAKEN;
 	}
 	CHECK(hostile == 0);	/* rand(3) < 0 never */
+}
+
+/* A battle against a merchantman (type 4, 8 guns, 80 men). */
+static void
+battle_game(struct sim *s)
+{
+	sea_game(s, 300, 300, 0x00);
+	s->fleet.ships[0] = 1;		/* a sloop */
+	s->fleet.crew = 40;
+	s->fleet.guns = 12;
+	memset(&s->encounter, 0, sizeof(s->encounter));
+	s->encounter.type = 4;
+	s->encounter.nation = 1;
+	s->encounter.guns = 8;
+	s->encounter.crew = 20;
+	s->encounter.role = 4;
+	s->encounter.gold = 30;
+	sim_battle_start(s);
+}
+
+/* Sea battles: setup, gunnery, damage, outcomes and their effects. */
+static void
+test_battles(void)
+{
+	struct sim s, s2;
+	struct sim_battle *bt = &s.battle;
+	int i, ev, hits, gx, gy;
+	long gold;
+
+	make_world(&test_world);
+
+	/* Setup: guns limited by crew/4 and by the class ((1 + 2) * 4). */
+	battle_game(&s);
+	CHECK(bt->active && bt->outcome == BAT_NONE);
+	CHECK(bt->you.crew == 40 && bt->you.guns == 10);
+	CHECK(bt->guns_ashore == 2 && bt->crew_ashore == 0);
+	CHECK(bt->foe.crew == 80 && bt->foe.guns == 8 && bt->foe.type == 4);
+	CHECK(bt->you.turn_rate == 3 && bt->foe.turn_rate == 2);
+	gx = abs(bt->you.x - bt->foe.x) / 256;
+	gy = abs(bt->you.y - bt->foe.y) / 256;
+	CHECK(gx >= 64 && gx <= 94 && gy >= 64 && gy <= 94);
+	CHECK(!bt->you.full_sails && !bt->foe.full_sails);
+	CHECK(abs((signed char)(uint8_t)(bt->foe.heading - bt->you.heading))
+	    <= 40);
+
+	/* Firing: one shot, then a reload of |144 - 8 x 4| = 112 ticks. */
+	ev = sim_battle_tick(&s, 0, 1, 0);
+	CHECK((ev & BEV_FIRED) && bt->you.reload == 112);
+	CHECK(bt->you.shot.ticks > 0);
+	CHECK((sim_battle_tick(&s, 0, 1, 0) & BEV_FIRED) == 0);
+
+	/* Sails take 160 ticks to change; the guns wait meanwhile. */
+	battle_game(&s);
+	CHECK(sim_battle_tick(&s, 0, 0, 1) == 0 && bt->you.sail_timer == 160);
+	for (i = 0, ev = 0; i < 160 && bt->outcome == BAT_NONE; i++)
+		ev |= sim_battle_tick(&s, 0, 0, 0);
+	CHECK((ev & BEV_SAILS) && bt->you.full_sails);
+
+	/* Steering: 16 per 8 ticks. */
+	battle_game(&s);
+	gx = bt->you.heading;
+	for (i = 0; i < 8; i++)
+		sim_battle_tick(&s, 1, 0, 0);
+	CHECK(bt->you.heading == ((gx + 16) & 0xFF));
+
+	/* A shot at point blank hits: the hull takes guns x 4 / (class + 2),
+	 * halved under battle sails, and half again at difficulty 0. */
+	battle_game(&s);
+	bt->foe.x = bt->you.x + 60 * 256;	/* abeam, to starboard */
+	bt->foe.y = bt->you.y;
+	bt->you.heading = 0;
+	bt->foe.heading = 0;
+	bt->foe.target = 0;
+	bt->foe.guns = 0;			/* she cannot answer */
+	sim_battle_tick(&s, 0, 1, 0);
+	for (i = 0, hits = 0; i < 40 && bt->outcome == BAT_NONE; i++)
+		hits += (sim_battle_tick(&s, 0, 0, 0) & BEV_HIT_FOE) != 0;
+	CHECK(hits == 1);
+	CHECK(s.player.difficulty == 0 && bt->foe.damage == 4);	/* 6, 3 */
+	CHECK(bt->foe.crew < 80);
+
+	/* Sinking at damage 64; the player keeps her prize money only from
+	 * surrenders. */
+	bt->foe.damage = 63;
+	bt->foe.full_sails = 1;
+	sim_battle_tick(&s, 0, 1, 0);
+	for (i = 0; i < 300 && bt->outcome == BAT_NONE; i++)
+		sim_battle_tick(&s, 0, 1, 0);
+	CHECK(bt->outcome == BAT_ENEMY_SUNK);
+	gold = s.fleet.gold;
+	CHECK(sim_battle_finish(&s, 1) == BAT_ENEMY_SUNK);
+	CHECK(!bt->active && s.fleet.nships == 1 && s.fleet.gold == gold);
+	CHECK(s.fleet.guns == bt->you.guns + 2);
+
+	/* Escape: more than 240 pixels apart on an axis. */
+	battle_game(&s);
+	bt->foe.x = bt->you.x + 239 * 256;
+	bt->foe.y = bt->you.y;
+	bt->you.heading = 0xC0;		/* west, away from her */
+	bt->you.full_sails = 1;
+	for (i = 0; i < 400 && bt->outcome == BAT_NONE; i++)
+		sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->outcome == BAT_ESCAPED);
+
+	/* Boarding: the ships touch; the larger crew wins (an engine
+	 * choice until sword fights), and the prize may join the fleet. */
+	battle_game(&s);
+	bt->foe.x = bt->you.x;
+	bt->foe.y = bt->you.y;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->outcome == BAT_BOARDING);
+	bt->you.crew = 100;
+	gold = s.fleet.gold;
+	CHECK(sim_battle_finish(&s, 1) == BAT_SURRENDER);
+	CHECK(s.fleet.nships == 2 && s.fleet.ships[1] == 4);
+	CHECK(s.fleet.gold == gold + 300);
+	battle_game(&s);
+	bt->foe.x = bt->you.x;
+	bt->foe.y = bt->you.y;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(sim_battle_finish(&s, 1) == BAT_PLAYER_SUNK);
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0);	/* marooned */
+
+	/* Surrender: an outmatched enemy alongside strikes her colours at
+	 * the next decision. */
+	battle_game(&s);
+	bt->foe.x = bt->you.x + 50 * 256;
+	bt->foe.y = bt->you.y + 30 * 256;
+	bt->foe.damage = 40;
+	bt->foe.guns = 2;
+	bt->foe.crew = 10;
+	bt->foe.speed = 0;
+	for (i = 0; i < 64 && bt->outcome == BAT_NONE; i++) {
+		bt->foe.x = bt->you.x + 50 * 256;
+		bt->foe.y = bt->you.y + 30 * 256;
+		sim_battle_tick(&s, 0, 0, 0);
+	}
+	CHECK(bt->outcome == BAT_SURRENDER && bt->tick == 64);
+	CHECK(sim_battle_finish(&s, 0) == BAT_SURRENDER);
+	CHECK(s.fleet.nships == 1);	/* plundered, not kept */
+
+	/* Exact limits, with both ships sailing north side by side at the
+	 * same speed: boarding when the quarter boxes touch (5 + 7 = 12
+	 * pixels across), escape beyond 240 pixels. */
+	for (i = 0; i < 4; i++) {
+		static const int gap[4] = { 12, 13, 240, 241 };
+		static const int want[4] = { BAT_BOARDING, BAT_NONE, BAT_NONE,
+		    BAT_ESCAPED };
+
+		battle_game(&s);
+		bt->wind_strength = 0;
+		bt->you.heading = bt->foe.heading = bt->foe.target = 0;
+		bt->foe.x = bt->you.x + gap[i] * 256;
+		bt->foe.y = bt->you.y;
+		sim_battle_tick(&s, 0, 0, 0);
+		CHECK(bt->you.speed == bt->foe.speed);
+		CHECK(bt->outcome == want[i]);
+	}
+
+	/* Sunset after 4500 ticks. */
+	battle_game(&s);
+	bt->tick = 4499;
+	bt->foe.x = bt->you.x + 100 * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->outcome == BAT_SUNSET);
+
+	/* Deterministic: the same start and inputs give the same battle. */
+	battle_game(&s);
+	battle_game(&s2);
+	for (i = 0; i < 2000; i++) {
+		sim_battle_tick(&s, i % 3 - 1, i % 50 == 0, i == 700);
+		sim_battle_tick(&s2, i % 3 - 1, i % 50 == 0, i == 700);
+	}
+	CHECK(memcmp(&s.battle, &s2.battle, sizeof(s.battle)) == 0);
+	CHECK(bt->tick > 0);
+}
+
+/* A battle through the protocol: snapshots mid-fight replay the same. */
+static void
+test_battle_protocol(void)
+{
+	struct session s1, s2;
+	struct jbuf st = { 0 }, cmd = { 0 }, out = { 0 }, r1 = { 0 },
+	    r2 = { 0 };
+
+	memset(&s1, 0, sizeof(s1));
+	s1.load = loader;
+	s1.load_world = world_cb;
+	proto_handle(&s1, "{\"cmd\":\"new_game\",\"era\":1660}", &out);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"battle\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "no battle") != NULL);
+	jb_free(&out);
+	s1.sim.encounter.stage = ENC_COLOURS;
+	s1.sim.encounter.type = 4;
+	s1.sim.encounter.guns = 8;
+	s1.sim.encounter.crew = 20;
+	s1.sim.encounter.role = 4;
+	proto_handle(&s1, "{\"cmd\":\"encounter\",\"action\":\"battle\"}",
+	    &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"battle\"") != NULL);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"finish\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "no finished battle") != NULL);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"battle\",\"ticks\":100,\"fire\":1,"
+	    "\"turn\":1}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"tick\":") != NULL &&
+	    strstr(out.s, "\"events\":") != NULL);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"battle\",\"turn\":2}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+
+	sim_to_json(&s1.sim, &st);
+	jb_raw(&cmd, "{\"cmd\":\"load\",\"state\":");
+	jb_raw(&cmd, st.s);
+	jb_raw(&cmd, "}");
+	memset(&s2, 0, sizeof(s2));
+	s2.load = loader;
+	s2.load_world = world_cb;
+	proto_handle(&s2, cmd.s, &out);
+	CHECK(out.s != NULL && strcmp(out.s, "{\"ok\":true}") == 0);
+	jb_free(&out);
+	CHECK(memcmp(&s1.sim.battle, &s2.sim.battle,
+	    sizeof(s1.sim.battle)) == 0);
+	proto_handle(&s1, "{\"cmd\":\"battle\",\"ticks\":3000,\"fire\":1}",
+	    &r1);
+	proto_handle(&s2, "{\"cmd\":\"battle\",\"ticks\":3000,\"fire\":1}",
+	    &r2);
+	CHECK(r1.s != NULL && r2.s != NULL && strcmp(r1.s, r2.s) == 0);
+	if (s1.sim.battle.outcome != BAT_NONE) {
+		proto_handle(&s1, "{\"cmd\":\"finish\",\"keep\":1}", &out);
+		CHECK(out.s != NULL && strstr(out.s, "\"outcome\":") != NULL);
+		CHECK(!s1.sim.battle.active);
+		jb_free(&out);
+	}
+	session_free(&s1);
+	session_free(&s2);
+	jb_free(&st);
+	jb_free(&cmd);
+	jb_free(&r1);
+	jb_free(&r2);
 }
 
 int
@@ -701,6 +961,8 @@ main(void)
 	test_sailing();
 	test_sail_snapshot();
 	test_encounters();
+	test_battles();
+	test_battle_protocol();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

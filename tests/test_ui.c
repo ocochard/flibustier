@@ -22,6 +22,7 @@
 #include "sim/proto.h"
 #include "sim/save.h"
 #include "ui/game.h"
+#include "ui/screen.h"
 #include "ui/script.h"
 
 #define SKIP	77
@@ -306,9 +307,42 @@ test_encounter_screens(void)
 		/* A hunter: close for battle. */
 		CHECK(game_script(g, "enter enter") == 0);
 		CHECK(g->sim.encounter.stage == ENC_NONE &&
-		    g->enc_result == RES_BATTLE);
+		    g->sim.battle.active && g->screen == &screen_battle);
+		game_free(g);
+		return;
 	}
 	CHECK(game_script(g, "enter wait:10") == 0);	/* back to sea */
+	game_free(g);
+}
+
+/* A sea battle: fight, see the outcome, take the prize, sail on. */
+static void
+test_battle_screen(void)
+{
+	struct game *g;
+	int i;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Lo enter enter enter enter enter hold:right:16");
+	if (g == NULL)
+		return;
+	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
+		CHECK(game_script(g, "wait:32") == 0);
+	CHECK(game_script(g, "enter enter") == 0);	/* investigate twice */
+	if (g->sim.encounter.stage == ENC_COLOURS)
+		CHECK(game_script(g, "enter") == 0);	/* attack */
+	CHECK(g->screen == &screen_battle && g->sim.battle.active);
+	CHECK(game_script(g, "up wait:200") == 0);	/* full sails */
+	CHECK(g->sim.battle.you.full_sails || g->sim.battle.outcome != 0);
+	/* Steer toward her and fire until it is decided. */
+	for (i = 0; i < 300 && g->btl_stage == 0; i++)
+		CHECK(game_script(g, "enter wait:16") == 0);
+	CHECK(g->btl_stage == 1 && g->sim.battle.outcome != BAT_NONE);
+	CHECK(game_script(g, "enter") == 0);
+	if (g->btl_stage == 2)			/* a prize: keep her */
+		CHECK(game_script(g, "enter") == 0);
+	CHECK(g->screen == &screen_sail && !g->sim.battle.active);
+	CHECK(g->sim.fleet.nships >= 1);
 	game_free(g);
 }
 
@@ -333,6 +367,7 @@ main(void)
 	test_hall_of_fame();
 	test_sailing();
 	test_encounter_screens();
+	test_battle_screen();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

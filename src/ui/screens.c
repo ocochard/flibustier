@@ -51,6 +51,21 @@
 #define S_UNANSWERED		315
 #define W_A_SHIP		11	/* "a pinnace"... by ship type */
 #define W_COLOURS		106	/* "Spanish"... "pirate" */
+#define W_SHIP_TYPE		8	/* "Pinnace".. "Fort" */
+#define W_DAMAGE		14	/* damage levels */
+#define S_PRIZE			164	/* "we've captured %sa %s ton %s..." */
+#define S_YOU_SUNK		167
+#define S_FOE_SUNK		168
+#define S_SUNSET		169
+#define S_STRUCK		170
+#define S_BOARDING		171	/* "...you spot %s approaching" */
+#define SAILING_RELOADING	0
+#define SAILING_LOADED		1
+#define SAILING_BATTLE_SAILS	2
+#define SAILING_FULL_SAILS	3
+#define SAILING_CAPTAIN		7	/* "the enemy captain" */
+#define SAILING_GUNS		10	/* "Guns: " */
+#define SAILING_MEN		11	/* "Men: " */
 #define TRAVEL_CONTINUE		0
 #define TRAVEL_SAVE		8
 #define TRAVEL_EXIT		9
@@ -61,6 +76,7 @@
 /* Text fonts by size: PIRATE1 is the largest (25 px). */
 #define FONT_TITLE		0
 #define FONT_BODY		1
+#define FONT_SMALL		2	/* PIRATE3, 14 px */
 
 /* Era of each famous expedition, from its year. */
 static const int expedition_era[6] = { 0, 0, 2, 4, 4, 5 };
@@ -1199,6 +1215,10 @@ encounter_choose(struct game *g, int i)
 		game_goto(g, &screen_sail);
 		return;
 	}
+	if (r == RES_BATTLE) {
+		game_goto(g, &screen_battle);
+		return;
+	}
 	g->enc_result = (int)r;	/* show the outcome until a key */
 }
 
@@ -1210,7 +1230,8 @@ encounter_event(struct game *g, const struct ui_event *ev)
 	if (g->enc_result >= 0) {
 		if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 		    ev->key == UI_KEY_ENTER))
-			game_goto(g, &screen_sail);
+			game_goto(g, g->sim.battle.active ? &screen_battle :
+			    &screen_sail);
 		return;
 	}
 	count = g->sim.encounter.stage == ENC_COLOURS ? 3 : 2;
@@ -1287,9 +1308,7 @@ encounter_draw(struct game *g)
 			}
 			break;
 		}
-		if (g->enc_result != RES_NEWS)
-			draw(g, FONT_BODY, 80, y + 8, 480,
-			    "(Sea battles are not implemented yet.)", 0);
+
 		draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
 		return;
 	}
@@ -1320,4 +1339,274 @@ encounter_draw(struct game *g)
 
 const struct screen screen_encounter = {
 	"encounter", encounter_enter, encounter_event, NULL, encounter_draw,
+};
+
+/*
+ * Sea battle (pic/sbat): a 480x480 battle area, the encounter's corner of
+ * the map drawn with the 32x32 battle tiles, and a panel on the right
+ * with each side's men, guns and damage picture, and the wind.  Left and
+ * Right steer, Enter or Space fires, Up and Down set the sails.
+ */
+#define AREA		480
+#define AREA_CELLS	(AREA / 32)
+#define PANEL_X		492
+
+static const char *damage_picture[9] = {
+	"cur/pinnabtl", "cur/sloopbtl", "cur/barqubtl", "cur/cargobtl",
+	"cur/merchbtl", "cur/frigabtl", "cur/wargabtl", "cur/gallebtl",
+	"cur/fastgbtl",
+};
+
+static void
+load_bank(struct game *g, const char *id, int raw, struct sprite_bank *b)
+{
+	struct blob bl;
+
+	bank_free(b);
+	if (packs_load(g->packs, id, &bl) != 0)
+		return;
+	if (raw)
+		bank_decode_raw(bl.data, bl.len, b);
+	else
+		bank_decode_runs(bl.data, bl.len, b);
+	blob_free(&bl);
+}
+
+static void
+battle_sprites(struct game *g, int side, int type)
+{
+	static const char *a[3] = { "cur/ship0a", "cur/ship1a", "cur/ship2a" };
+	static const char *b[3] = { "cur/ship0b", "cur/ship1b", "cur/ship2b" };
+	int size = (type & 7) < 3 ? 0 : (type & 7) < 6 ? 1 : 2;
+
+	load_bank(g, a[size], 1, &g->btl_ship[side][0]);
+	load_bank(g, b[size], 1, &g->btl_ship[side][1]);
+	load_bank(g, damage_picture[type % 9], 1, &g->btl_damage[side]);
+}
+
+static void
+battle_enter(struct game *g)
+{
+	struct blob b;
+
+	game_background(g, "pic/sbat");
+	game_portrait(g, NULL);
+	battle_sprites(g, 0, g->sim.battle.you.type);
+	battle_sprites(g, 1, g->sim.battle.foe.type);
+	tileset_free(&g->btl_tiles);
+	if (packs_load(g->packs, "tiles/battle", &b) == 0) {
+		tileset_decode(b.data, b.len, &g->btl_tiles);
+		blob_free(&b);
+	}
+	g->btl_fire = g->btl_sails = 0;
+	g->btl_stage = g->sim.battle.outcome == BAT_NONE ? 0 : 1;
+	g->turn = 0;
+	g->ink[0] = g->ink[1] = g->ink[2] = 240;
+}
+
+static void
+battle_finish(struct game *g, int keep)
+{
+	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
+	game_goto(g, &screen_sail);
+}
+
+/* "Shall we keep her?": yes, send a prize crew; no, plunder and sink. */
+static void
+prize_choose(struct game *g, int i)
+{
+	battle_finish(g, i == 0);
+}
+
+static void
+battle_event(struct game *g, const struct ui_event *ev)
+{
+	int outcome = g->sim.battle.outcome;
+
+	if (g->btl_stage == 2) {
+		menu_event(g, ev, 2, NULL, prize_choose, NULL);
+		return;
+	}
+	if (g->btl_stage == 1) {
+		if (!((ev->type == EV_KEY && ev->key == UI_KEY_ENTER) ||
+		    ev->type == EV_CLICK))
+			return;
+		/* Boarding is decided by crews until sword fights exist. */
+		if (outcome == BAT_SURRENDER || (outcome == BAT_BOARDING &&
+		    g->sim.battle.you.crew >= g->sim.battle.foe.crew)) {
+			g->btl_stage = 2;
+			g->selected = 0;
+		} else
+			battle_finish(g, 0);
+		return;
+	}
+	if (ev->type == EV_KEY && ev->key == UI_KEY_LEFT)
+		g->turn = -1;
+	else if (ev->type == EV_KEY && ev->key == UI_KEY_RIGHT)
+		g->turn = 1;
+	else if (ev->type == EV_KEYUP &&
+	    (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT))
+		g->turn = 0;
+	else if ((ev->type == EV_KEY && ev->key == UI_KEY_ENTER) ||
+	    (ev->type == EV_CHAR && ev->ch == ' '))
+		g->btl_fire = 1;
+	else if (ev->type == EV_KEY && ev->key == UI_KEY_UP)
+		g->btl_sails = 1;
+	else if (ev->type == EV_KEY && ev->key == UI_KEY_DOWN)
+		g->btl_sails = -1;
+}
+
+static void
+battle_tick(struct game *g)
+{
+	if (g->fading != 0 || g->btl_stage != 0)
+		return;
+	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
+	g->btl_fire = 0;
+	g->btl_sails = 0;
+	if (g->sim.battle.outcome != BAT_NONE) {
+		g->btl_stage = 1;
+		g->turn = 0;
+	}
+}
+
+static void
+battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
+{
+	int idx = ((b->heading + 8) >> 4) & 15;
+	const struct sprite_bank *bank = &g->btl_ship[side][idx / 8];
+	const struct frame *f;
+
+	if (bank->count != 8)
+		return;
+	f = &bank->frames[idx % 8];
+	/* Raw frames: skip the background colour 0, clip to the area. */
+	{
+		int x, y, sx = b->x / 256 - f->w / 2, sy = b->y / 256 - f->h / 2;
+
+		for (y = 0; y < f->h; y++)
+			for (x = 0; x < f->w; x++) {
+				uint8_t c = f->pixels[y * f->w + x];
+
+				if (c != 0 && sx + x >= 0 && sx + x < AREA &&
+				    sy + y >= 0 && sy + y < AREA)
+					g->fb.px[(sy + y) * FB_W + sx + x] = c;
+			}
+	}
+}
+
+static void
+battle_side_text(struct game *g, int y, const struct battle_ship *b,
+    int status)
+{
+	char buf[96];
+
+	draw(g, FONT_SMALL, PANEL_X, y, 140,
+	    game_word(g, W_SHIP_TYPE, (size_t)(b->type % 10)), 0);
+	snprintf(buf, sizeof(buf), "%s%d  %s%d",
+	    game_word(g, W_SAILING, SAILING_MEN), b->crew,
+	    game_word(g, W_SAILING, SAILING_GUNS), b->guns);
+	draw(g, FONT_SMALL, PANEL_X, y + 72, 140, buf, 0);
+	snprintf(buf, sizeof(buf), "%s", game_word(g, W_SAILING, (size_t)(
+	    status >= 0 ? status : b->full_sails ? SAILING_FULL_SAILS :
+	    SAILING_BATTLE_SAILS)));
+	draw(g, FONT_SMALL, PANEL_X, y + 102, 140, buf, 0);
+}
+
+static void
+battle_draw(struct game *g)
+{
+	const struct sim_battle *bt = &g->sim.battle;
+	const struct sim_fleet *f = &g->sim.fleet;
+	char text[600], from[64], tons[16], guns[16];
+	int cx0, cy0, cx, cy, lvl;
+
+	/* The sea around the fleet, at twice the sailing scale. */
+	cx0 = f->x / WORLD_TILE - AREA_CELLS / 2;
+	cy0 = f->y / WORLD_TILE - AREA_CELLS / 2;
+	if (g->btl_tiles.tile_w == 32)
+		for (cy = 0; cy < AREA_CELLS; cy++)
+			for (cx = 0; cx < AREA_CELLS; cx++) {
+				struct image t;
+				int mx = clampi(cx0 + cx, 0, WORLD_CELLS_W - 1);
+				int my = clampi(cy0 + cy, 0, WORLD_CELLS_H - 1);
+
+				t.w = t.h = 32;
+				t.pixels = g->btl_tiles.pixels + 32 * 32 *
+				    g->world->map[my * WORLD_CELLS_W + mx];
+				t.has_palette = 0;
+				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
+			}
+	battle_ship_draw(g, 0, &bt->you);
+	battle_ship_draw(g, 1, &bt->foe);
+	if (bt->you.shot.ticks > 0)
+		fb_rect(&g->fb, bt->you.shot.x / 256 - 1, bt->you.shot.y / 256 -
+		    1, 3, 3, fb_nearest(&g->fb, 20, 20, 20));
+	if (bt->foe.shot.ticks > 0)
+		fb_rect(&g->fb, bt->foe.shot.x / 256 - 1, bt->foe.shot.y / 256 -
+		    1, 3, 3, fb_nearest(&g->fb, 20, 20, 20));
+
+	/* The panel: the enemy above, the player below, the wind between. */
+	battle_side_text(g, 14, &bt->foe, -1);
+	battle_side_text(g, 358, &bt->you, bt->you.reload > 0 ?
+	    SAILING_RELOADING : -1);
+	lvl = bt->foe.damage / 16 > 4 ? 4 : bt->foe.damage / 16;
+	if (g->btl_damage[1].count == 5)
+		fb_frame(&g->fb, &g->btl_damage[1].frames[lvl], 489, 137);
+	lvl = bt->you.damage / 16 > 4 ? 4 : bt->you.damage / 16;
+	if (g->btl_damage[0].count == 5)
+		fb_frame(&g->fb, &g->btl_damage[0].frames[lvl], 489, 258);
+	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
+	    game_word(g, W_COMPASS, (size_t)(bt->wind >> 4)), NULL);
+	draw(g, FONT_SMALL, PANEL_X + 40, 233, 100, from, 0);
+
+	if (g->btl_stage == 0)
+		return;
+	text_band(g, 300, 150);
+	if (g->btl_stage == 2) {
+		snprintf(tons, sizeof(tons), "%d", g->sim.encounter.cargo);
+		snprintf(guns, sizeof(guns), "%d", bt->foe.guns);
+		/* "%sa %s ton %s with %s guns... space for %s tons" */
+		{
+			const char *fmt = game_str(g, S_PRIZE);
+			char a[600];
+
+			fill(a, sizeof(a), fmt, "", tons);
+			fill(text, sizeof(text), a, game_word(g, W_SHIP_TYPE,
+			    (size_t)(bt->foe.type % 10)), guns);
+			fill(a, sizeof(a), text, "?", NULL);
+			snprintf(text, sizeof(text), "%s", a);
+		}
+		draw(g, FONT_BODY, 80, 310, 400, text, 1);
+		return;
+	}
+	switch (bt->outcome) {
+	case BAT_PLAYER_SUNK:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_YOU_SUNK));
+		break;
+	case BAT_ENEMY_SUNK:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_FOE_SUNK));
+		break;
+	case BAT_SUNSET:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_SUNSET));
+		break;
+	case BAT_SURRENDER:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_STRUCK));
+		break;
+	case BAT_BOARDING:
+		fill(text, sizeof(text), game_str(g, S_BOARDING),
+		    game_word(g, W_SAILING, SAILING_CAPTAIN), NULL);
+		strncat(text, "\r(Sword fights are not implemented yet: the "
+		    "larger crew wins.)", sizeof(text) - strlen(text) - 1);
+		break;
+	default:	/* out of range: the battle simply ends */
+		text[0] = '\0';
+		break;
+	}
+	draw(g, FONT_BODY, 80, 310, 400, text, 0);
+	draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
+}
+
+const struct screen screen_battle = {
+	"battle", battle_enter, battle_event, battle_tick, battle_draw,
 };

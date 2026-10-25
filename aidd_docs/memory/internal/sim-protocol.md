@@ -24,6 +24,8 @@ with a message. Numbers are integers only.
 | `load` | `state`: an object as returned by `state` | none |
 | `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land` or `town`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
+| `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
+| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
 | `set` | `town` (name or index), `field`, `value` | none |
 | `set` | `relation` ([a, b], nation indices), `value` (-1, 0, 1) | none |
 | `set` | `field`: `player_town` (-1 or town index), `value` | none |
@@ -40,17 +42,28 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 4,
+  "version": 5,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
              "expedition": -1},
-  "fleet": {"ships": [1], "crew": 40, "guns": 8, "gold": 2000,
+  "fleet": {"ships": [1], "damage": [0], "gunnery": 0,
+            "crew": 40, "guns": 8, "gold": 2000,
             "x": 5477, "y": 4319, "fx": 0, "fy": 0, "heading": 0,
             "speed": 0, "ticks": 0, "leaving": 24},
   "wind": 192, "encounters": 1, "heat": 0, "heat_town": -1,
   "encounter": {"stage": "none", "type": 4, "nation": 1, "crew": 8,
-                "guns": 8, "role": 5, "hostile": 0, "town": 20},
+                "guns": 8, "role": 5, "cargo": 60, "gold": 25,
+                "hostile": 0, "town": 20},
+  "battle": {"active": 0, "tick": 0, "wind": 192, "wind_strength": 1,
+             "decision": 1, "outcome": "none", "crew_ashore": 0,
+             "guns_ashore": 0,
+             "you": {"x": 69632, "y": 53760, "heading": 160,
+                     "target": 0, "speed": 0, "type": 1, "guns": 10,
+                     "crew": 40, "damage": 0, "full_sails": 0,
+                     "sail_timer": 0, "reload": 0, "turn_rate": 3,
+                     "role": 0, "shot": [0, 0, 0, 0]},
+             "foe": {"...": "same fields"}},
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
   "player_town": -1,
@@ -81,6 +94,21 @@ with a message. Numbers are integers only.
   - `encounters` set to 0 (with `set`) stops sightings, for tests and
     bots that only sail. `heat` is the counter that thins sightings near
     towns.
+- A `battle`, `overtaken` or `unanswered` encounter result starts a sea
+  battle; the encounter closes and `battle.active` is 1. Sailing and
+  the encounter command wait until `finish` applies the outcome.
+  - `battle` runs ticks with the same inputs and stops early once
+    `outcome` is set: `boarding`, `escaped`, `sunset`, `surrender`,
+    `player_sunk` or `enemy_sunk`.
+  - `events` bits: 1 the player fired, 2 the enemy fired, 4 the player
+    hit, 8 the enemy hit, 16 the player's guns reloaded, 32 the
+    player's sails changed, 64 the wind changed.
+  - Positions are in 1/256 pixels on a 480 x 480 field. `shot` is
+    `[ticks left, x, y, heading]`; 0 ticks means no shot in flight.
+  - `finish` returns `surrender` for a won boarding and `player_sunk`
+    for a lost one (crews decide until sword fights exist).
+  - `fleet.damage` is the hull damage per ship; `fleet.gunnery` is the
+    unidentified player value that sets the reload time.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.
 - Nations are indexed 0 Spain, 1 England, 2 France, 3 Holland.

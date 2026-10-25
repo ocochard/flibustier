@@ -16,7 +16,8 @@
  * the sailing setup (VA 0x2ab09) to find open sea.  Start scenarios are
  * read by the scenario loader (VA 0x1386c).  The sailing loop (VA 0x231b8)
  * uses the sine and colour class tables, and the per-era block that VA
- * 0x1361c copies, which starts with the speed table.
+ * 0x1361c copies, which starts with the speed table.  The battle loop
+ * (VA 0x7db8) uses the hit box tables.
  */
 static const struct exe_layout layouts[] = {
 	{
@@ -29,6 +30,9 @@ static const struct exe_layout layouts[] = {
 		0x36628,
 		0x4113c,
 		0x34d68,
+		0x325ae,
+		0x32b0c,
+		0x32b20,
 	},
 };
 

@@ -86,9 +86,12 @@ struct sim_player {
 struct sim_fleet {
 	int		nships;
 	uint8_t		ships[SCENARIO_SHIPS];	/* types, 0 = pinnace */
+	uint8_t		damage[SCENARIO_SHIPS];	/* hull damage per ship */
 	int		crew;
 	int		guns;
 	long		gold;
+	int		gunnery;	/* player block +0x18, not identified;
+					 * sets the reload time */
 	int32_t		x, y;		/* world pixels */
 	uint8_t		fx, fy;		/* 1/8 pixel remainders */
 	uint8_t		heading;	/* 0 north, 0x40 east... */
@@ -131,6 +134,60 @@ enum encounter_result {
 	RES_UNANSWERED	/* hail refused: battle */
 };
 
+/* How a sea battle ended. */
+enum battle_outcome {
+	BAT_NONE,		/* still fighting */
+	BAT_BOARDING,		/* the ships crashed together */
+	BAT_ESCAPED,		/* out of range of each other */
+	BAT_SUNSET,		/* the time limit */
+	BAT_SURRENDER,		/* the enemy struck her colours */
+	BAT_PLAYER_SUNK,
+	BAT_ENEMY_SUNK
+};
+
+/* Events of one battle tick, as bits. */
+#define BEV_FIRED	0x01	/* the player fired */
+#define BEV_FOE_FIRED	0x02
+#define BEV_HIT_FOE	0x04
+#define BEV_HIT_YOU	0x08
+#define BEV_RELOADED	0x10	/* the player's guns are ready again */
+#define BEV_SAILS	0x20	/* the player's sails changed */
+#define BEV_WIND	0x40	/* the wind changed */
+
+struct battle_shot {
+	int		ticks;		/* flight ticks left; 0: none */
+	int32_t		x, y;		/* 1/256 pixels */
+	uint8_t		heading;
+};
+
+struct battle_ship {
+	int32_t		x, y;		/* battle field, 1/256 pixels */
+	uint8_t		heading;
+	uint8_t		target;		/* heading the enemy steers for */
+	int		speed;
+	int		type;		/* 0 pinnace .. 8 fast galleon */
+	int		guns, crew, damage;
+	int		full_sails;	/* else battle sails */
+	int		sail_timer;	/* ticks until the sails change */
+	int		reload;		/* ticks until the guns are ready */
+	int		turn_rate;	/* 3 small .. 1 big */
+	int		role;		/* the enemy's, for its decisions */
+	struct battle_shot shot;
+};
+
+struct sim_battle {
+	int		active;
+	uint32_t	tick;
+	uint8_t		wind;		/* direction it blows toward */
+	int		wind_strength;	/* 0..2 */
+	int		decision;	/* the enemy's: 0 close, 1 broadside,
+					 * 2 flee */
+	int		outcome;	/* enum battle_outcome */
+	int		crew_ashore;	/* crew and guns left with the fleet */
+	int		guns_ashore;
+	struct battle_ship you, foe;
+};
+
 struct sim_encounter {
 	int		stage;		/* enum encounter_stage */
 	int		type;		/* 0 pinnace .. 8 fast galleon */
@@ -138,6 +195,7 @@ struct sim_encounter {
 	int		crew;
 	int		guns;
 	int		role;
+	int		cargo, gold;	/* record bytes 5 and 6, not decoded */
 	int		hostile;	/* she chases the player */
 	int		town;		/* nearest town when sighted */
 };
@@ -151,6 +209,7 @@ struct sim {
 	int		heat;		/* lingering counter (VA 0x4c09e) */
 	int		heat_town;	/* nearest town it counts for */
 	struct sim_encounter encounter;
+	struct sim_battle battle;
 	const struct world *world;	/* not saved; NULL: no sailing */
 	int		era_year;	/* era of the towns, 1560..1680 */
 	int		year;		/* calendar year */
@@ -188,11 +247,28 @@ void	sim_advance(struct sim *s, int32_t days);
 enum sail_stop sim_sail(struct sim *s, int turn, int ticks, int *town);
 
 /*
- * Answer the current encounter's dialog.  Battles are not simulated yet:
- * a battle result ends the encounter.
+ * Answer the current encounter's dialog.  A battle result starts a sea
+ * battle (see sim.battle).
  */
 enum encounter_result sim_encounter_act(struct sim *s,
 	    enum encounter_action action);
+
+/* Start a sea battle against the current encounter's ship. */
+void	sim_battle_start(struct sim *s);
+
+/*
+ * One battle tick: turn -1, 0 or +1; fire when nonzero; sails -1 for
+ * battle sails, +1 for full sails, 0 to keep them.  Returns BEV_* bits;
+ * sim.battle.outcome tells when it is over.
+ */
+int	sim_battle_tick(struct sim *s, int turn, int fire, int sails);
+
+/*
+ * Apply a finished battle to the fleet and close it.  "keep" decides
+ * whether a surrendered ship joins the fleet.  Boarding is decided by
+ * crews until sword fights exist.  Returns the outcome.
+ */
+enum battle_outcome sim_battle_finish(struct sim *s, int keep);
 
 /* One world update; exposed for tests. */
 void	sim_world_update(struct sim *s);
