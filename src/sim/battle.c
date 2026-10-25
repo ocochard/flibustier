@@ -48,10 +48,15 @@ heading_diff(int a, int b)
 	return ((int)(signed char)(uint8_t)(a - b));
 }
 
+/*
+ * The battle's level: the difficulty, one easier with the gunnery
+ * ability.  Named captains add to it; they are not modelled yet.
+ */
 static int
 battle_level(const struct sim *s)
 {
-	return (clampi(s->player.difficulty, 0, BATTLE_LEVELS - 1));
+	return (clampi(s->player.difficulty -
+	    (s->player.ability == ABILITY_GUNNERY), 0, BATTLE_LEVELS - 1));
 }
 
 static int

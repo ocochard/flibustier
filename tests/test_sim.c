@@ -784,6 +784,29 @@ test_battles(void)
 	CHECK(hits == 1);
 	CHECK(s.player.difficulty == 0 && bt->foe.damage == 4);	/* 6, 3 */
 	CHECK(bt->foe.crew < 80);
+	/* At difficulty 1 the bonus is gone, unless gunnery brings the
+	 * level back to 0. */
+	for (i = 0; i < 2; i++) {
+		int j;
+
+		battle_game(&s);
+		s.player.difficulty = 1;
+		s.player.ability = i == 0 ? ABILITY_FENCING : ABILITY_GUNNERY;
+		bt->foe.x = bt->you.x + 60 * 256;
+		bt->foe.y = bt->you.y;
+		bt->you.heading = bt->foe.heading = bt->foe.target = 0;
+		bt->foe.guns = 0;
+		sim_battle_tick(&s, 0, 1, 0);
+		for (j = 0; j < 40 && bt->outcome == BAT_NONE; j++)
+			sim_battle_tick(&s, 0, 0, 0);
+		CHECK(bt->foe.damage == (i == 0 ? 3 : 4));
+	}
+	battle_game(&s);
+	bt->foe.x = bt->you.x + 60 * 256;
+	bt->foe.y = bt->you.y;
+	bt->you.heading = bt->foe.heading = bt->foe.target = 0;
+	bt->foe.guns = 0;
+	bt->foe.damage = 4;
 
 	/* Sinking at damage 64; the player keeps her prize money only from
 	 * surrenders. */

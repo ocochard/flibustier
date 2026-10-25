@@ -173,9 +173,10 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
    `(speed_table[class][((heading + 8 - wind) >> 4) & 15] + bonus) x 3`.
    - `class` is the largest ship type in the fleet (`& 7`).
    - `bonus = (5 - d) >> 1`, where `d = clamp(difficulty - navigator,
-     0, 4)` and `navigator` is 1 with the special ability the game
-     tests as 3. Which of our ability indices that is, is not
-     confirmed.
+     0, 4)` and `navigator` is 1 with the navigation ability. The game
+     numbers the abilities from 1 in the order of CSTN group 83:
+     fencing 1, navigation 3 and gunnery 4 are each tested where they
+     belong.
    - The multiplier is 6 instead of 3 while a value at VA `0x4d292` is
      below 100; that value starts at 999 and is not traced.
    - When that value is below `d x 64`, the speed is halved and, every
@@ -321,6 +322,12 @@ Helper names below are those `tools/ghidra/RegParams.java` gives:
 `div16(a, b)` is `a / b`, or 0 when `a < b` or `b == 0`; `sine_mul`
 and `cosine_mul` are the sailing sine products.
 
+**Level.** Where this section says "difficulty", the game uses a level
+(VA `0x1b087`): `clamp(difficulty + extra - gunner, 0, 4)`, where
+`gunner` is 1 with the gunnery ability. `extra` is 0 for ordinary ships;
+named captains set it to 1 or `(id & 7) / 3` (VA `0xd1fc`). The sword
+fight computes its level the same way with fencing.
+
 ### Setup (VA `0x9832`)
 
 - **Flagship:** the ship that fights is the first of the fleet. With
@@ -433,8 +440,8 @@ byte), return to the fleet.
 
 ### Engine choices until more is traced
 
-- **Boarding:** the larger crew wins, standing in for the sword fight.
-  A win counts as a surrender.
+- **Boarding:** the larger crew wins, standing in for the sword fight
+  (traced below, not implemented yet). A win counts as a surrender.
 - **Prize:** a captured ship pays the encounter record's byte 6 x 10
   gold, standing in for cargo and treasure. Kept, she joins the fleet
   with her guns.
@@ -444,6 +451,171 @@ byte), return to the fleet.
   loss of a slow ship on escape (CSTR 172).
 - The engine keeps hull damage beside each ship rather than packed in
   the type byte.
+
+## Sword fights (VA `0x16205`; frame loop at VA `0x2747c`)
+
+One routine runs every sword fight. A caller fills a block of four
+words and four bytes:
+
+| Field | Meaning |
+|---|---|
+| word 0, 1 | player's men and strength factor |
+| word 2, 3 | opponent's men and strength factor |
+| byte 8 | opponent's title, CSTN group 74 (0 guard … 3 enemy captain, 4 captain, 5 first mate) |
+| byte 9 | opponent's nation, CSTN group 71; -1 a named captain |
+| byte 10 | level `extra` (see the sea battle level) |
+| byte 11 | kind: 0 crew fight, 1 duel, -2 practice |
+
+The routine returns 1 when the player wins, 0 when the player is driven
+back, -1 when the player loses. For a crew fight, both men counts come
+back reduced.
+
+### Callers
+
+- **Boarding (VA `0xf10a`, outcome code 5 of the sea battle):**
+  - Before the fight, CSTR 171 is shown.
+  - Player: the crew aboard, factor `7 - player damage / 16`.
+  - Opponent: the enemy crew (record byte 2 x 4), factor
+    `record byte 4 - enemy damage / 16`.
+  - The opponent is title 4 ("Captain") of the record's nation, with
+    `extra` 0 for an ordinary ship.
+  - A win leads to the capture (VA `0xdb7b`, CSTR 164). Being driven
+    back ends the battle with no capture. Both lower a counter at VA
+    `0x45e76` by 2 (not identified).
+  - A loss (VA `0x16647`): CSTR 175, "Your men flee in panic…
+    imprisoned in %s", then CSTR 190. Not traced further.
+  - After a win or a repulse, the fleet loses the men who fell.
+- **Duels (VA `0x161ba`):** one man each, factors 9 and 9. A loss or
+  being driven back shows CSTR 174 (disgrace).
+- **Practice (VA `0xbdae`):** 200 men each, factors 32, against a
+  first mate. No consequences. Afterwards a fencing practice value
+  (VA `0x45e90`, 0..30) rises by 5.
+
+### Setup
+
+- **Level:** `clamp(difficulty + extra - fencer, 0, 4)`, where `fencer`
+  is 1 with the fencing ability.
+- **Weapons (CSTN group 70):** 0 rapier, 1 longsword, 2 cutlass.
+  - The player chooses first on `img/wpnsel` (CSTR 85), with the
+    cutlass preselected. Only a kind of -1, which no traced caller
+    uses, skips the choice.
+  - The opponent fights with the rapier in duels and practice. In crew
+    fights it picks the longsword or cutlass, `rand(2) + 1`.
+- **Strength bar:** `B = 31 x Pm x Pf / (Pm x Pf + Om x Of) + 8`, in
+  integer arithmetic, for the player; `O = 47 - B` for the opponent.
+  `B / 8` places the two flags on the screen (table at VA `0x338a0`).
+- **Positions on a line:** the player at x 340, the opponent at x 220.
+  In other fights they start at 320 and 240. The distance is
+  `player x - opponent x`.
+- **Moves:** the opponent starts on guard with one of 8 scripts picked
+  at random. The player starts with no move, so the first input counts
+  at once.
+
+### Moves
+
+Each fighter plays one move at a time, one frame per tick. The tables
+below are indexed by `move x 6 + frame`, from VA `0x338ac` (frames per
+move) and `0x38a1a` to `0x38b99`.
+
+| Move | Frames | What it does |
+|---|---|---|
+| 0, 1, 2 | 6 | guard: 0 middle and high, 1 low and middle, 2 high and middle |
+| 3, 4, 5 | 6 | the same guards while stepping back 14 on frame 0 |
+| 6, 7, 8 | 6 | slash: middle, low, high; strikes on frame 3 (high: 4), steps in 4 on frame 5 |
+| 9, 10, 11 | 4 | lunge: middle, low, high; strikes on frame 2, steps in 4 on frame 3 |
+| 12 | 6 | advance 14 on frame 5 |
+| 13 | 6 | back off 14 on frame 0 |
+| 14 | 10 | falls; the fight ends after frame 8 |
+
+- **Lines** are bits: 1 low, 2 middle, 4 high. A guard frame holds the
+  bits it covers, and a strike frame holds the bit it attacks.
+- **Steps** apply only while the distance is above 9.
+
+### The player's input
+
+- **Directions:** the input is a direction on a 3 x 3 pad, with the
+  opponent to the left.
+  - None, down and up pick guards 0, 1 and 2.
+  - Away from the opponent (alone, with down, with up) picks 3, 4 and 5.
+  - Toward the opponent picks an attack in the line given by up or
+    down.
+- **Lunge or slash:** with the keyboard, an attack is a lunge unless a
+  shift key is held, which makes it a slash.
+- **New moves:** a new move starts only when the current one ends.
+  Guards and attacks (moves 0-2 and 6-11) take the input once; holding
+  it does not repeat them.
+- **At a distance:** beyond 59, attacks become advances (12) and the
+  steps back become move 13.
+- **When the opponent falls,** the player stands on guard 1.
+
+### Each tick
+
+1. **The player's frame.**
+   - On a strike frame, if the opponent's guard does not cover the
+     line, the strike reaches when
+     `distance <= reach_level[level] + reach_weapon[weapon]`. The reach
+     tables (VA `0x389b8`, `0x389bd`) shrink with the level and from
+     rapier to cutlass.
+   - It hits when `threshold[level] <= (rand & 255) + practice` (VA
+     `0x389e4`).
+   - A hit:
+     - pushes the opponent back 4;
+     - moves the strength bar toward the player `2 x weapon + 1`
+       times, each time by 2 steps (1 for a lunge);
+     - counts the hit by line.
+   - If the opponent was already beaten (below), he falls (move 14).
+   - A covered strike at a distance under 36 is a clash with no
+     effect.
+2. **The player steps.** Reaching x 442 drives the player back, which
+   ends the fight with 0.
+3. **The opponent's frame.** It works the same way, with these
+   differences:
+   - reach by weapon only (VA `0x389c1`);
+   - it hits when `threshold[level] <= rand & 255` (VA `0x389e9`);
+   - a hit pushes the player back 4;
+   - it moves the bar `weapon + 1` times, 2 steps each (1 for a lunge);
+   - a covered strike under 35 clashes.
+4. **The opponent steps.** At x 60 or less he is driven off, and the
+   player wins.
+5. **The crew melee (crew fights, every 16 ticks):**
+   - Each side rolls `rand(|((men + 8) >> 2) x bar|)`. The product is
+     taken as a signed 16-bit value, and `rand(0)` is 0.
+   - If the opponent's roll is lower, he loses `((Om + Pm) >> 6) + 1`
+     men, kept within 1..9999, and the bar moves one step toward the
+     player.
+   - Otherwise the player loses men the same way and the bar moves one
+     step toward the opponent.
+6. **End of the fight:** a fighter whose fall (move 14) passes frame 8
+   loses.
+
+- **Bar steps:** a step toward the player raises `B` and lowers `O`,
+  only while `O > 0`. When `O` falls below 1, or the opponent is down to
+  1 man, the opponent is beaten: his next hit taken makes him fall. The
+  same holds the other way for the player.
+- **Speed:** a tick lasts 12, 11, 10 or 9 timer units by `level & 3`
+  (VA `0x389c4`).
+- **Debug flag:** a byte at VA `0x33ee9`, 0 in the shipped game, would
+  make the player invulnerable. No code sets it.
+
+### The opponent's choices (VA `0x280ef`, when a move ends)
+
+- **Far (distance 20 or more):** a random pick from the 8-entry table
+  at VA `0x38c5a`, mostly advances, some guards and backing off.
+- **Close:** with `rand & 15` above the level's caution (VA `0x38c72`),
+  the next step of the current 8-step script. Otherwise guard 1.
+- **Scripts:** at VA `0x38c87`, 8 scripts of 8 steps per bank. Bank 0
+  serves level 0, bank 1 level 1, bank 2 the higher levels.
+  - A step below 0x80 is a move.
+  - 0x90 parries the player's current line.
+  - 0x91 parries while stepping back.
+  - 0x92 slashes, and 0x93 lunges, in one of the two other lines at
+    random. The lines come from the table at VA `0x38d47`.
+- **New script:** when a script wraps around, a new one is picked at
+  random:
+  - at level 1, after more than 2 player hits;
+  - at level 2, after any player hit;
+  - at level 3, after any hit.
+  - Levels 0 and 4 keep their script.
 
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 
