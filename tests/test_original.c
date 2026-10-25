@@ -22,6 +22,7 @@
 #include "assets/text.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
+#include "view/view.h"
 
 #define SKIP	77
 
@@ -346,6 +347,54 @@ test_towns(struct packs *packs)
 	blob_free(&b);
 }
 
+/* Every asset and virtual view opens and renders its first frame. */
+static void
+test_views(struct packs *packs)
+{
+	char **ids, err[256];
+	size_t n, i;
+	struct view *v;
+	const struct rgb *img;
+	uint8_t *a;
+	size_t len;
+
+	CHECK(packs_list(packs, &ids, &n) == 0);
+	for (i = 0; i < n + view_virtual_count(); i++) {
+		const char *id = i < n ? ids[i] : view_virtual_id(i - n);
+
+		if ((v = view_open(packs, id, err, sizeof(err))) == NULL) {
+			fprintf(stderr, "view %s: %s\n", id, err);
+			failures++;
+			continue;
+		}
+		if (view_render(v, view_start_frame(v), 0, &img) != 0 ||
+		    img->w <= 0 || img->h <= 0) {
+			fprintf(stderr, "view %s: cannot render\n", id);
+			failures++;
+		}
+		view_close(v);
+	}
+	packs_list_free(ids, n);
+
+	/* The sailing sea animates: two ticks differ around Havana. */
+	v = view_open(packs, "world/1660", err, sizeof(err));
+	CHECK(v != NULL);
+	if (v == NULL)
+		return;
+	CHECK(view_render(v, view_start_frame(v), 0, &img) == 0);
+	len = (size_t)img->w * img->h * 3;
+	if ((a = malloc(len)) != NULL) {
+		memcpy(a, img->px, len);
+		CHECK(view_render(v, view_start_frame(v), 3, &img) == 0);
+		CHECK(memcmp(a, img->px, len) != 0);
+		/* After 16 ticks every range is back where it started. */
+		CHECK(view_render(v, view_start_frame(v), 16, &img) == 0);
+		CHECK(memcmp(a, img->px, len) == 0);
+		free(a);
+	}
+	view_close(v);
+}
+
 int
 main(void)
 {
@@ -369,6 +418,7 @@ main(void)
 	test_all_assets(packs);
 	test_details(packs);
 	test_towns(packs);
+	test_views(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

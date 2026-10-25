@@ -49,6 +49,25 @@ game data are skipped unless `STMALO_DATA` points to the GOG `DATA.DAT`
 STMALO_DATA=~/games/pirates_gold ctest --test-dir build
 ```
 
+## Asset viewer
+
+The only feature so far is a viewer for the original assets:
+
+```sh
+./build/stmalo --data ~/games/pirates_gold
+```
+
+Up/Down picks an asset, Left/Right steps through its frames, PgUp/PgDn
+pages (in the sailing world views, they scroll vertically), Tab changes
+the palette of sprites, and typing filters the list. Besides the
+original files, `world/<year>` shows the sailing world of an era with
+its animated sea, and `towns/<year>` the era's towns on a terrain map.
+
+`--list` prints every asset ID. `--export ID out.png` renders one asset
+without opening a window. Use `--frame N` to pick the frame and
+`--tick N` the animation step. `--pack DIR` adds an asset pack on top of
+the original data.
+
 ## Contributing
 
 Contributions are welcome. Please work only from your own analysis of the

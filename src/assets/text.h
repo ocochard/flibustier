@@ -39,4 +39,10 @@ void	strgroups_free(struct strgroups *groups);
 /* Returns a malloc'ed NUL-terminated UTF-8 copy, or NULL. */
 char	*macroman_to_utf8(const uint8_t *s, size_t len);
 
+/*
+ * Decode one UTF-8 character at *s, advance *s past it, and return its
+ * Mac Roman byte (the original fonts' encoding), or '?' when it has none.
+ */
+int	utf8_next_macroman(const char **s);
+
 #endif

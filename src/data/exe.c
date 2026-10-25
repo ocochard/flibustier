@@ -12,7 +12,8 @@
 /*
  * Era block addresses come from the function that loads an era: it
  * copies 0xF24 bytes from one of these addresses into the live town
- * table (VA 0x13555 in the GOG build).
+ * table (VA 0x13555 in the GOG build).  The tile class table is read by
+ * the sailing setup (VA 0x2ab09) to find open sea.
  */
 static const struct exe_layout layouts[] = {
 	{
@@ -20,6 +21,7 @@ static const struct exe_layout layouts[] = {
 		"0f196be3fe64651e4c858578c14d7848355c2d793a30206ef5440b75b5e0bce3",
 		0x47a7,
 		{ 0x38d58, 0x39c7c, 0x3aba0, 0x3bac4, 0x3c9e8, 0x3d90c },
+		0x4103c,
 	},
 };
 

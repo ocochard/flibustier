@@ -23,6 +23,7 @@ struct exe_layout {
 	const char	*sha256;
 	size_t		 image_offset;
 	uint32_t	 town_va[EXE_ERAS];	/* era blocks, 1560 to 1680 */
+	uint32_t	 tile_class_va;		/* 256 bytes: class per map tile */
 };
 
 /* Returns the layout of a known build, or NULL. */

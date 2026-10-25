@@ -62,6 +62,40 @@ macroman_to_utf8(const uint8_t *s, size_t len)
 	return (out);
 }
 
+int
+utf8_next_macroman(const char **s)
+{
+	const unsigned char *p = (const unsigned char *)*s;
+	unsigned c, n, i;
+
+	if (*p < 0x80) {
+		*s += 1;
+		return (*p);
+	}
+	if ((*p & 0xE0) == 0xC0) {
+		c = *p & 0x1F;
+		n = 1;
+	} else if ((*p & 0xF0) == 0xE0) {
+		c = *p & 0x0F;
+		n = 2;
+	} else {
+		*s += 1;	/* invalid or 4-byte: no Mac Roman glyph */
+		return ('?');
+	}
+	for (i = 1; i <= n; i++) {
+		if ((p[i] & 0xC0) != 0x80) {
+			*s += i;
+			return ('?');
+		}
+		c = c << 6 | (p[i] & 0x3F);
+	}
+	*s += n + 1;
+	for (i = 0; i < 128; i++)
+		if (macroman[i] == c)
+			return ((int)(0x80 + i));
+	return ('?');
+}
+
 void
 strtab_free(struct strtab *tab)
 {

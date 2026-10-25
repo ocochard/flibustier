@@ -108,6 +108,10 @@ Each phase ends with something visible and a test.
 
 ### Phase 1: data access and asset viewer
 
+Status (2026-10-25): done, apart from native-format loaders (PNG, OGG)
+for packs.
+
+
 - `src/data/`: the pack system (manifest parser, priority stack, logical
   ID lookup), the ISO 9660 reader, executable identification, and pack
   path settings (command line or config file).
