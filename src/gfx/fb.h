@@ -34,6 +34,13 @@ void	fb_rect(struct fb *fb, int x, int y, int w, int h, uint8_t index);
 void	fb_image(struct fb *fb, const struct image *img, int x, int y,
 	    int use_palette);
 
+/*
+ * Draw the (sx, sy, w, h) part of a picture at (dx, dy), clipped; pixels
+ * of colour "key" are skipped unless it is negative.
+ */
+void	fb_image_part(struct fb *fb, const struct image *img, int sx, int sy,
+	    int w, int h, int dx, int dy, int key);
+
 /* Draw a sprite frame at (x, y); transparent pixels are skipped. */
 void	fb_frame(struct fb *fb, const struct frame *f, int x, int y);
 

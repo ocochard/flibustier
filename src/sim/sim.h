@@ -101,7 +101,45 @@ struct sim_fleet {
 enum sail_stop {
 	SAIL_TICKS,	/* all requested ticks done */
 	SAIL_LAND,	/* the next move would run aground on land */
-	SAIL_TOWN	/* arrived at a town: sim_sail()'s "town" says which */
+	SAIL_TOWN,	/* arrived at a town: sim_sail()'s "town" says which */
+	SAIL_ENCOUNTER	/* a sail is sighted: see sim.encounter */
+};
+
+#define NATION_PIRATE	4	/* in encounter records */
+
+/* Steps of an encounter, as the dialogs reveal the other ship. */
+enum encounter_stage {
+	ENC_NONE,
+	ENC_SIGHTED,	/* "Sail ho!" */
+	ENC_IDENTIFIED,	/* her type is known */
+	ENC_COLOURS	/* her nation is known */
+};
+
+enum encounter_action {
+	ACT_INVESTIGATE,
+	ACT_IGNORE,	/* continue the voyage, or sail away */
+	ACT_BATTLE,	/* close for battle */
+	ACT_HAIL	/* hail for news */
+};
+
+enum encounter_result {
+	RES_CONTINUE,	/* the next dialog: see sim.encounter.stage */
+	RES_ESCAPED,	/* the encounter ends without a fight */
+	RES_NEWS,	/* hailed; the encounter ends */
+	RES_BATTLE,	/* the player closes for battle */
+	RES_OVERTAKEN,	/* she catches the fleeing player: battle */
+	RES_UNANSWERED	/* hail refused: battle */
+};
+
+struct sim_encounter {
+	int		stage;		/* enum encounter_stage */
+	int		type;		/* 0 pinnace .. 8 fast galleon */
+	int		nation;		/* 0..3, or NATION_PIRATE */
+	int		crew;
+	int		guns;
+	int		role;
+	int		hostile;	/* she chases the player */
+	int		town;		/* nearest town when sighted */
 };
 
 struct sim {
@@ -109,6 +147,10 @@ struct sim {
 	struct sim_player player;
 	struct sim_fleet fleet;
 	uint8_t		wind;		/* direction it blows toward */
+	int		encounters;	/* 1: sails may be sighted (0 for tests) */
+	int		heat;		/* lingering counter (VA 0x4c09e) */
+	int		heat_town;	/* nearest town it counts for */
+	struct sim_encounter encounter;
 	const struct world *world;	/* not saved; NULL: no sailing */
 	int		era_year;	/* era of the towns, 1560..1680 */
 	int		year;		/* calendar year */
@@ -118,7 +160,8 @@ struct sim {
 	int		diplomacy_range; /* unknown original value */
 	int		player_town;	/* town the player is in, or -1 */
 	int8_t		relations[4][4];
-	int8_t		standing[4];	/* player standing per nation */
+	int8_t		standing[5];	/* player standing per nation, and
+					 * pirates (always -1 so far) */
 	size_t		ntowns;
 	struct sim_town	towns[TOWN_MAX];
 	size_t		nnews;		/* total logged, may exceed the ring */
@@ -143,6 +186,13 @@ void	sim_advance(struct sim *s, int32_t days);
  * Returns why it stopped; "town" receives the town index on SAIL_TOWN.
  */
 enum sail_stop sim_sail(struct sim *s, int turn, int ticks, int *town);
+
+/*
+ * Answer the current encounter's dialog.  Battles are not simulated yet:
+ * a battle result ends the encounter.
+ */
+enum encounter_result sim_encounter_act(struct sim *s,
+	    enum encounter_action action);
 
 /* One world update; exposed for tests. */
 void	sim_world_update(struct sim *s);

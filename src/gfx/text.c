@@ -155,6 +155,10 @@ text_draw(const struct text_target *t, const struct text_style *st,
 			continue;
 		}
 		at_line_start = at_para_start = 0;
+		if (*s == '`') {
+			s++;	/* a lead-in not at a paragraph start: no cap */
+			continue;
+		}
 		/* Wrap before a word that does not fit. */
 		if (*s != ' ' && pen > x + (y < indent_until ? indent : 0) &&
 		    pen + word_width(f, s) > x + w) {

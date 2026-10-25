@@ -447,6 +447,17 @@ make_world(struct world *w)
 	for (y = 0; y < SHIP_CLASSES; y++)
 		for (x = 0; x < WIND_SECTORS; x++)
 			w->speed[y][x] = x == 8 ? -1 : 7;
+	/* Per nation: merchantmen, then a pirate sloop as record 1. */
+	for (y = 0; y < ENCOUNTER_NATIONS; y++)
+		for (x = 0; x < ENCOUNTER_SHIPS; x++) {
+			uint8_t *r = w->encounter[y][x];
+
+			r[0] = x == 1 ? 1 : 4;
+			r[1] = x == 1 ? NATION_PIRATE : (uint8_t)y;
+			r[2] = 20;
+			r[3] = 8;
+			r[4] = x == 1 ? 7 : 4;
+		}
 }
 
 static int
@@ -473,6 +484,7 @@ sea_game(struct sim *s, int cx, int cy, int heading)
 	s->fleet.y = cy * WORLD_TILE + 8;
 	s->fleet.heading = (uint8_t)heading;
 	s->fleet.leaving = -1;
+	s->encounters = 0;	/* mechanics only; encounters have tests */
 }
 
 static void
@@ -552,6 +564,7 @@ test_sail_snapshot(void)
 	jb_free(&out);
 	s1.sim.fleet.x = 300 * WORLD_TILE;	/* open sea */
 	s1.sim.fleet.y = 300 * WORLD_TILE;
+	s1.sim.encounters = 0;
 	proto_handle(&s1, "{\"cmd\":\"sail\",\"turn\":1,\"ticks\":300}",
 	    &out);
 	CHECK(out.s != NULL && strstr(out.s, "\"stop\":\"ticks\"") != NULL);
@@ -584,6 +597,98 @@ test_sail_snapshot(void)
 	jb_free(&r2);
 }
 
+/* Encounters: sightings, the dialogs, and their outcomes. */
+static void
+test_encounters(void)
+{
+	struct sim s;
+	int town, i, sighted = 0, far = 0, hostile = 0;
+	enum encounter_result r;
+
+	/* Far from towns a sail appears in 1 of 16 checks; near them, the
+	 * lingering counter makes them rarer and rarer. */
+	sea_game(&s, 300, 300, 0x00);	/* the towns are 150+ cells away */
+	s.encounters = 1;
+	for (i = 0; i < 400; i++) {
+		s.encounter.stage = ENC_NONE;
+		s.fleet.x = 300 * WORLD_TILE;
+		s.fleet.y = 300 * WORLD_TILE;
+		if (sim_sail(&s, 0, 32, &town) == SAIL_ENCOUNTER) {
+			far++;
+			hostile += s.encounter.hostile;
+		}
+	}
+	CHECK(far > 10 && far < 50);	/* about 400 / 16 = 25 */
+	CHECK(hostile > 0);	/* pirates are among the records */
+
+	/* Near a town (2 cells from Beta), a first check adds 6 to the
+	 * counter: (r & 7) + 1 < 2, 1 in 8.  Lingering shuts sightings off. */
+	sea_game(&s, 120, 112, 0x00);
+	s.encounters = 1;
+	for (i = 0; i < 400; i++) {
+		s.encounter.stage = ENC_NONE;
+		s.heat = 0;
+		s.fleet.x = 120 * WORLD_TILE + 8;
+		s.fleet.y = 112 * WORLD_TILE + 8;
+		if (sim_sail(&s, 0, 32, &town) == SAIL_ENCOUNTER)
+			sighted++;
+	}
+	CHECK(sighted > 25 && sighted < 80);	/* about 400 / 8 = 50 */
+	for (i = 0, sighted = 0; i < 400; i++) {
+		s.encounter.stage = ENC_NONE;
+		s.fleet.x = 120 * WORLD_TILE + 8;
+		s.fleet.y = 112 * WORLD_TILE + 8;
+		if (i > 2 && sim_sail(&s, 0, 32, &town) == SAIL_ENCOUNTER)
+			sighted++;
+		else if (i <= 2)
+			sim_sail(&s, 0, 32, &town);
+	}
+	CHECK(sighted == 0 && s.heat > 100);
+
+	/* While an encounter is open, sailing waits for an answer. */
+	sea_game(&s, 300, 300, 0x00);
+	s.encounter.stage = ENC_SIGHTED;
+	s.encounter.nation = 1;
+	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_ENCOUNTER);
+	CHECK(s.fleet.ticks == 0);
+
+	/* A peaceful ship can be left at any step. */
+	s.encounter.hostile = 0;
+	CHECK(sim_encounter_act(&s, ACT_IGNORE) == RES_ESCAPED);
+	CHECK(s.encounter.stage == ENC_NONE && s.heat == 16);
+	s.encounter.stage = ENC_SIGHTED;
+	CHECK(sim_encounter_act(&s, ACT_INVESTIGATE) == RES_CONTINUE);
+	CHECK(s.encounter.stage == ENC_IDENTIFIED);
+	CHECK(sim_encounter_act(&s, ACT_INVESTIGATE) == RES_CONTINUE);
+	CHECK(s.encounter.stage == ENC_COLOURS);
+	CHECK(sim_encounter_act(&s, ACT_HAIL) == RES_NEWS);
+	/* A disliked nation does not answer. */
+	s.encounter.stage = ENC_COLOURS;
+	s.standing[1] = -4;
+	CHECK(sim_encounter_act(&s, ACT_HAIL) == RES_UNANSWERED);
+	s.encounter.stage = ENC_COLOURS;
+	CHECK(sim_encounter_act(&s, ACT_BATTLE) == RES_BATTLE);
+
+	/* A hunter cannot be avoided once seen; at the hardest level she
+	 * catches a fleeing player 2 times in 3. */
+	s.encounter.stage = ENC_IDENTIFIED;
+	s.encounter.hostile = 1;
+	CHECK(sim_encounter_act(&s, ACT_IGNORE) == RES_CONTINUE);
+	s.player.difficulty = 3;
+	for (i = 0, hostile = 0; i < 300; i++) {
+		s.encounter.stage = ENC_COLOURS;
+		r = sim_encounter_act(&s, ACT_IGNORE);
+		hostile += r == RES_OVERTAKEN;
+	}
+	CHECK(hostile == 300);	/* rand(3) < 3 always */
+	s.player.difficulty = 0;
+	for (i = 0, hostile = 0; i < 300; i++) {
+		s.encounter.stage = ENC_COLOURS;
+		hostile += sim_encounter_act(&s, ACT_IGNORE) == RES_OVERTAKEN;
+	}
+	CHECK(hostile == 0);	/* rand(3) < 0 never */
+}
+
 int
 main(void)
 {
@@ -595,6 +700,7 @@ main(void)
 	test_hof();
 	test_sailing();
 	test_sail_snapshot();
+	test_encounters();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

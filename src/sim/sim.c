@@ -28,6 +28,9 @@
 #define EDGE_MAX_X		0x27bf
 #define EDGE_MAX_Y		0x1dbf
 #define ARRIVAL_CELLS		1	/* a town counts as reached within */
+#define SIGHTING_TICKS		32	/* how often a sail may appear */
+#define HEAT_IGNORED		16	/* added when an encounter is left */
+#define FAR_FROM_TOWNS		12	/* cells: ships from any nation */
 
 enum town_event {
 	EV_INDIANS,
@@ -117,6 +120,9 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	}
 	s->fleet.leaving = -1;
 	s->wind = WIND_START;
+	s->standing[NATION_PIRATE] = -1;	/* pirates are always hostile */
+	s->encounters = 1;
+	s->heat_town = -1;
 	s->ntowns = era->count;
 	for (i = 0; i < era->count; i++) {
 		t = &era->towns[i];
@@ -331,6 +337,8 @@ sim_advance(struct sim *s, int32_t days)
 	}
 }
 
+static int	sighting(struct sim *s);
+
 /* Signed sine of a heading, from the game's half-circle table. */
 static int
 sine(const struct world *w, int heading)
@@ -431,6 +439,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 	*town = -1;
 	if (s->world == NULL)
 		return (SAIL_TICKS);
+	if (s->encounter.stage != ENC_NONE)
+		return (SAIL_ENCOUNTER);	/* answer it first */
 	turn = turn < 0 ? -1 : turn > 0 ? 1 : 0;
 	while (ticks-- > 0) {
 		f->ticks++;
@@ -479,6 +489,138 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 			f->leaving = t;
 			return (SAIL_TOWN);
 		}
+		if (s->encounters && (f->ticks + 4) % SIGHTING_TICKS == 0 &&
+		    sighting(s)) {
+			f->speed = 0;
+			return (SAIL_ENCOUNTER);
+		}
 	}
 	return (SAIL_TICKS);
+}
+
+/* Nearest town by |dx| + |dy| in cells, and that distance (at least 1). */
+static int
+nearest_town(const struct sim *s, int *dist)
+{
+	int cx = s->fleet.x / WORLD_TILE, cy = s->fleet.y / WORLD_TILE;
+	int best = -1, d;
+	size_t i;
+
+	*dist = 0;
+	for (i = 0; i < s->ntowns; i++) {
+		d = abs(s->towns[i].x - cx) + abs(s->towns[i].y - cy);
+		if (best < 0 || d < *dist) {
+			best = (int)i;
+			*dist = d;
+		}
+	}
+	if (*dist < 1)
+		*dist = 1;
+	return (best);
+}
+
+/* Pick the ship met, from the era's records. */
+static void
+pick_ship(struct sim *s, int town, int dist)
+{
+	struct sim_encounter *e = &s->encounter;
+	const uint8_t *rec;
+	int nation = s->towns[town].nation & 3, k = 0, range, r;
+
+	range = s->fleet.crew / 50 + s->heat / 6 - s->towns[town].standing;
+	if (range >= 1) {
+		k = rng_below(&s->rng, range) / 3;
+		if (k > ENCOUNTER_SHIPS - 1)
+			k = ENCOUNTER_SHIPS - 1;
+	}
+	if (rng_below(&s->rng, 15) < 4 || dist > FAR_FROM_TOWNS) {
+		r = rng_below(&s->rng, ENCOUNTER_NATIONS * ENCOUNTER_SHIPS);
+		k = r / 4;
+		nation = r % 4;
+	}
+	rec = s->world->encounter[nation][k];
+	memset(e, 0, sizeof(*e));
+	e->stage = ENC_SIGHTED;
+	e->type = rec[0] & 7;
+	/* Shown as a fast galleon in the early eras (assumed: the game
+	 * tests a value below 4 that looks like the era). */
+	if (e->type == 5 && s->world->era < 4)
+		e->type = 8;
+	e->nation = rec[1] <= NATION_PIRATE ? rec[1] : NATION_PIRATE;
+	e->crew = rec[2];
+	e->guns = rec[3];
+	e->role = rec[4];
+	e->hostile = e->role > 5 && s->standing[e->nation] < 0;
+	e->town = town;
+}
+
+/* Every 32 ticks: maybe a sail on the horizon (game-rules.md). */
+static int
+sighting(struct sim *s)
+{
+	int dist, town, r, chance;
+
+	if ((town = nearest_town(s, &dist)) < 0)
+		return (0);
+	if (town != s->heat_town) {
+		s->heat = 0;
+		s->heat_town = town;
+	}
+	if (dist > 63)
+		dist = 63;
+	r = rng_below(&s->rng, 0x10000);
+	if (dist < 8) {
+		s->heat += 8 - dist;
+		chance = (r & 7) + (s->heat >> 2) < 2;
+	} else if (dist < 16)
+		chance = (r & 15) < 2;
+	else if (dist < 32)
+		chance = (r & 31) < 4;
+	else
+		chance = (r & 63) < 4;
+	if (!chance)
+		return (0);
+	pick_ship(s, town, dist);
+	return (1);
+}
+
+static enum encounter_result
+end_encounter(struct sim *s, enum encounter_result r)
+{
+	if (r == RES_ESCAPED || r == RES_NEWS)
+		s->heat += HEAT_IGNORED;
+	s->encounter.stage = ENC_NONE;
+	return (r);
+}
+
+enum encounter_result
+sim_encounter_act(struct sim *s, enum encounter_action action)
+{
+	struct sim_encounter *e = &s->encounter;
+
+	switch (e->stage) {
+	case ENC_SIGHTED:
+		if (action == ACT_IGNORE)
+			return (end_encounter(s, RES_ESCAPED));
+		e->stage = ENC_IDENTIFIED;
+		return (RES_CONTINUE);
+	case ENC_IDENTIFIED:
+		/* A hunter cannot be avoided once she is seen. */
+		if (action == ACT_IGNORE && !e->hostile)
+			return (end_encounter(s, RES_ESCAPED));
+		e->stage = ENC_COLOURS;
+		return (RES_CONTINUE);
+	case ENC_COLOURS:
+		if (action != ACT_BATTLE && e->hostile &&
+		    rng_below(&s->rng, 3) < s->player.difficulty)
+			return (end_encounter(s, RES_OVERTAKEN));
+		if (action == ACT_BATTLE)
+			return (end_encounter(s, RES_BATTLE));
+		if (action == ACT_HAIL)
+			return (end_encounter(s, s->standing[e->nation] < -3 ?
+			    RES_UNANSWERED : RES_NEWS));
+		return (end_encounter(s, RES_ESCAPED));
+	default:
+		return (RES_ESCAPED);
+	}
 }

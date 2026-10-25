@@ -14,6 +14,7 @@
 #include "world.h"
 
 #define ERA_BLOCK_LEN	0x200
+#define ENCOUNTER_OFF	0x100	/* in the era block */
 
 int
 world_terrain(const struct world *w, int x, int y)
@@ -111,6 +112,11 @@ world_load(struct world *w, struct packs *packs,
 	    (uint32_t)block * ERA_BLOCK_LEN, sizeof(w->speed))) == NULL)
 		goto bad;
 	memcpy(w->speed, p, sizeof(w->speed));
+	if ((p = exe_at(layout, exe, len, layout->era_block_va +
+	    (uint32_t)block * ERA_BLOCK_LEN + ENCOUNTER_OFF,
+	    sizeof(w->encounter))) == NULL)
+		goto bad;
+	memcpy(w->encounter, p, sizeof(w->encounter));
 	return (0);
 bad:
 	snprintf(err, errlen, "tables missing from the executable");

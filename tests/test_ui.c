@@ -267,6 +267,7 @@ test_sailing(void)
 	 * island: half a turn to starboard, then out to sea, southward. */
 	CHECK(world_terrain(g->world, g->sim.fleet.x, g->sim.fleet.y) !=
 	    TERRAIN_LAND);
+	g->sim.encounters = 0;	/* encounters have their own test */
 	CHECK(game_script(g, "enter") == 0);	/* set sail */
 	h0 = g->sim.fleet.heading;
 	CHECK(game_script(g, "hold:right:16") == 0);
@@ -276,6 +277,38 @@ test_sailing(void)
 	CHECK(g->sim.fleet.ticks >= 64 && g->sim.day >= 1);
 	CHECK(g->sim.fleet.y > y0);
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */
+	game_free(g);
+}
+
+/* An encounter on the real map: sighted, identified, hailed. */
+static void
+test_encounter_screens(void)
+{
+	struct game *g;
+	int i;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Lo enter enter enter enter enter hold:right:16");
+	if (g == NULL)
+		return;
+	/* Sail until a sail is sighted. */
+	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
+		CHECK(game_script(g, "wait:32") == 0);
+	CHECK(g->sim.encounter.stage == ENC_SIGHTED);
+	CHECK(game_script(g, "enter") == 0);	/* investigate */
+	CHECK(g->sim.encounter.stage == ENC_IDENTIFIED);
+	if (!g->sim.encounter.hostile) {
+		/* Peaceful: investigate again, then hail for news. */
+		CHECK(game_script(g, "enter down enter") == 0);
+		CHECK(g->sim.encounter.stage == ENC_NONE &&
+		    g->enc_result == RES_NEWS);
+	} else {
+		/* A hunter: close for battle. */
+		CHECK(game_script(g, "enter enter") == 0);
+		CHECK(g->sim.encounter.stage == ENC_NONE &&
+		    g->enc_result == RES_BATTLE);
+	}
+	CHECK(game_script(g, "enter wait:10") == 0);	/* back to sea */
 	game_free(g);
 }
 
@@ -299,6 +332,7 @@ main(void)
 	test_saves();
 	test_hall_of_fame();
 	test_sailing();
+	test_encounter_screens();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

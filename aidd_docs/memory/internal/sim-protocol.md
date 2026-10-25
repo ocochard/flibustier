@@ -23,10 +23,12 @@ with a message. Numbers are integers only.
 | `state` | none | `state`: the full game state (below) |
 | `load` | `state`: an object as returned by `state` | none |
 | `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land` or `town`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
+| `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `set` | `town` (name or index), `field`, `value` | none |
 | `set` | `relation` ([a, b], nation indices), `value` (-1, 0, 1) | none |
 | `set` | `field`: `player_town` (-1 or town index), `value` | none |
 | `set` | `field`: `diplomacy_range`, `value` | none |
+| `set` | `field`: `encounters`, `value` (0 or 1) | none |
 | `quit` | none | none, then the program exits |
 
 - `new_game` fails for the Dutch in 1560, which has no career start.
@@ -38,7 +40,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -46,7 +48,9 @@ with a message. Numbers are integers only.
   "fleet": {"ships": [1], "crew": 40, "guns": 8, "gold": 2000,
             "x": 5477, "y": 4319, "fx": 0, "fy": 0, "heading": 0,
             "speed": 0, "ticks": 0, "leaving": 24},
-  "wind": 192,
+  "wind": 192, "encounters": 1, "heat": 0, "heat_town": -1,
+  "encounter": {"stage": "none", "type": 4, "nation": 1, "crew": 8,
+                "guns": 8, "role": 5, "hostile": 0, "town": 20},
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
   "player_town": -1,
@@ -67,6 +71,16 @@ with a message. Numbers are integers only.
   map cell) with 1/8-pixel remainders. `heading` and `wind` are
   directions in 256ths of a turn, 0 north, 64 east; `wind` is the
   direction it blows toward. `leaving` is the town just left, or -1.
+- `sail` also stops with `encounter` when a sail is sighted. The
+  `encounter` command then answers its dialogs one at a time: `stage`
+  goes `sighted`, `identified`, `colours`, and is `none` once the
+  encounter is over. Sailing waits until then.
+  - Encounter `type` follows CSTN group 8: 0 pinnace … 8 fast galleon.
+    `nation` 4 is pirates.
+  - `hostile` ships chase the player and cannot be avoided once seen.
+  - `encounters` set to 0 (with `set`) stops sightings, for tests and
+    bots that only sail. `heat` is the counter that thins sightings near
+    towns.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.
 - Nations are indexed 0 Spain, 1 England, 2 France, 3 Holland.

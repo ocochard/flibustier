@@ -227,6 +227,94 @@ Where the original's behaviour is not traced yet, the engine does this:
   give full speed. The table matters mostly near the wind.
 - **Rest of the block:** the bytes after the table are not decoded.
 
+## Encounters at sea
+
+### Sighting (sailing loop, VA `0x231b8`)
+
+1. **When:** every 32 ticks (when `(ticks + 4) & 31 == 0`), the game
+   finds the nearest town and its distance `d` in map cells (`|dx| +
+   |dy|`, at least 1).
+2. **Lingering counter:** a counter `h` (VA `0x4c09e`) resets to 0 when
+   the nearest town changes.
+3. **Chance of a sail:** with `r` random:
+
+| `d` | A sail is sighted when |
+|---|---|
+| below 8 | `(r & 7) + (h >> 2) < 2`, after `h += 8 - d` |
+| 8 to 15 | `r & 15 < 2` (1 in 8) |
+| 16 to 31 | `r & 31 < 4` (1 in 8) |
+| 32 or more (capped at 63) | `r & 63 < 4` (1 in 16) |
+
+4. **Lingering raises the counter:** the game reaches it through
+   `h += 8 - d`, so near towns sightings thin out the longer the fleet
+   stays.
+5. **Ignoring raises it too:** an encounter that ends without a fight
+   adds 16 to `h` (VA `0x2849c`).
+
+### Encounter (VA `0xd1fc`)
+
+1. **"Sail ho!"**
+   - The lookout reports a sail (CSTR 118). Below difficulty 2, it adds
+     whose waters these are (CSTR 119, with the nation word of the
+     nearest town).
+   - Choices: investigate or continue the voyage. Continuing ends the
+     encounter.
+2. **Which ship:**
+   - The ship comes from the per-era block (offset `0x100`, VA
+     `0x47086`): 4 nations x 5 records of 7 bytes.
+   - Normally it is record `k` of the nearest town's nation, with
+     `k = min(rand(crew / 50 + h / 6 - town.f9) / 3, 4)`, or `k = 0`
+     when that range is below 1.
+   - With chance 4/15, or when the nearest town is more than 12 cells
+     away, `r = rand(20)` gives record `r / 4` of nation `r % 4`
+     instead.
+   - Missions, pirate bases and treasure fleets have special cases, not
+     specified yet.
+3. **Ship record:**
+
+| Byte | Content |
+|---|---|
+| 0 | ship type (`& 7`): 0 pinnace … 7 galleon; type 5 shows as 8 (fast galleon) while VA `0x45e8c` is below 4 |
+| 1 | nation, 4 = pirate |
+| 2 | crew (judging by the values) |
+| 3 | guns (judging by the values) |
+| 4 | role: 3 to 9; pirates are 7, the big warships 8 or 9 |
+| 5, 6 | not decoded |
+
+4. **"She looks like %s, captain"** (CSTR 120, with the article and
+   type name from CSTN group 11). Choices: investigate or sail away.
+5. **Hostility:**
+   - A ship whose role is above 5, of a nation with which the player's
+     standing is negative, chases the player.
+   - Pirates (nation 4) start at standing -1, so they always do.
+   - A chasing pirate gets CSTR 121 ("It's the %s %s! He's chasing us"),
+     any other ship CSTR 122 ("She's flying %s colors").
+   - Choices: close for battle, hail for news, or sail away.
+6. **Outcomes:**
+   - **Sailing away:** when `rand(3) <` difficulty, the other ship
+     overtakes the player (CSTR 126) and there is a battle anyway.
+   - **Hailing:** a nation with standing below -3 does not answer
+     (CSTR 315) and attacks; otherwise the player gets news (VA
+     `0x1e78d`).
+   - **Closing for battle:** starts a sea battle (phase 6).
+
+### Engine choices for encounters (not traced)
+
+- **Picking the ship:** it is picked when the sail is sighted, not after
+  the first answer. The draws are the same; only their order differs.
+- **Hailing:** the player gets the latest news from the log; the
+  original's rumours (VA `0x1e78d`) are not traced.
+- **Hostile pirates:** they use the "He's chasing us" dialog (CSTR 311).
+  The original's named pirates (CSTR 121) need the pirate name lists.
+- **Battles:** they end the encounter until sea battles exist (phase 6).
+- **Pictures:**
+  - Ship portraits (`S_*.PCX`) hold 5 round views; the engine shows the
+    first.
+  - Flags (`F-*.PCX`, and `FJOLLY*` for pirates) hold 8 frames of
+    200x200 on a pure green key; the engine waves them in turn. The
+    original composites them with `BASEFLAG.PCX` (VA `0x108cf`), not
+    reproduced yet.
+
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 
 When a career ends:

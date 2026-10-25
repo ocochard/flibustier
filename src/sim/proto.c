@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	3
+#define STATE_VERSION	4
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -133,6 +133,54 @@ news_json(const struct sim *s, const struct sim_news *n, struct jbuf *b)
 	jb_raw(b, "}");
 }
 
+static const char *stage_names[] = { "none", "sighted", "identified",
+    "colours" };
+
+static void
+encounter_json(const struct sim_encounter *e, struct jbuf *b)
+{
+	jb_raw(b, "{\"stage\":");
+	jb_str(b, stage_names[e->stage & 3]);
+	jb_raw(b, ",\"type\":");
+	jb_int(b, e->type);
+	jb_raw(b, ",\"nation\":");
+	jb_int(b, e->nation);
+	jb_raw(b, ",\"crew\":");
+	jb_int(b, e->crew);
+	jb_raw(b, ",\"guns\":");
+	jb_int(b, e->guns);
+	jb_raw(b, ",\"role\":");
+	jb_int(b, e->role);
+	jb_raw(b, ",\"hostile\":");
+	jb_int(b, e->hostile);
+	jb_raw(b, ",\"town\":");
+	jb_int(b, e->town);
+	jb_raw(b, "}");
+}
+
+static int
+encounter_from_json(struct sim_encounter *e, const struct json *j)
+{
+	const char *stage = json_get_str(j, "stage");
+	int i;
+
+	memset(e, 0, sizeof(*e));
+	if (stage == NULL)
+		return (-1);
+	for (i = 0; i < 4; i++)
+		if (strcmp(stage, stage_names[i]) == 0)
+			e->stage = i;
+	e->type = (int)json_get_int(j, "type", -1);
+	e->nation = (int)json_get_int(j, "nation", -1);
+	e->crew = (int)json_get_int(j, "crew", 0);
+	e->guns = (int)json_get_int(j, "guns", 0);
+	e->role = (int)json_get_int(j, "role", 0);
+	e->hostile = (int)json_get_int(j, "hostile", 0);
+	e->town = (int)json_get_int(j, "town", -1);
+	return (e->type < 0 || e->type > 8 || e->nation < 0 ||
+	    e->nation > NATION_PIRATE ? -1 : 0);
+}
+
 void
 sim_to_json(const struct sim *s, struct jbuf *b)
 {
@@ -187,6 +235,14 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.leaving);
 	jb_raw(b, "},\"wind\":");
 	jb_int(b, s->wind);
+	jb_raw(b, ",\"encounters\":");
+	jb_int(b, s->encounters);
+	jb_raw(b, ",\"heat\":");
+	jb_int(b, s->heat);
+	jb_raw(b, ",\"heat_town\":");
+	jb_int(b, s->heat_town);
+	jb_raw(b, ",\"encounter\":");
+	encounter_json(&s->encounter, b);
 	jb_raw(b, ",\"era\":");
 	jb_int(b, s->era_year);
 	jb_raw(b, ",\"year\":");
@@ -368,6 +424,14 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	    errlen) != 0)
 		return (-1);
 	tmp.wind = (uint8_t)json_get_int(j, "wind", 0);
+	tmp.encounters = json_get_int(j, "encounters", 1) != 0;
+	tmp.heat = (int)json_get_int(j, "heat", 0);
+	tmp.heat_town = (int)json_get_int(j, "heat_town", -1);
+	if (encounter_from_json(&tmp.encounter, json_get(j, "encounter")) !=
+	    0) {
+		snprintf(err, errlen, "bad encounter");
+		return (-1);
+	}
 	tmp.era_year = (int)json_get_int(j, "era", 0);
 	tmp.year = (int)json_get_int(j, "year", 0);
 	tmp.day_of_year = (int)json_get_int(j, "day_of_year", -1);
@@ -403,6 +467,7 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	}
 	for (a = 0; a < 4; a++)
 		tmp.standing[a] = (int8_t)v[a];
+	tmp.standing[NATION_PIRATE] = -1;
 	towns = json_get(j, "towns");
 	if (towns == NULL || towns->type != JSON_ARRAY ||
 	    towns->count > TOWN_MAX) {
@@ -650,6 +715,8 @@ cmd_set(struct session *ss, const struct json *cmd, struct jbuf *out)
 			return;
 		}
 		s->player_town = (int)v;
+	} else if (field != NULL && strcmp(field, "encounters") == 0) {
+		s->encounters = v != 0;
 	} else if (field != NULL && strcmp(field, "diplomacy_range") == 0) {
 		if (v < 1 || v > 0xFFFF) {
 			reply_error(out, "diplomacy_range is 1..65535");
@@ -677,7 +744,8 @@ cmd_set(struct session *ss, const struct json *cmd, struct jbuf *out)
 static void
 cmd_sail(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
-	static const char *stops[] = { "ticks", "land", "town" };
+	static const char *stops[] = { "ticks", "land", "town",
+	    "encounter" };
 	int64_t ticks = json_get_int(cmd, "ticks", 64);
 	int64_t turn = json_get_int(cmd, "turn", 0);
 	const struct sim_fleet *f = &ss->sim.fleet;
@@ -699,6 +767,9 @@ cmd_sail(struct session *ss, const struct json *cmd, struct jbuf *out)
 	if (stop == SAIL_TOWN) {
 		jb_raw(out, ",\"town\":");
 		jb_str(out, ss->sim.towns[town].name);
+	} else if (stop == SAIL_ENCOUNTER) {
+		jb_raw(out, ",\"encounter\":");
+		encounter_json(&ss->sim.encounter, out);
 	}
 	jb_raw(out, ",\"x\":");
 	jb_int(out, f->x);
@@ -712,6 +783,38 @@ cmd_sail(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, ss->sim.wind);
 	jb_raw(out, ",\"day\":");
 	jb_int(out, ss->sim.day);
+	jb_raw(out, "}");
+}
+
+static void
+cmd_encounter(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *actions[] = { "investigate", "ignore", "battle",
+	    "hail" };
+	static const char *results[] = { "continue", "escaped", "news",
+	    "battle", "overtaken", "unanswered" };
+	const char *a = json_get_str(cmd, "action");
+	enum encounter_result r;
+	int i;
+
+	if (ss->sim.encounter.stage == ENC_NONE) {
+		reply_error(out, "no encounter");
+		return;
+	}
+	for (i = 0; i < 4 && a != NULL; i++)
+		if (strcmp(a, actions[i]) == 0)
+			break;
+	if (a == NULL || i == 4) {
+		reply_error(out, "encounter needs \"action\": investigate, "
+		    "ignore, battle or hail");
+		return;
+	}
+	r = sim_encounter_act(&ss->sim, (enum encounter_action)i);
+	jb_raw(out, "{\"ok\":true,\"result\":");
+	jb_str(out, results[r]);
+	jb_raw(out, ",\"encounter\":");
+	/* After the last dialog the stage is "none"; the ship stays known. */
+	encounter_json(&ss->sim.encounter, out);
 	jb_raw(out, "}");
 }
 
@@ -756,6 +859,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_set(ss, cmd, out);
 	else if (strcmp(name, "sail") == 0)
 		cmd_sail(ss, cmd, out);
+	else if (strcmp(name, "encounter") == 0)
+		cmd_encounter(ss, cmd, out);
 	else
 		reply_error(out, "unknown command");
 	json_free(cmd);

@@ -19,6 +19,9 @@
 #define WORLD_PX_H	(WORLD_CELLS_H * WORLD_TILE)
 #define SHIP_CLASSES	8
 #define WIND_SECTORS	16
+#define ENCOUNTER_NATIONS	4
+#define ENCOUNTER_SHIPS		5
+#define ENCOUNTER_LEN		7
 
 /* Terrain classes of map pixel colours. */
 enum terrain {
@@ -40,6 +43,10 @@ struct world {
 	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];
+	/* Ships met at sea: per nation, 5 records of type, nation, crew,
+	 * guns, role and two bytes not decoded (game-rules.md). */
+	uint8_t		encounter[ENCOUNTER_NATIONS][ENCOUNTER_SHIPS]
+			    [ENCOUNTER_LEN];
 };
 
 /* Returns 0, or -1 with a message in "err". */

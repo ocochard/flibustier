@@ -104,6 +104,7 @@ struct game {
 	struct sea		 sea;
 	int			 view_x, view_y;	/* sailing view origin, pixels */
 	int			 turn;		/* steering input: -1, 0, +1 */
+	int			 enc_result;	/* -1 while the dialogs go on */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

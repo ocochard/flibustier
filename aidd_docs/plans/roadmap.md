@@ -209,9 +209,14 @@ Status (2026-10-26): first slice done.
   The sailing screen shows the tiles, the animated sea, the ship and the
   wind, and arriving at a town opens the stand-in town menu.
 
-Still to do: shoals and running aground, storms, night, the overview
-map, encounters ("Sail ho!"), landing parties, and the values that halve
-speed (VA `0x4d292`).
+Encounters done (2026-10-26): sightings as the game rolls them, the
+ship picked from the era's records, and the "Sail ho!" dialogs over the
+lookout picture, the ship's portrait and her flag, with sailing away,
+hailing for news, or closing for battle (until phase 6, a battle ends
+the encounter).
+
+Still to do: shoals and running aground, storms (the speed effects of
+VA `0x4d292`), food, night, the overview map and landing parties.
 
 
 - World map, town placement per era, wind and points of sail per ship

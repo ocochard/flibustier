@@ -42,6 +42,15 @@
 #define W_SAILING		30	/* sailing phrases */
 #define SAILING_FROM		9	/* "from the %s" */
 #define SAILING_KNOTS		12	/* "Knots: " */
+#define S_SAIL_HO		118	/* "Sail ho!" ... %s */
+#define S_WATERS		119	/* "We're in %s waters" */
+#define S_LOOKS_LIKE		120	/* "She looks like %s" */
+#define S_COLOURS		122	/* "She's flying %s colors" */
+#define S_OVERTAKEN		126
+#define S_CHASING		311	/* "He's chasing us" */
+#define S_UNANSWERED		315
+#define W_A_SHIP		11	/* "a pinnace"... by ship type */
+#define W_COLOURS		106	/* "Spanish"... "pirate" */
 #define TRAVEL_CONTINUE		0
 #define TRAVEL_SAVE		8
 #define TRAVEL_EXIT		9
@@ -1068,6 +1077,10 @@ sail_tick(struct game *g)
 	case SAIL_TOWN:
 		game_goto(g, &screen_voyage);
 		break;
+	case SAIL_ENCOUNTER:
+		g->turn = 0;
+		game_goto(g, &screen_encounter);
+		break;
 	case SAIL_LAND:
 	case SAIL_TICKS:
 		break;
@@ -1113,4 +1126,198 @@ sail_draw(struct game *g)
 
 const struct screen screen_sail = {
 	"sail", sail_enter, sail_event, sail_tick, sail_draw,
+};
+
+/*
+ * Encounter: the game's dialogs over its pictures, "Sail ho!", then the
+ * ship's portrait once she is identified, then her flag.  Sea battles are
+ * a later phase; for now a battle ends the encounter with a notice.
+ */
+static const char *ship_portrait[9] = {
+	"pic/s_pinn", "pic/s_sloop", "pic/s_barque", "pic/s_fluyt",
+	"pic/s_merch", "pic/s_frig", "pic/s_war", "pic/s_gal", "pic/s_fast",
+};
+
+static const char *nation_colours[5] = {
+	"pic/f-span", "pic/f-engl", "pic/f-french", "pic/f-dutch",
+	"pic/fjolly01",
+};
+
+static void
+encounter_background(struct game *g)
+{
+	const struct sim_encounter *e = &g->sim.encounter;
+
+	switch (e->stage) {
+	case ENC_IDENTIFIED:
+		game_background(g, ship_portrait[e->type % 9]);
+		break;
+	case ENC_COLOURS:
+		game_background(g, nation_colours[e->nation % 5]);
+		break;
+	default:
+		game_background(g, "pic/sail-ho");
+		break;
+	}
+	g->ink[0] = g->ink[1] = g->ink[2] = 235;
+	g->highlight[0] = 250;
+	g->highlight[1] = 210;
+	g->highlight[2] = 60;
+	if (e->stage == ENC_COLOURS) {
+		/* Flag palettes have no yellow; their red reads well. */
+		g->highlight[0] = 230;
+		g->highlight[1] = 40;
+		g->highlight[2] = 30;
+	}
+}
+
+static void
+encounter_enter(struct game *g)
+{
+	game_portrait(g, NULL);
+	g->enc_result = -1;
+	encounter_background(g);
+}
+
+static void
+encounter_choose(struct game *g, int i)
+{
+	static const int sighted[2] = { ACT_INVESTIGATE, ACT_IGNORE };
+	static const int colours[3] = { ACT_BATTLE, ACT_HAIL, ACT_IGNORE };
+	enum encounter_result r;
+	int action;
+
+	action = g->sim.encounter.stage == ENC_COLOURS ? colours[i % 3] :
+	    sighted[i % 2];
+	r = sim_encounter_act(&g->sim, (enum encounter_action)action);
+	if (r == RES_CONTINUE) {
+		g->selected = 0;
+		encounter_background(g);
+		return;
+	}
+	if (r == RES_ESCAPED) {
+		game_goto(g, &screen_sail);
+		return;
+	}
+	g->enc_result = (int)r;	/* show the outcome until a key */
+}
+
+static void
+encounter_event(struct game *g, const struct ui_event *ev)
+{
+	int count;
+
+	if (g->enc_result >= 0) {
+		if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+		    ev->key == UI_KEY_ENTER))
+			game_goto(g, &screen_sail);
+		return;
+	}
+	count = g->sim.encounter.stage == ENC_COLOURS ? 3 : 2;
+	menu_event(g, ev, count, NULL, encounter_choose, NULL);
+}
+
+/* A dark band behind the text, so it reads over any picture. */
+static void
+text_band(struct game *g, int y, int h)
+{
+	fb_rect(&g->fb, 60, y, FB_W - 120, h, fb_nearest(&g->fb, 20, 15, 10));
+}
+
+/*
+ * Ship portraits are sheets of 5 round views of about 200 pixels, and
+ * flags sheets of 8 waving frames of 200x200 on a green key.  Show the
+ * first view, and wave the flag.
+ */
+#define PORTRAIT_VIEW	200
+#define FLAG_FRAME	200
+#define FLAG_FRAMES	8
+
+static void
+encounter_picture(struct game *g)
+{
+	const struct sim_encounter *e = &g->sim.encounter;
+	int f, key;
+
+	if (e->stage != ENC_IDENTIFIED && e->stage != ENC_COLOURS)
+		return;		/* "Sail ho!" is a full picture */
+	fb_clear(&g->fb, fb_nearest(&g->fb, 0, 0, 0));
+	if (e->stage == ENC_IDENTIFIED) {
+		fb_image_part(&g->fb, &g->bg, 0, 0, PORTRAIT_VIEW,
+		    PORTRAIT_VIEW, (FB_W - PORTRAIT_VIEW) / 2, 50, -1);
+		return;
+	}
+	f = (int)(g->ticks / 6) % FLAG_FRAMES;
+	key = fb_nearest(&g->fb, 0, 255, 0);
+	fb_image_part(&g->fb, &g->bg, (f % 4) * FLAG_FRAME,
+	    (f / 4) * FLAG_FRAME, FLAG_FRAME, FLAG_FRAME,
+	    (FB_W - FLAG_FRAME) / 2, 50, key);
+}
+
+static void
+encounter_draw(struct game *g)
+{
+	const struct sim_encounter *e = &g->sim.encounter;
+	char text[512], waters[160];
+	const struct sim_news *n;
+	size_t i, kept;
+	int y;
+
+	if (g->enc_result < 0)
+		encounter_picture(g);
+
+	if (g->enc_result >= 0) {
+		text_band(g, 300, 150);
+		y = 310;
+		switch (g->enc_result) {
+		case RES_OVERTAKEN:
+			y += draw(g, FONT_BODY, 80, y, 480,
+			    game_str(g, S_OVERTAKEN), 0);
+			break;
+		case RES_UNANSWERED:
+			y += draw(g, FONT_BODY, 80, y, 480,
+			    game_str(g, S_UNANSWERED), 0);
+			break;
+		case RES_NEWS:
+			kept = sim_news_kept(&g->sim);
+			for (i = kept > 4 ? kept - 4 : 0; i < kept; i++) {
+				n = sim_news_at(&g->sim, i);
+				news_text(g, n, text, sizeof(text));
+				y += draw(g, FONT_BODY, 80, y, 480, text, 0);
+			}
+			break;
+		}
+		if (g->enc_result != RES_NEWS)
+			draw(g, FONT_BODY, 80, y + 8, 480,
+			    "(Sea battles are not implemented yet.)", 0);
+		draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
+		return;
+	}
+	switch (e->stage) {
+	case ENC_SIGHTED:
+		waters[0] = '\0';
+		if (g->sim.player.difficulty < 2 && e->town >= 0)
+			fill(waters, sizeof(waters), game_str(g, S_WATERS),
+			    game_word(g, W_NATION,
+			    (size_t)g->sim.towns[e->town].nation & 3), NULL);
+		fill(text, sizeof(text), game_str(g, S_SAIL_HO), waters, NULL);
+		break;
+	case ENC_IDENTIFIED:
+		fill(text, sizeof(text), game_str(g, S_LOOKS_LIKE),
+		    game_word(g, W_A_SHIP, (size_t)e->type), NULL);
+		break;
+	default:
+		if (e->hostile)
+			snprintf(text, sizeof(text), "%s", game_str(g, S_CHASING));
+		else
+			fill(text, sizeof(text), game_str(g, S_COLOURS),
+			    game_word(g, W_COLOURS, (size_t)e->nation), NULL);
+		break;
+	}
+	text_band(g, 300, 150);
+	draw(g, FONT_BODY, 80, 310, 480, text, 1);
+}
+
+const struct screen screen_encounter = {
+	"encounter", encounter_enter, encounter_event, NULL, encounter_draw,
 };

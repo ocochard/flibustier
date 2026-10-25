@@ -58,6 +58,28 @@ fb_image(struct fb *fb, const struct image *img, int x, int y,
 }
 
 void
+fb_image_part(struct fb *fb, const struct image *img, int sx, int sy, int w,
+    int h, int dx, int dy, int key)
+{
+	int x, y, px, py;
+	uint8_t c;
+
+	for (y = 0; y < h; y++) {
+		py = dy + y;
+		if (py < 0 || py >= FB_H || sy + y < 0 || sy + y >= img->h)
+			continue;
+		for (x = 0; x < w; x++) {
+			px = dx + x;
+			if (px < 0 || px >= FB_W || sx + x < 0 || sx + x >= img->w)
+				continue;
+			c = img->pixels[(size_t)(sy + y) * img->w + sx + x];
+			if (key < 0 || c != key)
+				fb->px[(size_t)py * FB_W + px] = c;
+		}
+	}
+}
+
+void
 fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
     int y0, int x1, int y1)
 {
