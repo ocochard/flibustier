@@ -170,25 +170,62 @@ The first 512 bytes of the matching PCX, presumably a backup for the
 - FlashTek X-32 DOS extender, flat 32-bit image, not compressed. Virtual
   address 0 = file offset `0x47a7`, image size `0x42338`.
 - Compiler: probably Zortech/Symantec C (medium confidence).
-- Town tables, one per era. Record = 80 bytes: `u16 f[32]`, then
-  `char name[16]`.
-  - Era start offsets (file offset, record count):
-
-    | Era | Start | Records |
-    |---|---|---|
-    | 1560 | `0x3d523` | 36 |
-    | 1600 | `0x3e447` | 36 |
-    | 1620 | `0x3f36b` | 42 |
-    | 1640 | `0x4028f` | 45 |
-    | 1660 | `0x411b3` | 45 |
-    | 1680 | `0x420d7` | 48 |
-
-  - Verified fields: f1,f2 = map x,y in 640x480 space (spot-checked Havana,
-    Panama, San Juan); f3 = nation (0 Spain, 1 England, 2 France,
-    3 Holland).
-  - Likely fields: f14 = stable town ID; f24-f27 = harbour points;
-    f29,f30 = x,y x 0.75.
-  - Non-town entries are mixed in, such as treasure-fleet waypoints.
+- Executable identification: `src/data/exe.c` keys data offsets by the
+  file's SHA-256. GOG build: `0f196be3...bce3`, 289503 bytes.
+- **Town tables** (decoded in `src/assets/towns.c`, checked against the
+  game code with Ghidra):
+  - **Era loader.** The function at VA `0x13555` takes an era (1-6 for
+    1560-1680; 0 also maps to 1560). It copies a 0xF24-byte block from
+    VA `0x38d58`, `0x39c7c`, `0x3aba0`, `0x3bac4`, `0x3c9e8` or `0x3d90c`
+    into the live table at VA `0x4605e`. It also copies 0x780 bytes of a
+    second per-era table (the coordinate lists below) to VA `0x4ca58`.
+  - **Block layout.** A 36-byte header, then 48 records of 80 bytes:
+    `u16 f[32]` followed by `char name[16]` (ASCII).
+    - Header offset `0x20`: index of the last record in use.
+    - The last two records in use are both "Florida Channel", which are
+      sea points rather than towns. The game's town count (VA `0x4605a`)
+      excludes them.
+    - Towns per era: 34, 34, 40, 43, 43, 46.
+    - Other header words: unknown.
+  - **Fields.** Evidence from the decompiled code at VA `0xca7f` (random
+    town events, logged as CSTN group 20 entries 11-15), `0xc81b`
+    (conquest of a weaker neighbour, entry 19) and `0xcde9` (treasure
+    fleet):
+    - f0 flags:
+      - `0x40`: inland. Exactly the inland towns; their second approach
+        point is 0.
+      - `0x80`: a town event moves it to `0x20`.
+      - `0x10`: set on the major Spanish ports.
+    - f1, f2: x, y on the 640x480 map (conquest uses their Manhattan
+      distance, < 150).
+    - f3: nation: 0 Spain, 1 England, 2 France, 3 Holland (conquest
+      copies it).
+    - f4: forts, 0-4. A guess, from values and the " %s fort%s" string.
+    - f5: soldiers.
+      - Halved by "Indians attack" and "Malaria".
+      - The conquest attacker needs more than twice the defender's value.
+    - f6: citizens. Halved by "Malaria".
+    - f7: gold.
+      - +12 on "New gold mine".
+      - Zeroed by "Pirates plunder".
+      - Quartered when the treasure fleet leaves.
+    - f8: wealth, 0-255.
+      - +0x40 on a gold mine; -1/4 when plundered; +10 when the treasure
+        fleet visits.
+      - The 4 wealth words probably map to `f8 >> 6`; not confirmed in
+        code.
+    - f9: reset to 0 by "New governor". Perhaps the governor's attitude.
+    - f10: set on the town a fleet currently targets (VA `0xcba7`).
+    - f11: re-rolled 0-15 by "New governor" unless bit `0x40` is set.
+    - f14: town ID, stable across eras.
+    - f24-f27: approach points (zero for the second one of inland towns).
+    - f29, f30: about 0.75 x (x, y). Probably coordinates on a smaller
+      map.
+    - f12, f13, f15-f23, f28, f31: unknown.
+  - **Towns per nation** (Spain, England, France, Holland):
+    1560: 27/2/5/0, 1600: 30/2/2/0, 1620: 30/4/3/3, 1640: 28/7/5/3,
+    1660: 26/8/6/3, 1680: 25/11/7/3. There are no Dutch towns before
+    1620.
 - Career start and famous-expedition scenarios: 90-byte records at
   `0x3a337`. Fields not decoded.
 - Coordinate triplet lists at `0x43000`-`0x45800`. Meaning unverified.

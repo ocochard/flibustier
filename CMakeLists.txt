@@ -16,8 +16,10 @@ endif()
 # Engine core: data access and asset decoding, no raylib dependency, so
 # headless tools and tests can use it.
 add_library(stmalo_core STATIC
+	src/data/exe.c
 	src/data/iso9660.c
 	src/data/pack.c
+	src/data/sha256.c
 	src/assets/font.c
 	src/assets/image.c
 	src/assets/img.c
@@ -25,7 +27,8 @@ add_library(stmalo_core STATIC
 	src/assets/rsd.c
 	src/assets/sprite.c
 	src/assets/text.c
-	src/assets/tileset.c)
+	src/assets/tileset.c
+	src/assets/towns.c)
 target_include_directories(stmalo_core PUBLIC src)
 target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
 

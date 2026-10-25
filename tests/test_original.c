@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "data/exe.h"
 #include "data/pack.h"
 #include "assets/font.h"
 #include "assets/img.h"
@@ -20,6 +21,7 @@
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
+#include "assets/towns.h"
 
 #define SKIP	77
 
@@ -284,6 +286,66 @@ test_details(struct packs *packs)
 	blob_free(&b);
 }
 
+static const struct town *
+find_town(const struct era_towns *era, const char *name)
+{
+	size_t i;
+
+	for (i = 0; i < era->count; i++)
+		if (strcmp(era->towns[i].name, name) == 0)
+			return (&era->towns[i]);
+	return (NULL);
+}
+
+static void
+test_towns(struct packs *packs)
+{
+	static const size_t counts[EXE_ERAS] = { 34, 34, 40, 43, 43, 46 };
+	/* Towns per nation (Spain, England, France, Holland) per era. */
+	static const int nations[EXE_ERAS][4] = {
+		{ 27, 2, 5, 0 }, { 30, 2, 2, 0 }, { 30, 4, 3, 3 },
+		{ 28, 7, 5, 3 }, { 26, 8, 6, 3 }, { 25, 11, 7, 3 },
+	};
+	int per[4];
+	const struct exe_layout *layout;
+	const struct town *t;
+	struct era_towns era;
+	struct blob b;
+	size_t i;
+	int e;
+
+	CHECK(packs_load(packs, "program/main", &b) == 0);
+	layout = exe_identify(b.data, b.len);
+	CHECK(layout != NULL);
+	if (layout == NULL) {
+		blob_free(&b);
+		return;
+	}
+	for (e = 0; e < EXE_ERAS; e++) {
+		CHECK(towns_load(layout, b.data, b.len, e, &era) == 0);
+		CHECK(era.count == counts[e]);
+		CHECK(strcmp(era.channel[0].name, "Florida Channel") == 0 &&
+		    strcmp(era.channel[1].name, "Florida Channel") == 0);
+		memset(per, 0, sizeof(per));
+		for (i = 0; i < era.count; i++) {
+			per[era.towns[i].nation]++;
+			CHECK(era.towns[i].x < 640 && era.towns[i].y < 480);
+			CHECK(era.towns[i].wealth <= 255);
+		}
+		CHECK(memcmp(per, nations[e], sizeof(per)) == 0);
+	}
+	CHECK(towns_load(layout, b.data, b.len, 4, &era) == 0);
+	t = find_town(&era, "Havana");
+	CHECK(t != NULL && t->x == 245 && t->y == 179 &&
+	    t->nation == NATION_SPAIN && t->forts == 4);
+	t = find_town(&era, "Jalapa");
+	CHECK(t != NULL && (t->flags & TOWN_INLAND));
+	t = find_town(&era, "Port Royale");
+	CHECK(t != NULL && t->nation == NATION_ENGLAND &&
+	    !(t->flags & TOWN_INLAND));
+	blob_free(&b);
+}
+
 int
 main(void)
 {
@@ -306,6 +368,7 @@ main(void)
 	test_other_ids(packs);
 	test_all_assets(packs);
 	test_details(packs);
+	test_towns(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

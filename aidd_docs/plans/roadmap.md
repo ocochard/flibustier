@@ -24,9 +24,10 @@ The engine runs from asset packs:
 - Every graphics format is decoded and proven: PCX, RSD, SPR, CRS, CUR,
   GRP, IMG, IMB, CHR, and the BMP tiles.
 - The text tables are decoded.
-- The town tables in the executable are decoded for all six eras.
-- The executable is uncompressed and can be disassembled, but there is no
-  decompiler yet (REA needs a newer Ghidra).
+- The town tables in the executable are decoded for all six eras. The
+  field meanings come from the game code.
+- The executable is uncompressed and decompiles with Ghidra 12.2, both
+  headless and through REA.
 - Rules that only exist as code are unknown: sailing, wind, combat,
   fencing, economy, events, AI, saves, and the sea palette.
 - The music is a per-driver bytecode, not yet decoded.
@@ -141,9 +142,17 @@ Each phase ends with something visible and a test.
 
 ### Phase 3: reverse-engineering groundwork (in parallel with phases 1-2)
 
-- Set up Ghidra or REA on the flat image (raw i386, base 0). Recover
-  function boundaries, label the C runtime, and name the functions that
-  load files (from the filename table).
+- Ghidra 12.2 works headless: `tools/ghidra/analyze.sh` carves the flat
+  image, analyses it as raw i386 at base 0, and decompiles all 639
+  functions it finds, in about 25 seconds. Keep its output outside the
+  repository, since it is derived from the original program.
+- REA (MCP) also works on the same flat image, opened as `raw-binary`,
+  `x86`, entry `0x0`. Use it for interactive work (xrefs, decompiling one
+  function, annotations) and `analyze.sh` for whole-program greppable
+  dumps.
+- Next steps: label the C runtime, name the file-loading functions (from
+  the filename table), and find functions Ghidra missed. Raw-binary
+  analysis only follows calls reachable from the entry point.
 - Capture reference behaviour in DOSBox-staging: screenshots, save files,
   and tile coordinates through the `TileX/TileY` debug string if it can be
   enabled.

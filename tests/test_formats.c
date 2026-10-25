@@ -13,7 +13,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "data/exe.h"
 #include "data/pack.h"
+#include "data/sha256.h"
 #include "assets/font.h"
 #include "assets/img.h"
 #include "assets/pcx.h"
@@ -21,6 +23,7 @@
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
+#include "assets/towns.h"
 
 static int failures;
 
@@ -386,6 +389,78 @@ test_text(void)
 	free(u);
 }
 
+static void
+test_sha256(void)
+{
+	static uint8_t big[1000];
+	char hex[65];
+
+	sha256_hex((const uint8_t *)"", 0, hex);
+	CHECK(strcmp(hex, "e3b0c44298fc1c149afbf4c8996fb924"
+	    "27ae41e4649b934ca495991b7852b855") == 0);
+	sha256_hex((const uint8_t *)"abc", 3, hex);
+	CHECK(strcmp(hex, "ba7816bf8f01cfea414140de5dae2223"
+	    "b00361a396177a9cb410ff61f20015ad") == 0);
+	/* 56 bytes: the length no longer fits in the first padding block. */
+	sha256_hex((const uint8_t *)
+	    "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56,
+	    hex);
+	CHECK(strcmp(hex, "248d6a61d20638b8e5c026930c3e6039"
+	    "a33ce45964ff2167f6ecedd419db06c1") == 0);
+	memset(big, 'a', sizeof(big));
+	sha256_hex(big, sizeof(big), hex);
+	CHECK(strcmp(hex, "41edece42d63e8d9bf515a9ba6932e1c"
+	    "20cbc9f5a5d134645adb5db1b9737ea3") == 0);
+	CHECK(exe_identify(big, sizeof(big)) == NULL);
+}
+
+static void
+test_towns(void)
+{
+	static uint8_t exe[16 + 0xF24];
+	struct exe_layout layout;
+	struct era_towns era;
+	uint8_t *r;
+	int i;
+
+	memset(&layout, 0, sizeof(layout));
+	layout.image_offset = 16;
+	for (i = 0; i < EXE_ERAS; i++)
+		layout.town_va[i] = 0;
+	memset(exe, 0, sizeof(exe));
+	put16(exe + 16 + 0x20, 2);	/* last record index: 3 records */
+	r = exe + 16 + 36;
+	put16(r, TOWN_INLAND);
+	put16(r + 2, 245);
+	put16(r + 4, 179);
+	put16(r + 8, 4);		/* forts */
+	put16(r + 16, 195);		/* wealth */
+	put16(r + 28, 6);		/* id */
+	memcpy(r + 64, "Havana", 6);
+	memcpy(r + 80 + 64, "Channel A", 9);
+	memcpy(r + 160 + 64, "Channel B", 9);
+	CHECK(towns_load(&layout, exe, sizeof(exe), 4, &era) == 0);
+	CHECK(era.year == 1660 && era.count == 1);
+	CHECK(strcmp(era.towns[0].name, "Havana") == 0);
+	CHECK(era.towns[0].x == 245 && era.towns[0].y == 179 &&
+	    era.towns[0].forts == 4 && era.towns[0].wealth == 195 &&
+	    era.towns[0].id == 6 && (era.towns[0].flags & TOWN_INLAND));
+	CHECK(strcmp(era.channel[1].name, "Channel B") == 0);
+
+	/* A name filling all 16 bytes stays terminated. */
+	memcpy(r + 64, "ABCDEFGHIJKLMNOP", 16);
+	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == 0);
+	CHECK(strlen(era.towns[0].name) == 16);
+
+	CHECK(towns_load(&layout, exe, sizeof(exe) - 1, 0, &era) == -1);
+	CHECK(towns_load(&layout, exe, sizeof(exe), 6, &era) == -1);
+	put16(r + 6, 7);		/* no such nation */
+	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == -1);
+	put16(r + 6, 0);
+	put16(exe + 16 + 0x20, 48);	/* 49 records do not fit */
+	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == -1);
+}
+
 int
 main(void)
 {
@@ -396,6 +471,8 @@ main(void)
 	test_tileset();
 	test_font();
 	test_text();
+	test_sha256();
+	test_towns();
 	test_packs();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
