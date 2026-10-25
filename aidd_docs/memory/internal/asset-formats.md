@@ -36,9 +36,11 @@ stride.
   palette at EOF after the `0x0C` marker.
 - Sizes: 640x480 (70 files), 800x400 (24, flags and Jolly Roger), 604x403
   (9, ship portraits `S_*`), 200x200 (`BASEFLAG`).
-- Indices 0..39 in `MAP1560`, `SBAT` and `SBTL.BMP` are sea pixels. The game
-  overwrites or cycles these palette entries at runtime. The ramp is not
-  found yet; it is probably in the executable.
+- `MAP1560.PCX` and the era maps are not pictures. Each of their pixels
+  is a tile number in `MAP.IMB` (see "Sailing world" below). Their own
+  palette is meaningless, which is why the sea looked like noise.
+- Indices 0..39 in `SBAT` and `SBTL.BMP` may be tile or colour codes of
+  the same kind. Not checked yet.
 
 ## PCX/MAP16x0.RSD: era patches of the overview map (proven)
 
@@ -115,9 +117,52 @@ Sprite bank of 15x15 frames: `u16 15, u16 15, u16 2`, then 225 pixels and
   then `w*h` pixels and 2 trailing bytes.
 - Tile sizes: `MAP` and `TMAP` are 16x16 (sailing); `BATTLE` is 32x32
   (sea battle).
-- Open: where the tile layout of the sailing world lives. Hypothesis: the
-  640x480 `MAP1560` grid (1 pixel = 1 cell), auto-tiled from a land/sea
-  mask. `CSTR` contains a `TileX/TileY/InternalX/InternalY` debug string.
+- The tile layout of the sailing world is the era map: see "Sailing
+  world" below.
+
+## Sailing world and sea animation (traced in code, rendering proven)
+
+- **The world grid.** The sailing setup (VA `0x289da`) loads the era map
+  PCX as a raw 640x480 buffer. Each byte is a tile number in `MAP.IMB`, so
+  the world is 640x480 cells of 16x16 pixels.
+  - Rendering the cells around Havana with `MAP.IMB` gives a coherent
+    coastline, with town, beach and shallow-water tiles.
+  - The random sea values 1-38 are random variants of the sea tile.
+- **Picture table.** Pictures are loaded by index through the pointer
+  table at VA `0x31dd0` (130 file names; loader at VA `0x2320`).
+  - The map is picture `table[era]` with `table` = `72, 73, 73, 74, 75,
+    76, 77` at VA `0x41418`. Picture 72 is `map1560.pcx` and 73-77 are
+    `map1600.pcx`-`map1680.pcx`.
+  - Those later files are not on the CD; only the `.RSD` patches are.
+    How the patches get applied, and the meaning of the era index, are
+    still open.
+- **Tile classes.** A 256-byte table at VA `0x4103c` gives each tile a
+  class:
+
+  | Class | Tiles | Cells in 1560 | Meaning |
+  |---|---|---|---|
+  | 3 | 0-38 | 68% | open sea |
+  | 1 | 39-58 | | probably shallows |
+  | 2 | 59-66, 79-121 | | probably land |
+  | 4 | 67-78, 122-255 | | probably coast and towns |
+
+  Class 3 is confirmed: the game scatters 40 random effects (probably
+  whitecaps) over class-3 cells in view.
+- **Sea colours.** No ramp is stored. The colours are the tileset's own
+  palette entries, rotated in place.
+  - At setup (VA `0x2ab09`), the game snapshots palette ranges 208-215,
+    64-71, 72-79 and 216-223 into doubled 16-entry tables, so a rotation
+    can wrap.
+  - Each frame, the animators rewrite the live palette from offset
+    `counter & 7` and upload the range (VA `0x26e9f`):
+    - 208-215 rotate every frame (VA `0x2ae26`).
+    - 64-71 and 72-79 rotate on alternate frames (VA `0x2aed6`).
+    - 216-223 rotate in the opposite direction (VA `0x2b009`).
+  - The sea tiles use 208-215, so that range is the water shimmer.
+- **Other palette cycling.** A generic "rotate range by one" (VA
+  `0x35f8`) cycles 238-254, 100-163, 194-206 and 211-236 in three
+  functions near the start of the code, probably title and intro
+  screens.
 
 ## *.CHR: 1-bit fonts (proven)
 

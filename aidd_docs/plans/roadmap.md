@@ -29,7 +29,8 @@ The engine runs from asset packs:
 - The executable is uncompressed and decompiles with Ghidra 12.2, both
   headless and through REA.
 - Rules that only exist as code are unknown: sailing, wind, combat,
-  fencing, economy, events, AI, saves, and the sea palette.
+  fencing, economy, events, AI, and saves. The sea palette and the
+  sailing world grid are now known.
 - The music is a per-driver bytecode, not yet decoded.
 
 ## Key design decisions
@@ -157,8 +158,9 @@ Each phase ends with something visible and a test.
   and tile coordinates through the `TileX/TileY` debug string if it can be
   enabled.
 - Priority targets:
-  1. Sea palette ramp and cycling.
-  2. How the sailing world grid is built.
+  1. ~~Sea palette ramp and cycling.~~ Done: tileset palette rotation.
+  2. ~~How the sailing world grid is built.~~ Done: the era map is a
+     tile grid.
   3. Ship stats.
   4. Save file format.
   5. Remaining town record fields.

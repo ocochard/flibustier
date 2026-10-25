@@ -61,8 +61,15 @@ if(NOT raylib_FOUND)
 	FetchContent_MakeAvailable(raylib)
 endif()
 
+# Some raylib builds (FreeBSD raylib-6.0 package) omit libm and pthreads
+# from their own dependencies, so link them explicitly.
+find_package(Threads REQUIRED)
 add_executable(stmalo src/main.c)
-target_link_libraries(stmalo PRIVATE stmalo_core ${STMALO_RAYLIB})
+target_link_libraries(stmalo PRIVATE stmalo_core ${STMALO_RAYLIB}
+	Threads::Threads)
+if(UNIX)
+	target_link_libraries(stmalo PRIVATE m)
+endif()
 target_compile_options(stmalo PRIVATE ${STMALO_WARNINGS})
 
 # Tests.  test_original needs the game data: set STMALO_DATA to the GOG
