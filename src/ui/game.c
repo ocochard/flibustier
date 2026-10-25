@@ -76,12 +76,15 @@ load_fonts(struct game *g)
 }
 
 int
-game_init(struct game *g, struct packs *packs, const char *lang)
+game_init(struct game *g, struct packs *packs, const char *lang,
+    const char *save_dir)
 {
 	struct blob b;
 
 	memset(g, 0, sizeof(*g));
 	g->packs = packs;
+	if (save_dir != NULL)
+		snprintf(g->save_dir, sizeof(g->save_dir), "%s", save_dir);
 	snprintf(g->lang, sizeof(g->lang), "%s", lang);
 	if (load_text(g) != 0) {
 		snprintf(g->err, sizeof(g->err), "cannot load %s text", lang);
@@ -139,6 +142,10 @@ game_background(struct game *g, const char *pic)
 	int rc;
 
 	image_free(&g->bg);
+	/* Red reads well on parchment; screens may change it after this. */
+	g->highlight[0] = 170;
+	g->highlight[1] = 20;
+	g->highlight[2] = 10;
 	if (packs_load(g->packs, pic, &b) != 0)
 		return (-1);
 	rc = pcx_decode(b.data, b.len, &g->bg);
@@ -234,6 +241,13 @@ game_start_career(struct game *g)
 	snprintf(g->career.title, sizeof(g->career.title), "%s", scn.name);
 	/* A fixed seed for now; it will come from the clock or a setting. */
 	sim_new_game(&g->sim, &era, &scn, 1);
+	snprintf(g->sim.player.name, sizeof(g->sim.player.name), "%s",
+	    g->career.name);
+	g->sim.player.nation = g->career.nation;
+	g->sim.player.difficulty = g->career.difficulty;
+	g->sim.player.ability = g->career.ability;
+	g->sim.player.expedition = g->career.expedition;
 	g->started = 1;
+	g->news_seen = g->sim.nnews;
 	return (0);
 }

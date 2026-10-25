@@ -51,8 +51,9 @@ cursor starts at 0:
 - `81..FF`: skip `b & 0x7F` pixels.
 - `01..7F`: copy the next `b` bytes as pixels.
 
-Open: whether each era patches 1560 or the previous era. The evidence
-points to 1560.
+Each era patches the 1560 map directly. Proof: when asked for
+`map16x0.pcx`, the game's picture loader (VA `0x1cbb0`) loads
+`map1560.pcx` instead, then applies `map16x0.RSD` to it (VA `0x1d6e3`).
 
 ## Sprite bank (shared by SPR, CRS, CUR, BMP)
 
@@ -306,6 +307,49 @@ The first 512 bytes of the matching PCX, presumably a backup for the
 - `DIGITAL.PIR`: 9 effects in 8-bit unsigned PCM at about 7330 Hz
   (`mov cx,1CA2h`). Start table at image offset `0x9f`, end table at
   `0xb1`.
+
+## Original save files (layout traced, fields mostly not decoded)
+
+- **Files:** `PIRATES-<n>.SAV`, with 10 slots, `n` from 0 to 9. The slot
+  picker is at VA `0x1c658`.
+- **Recognition:** a file counts as a save when it starts with the
+  14-byte magic `PIRATES! GOLD\0`. The 80 bytes after it are the
+  description shown in the slot list.
+- **Body:** a straight dump of the game's memory, written block by block
+  (writer at VA `0x1c281`, reader at VA `0x1b9b0`, in the same order):
+
+| Bytes | Memory (VA) | Known content |
+|---|---|---|
+| 0x124 | `0x45e6e` | player standing per nation at `+0x0c`; relations 4x4 at `+0x44` |
+| 0x30 | `0x45f92` | player values, initialised from the start scenario (VA `0x1386c`) |
+| 0x90 | `0x45fc2` | |
+| 0x24 | `0x47186` | |
+| 0x0c | `0x471aa` | `+0`: player in town flag; `+2`: town index |
+| 0x24 | `0x471b6` | |
+| 0x30 | `0x471da` | 4 fleets of 12 bytes (targeting at VA `0xcba7`) |
+| 0x20 | `0x4720a` | |
+| 2 | `0x4723e` | log entry count `N` |
+| 8 x N | `0x47242` | log entries |
+| 0xF24 | `0x4605e` | live town table, in the era block format |
+| 0xA0 | `0x4d280` | |
+| 0x54 | `0x47a76` | |
+| 0x780 | `0x4ca58` | per-era coordinate lists (copied at era load) |
+| 2 | `0x46058` | current town index |
+| 2 | (current town) | the first field of the current town record |
+| 1 | `0x47aca` | |
+| 2 + 2 | `0x4c852`, `0x4c854` | |
+| 100 | `0x330f0` | a table in the initialised data |
+
+- **Log entry:** when saving, the game first logs an entry with news
+  code 27, writes the body, then drops the entry again (VA `0x1c110`),
+  so the saved log includes it.
+- **Calendar:** the calendar words (VA `0x46052`-`0x46056`) sit right
+  after the 0x90 block but are not in the list. The date must be kept
+  elsewhere, maybe in the 0x30 player block. Open.
+- **Hall of Fame:** kept in `pirates.hof`. Not traced yet.
+
+The engine uses its own save format (see `sim-protocol.md`). With this
+layout, original saves could be imported later.
 
 ## Config
 

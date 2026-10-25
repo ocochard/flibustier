@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "sim/save.h"
 #include "screen.h"
 
 /* String table entries used here (CSTR) and word lists (CSTN groups). */
@@ -21,14 +22,23 @@
 #define S_ABILITY_PROMPT	67
 #define S_NATION_PROMPT		70
 #define S_CONTINUE		71
+#define S_SAVE_GAME		290
+#define S_LOAD_GAME		320
 #define S_ERA_TEXT		261	/* six era descriptions */
 #define S_EXPEDITION_TEXT	267	/* six expedition descriptions */
+#define W_MONTH			7	/* January.. */
+#define W_LOG			20	/* log sentences, by news code */
 #define W_DIFFICULTY		35
 #define W_NATION		71	/* Spanish, English, French, Dutch */
 #define W_ABILITY		83
 #define W_ERA			98
 #define W_EXPEDITION		99
 #define W_WELCOME		100	/* 6 heading lines, then 4 options */
+#define W_NATION_NAME		81	/* Spain, England, France, Holland */
+#define W_TRAVEL		86	/* in-game menu */
+#define TRAVEL_CONTINUE		0
+#define TRAVEL_SAVE		8
+#define TRAVEL_EXIT		9
 
 #define WELCOME_HEADING		6
 #define INTRO_TICKS		150
@@ -81,7 +91,8 @@ style(const struct game *g, int font, int caps, struct text_style *st)
 	st->font = &g->font[font];
 	st->caps = caps ? &g->caps : NULL;
 	st->ink = fb_nearest(&g->fb, 55, 30, 10);
-	st->highlight = fb_nearest(&g->fb, 170, 20, 10);
+	st->highlight = fb_nearest(&g->fb, g->highlight[0], g->highlight[1],
+	    g->highlight[2]);
 	st->line_gap = 2;
 }
 
@@ -260,8 +271,7 @@ welcome_enter(struct game *g)
 static int
 welcome_enabled(const struct game *g, int i)
 {
-	(void)g;
-	return (i != WELCOME_LOAD);	/* saved games are not supported yet */
+	return (i != WELCOME_LOAD || g->save_dir[0] != '\0');
 }
 
 static void
@@ -271,6 +281,10 @@ welcome_choose(struct game *g, int i)
 	case WELCOME_NEW:
 		g->career.expedition = -1;
 		game_goto(g, &screen_era);
+		break;
+	case WELCOME_LOAD:
+		g->saving = 0;
+		game_goto(g, &screen_slots);
 		break;
 	case WELCOME_FAMOUS:
 		game_goto(g, &screen_expedition);
@@ -561,8 +575,10 @@ summary_enter(struct game *g)
 static void
 summary_event(struct game *g, const struct ui_event *ev)
 {
-	if (ev->type == EV_CLICK ||
-	    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER))
+	if (g->started && (ev->type == EV_CLICK ||
+	    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)))
+		game_goto(g, &screen_voyage);
+	else if (!g->started && ev->type == EV_KEY)
 		game_goto(g, &screen_welcome);
 }
 
@@ -592,4 +608,233 @@ summary_draw(struct game *g)
 
 const struct screen screen_summary = {
 	"summary", summary_enter, summary_event, NULL, summary_draw,
+};
+
+/*
+ * Replace each %s of a log sentence with the next argument, as the
+ * game's printf-style strings expect.
+ */
+static void
+fill(char *out, size_t len, const char *fmt, const char *a, const char *b)
+{
+	const char *arg[2] = { a, b };
+	size_t n = 0;
+	int k = 0;
+
+	while (*fmt != '\0' && n + 1 < len) {
+		if (fmt[0] == '%' && fmt[1] == 's') {
+			const char *v = k < 2 && arg[k] != NULL ? arg[k] : "";
+
+			k++;
+			while (*v != '\0' && n + 1 < len)
+				out[n++] = *v++;
+			fmt += 2;
+		} else
+			out[n++] = *fmt++;
+	}
+	out[n] = '\0';
+}
+
+static const char *
+town_name(const struct game *g, int i)
+{
+	return (i >= 0 && (size_t)i < g->sim.ntowns ? g->sim.towns[i].name :
+	    "");
+}
+
+/* A news item as the game's log words it. */
+static void
+news_text(const struct game *g, const struct sim_news *n, char *out,
+    size_t len)
+{
+	const char *fmt = game_word(g, W_LOG, (size_t)n->code);
+
+	switch (n->code) {
+	case NEWS_WAR:
+	case NEWS_PEACE:
+	case NEWS_ALLIANCE:
+		fill(out, len, fmt, game_word(g, W_NATION_NAME, (size_t)n->a & 3),
+		    game_word(g, W_NATION_NAME, (size_t)n->b & 3));
+		break;
+	case NEWS_AMNESTY:
+		fill(out, len, fmt, game_word(g, W_NATION_NAME,
+		    (size_t)n->a & 3), NULL);
+		break;
+	case NEWS_CAPTURE:
+		fill(out, len, fmt, game_word(g, W_NATION_NAME,
+		    (size_t)n->a & 3), town_name(g, n->b));
+		break;
+	default:
+		fill(out, len, fmt, town_name(g, n->a), NULL);
+	}
+}
+
+static void
+date_text(const struct game *g, char *out, size_t len)
+{
+	snprintf(out, len, "%s %d", game_word(g, W_MONTH,
+	    (size_t)(g->sim.day_of_year / 30)), g->sim.year);
+}
+
+/*
+ * Voyage: a stand-in for the sailing screens of the next phase, with the
+ * game's own in-game menu words: continue travels (a month passes),
+ * save, or exit.
+ */
+
+static const int travel_items[3] = {
+	TRAVEL_CONTINUE, TRAVEL_SAVE, TRAVEL_EXIT,
+};
+
+static int
+voyage_enabled(const struct game *g, int i)
+{
+	return (travel_items[i] != TRAVEL_SAVE || g->save_dir[0] != '\0');
+}
+
+static void
+voyage_choose(struct game *g, int i)
+{
+	switch (travel_items[i]) {
+	case TRAVEL_CONTINUE:
+		sim_advance(&g->sim, 30);
+		g->msg[0] = '\0';
+		break;
+	case TRAVEL_SAVE:
+		g->saving = 1;
+		game_goto(g, &screen_slots);
+		break;
+	case TRAVEL_EXIT:
+		g->started = 0;
+		game_goto(g, &screen_welcome);
+		break;
+	}
+}
+
+static void
+voyage_event(struct game *g, const struct ui_event *ev)
+{
+	menu_event(g, ev, 3, voyage_enabled, voyage_choose, NULL);
+}
+
+static void
+voyage_draw(struct game *g)
+{
+	const struct sim_news *n;
+	char buf[256], line[160];
+	size_t i, kept, first;
+	int y = 30;
+
+	draw_centered(g, FONT_TITLE, y, g->sim.player.name);
+	y += 32;
+	date_text(g, line, sizeof(line));
+	snprintf(buf, sizeof(buf), "%s, %s", g->sim.player.title, line);
+	draw_centered(g, FONT_BODY, y, buf);
+	y += 40;
+	/* The latest news, oldest first. */
+	kept = sim_news_kept(&g->sim);
+	first = kept > 12 ? kept - 12 : 0;
+	for (i = first; i < kept; i++) {
+		n = sim_news_at(&g->sim, i);
+		news_text(g, n, line, sizeof(line));
+		y += draw(g, FONT_BODY, 80, y, 480, line, 0);
+	}
+	buf[0] = '\0';
+	for (i = 0; i < 3; i++) {
+		snprintf(line, sizeof(line), "%s~%s", i > 0 ? "\r" : "",
+		    game_word(g, W_TRAVEL, (size_t)travel_items[i]));
+		strncat(buf, line, sizeof(buf) - strlen(buf) - 1);
+	}
+	draw(g, FONT_BODY, 240, 370, 300, buf, 1);
+	if (g->msg[0] != '\0')
+		draw_centered(g, FONT_BODY, 440, g->msg);
+}
+
+const struct screen screen_voyage = {
+	"voyage", parchment_enter, voyage_event, NULL, voyage_draw,
+};
+
+/* Save slots, for both saving and loading. */
+
+static void
+slots_enter(struct game *g)
+{
+	char path[600], err[256];
+	int i;
+
+	game_background(g, "pic/savegame");
+	game_portrait(g, NULL);
+	/* The slate behind the slots needs a light highlight. */
+	g->highlight[0] = g->highlight[1] = g->highlight[2] = 240;
+	for (i = 0; i < SAVE_SLOTS; i++) {
+		save_slot_path(g->save_dir, i, path, sizeof(path));
+		if (save_read(path, NULL, g->slot_desc[i],
+		    sizeof(g->slot_desc[i]), err, sizeof(err)) != 0)
+			g->slot_desc[i][0] = '\0';
+	}
+}
+
+static int
+slots_enabled(const struct game *g, int i)
+{
+	return (g->saving || g->slot_desc[i][0] != '\0');
+}
+
+static void
+slots_choose(struct game *g, int i)
+{
+	char path[600], desc[SAVE_DESC_LEN + 1], date[64];
+
+	save_slot_path(g->save_dir, i, path, sizeof(path));
+	if (g->saving) {
+		date_text(g, date, sizeof(date));
+		snprintf(desc, sizeof(desc), "%s, %s, %s", g->sim.player.name,
+		    g->sim.player.title, date);
+		if (save_write(path, &g->sim, desc, g->err,
+		    sizeof(g->err)) != 0)
+			snprintf(g->msg, sizeof(g->msg), "%s", g->err);
+		else
+			snprintf(g->msg, sizeof(g->msg), "%s", desc);
+		game_goto(g, &screen_voyage);
+		return;
+	}
+	if (save_read(path, &g->sim, NULL, 0, g->err, sizeof(g->err)) != 0) {
+		snprintf(g->msg, sizeof(g->msg), "%s", g->err);
+		return;
+	}
+	g->started = 1;
+	g->news_seen = g->sim.nnews;
+	g->msg[0] = '\0';
+	game_goto(g, &screen_voyage);
+}
+
+static void
+slots_event(struct game *g, const struct ui_event *ev)
+{
+	menu_event(g, ev, SAVE_SLOTS, slots_enabled, slots_choose,
+	    g->saving ? &screen_voyage : &screen_welcome);
+}
+
+static void
+slots_draw(struct game *g)
+{
+	char buf[SAVE_SLOTS * 100], line[120];
+	int i;
+
+	draw_centered(g, FONT_TITLE, 40,
+	    game_str(g, g->saving ? S_SAVE_GAME : S_LOAD_GAME));
+	buf[0] = '\0';
+	for (i = 0; i < SAVE_SLOTS; i++) {
+		snprintf(line, sizeof(line), "%s~%d. %s", i > 0 ? "\r" : "",
+		    i + 1, g->slot_desc[i][0] != '\0' ? g->slot_desc[i] :
+		    "-");
+		strncat(buf, line, sizeof(buf) - strlen(buf) - 1);
+	}
+	draw(g, FONT_BODY, 100, 100, 460, buf, 1);
+	if (g->msg[0] != '\0')
+		draw_centered(g, FONT_BODY, 400, g->msg);
+}
+
+const struct screen screen_slots = {
+	"slots", slots_enter, slots_event, NULL, slots_draw,
 };

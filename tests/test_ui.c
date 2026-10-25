@@ -7,12 +7,19 @@
  * a window.  Needs the game data (STMALO_DATA); skipped otherwise.
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <unistd.h>
+
 #include "assets/towns.h"
 #include "data/pack.h"
+#include "sim/json.h"
+#include "sim/proto.h"
+#include "sim/save.h"
 #include "ui/game.h"
 #include "ui/script.h"
 
@@ -20,6 +27,7 @@
 
 static int failures;
 static struct packs *packs;
+static char saves_tmp[] = "/tmp/stmalo-ui-XXXXXX";
 
 #define CHECK(cond) do {						\
 	if (!(cond)) {							\
@@ -29,14 +37,18 @@ static struct packs *packs;
 	}								\
 } while (0)
 
-/* Run a script in a fresh game; the caller frees it. */
+/*
+ * Run a script in a fresh game; the caller frees it.  Saved games are
+ * disabled unless "saves" is set, which removes "Continue a saved game"
+ * from the welcome menu.
+ */
 static struct game *
-play(const char *lang, const char *script)
+play_in(const char *saves, const char *lang, const char *script)
 {
 	static struct game g;
 
 	memset(&g, 0, sizeof(g));
-	if (game_init(&g, packs, lang) != 0) {
+	if (game_init(&g, packs, lang, saves) != 0) {
 		fprintf(stderr, "game_init: %s\n", g.err);
 		failures++;
 		return (NULL);
@@ -46,6 +58,12 @@ play(const char *lang, const char *script)
 		failures++;
 	}
 	return (&g);
+}
+
+static struct game *
+play(const char *lang, const char *script)
+{
+	return (play_in(NULL, lang, script));
 }
 
 static void
@@ -145,6 +163,57 @@ test_languages(void)
 	}
 }
 
+/* Save in slot 3 after two months, then load it in a new game. */
+static void
+test_saves(void)
+{
+	struct game *g;
+	struct jbuf before = { 0 }, after = { 0 };
+	char path[600], desc[128], err[256];
+
+	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
+	    "down enter type:Kidd enter enter enter enter enter enter "
+	    "down enter down down down enter");
+	if (g == NULL)
+		return;
+	CHECK(g->started && g->sim.day == 60);
+	CHECK(strncmp(g->msg, "Kidd, English Buccaneer, ", 25) == 0);
+	sim_to_json(&g->sim, &before);
+	game_free(g);
+	save_slot_path(saves_tmp, 3, path, sizeof(path));
+	CHECK(save_read(path, NULL, desc, sizeof(desc), err, sizeof(err)) == 0);
+	CHECK(strstr(desc, "Kidd") != NULL);
+
+	/* Welcome: "Continue a saved game", then slot 4 (index 3); empty
+	 * slots are skipped, so "down" from slot 1 lands on it. */
+	g = play_in(saves_tmp, "eng", "enter down enter down enter");
+	if (g == NULL)
+		return;
+	CHECK(g->started);
+	sim_to_json(&g->sim, &after);
+	CHECK(before.s != NULL && after.s != NULL &&
+	    strcmp(before.s, after.s) == 0);
+	CHECK(strcmp(g->sim.player.name, "Kidd") == 0);
+	game_free(g);
+	jb_free(&before);
+	jb_free(&after);
+
+	/* A file that is not a save is refused. */
+	save_slot_path(saves_tmp, 5, path, sizeof(path));
+	{
+		FILE *fp = fopen(path, "w");
+
+		if (fp != NULL) {
+			fputs("{\"format\":\"other\"}", fp);
+			fclose(fp);
+		}
+	}
+	CHECK(save_read(path, NULL, desc, sizeof(desc), err, sizeof(err)) == -1);
+	remove(path);
+	save_slot_path(saves_tmp, 3, path, sizeof(path));
+	remove(path);
+}
+
 int
 main(void)
 {
@@ -157,9 +226,13 @@ main(void)
 	if ((packs = packs_new()) == NULL ||
 	    packs_add_original(packs, path) != 0)
 		return (1);
+	if (mkdtemp(saves_tmp) == NULL)
+		return (1);
 	test_career();
 	test_menus();
 	test_languages();
+	test_saves();
+	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

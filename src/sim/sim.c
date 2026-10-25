@@ -4,6 +4,7 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,6 +71,8 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->year = era->year;
 	s->diplomacy_range = SIM_DIPLOMACY_RANGE;
 	s->player_town = SIM_NO_TOWN;
+	s->player.expedition = -1;
+	snprintf(s->player.title, sizeof(s->player.title), "%s", scn->name);
 	memcpy(s->relations, scn->relations, sizeof(s->relations));
 	s->ntowns = era->count;
 	for (i = 0; i < era->count; i++) {

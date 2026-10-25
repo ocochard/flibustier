@@ -60,8 +60,19 @@ struct sim_news {
 	int		a, b;
 };
 
+/* Who the player is: set by the start screens, kept in saves. */
+struct sim_player {
+	char		name[41];	/* UTF-8 */
+	char		title[24];	/* start scenario, "English Buccaneer" */
+	int		nation;		/* town nation order */
+	int		difficulty;	/* 0..3 */
+	int		ability;	/* 0..4 */
+	int		expedition;	/* -1, or famous expedition 0..5 */
+};
+
 struct sim {
 	struct rng	rng;
+	struct sim_player player;
 	int		era_year;	/* era of the towns, 1560..1680 */
 	int		year;		/* calendar year */
 	int		day_of_year;	/* 0..359: twelve 30-day months */

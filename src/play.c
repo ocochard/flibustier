@@ -12,6 +12,7 @@
 #include "raylib.h"
 
 #include "play.h"
+#include "sim/save.h"
 #include "ui/game.h"
 #include "ui/script.h"
 
@@ -26,6 +27,22 @@ static const struct {
 	{ KEY_ENTER, UI_KEY_ENTER }, { KEY_KP_ENTER, UI_KEY_ENTER },
 	{ KEY_ESCAPE, UI_KEY_ESCAPE }, { KEY_BACKSPACE, UI_KEY_BACKSPACE },
 };
+
+/* The save directory, or "" (saving disabled) with a warning. */
+static void
+resolve_saves(const char *saves, char *dir, size_t len)
+{
+	char err[256];
+
+	if (saves != NULL) {
+		snprintf(dir, len, "%s", saves);
+		return;
+	}
+	if (save_dir(dir, len, err, sizeof(err)) != 0) {
+		fprintf(stderr, "saved games disabled: %s\n", err);
+		dir[0] = '\0';
+	}
+}
 
 /* Where the 640x480 screen sits in the window, keeping its shape. */
 static Rectangle
@@ -74,17 +91,19 @@ feed_input(struct game *g, Vector2 *last_mouse)
 }
 
 int
-play_run(struct packs *packs, const char *lang, const char *shot,
-    int shot_frames)
+play_run(struct packs *packs, const char *lang, const char *saves,
+    const char *shot, int shot_frames)
 {
 	static struct game g;
 	static uint8_t rgb[FB_W * FB_H * 3];
 	Vector2 last_mouse = { -1, -1 };
 	Texture2D tex;
 	Image im, screen;
+	char dir[512];
 	int frames = 0, rc = 0;
 
-	if (game_init(&g, packs, lang) != 0) {
+	resolve_saves(saves, dir, sizeof(dir));
+	if (game_init(&g, packs, lang, dir) != 0) {
 		fprintf(stderr, "%s\n", g.err);
 		game_free(&g);
 		return (1);
@@ -123,15 +142,18 @@ play_run(struct packs *packs, const char *lang, const char *shot,
 }
 
 int
-play_headless(struct packs *packs, const char *lang, const char *script,
-    const char *out)
+play_headless(struct packs *packs, const char *lang, const char *saves,
+    const char *script, const char *out)
 {
 	static struct game g;
 	static uint8_t rgb[FB_W * FB_H * 3];
+	char dir[512];
 	Image im;
 	int rc = 0;
 
-	if (game_init(&g, packs, lang) != 0 || game_script(&g, script) != 0) {
+	resolve_saves(saves, dir, sizeof(dir));
+	if (game_init(&g, packs, lang, dir) != 0 ||
+	    game_script(&g, script) != 0) {
 		fprintf(stderr, "%s\n", g.err);
 		game_free(&g);
 		return (1);

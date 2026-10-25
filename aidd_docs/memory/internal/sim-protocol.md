@@ -37,8 +37,11 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "rng": ["<state hex>", "<inc hex>"],
+  "player": {"name": "Olivier", "title": "English Buccaneer",
+             "nation": 1, "difficulty": 1, "ability": 2,
+             "expedition": -1},
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
   "player_town": -1,
@@ -71,6 +74,26 @@ with a message. Numbers are integers only.
   - Readable fields are added for convenience: `town`, `nation`, `text`.
 - `diplomacy_range` replaces an original value not traced yet (see the
   open questions in [game-rules](game-rules.md)).
+
+## Saved games
+
+A saved game is one file per slot, `save0.json` to `save9.json`
+(`src/sim/save.c`):
+
+```json
+{"format": "stmalo-save", "version": 1,
+ "description": "Olivier, English Buccaneer, April 1660",
+ "state": { ...the state above... }}
+```
+
+- **Location:** the directory comes from `--saves DIR`, else
+  `$STMALO_SAVES`, else `$XDG_DATA_HOME/stmalo/saves`, else
+  `~/.local/share/stmalo/saves`. It is created when missing.
+- **Writing:** a save goes to a temporary file that is then renamed, so a
+  crash never leaves a broken slot.
+- **Original saves:** the original's `PIRATES-<n>.SAV` layout is in
+  [asset-formats](asset-formats.md). The engine does not read those files
+  yet.
 
 ## Tests
 

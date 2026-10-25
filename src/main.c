@@ -28,6 +28,8 @@ usage(void)
 	    "  --pack DIR    asset pack with a pack.ini, over the data;\n"
 	    "                later packs take priority\n"
 	    "  --lang LANG   eng, fre or ger (default: eng)\n"
+	    "  --saves DIR   saved games (default: $STMALO_SAVES, else\n"
+	    "                ~/.local/share/stmalo/saves)\n"
 	    "\n"
 	    "commands:\n"
 	    "  (none)        play [--screenshot OUT.png [--frames N]]\n"
@@ -92,7 +94,7 @@ int
 main(int argc, char **argv)
 {
 	const char *data, *pack[MAX_PACKS], *id = NULL, *out = NULL;
-	const char *shot = NULL, *lang = "eng", *script = NULL;
+	const char *shot = NULL, *lang = "eng", *script = NULL, *saves = NULL;
 	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT } cmd = PLAY;
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
@@ -110,6 +112,8 @@ main(int argc, char **argv)
 			cmd = VIEWER;
 		else if (strcmp(argv[a], "--lang") == 0 && a + 1 < argc)
 			lang = argv[++a];
+		else if (strcmp(argv[a], "--saves") == 0 && a + 1 < argc)
+			saves = argv[++a];
 		else if (strcmp(argv[a], "--script") == 0 && a + 2 < argc) {
 			cmd = SCRIPT;
 			script = argv[++a];
@@ -158,10 +162,10 @@ main(int argc, char **argv)
 		usage();
 	switch (cmd) {
 	case PLAY:
-		rc = play_run(packs, lang, shot, shot_frames);
+		rc = play_run(packs, lang, saves, shot, shot_frames);
 		break;
 	case SCRIPT:
-		rc = play_headless(packs, lang, script, out);
+		rc = play_headless(packs, lang, saves, script, out);
 		break;
 	case LIST:
 		rc = list_ids(packs);

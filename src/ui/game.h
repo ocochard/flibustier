@@ -87,17 +87,27 @@ struct game {
 	struct text_layout	 options;	/* menu options of the last draw */
 	unsigned		 ticks;		/* on the current screen */
 	struct image		 bg;		/* current background */
+	uint8_t			 highlight[3];	/* selected option colour */
 	struct sprite_bank	 portrait;	/* current portrait, if any */
 	int			 quit;
 
 	struct career		 career;
 	struct sim		 sim;
-	int			 started;	/* sim holds a new game */
+	int			 started;	/* sim holds a game */
+	size_t			 news_seen;	/* news shown so far */
+	char			 save_dir[512];	/* empty: saving disabled */
+	int			 saving;	/* slot screen: save, not load */
+	char			 slot_desc[10][96];	/* "" when empty */
+	char			 msg[128];	/* one-line feedback */
 	char			 err[256];
 };
 
-/* Returns 0, or -1 with a message in g->err. */
-int	game_init(struct game *g, struct packs *packs, const char *lang);
+/*
+ * Returns 0, or -1 with a message in g->err.  "save_dir" may be NULL or
+ * empty to disable saved games.
+ */
+int	game_init(struct game *g, struct packs *packs, const char *lang,
+	    const char *save_dir);
 void	game_free(struct game *g);
 
 void	game_event(struct game *g, const struct ui_event *ev);

@@ -33,6 +33,7 @@ add_library(stmalo_core STATIC
 	src/sim/json.c
 	src/sim/proto.c
 	src/sim/rng.c
+	src/sim/save.c
 	src/sim/sim.c
 	src/gfx/fb.c
 	src/gfx/text.c

@@ -151,9 +151,13 @@ Status (2026-10-26): start flow done, both in a window and headless:
   ability for a new career, or one of the famous expeditions;
 - the choices create the simulation.
 
-Still to do: the Hall of Fame and saved games (they need the save
-format), the title sprites, and the portrait positions, which are a
-guess (see `src/ui/screens.c`).
+Saved games work (2026-10-26): 10 slots, each a JSON state file, saved
+from a stand-in in-game menu and loaded from the welcome menu. The
+original's save layout is documented at block level, so an importer is
+possible later.
+
+Still to do: the Hall of Fame, the title sprites, and the portrait
+positions, which are a guess (see `src/ui/screens.c`).
 
 
 - Indexed framebuffer, palette shader, fades.
@@ -262,8 +266,9 @@ guess (see `src/ui/screens.c`).
 
 ## Open questions for the maintainer
 
-- Must saves be compatible with the original game, or is our own save
-  format acceptable?
+- Must saves be compatible with the original game? The engine has its
+  own format; importing original saves is possible later, since their
+  layout is known at block level.
 - Should the 16-colour art mode be supported? (Proposed: no.)
 - Should the open pack live in this repository, or in a separate
   repository with its own licence (for example CC BY-SA for art and

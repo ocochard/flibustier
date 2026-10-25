@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	1
+#define STATE_VERSION	2
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -144,7 +144,19 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_hex64(b, s->rng.state);
 	jb_raw(b, ",");
 	jb_hex64(b, s->rng.inc);
-	jb_raw(b, "],\"era\":");
+	jb_raw(b, "],\"player\":{\"name\":");
+	jb_str(b, s->player.name);
+	jb_raw(b, ",\"title\":");
+	jb_str(b, s->player.title);
+	jb_raw(b, ",\"nation\":");
+	jb_int(b, s->player.nation);
+	jb_raw(b, ",\"difficulty\":");
+	jb_int(b, s->player.difficulty);
+	jb_raw(b, ",\"ability\":");
+	jb_int(b, s->player.ability);
+	jb_raw(b, ",\"expedition\":");
+	jb_int(b, s->player.expedition);
+	jb_raw(b, "},\"era\":");
 	jb_int(b, s->era_year);
 	jb_raw(b, ",\"year\":");
 	jb_int(b, s->year);
@@ -226,6 +238,34 @@ get_array(const struct json *obj, const char *key, size_t n,
 	return (0);
 }
 
+static int
+player_from_json(struct sim_player *p, const struct json *j, char *err,
+    size_t errlen)
+{
+	const char *name = json_get_str(j, "name");
+	const char *title = json_get_str(j, "title");
+
+	memset(p, 0, sizeof(*p));
+	if (name == NULL || title == NULL || strlen(name) >= sizeof(p->name) ||
+	    strlen(title) >= sizeof(p->title)) {
+		snprintf(err, errlen, "bad player name or title");
+		return (-1);
+	}
+	strcpy(p->name, name);
+	strcpy(p->title, title);
+	p->nation = (int)json_get_int(j, "nation", -1);
+	p->difficulty = (int)json_get_int(j, "difficulty", -1);
+	p->ability = (int)json_get_int(j, "ability", -1);
+	p->expedition = (int)json_get_int(j, "expedition", -2);
+	if (p->nation < 0 || p->nation > 3 || p->difficulty < 0 ||
+	    p->difficulty > 3 || p->ability < 0 || p->ability > 4 ||
+	    p->expedition < -1 || p->expedition > 5) {
+		snprintf(err, errlen, "bad player");
+		return (-1);
+	}
+	return (0);
+}
+
 int
 sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 {
@@ -248,6 +288,9 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		snprintf(err, errlen, "bad rng");
 		return (-1);
 	}
+	if (player_from_json(&tmp.player, json_get(j, "player"), err,
+	    errlen) != 0)
+		return (-1);
 	tmp.era_year = (int)json_get_int(j, "era", 0);
 	tmp.year = (int)json_get_int(j, "year", 0);
 	tmp.day_of_year = (int)json_get_int(j, "day_of_year", -1);
@@ -402,6 +445,7 @@ cmd_new_game(struct session *ss, const struct json *cmd, struct jbuf *out)
 		return;
 	}
 	sim_new_game(&ss->sim, &towns, &scn, (uint64_t)seed);
+	ss->sim.player.nation = nat;
 	ss->started = 1;
 	jb_raw(out, "{\"ok\":true,\"scenario\":");
 	jb_str(out, scn.name);

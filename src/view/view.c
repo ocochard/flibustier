@@ -338,7 +338,7 @@ load_world(struct view *v, int year, char *err, size_t errlen)
 	}
 	v->map = base.pixels;	/* the pixels are tile numbers */
 	if (year != 1560) {
-		/* Open question: patches may chain era to era instead. */
+		/* Every era patches the 1560 map, as the game does. */
 		snprintf(id, sizeof(id), "patch/map%d", year);
 		if (packs_load(v->packs, id, &b) != 0 ||
 		    rsd_apply(b.data, b.len, v->map, WORLD_W * WORLD_H) != 0) {
