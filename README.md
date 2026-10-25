@@ -49,12 +49,23 @@ game data are skipped unless `STMALO_DATA` points to the GOG `DATA.DAT`
 STMALO_DATA=~/games/pirates_gold ctest --test-dir build
 ```
 
-## Asset viewer
-
-The only feature so far is a viewer for the original assets:
+## Running
 
 ```sh
-./build/stmalo --data ~/games/pirates_gold
+./build/stmalo --data ~/games/pirates_gold [--lang eng|fre|ger]
+```
+
+So far this runs the start of the game: the intro, the welcome menu, and
+the choices that create a new career or a famous expedition.
+`--script "enter down enter ..." out.png` plays the same screens without
+a window and saves the last one, for tests and bots.
+
+## Asset viewer
+
+A viewer for the original assets:
+
+```sh
+./build/stmalo --data ~/games/pirates_gold --viewer
 ```
 
 Up/Down picks an asset, Left/Right steps through its frames, PgUp/PgDn

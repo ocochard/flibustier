@@ -66,9 +66,12 @@ The engine runs from asset packs:
    `PIRATESG.EXE` are per build, so they live in a per-hash table. Refuse
    unknown builds with a clear message.
 3. **Logical 640x480 screen, with an indexed mode and a true-colour mode.**
-   - Indexed: an 8-bit framebuffer drawn through a fragment shader with a
-     256x1 palette texture. This gives faithful palette cycling (the sea
-     uses indices 0..39) and fades.
+   - Indexed: an 8-bit framebuffer plus a 256-colour palette, as on the
+     original. Palette cycling and fades are just palette changes.
+     - It is converted to RGB on the CPU (`fb_to_rgb`), which is cheap
+       at 640x480 and lets the same frame go to a window, a PNG or a
+       test without a GPU.
+     - A palette shader stays possible if profiling ever asks for it.
    - True colour: RGBA textures, which replacement art needs. These packs
      may be higher resolution: a pack declares its scale (1x, 2x, ...),
      and the layout stays in 640x480 logical coordinates.
@@ -142,6 +145,16 @@ player are still to come.
   its screens second.
 
 ### Phase 2: presentation shell
+
+Status (2026-10-26): start flow done, both in a window and headless:
+- intro, welcome menu, then era, nationality, name, difficulty and
+  ability for a new career, or one of the famous expeditions;
+- the choices create the simulation.
+
+Still to do: the Hall of Fame and saved games (they need the save
+format), the title sprites, and the portrait positions, which are a
+guess (see `src/ui/screens.c`).
+
 
 - Indexed framebuffer, palette shader, fades.
 - Text renderer: PIRATE1-4 fonts, drop capitals, the markup (`~` menus,

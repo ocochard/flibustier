@@ -17,6 +17,7 @@
 #include "assets/text.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
+#include "gfx/text.h"
 #include "view.h"
 
 #define WORLD_W		640	/* cells */
@@ -215,76 +216,37 @@ load_font(struct packs *packs, const char *id, struct font *f)
 	return (rc);
 }
 
-static int
-glyph_advance(const struct font *f, int c)
-{
-	if (c == ' ')
-		return (f->height / 3);
-	if (c < (int)f->first || (size_t)(c - f->first) >= f->count)
-		return (0);
-	return (f->glyphs[c - f->first].advance);
-}
-
+/* Text through the shared renderer, plotting packed 0xRRGGBB colours. */
 static void
-draw_glyph(struct rgb *o, const struct font *f, int pen, int y, int c,
-    const uint8_t col[3])
+plot_rgb(void *arg, int x, int y, uint32_t ink)
 {
-	size_t g;
-	int gx, gy;
+	const uint8_t c[3] = { (uint8_t)(ink >> 16), (uint8_t)(ink >> 8),
+	    (uint8_t)ink };
 
-	if (c < (int)f->first || (size_t)(c - f->first) >= f->count)
-		return;
-	g = (size_t)(c - f->first);
-	for (gy = 0; gy < f->height; gy++)
-		for (gx = 0; gx < f->cell_w; gx++)
-			if (font_pixel(f, g, gx, gy))
-				put(o, pen - f->origin_x + gx, y + gy, col);
+	put(arg, x, y, c);
 }
 
-/* Width in pixels of the word starting at s (stops at space or break). */
-static int
-word_width(const struct font *f, const char *s)
+static uint32_t
+packed(const uint8_t c[3])
 {
-	int w = 0, c;
-
-	while (*s != '\0' && *s != ' ' && *s != '\r' && *s != '\n') {
-		c = utf8_next_macroman(&s);
-		w += glyph_advance(f, c);
-	}
-	return (w);
+	return ((uint32_t)c[0] << 16 | (uint32_t)c[1] << 8 | c[2]);
 }
 
-/*
- * Draw UTF-8 text with an original font, wrapping at "maxw".  '\r' and
- * '\n' break lines; other control bytes are skipped.  Returns the y below
- * the last line.
- */
+/* Returns the y below the text. */
 static int
 draw_text(struct rgb *o, const struct font *f, int x, int y, int maxw,
     const char *s, const uint8_t col[3])
 {
-	int pen = x, c, line = f->height + 2;
+	struct text_target t = { plot_rgb, o };
+	struct text_style st;
+	struct text_layout lay;
 
-	while (*s != '\0') {
-		if (*s == '\r' || *s == '\n') {
-			s++;
-			pen = x;
-			y += line;
-			continue;
-		}
-		if (*s != ' ' && pen > x && pen + word_width(f, s) > x + maxw) {
-			pen = x;
-			y += line;
-		}
-		c = utf8_next_macroman(&s);
-		if (c < 0x20)
-			continue;
-		if (c == ' ' && pen == x)
-			continue;	/* no leading space after a wrap */
-		draw_glyph(o, f, pen, y, c, col);
-		pen += glyph_advance(f, c);
-	}
-	return (y + line);
+	memset(&st, 0, sizeof(st));
+	st.font = f;
+	st.ink = st.highlight = packed(col);
+	st.line_gap = 2;
+	text_draw(&t, &st, x, y, maxw, s, -1, &lay);
+	return (y + lay.height);
 }
 
 static int

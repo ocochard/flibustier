@@ -1,0 +1,239 @@
+/*
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026, Olivier Cochard-Labbé
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "assets/pcx.h"
+#include "assets/scenario.h"
+#include "assets/towns.h"
+#include "game.h"
+#include "screen.h"
+
+#define FADE_STEP	32	/* brightness per tick: 8 ticks per fade */
+
+const char *
+game_str(const struct game *g, size_t i)
+{
+	return (i < g->cstr.count ? g->cstr.str[i] : "");
+}
+
+const char *
+game_word(const struct game *g, size_t group, size_t i)
+{
+	if (group >= g->cstn.count || i >= g->cstn.groups[group].count)
+		return ("");
+	return (g->cstn.groups[group].str[i]);
+}
+
+static int
+load_text(struct game *g)
+{
+	struct blob b;
+	char id[32];
+	int rc;
+
+	snprintf(id, sizeof(id), "text/%s/cstr", g->lang);
+	if (packs_load(g->packs, id, &b) != 0)
+		return (-1);
+	rc = cstr_decode(b.data, b.len, &g->cstr);
+	blob_free(&b);
+	if (rc != 0)
+		return (-1);
+	snprintf(id, sizeof(id), "text/%s/cstn", g->lang);
+	if (packs_load(g->packs, id, &b) != 0)
+		return (-1);
+	rc = cstn_decode(b.data, b.len, &g->cstn);
+	blob_free(&b);
+	return (rc);
+}
+
+static int
+load_fonts(struct game *g)
+{
+	struct blob b;
+	char id[32];
+	int i, rc;
+
+	for (i = 0; i < GAME_FONTS; i++) {
+		snprintf(id, sizeof(id), "font/pirate%d", i + 1);
+		if (packs_load(g->packs, id, &b) != 0)
+			return (-1);
+		rc = font_decode(b.data, b.len, &g->font[i]);
+		blob_free(&b);
+		if (rc != 0)
+			return (-1);
+	}
+	if (packs_load(g->packs, "font/caps", &b) != 0)
+		return (-1);
+	rc = caps_decode(b.data, b.len, &g->caps);
+	blob_free(&b);
+	return (rc);
+}
+
+int
+game_init(struct game *g, struct packs *packs, const char *lang)
+{
+	struct blob b;
+
+	memset(g, 0, sizeof(*g));
+	g->packs = packs;
+	snprintf(g->lang, sizeof(g->lang), "%s", lang);
+	if (load_text(g) != 0) {
+		snprintf(g->err, sizeof(g->err), "cannot load %s text", lang);
+		return (-1);
+	}
+	if (load_fonts(g) != 0) {
+		snprintf(g->err, sizeof(g->err), "cannot load the fonts");
+		return (-1);
+	}
+	if (packs_load(packs, "program/main", &b) != 0 ||
+	    (g->layout = exe_identify(b.data, b.len)) == NULL) {
+		blob_free(&b);
+		snprintf(g->err, sizeof(g->err),
+		    "missing or unknown PIRATESG.EXE");
+		return (-1);
+	}
+	g->exe = b.data;	/* kept for the town and scenario tables */
+	g->exe_len = b.len;
+	g->career.expedition = -1;
+	g->brightness = 0;
+	g->screen = &screen_intro;
+	g->fading = 1;
+	g->screen->enter(g);
+	return (0);
+}
+
+void
+game_free(struct game *g)
+{
+	int i;
+
+	strtab_free(&g->cstr);
+	strgroups_free(&g->cstn);
+	for (i = 0; i < GAME_FONTS; i++)
+		font_free(&g->font[i]);
+	font_free(&g->caps);
+	image_free(&g->bg);
+	bank_free(&g->portrait);
+	free(g->exe);
+}
+
+void
+game_goto(struct game *g, const struct screen *s)
+{
+	if (g->fading == -1)
+		return;		/* already leaving */
+	g->next = s;
+	g->fading = -1;
+}
+
+int
+game_background(struct game *g, const char *pic)
+{
+	struct blob b;
+	int rc;
+
+	image_free(&g->bg);
+	if (packs_load(g->packs, pic, &b) != 0)
+		return (-1);
+	rc = pcx_decode(b.data, b.len, &g->bg);
+	blob_free(&b);
+	if (rc == 0)
+		memcpy(g->fb.pal, g->bg.palette, sizeof(g->fb.pal));
+	return (rc);
+}
+
+int
+game_portrait(struct game *g, const char *spr)
+{
+	struct blob b;
+	int rc;
+
+	bank_free(&g->portrait);
+	if (spr == NULL)
+		return (0);
+	if (packs_load(g->packs, spr, &b) != 0)
+		return (-1);
+	rc = bank_decode_runs(b.data, b.len, &g->portrait);
+	blob_free(&b);
+	return (rc);
+}
+
+void
+game_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->fading == -1 || g->quit)
+		return;		/* input is ignored while leaving a screen */
+	g->screen->event(g, ev);
+}
+
+void
+game_tick(struct game *g)
+{
+	if (g->fading < 0) {
+		g->brightness -= FADE_STEP;
+		if (g->brightness <= 0) {
+			g->brightness = 0;
+			g->screen = g->next;
+			g->next = NULL;
+			g->ticks = 0;
+			g->selected = 0;
+			memset(&g->options, 0, sizeof(g->options));
+			g->fading = 1;
+			if (g->screen == NULL) {
+				g->quit = 1;
+				return;
+			}
+			g->screen->enter(g);
+		}
+	} else if (g->fading > 0) {
+		g->brightness += FADE_STEP;
+		if (g->brightness >= 256) {
+			g->brightness = 256;
+			g->fading = 0;
+		}
+	}
+	if (g->screen != NULL && g->screen->tick != NULL)
+		g->screen->tick(g);
+	g->ticks++;
+}
+
+void
+game_draw(struct game *g)
+{
+	if (g->screen == NULL)
+		return;
+	if (g->bg.pixels != NULL)
+		fb_image(&g->fb, &g->bg, 0, 0, 0);
+	else
+		fb_clear(&g->fb, 0);
+	g->screen->draw(g);
+}
+
+/* Start the simulation from the player's choices. */
+int
+game_start_career(struct game *g)
+{
+	struct era_towns era;
+	struct scenario scn;
+	int index;
+
+	index = g->career.expedition >= 0 ?
+	    SCENARIO_CAREERS + g->career.expedition :
+	    scenario_career(g->career.era, g->career.nation == NATION_SPAIN ?
+	    SCN_SPAIN : (enum scenario_nation)(g->career.nation - 1));
+	if (scenario_load(g->layout, g->exe, g->exe_len, index, &scn) != 0 ||
+	    towns_load(g->layout, g->exe, g->exe_len, g->career.era,
+	    &era) != 0)
+		return (-1);
+	snprintf(g->career.title, sizeof(g->career.title), "%s", scn.name);
+	/* A fixed seed for now; it will come from the clock or a setting. */
+	sim_new_game(&g->sim, &era, &scn, 1);
+	g->started = 1;
+	return (0);
+}

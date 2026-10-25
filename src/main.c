@@ -11,6 +11,7 @@
 #include "raylib.h"
 
 #include "data/pack.h"
+#include "play.h"
 #include "view/view.h"
 #include "viewer.h"
 
@@ -26,10 +27,14 @@ usage(void)
 	    "                extracted CD (default: $STMALO_DATA)\n"
 	    "  --pack DIR    asset pack with a pack.ini, over the data;\n"
 	    "                later packs take priority\n"
+	    "  --lang LANG   eng, fre or ger (default: eng)\n"
 	    "\n"
 	    "commands:\n"
+	    "  (none)        play [--screenshot OUT.png [--frames N]]\n"
+	    "  --script STEPS OUT.png\n"
+	    "                play without a window, then save the screen\n"
 	    "  --viewer [--id ID] [--screenshot OUT.png [--frames N]]\n"
-	    "                browse assets (default)\n"
+	    "                browse assets\n"
 	    "  --list        print every asset ID\n"
 	    "  --export ID OUT.png [--frame N] [--tick N]\n"
 	    "                render one asset frame to a PNG, no window\n");
@@ -87,8 +92,8 @@ int
 main(int argc, char **argv)
 {
 	const char *data, *pack[MAX_PACKS], *id = NULL, *out = NULL;
-	const char *shot = NULL;
-	enum { VIEWER, LIST, EXPORT } cmd = VIEWER;
+	const char *shot = NULL, *lang = "eng", *script = NULL;
+	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT } cmd = PLAY;
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
@@ -103,7 +108,13 @@ main(int argc, char **argv)
 			pack[npacks++] = argv[++a];
 		else if (strcmp(argv[a], "--viewer") == 0)
 			cmd = VIEWER;
-		else if (strcmp(argv[a], "--list") == 0)
+		else if (strcmp(argv[a], "--lang") == 0 && a + 1 < argc)
+			lang = argv[++a];
+		else if (strcmp(argv[a], "--script") == 0 && a + 2 < argc) {
+			cmd = SCRIPT;
+			script = argv[++a];
+			out = argv[++a];
+		} else if (strcmp(argv[a], "--list") == 0)
 			cmd = LIST;
 		else if (strcmp(argv[a], "--export") == 0 && a + 2 < argc) {
 			cmd = EXPORT;
@@ -142,7 +153,16 @@ main(int argc, char **argv)
 		return (1);
 	}
 
+	if (strcmp(lang, "eng") != 0 && strcmp(lang, "fre") != 0 &&
+	    strcmp(lang, "ger") != 0)
+		usage();
 	switch (cmd) {
+	case PLAY:
+		rc = play_run(packs, lang, shot, shot_frames);
+		break;
+	case SCRIPT:
+		rc = play_headless(packs, lang, script, out);
+		break;
 	case LIST:
 		rc = list_ids(packs);
 		break;

@@ -34,6 +34,11 @@ add_library(stmalo_core STATIC
 	src/sim/proto.c
 	src/sim/rng.c
 	src/sim/sim.c
+	src/gfx/fb.c
+	src/gfx/text.c
+	src/ui/game.c
+	src/ui/screens.c
+	src/ui/script.c
 	src/view/view.c)
 target_include_directories(stmalo_core PUBLIC src)
 target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
@@ -70,7 +75,7 @@ endif()
 # Some raylib builds (FreeBSD raylib-6.0 package) omit libm and pthreads
 # from their own dependencies, so link them explicitly.
 find_package(Threads REQUIRED)
-add_executable(stmalo src/main.c src/viewer.c)
+add_executable(stmalo src/main.c src/play.c src/viewer.c)
 target_link_libraries(stmalo PRIVATE stmalo_core ${STMALO_RAYLIB}
 	Threads::Threads)
 if(UNIX)
@@ -88,13 +93,14 @@ target_compile_options(stmalo-sim PRIVATE ${STMALO_WARNINGS})
 # reported as skipped.
 include(CTest)
 if(BUILD_TESTING)
-	foreach(t test_formats test_original test_sim)
+	foreach(t test_formats test_original test_sim test_ui)
 		add_executable(${t} tests/${t}.c)
 		target_link_libraries(${t} PRIVATE stmalo_core)
 		target_compile_options(${t} PRIVATE ${STMALO_WARNINGS})
 		add_test(NAME ${t} COMMAND ${t})
 	endforeach()
-	set_tests_properties(test_original PROPERTIES SKIP_RETURN_CODE 77)
+	set_tests_properties(test_original test_ui PROPERTIES
+	    SKIP_RETURN_CODE 77)
 	file(GLOB replays ${CMAKE_SOURCE_DIR}/tests/replays/*.jsonl)
 	foreach(r ${replays})
 		get_filename_component(name ${r} NAME_WE)
