@@ -9,8 +9,43 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
-# Use a system raylib when available, otherwise fetch a pinned release.
-find_package(raylib 5.5 QUIET)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+	set(STMALO_WARNINGS -Wall -Wextra -Wpedantic)
+endif()
+
+# Engine core: data access and asset decoding, no raylib dependency, so
+# headless tools and tests can use it.
+add_library(stmalo_core STATIC
+	src/data/iso9660.c
+	src/data/pack.c
+	src/assets/font.c
+	src/assets/image.c
+	src/assets/img.c
+	src/assets/pcx.c
+	src/assets/rsd.c
+	src/assets/sprite.c
+	src/assets/text.c
+	src/assets/tileset.c)
+target_include_directories(stmalo_core PUBLIC src)
+target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
+
+# Use a system raylib 5.5 or later when available (CMake config or
+# pkg-config), otherwise fetch a pinned release.
+set(STMALO_RAYLIB raylib)
+find_package(raylib QUIET)
+if(raylib_FOUND AND raylib_VERSION AND raylib_VERSION VERSION_LESS 5.5)
+	set(raylib_FOUND FALSE)
+endif()
+if(NOT raylib_FOUND)
+	find_package(PkgConfig QUIET)
+	if(PKG_CONFIG_FOUND)
+		pkg_check_modules(RAYLIB QUIET IMPORTED_TARGET raylib>=5.5)
+		if(RAYLIB_FOUND)
+			set(STMALO_RAYLIB PkgConfig::RAYLIB)
+			set(raylib_FOUND TRUE)
+		endif()
+	endif()
+endif()
 if(NOT raylib_FOUND)
 	message(STATUS "System raylib not found, fetching raylib 5.5")
 	include(FetchContent)
@@ -24,8 +59,19 @@ if(NOT raylib_FOUND)
 endif()
 
 add_executable(stmalo src/main.c)
-target_link_libraries(stmalo PRIVATE raylib)
+target_link_libraries(stmalo PRIVATE stmalo_core ${STMALO_RAYLIB})
+target_compile_options(stmalo PRIVATE ${STMALO_WARNINGS})
 
-if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-	target_compile_options(stmalo PRIVATE -Wall -Wextra -Wpedantic)
+# Tests.  test_original needs the game data: set STMALO_DATA to the GOG
+# DATA.DAT (or an install directory) in the environment, otherwise it is
+# reported as skipped.
+include(CTest)
+if(BUILD_TESTING)
+	foreach(t test_formats test_original)
+		add_executable(${t} tests/${t}.c)
+		target_link_libraries(${t} PRIVATE stmalo_core)
+		target_compile_options(${t} PRIVATE ${STMALO_WARNINGS})
+		add_test(NAME ${t} COMMAND ${t})
+	endforeach()
+	set_tests_properties(test_original PROPERTIES SKIP_RETURN_CODE 77)
 endif()

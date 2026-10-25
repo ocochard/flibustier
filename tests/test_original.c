@@ -1,0 +1,316 @@
+/*
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026, Olivier Cochard-Labbé
+ *
+ * Tests against the user's own Pirates! Gold data.  Set STMALO_DATA to
+ * the GOG DATA.DAT, its install directory, or an extracted copy.  The
+ * test is skipped (exit code 77) when it is not set.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "data/pack.h"
+#include "assets/font.h"
+#include "assets/img.h"
+#include "assets/pcx.h"
+#include "assets/rsd.h"
+#include "assets/sprite.h"
+#include "assets/text.h"
+#include "assets/tileset.h"
+
+#define SKIP	77
+
+static int failures;
+
+#define CHECK(cond) do {						\
+	if (!(cond)) {							\
+		fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__,	\
+		    __LINE__, #cond);					\
+		failures++;						\
+	}								\
+} while (0)
+
+static int
+load_pcx(struct packs *packs, const char *id, struct image *img)
+{
+	struct blob b;
+	int rc;
+
+	if (packs_load(packs, id, &b) != 0)
+		return (-1);
+	rc = strcmp(b.ext, "pcx") == 0 ? pcx_decode(b.data, b.len, img) : -1;
+	blob_free(&b);
+	return (rc);
+}
+
+static void
+test_pictures(struct packs *packs)
+{
+	static const struct {
+		const char	*id;
+		int		 w, h;
+	} pics[] = {
+		{ "pic/town",		640, 480 },
+		{ "pic/tavern",		640, 480 },
+		{ "pic/f-engl",		800, 400 },
+		{ "pic/s_frig",		604, 403 },
+		{ "pic/baseflag",	200, 200 },
+	};
+	struct image img;
+	size_t i;
+
+	for (i = 0; i < sizeof(pics) / sizeof(pics[0]); i++) {
+		CHECK(load_pcx(packs, pics[i].id, &img) == 0);
+		CHECK(img.w == pics[i].w && img.h == pics[i].h);
+		image_free(&img);
+	}
+}
+
+static void
+test_era_maps(struct packs *packs)
+{
+	static const char *eras[] = {
+		"patch/map1600", "patch/map1620", "patch/map1640",
+		"patch/map1660", "patch/map1680",
+	};
+	struct image base;
+	struct blob b;
+	uint8_t *px;
+	size_t i, n, changed, k;
+
+	CHECK(load_pcx(packs, "pic/map1560", &base) == 0);
+	if (base.pixels == NULL)
+		return;
+	n = (size_t)base.w * base.h;
+	CHECK(n == 640 * 480);
+	if ((px = malloc(n)) == NULL)
+		return;
+	for (i = 0; i < sizeof(eras) / sizeof(eras[0]); i++) {
+		memcpy(px, base.pixels, n);
+		CHECK(packs_load(packs, eras[i], &b) == 0);
+		CHECK(rsd_apply(b.data, b.len, px, n) == 0);
+		blob_free(&b);
+		for (changed = 0, k = 0; k < n; k++)
+			changed += px[k] != base.pixels[k];
+		/* Each era changes a few hundred pixels of the 1560 map. */
+		CHECK(changed > 100 && changed < 2000);
+	}
+	free(px);
+	image_free(&base);
+}
+
+static void
+test_other_ids(struct packs *packs)
+{
+	static const char *ids[] = {
+		"program/main", "text/eng/cstr", "text/fre/cstn",
+		"spr/tavern", "cur/ship0a", "grp/mybody", "img/cloud",
+		"img/wpnsel", "tiles/map", "tiles15/sbtl", "font/pirate1",
+		"ui/misc", "driver/asound",
+	};
+	struct blob b;
+	size_t i;
+
+	for (i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
+		if (packs_load(packs, ids[i], &b) != 0) {
+			fprintf(stderr, "missing %s: %s\n", ids[i],
+			    packs_error(packs));
+			failures++;
+			continue;
+		}
+		CHECK(b.len > 0);
+		blob_free(&b);
+	}
+	CHECK(packs_load(packs, "text/spa/cstr", &b) == -1);
+}
+
+static int
+starts(const char *s, const char *prefix)
+{
+	return (strncmp(s, prefix, strlen(prefix)) == 0);
+}
+
+/* Decode one asset with the decoder its ID prefix calls for. */
+static int
+decode_any(const char *id, const struct blob *b)
+{
+	struct image img;
+	struct sprite_bank bank;
+	struct sprite_group grp;
+	struct tileset ts;
+	struct font font;
+	struct strtab tab;
+	struct strgroups groups;
+	int rc = 0;
+
+	if (starts(id, "pic/")) {
+		if ((rc = pcx_decode(b->data, b->len, &img)) == 0)
+			image_free(&img);
+	} else if (starts(id, "spr/") || starts(id, "ui/")) {
+		if ((rc = bank_decode_runs(b->data, b->len, &bank)) == 0)
+			bank_free(&bank);
+	} else if (starts(id, "cur/") || starts(id, "tiles15/")) {
+		if ((rc = bank_decode_raw(b->data, b->len, &bank)) == 0)
+			bank_free(&bank);
+	} else if (starts(id, "grp/")) {
+		if ((rc = group_decode(b->data, b->len, &grp)) == 0)
+			group_free(&grp);
+	} else if (starts(id, "img/")) {
+		if ((rc = img_decode(b->data, b->len, &img)) == 0)
+			image_free(&img);
+	} else if (starts(id, "tiles/")) {
+		if ((rc = tileset_decode(b->data, b->len, &ts)) == 0)
+			tileset_free(&ts);
+	} else if (strcmp(id, "font/caps") == 0) {
+		if ((rc = caps_decode(b->data, b->len, &font)) == 0)
+			font_free(&font);
+	} else if (starts(id, "font/")) {
+		if ((rc = font_decode(b->data, b->len, &font)) == 0)
+			font_free(&font);
+	} else if (starts(id, "text/") && strstr(id, "/cstr") != NULL) {
+		if ((rc = cstr_decode(b->data, b->len, &tab)) == 0)
+			strtab_free(&tab);
+	} else if (starts(id, "text/")) {
+		if ((rc = cstn_decode(b->data, b->len, &groups)) == 0)
+			strgroups_free(&groups);
+	}
+	/* Patches are checked by test_era_maps; others are opaque. */
+	return (rc);
+}
+
+static void
+test_all_assets(struct packs *packs)
+{
+	char **ids;
+	size_t n, i, decoded;
+	struct blob b;
+
+	CHECK(packs_list(packs, &ids, &n) == 0);
+	for (decoded = 0, i = 0; i < n; i++) {
+		if (packs_load(packs, ids[i], &b) != 0) {
+			fprintf(stderr, "cannot load listed %s\n", ids[i]);
+			failures++;
+			continue;
+		}
+		if (decode_any(ids[i], &b) != 0) {
+			fprintf(stderr, "cannot decode %s\n", ids[i]);
+			failures++;
+		} else
+			decoded++;
+		blob_free(&b);
+	}
+	printf("%zu assets listed, %zu loaded and decoded\n", n, decoded);
+	/* 104 pictures alone; the CD holds about 250 asset files. */
+	CHECK(n > 200);
+	packs_list_free(ids, n);
+}
+
+static void
+test_details(struct packs *packs)
+{
+	static const int heights[] = { 25, 15, 14, 30 };
+	char id[32];
+	struct blob b;
+	struct sprite_bank bank;
+	struct sprite_group grp;
+	struct tileset ts;
+	struct font font;
+	struct strtab tab;
+	struct strgroups groups;
+	int i;
+
+	CHECK(packs_load(packs, "spr/buysell", &b) == 0);
+	CHECK(bank_decode_runs(b.data, b.len, &bank) == 0);
+	CHECK(bank.count == 93);
+	bank_free(&bank);
+	blob_free(&b);
+
+	CHECK(packs_load(packs, "cur/ship0a", &b) == 0);
+	CHECK(bank_decode_raw(b.data, b.len, &bank) == 0);
+	CHECK(bank.count == 8);	/* one frame per heading */
+	bank_free(&bank);
+	blob_free(&b);
+
+	CHECK(packs_load(packs, "grp/mybody", &b) == 0);
+	CHECK(group_decode(b.data, b.len, &grp) == 0);
+	CHECK(grp.count == 16);
+	group_free(&grp);
+	blob_free(&b);
+
+	CHECK(packs_load(packs, "tiles/map", &b) == 0);
+	CHECK(tileset_decode(b.data, b.len, &ts) == 0);
+	CHECK(ts.count == 256 && ts.tile_w == 16 && ts.has_palette);
+	tileset_free(&ts);
+	blob_free(&b);
+	CHECK(packs_load(packs, "tiles/battle", &b) == 0);
+	CHECK(tileset_decode(b.data, b.len, &ts) == 0);
+	CHECK(ts.tile_w == 32 && ts.tile_h == 32);
+	tileset_free(&ts);
+	blob_free(&b);
+
+	for (i = 0; i < 4; i++) {
+		snprintf(id, sizeof(id), "font/pirate%d", i + 1);
+		CHECK(packs_load(packs, id, &b) == 0);
+		CHECK(font_decode(b.data, b.len, &font) == 0);
+		CHECK(font.height == heights[i] && font.count == 143);
+		font_free(&font);
+		blob_free(&b);
+	}
+	CHECK(packs_load(packs, "font/caps", &b) == 0);
+	CHECK(caps_decode(b.data, b.len, &font) == 0);
+	CHECK(font.count == 33 && font.height == 34);
+	font_free(&font);
+	blob_free(&b);
+
+	CHECK(packs_load(packs, "text/fre/cstr", &b) == 0);
+	CHECK(cstr_decode(b.data, b.len, &tab) == 0);
+	CHECK(tab.count == 322);
+	strtab_free(&tab);
+	blob_free(&b);
+
+	CHECK(packs_load(packs, "text/eng/cstn", &b) == 0);
+	CHECK(cstn_decode(b.data, b.len, &groups) == 0);
+	CHECK(groups.count == 108);
+	/* Group 8: ship types smallest first, then "Fort", " (damaged)". */
+	CHECK(groups.groups[8].count == 11 &&
+	    strcmp(groups.groups[8].str[0], "Pinnace") == 0 &&
+	    strcmp(groups.groups[8].str[9], "Fort") == 0);
+	/* Stored counts are wrong in two groups of the original. */
+	CHECK(groups.declared[74] == 5 && groups.groups[74].count == 6);
+	strgroups_free(&groups);
+	blob_free(&b);
+}
+
+int
+main(void)
+{
+	const char *path;
+	struct packs *packs;
+
+	if ((path = getenv("STMALO_DATA")) == NULL || *path == '\0') {
+		printf("STMALO_DATA not set, skipping\n");
+		return (SKIP);
+	}
+	if ((packs = packs_new()) == NULL)
+		return (1);
+	if (packs_add_original(packs, path) != 0) {
+		fprintf(stderr, "%s\n", packs_error(packs));
+		packs_free(packs);
+		return (1);
+	}
+	test_pictures(packs);
+	test_era_maps(packs);
+	test_other_ids(packs);
+	test_all_assets(packs);
+	test_details(packs);
+	packs_free(packs);
+	if (failures > 0) {
+		fprintf(stderr, "%d check(s) failed\n", failures);
+		return (1);
+	}
+	printf("all original data tests passed\n");
+	return (0);
+}

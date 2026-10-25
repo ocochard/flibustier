@@ -7,6 +7,9 @@ All integers are little-endian `u16` unless stated otherwise. "Proven"
 means a decoder consumed every file of that type exactly to EOF and the
 rendered output looked correct.
 
+Decoders: `src/assets/`. Each one is checked against every file of its
+kind on the GOG data by `tests/test_original.c`.
+
 ## Distribution layout
 
 - GOG ships `DATA.DAT`, an ISO 9660 image (volume `PIRATESGOLD`). The game
@@ -95,6 +98,11 @@ Sprite bank of 15x15 frames: `u16 15, u16 15, u16 2`, then 225 pixels and
   literal bytes; otherwise repeat the next byte `b` times.
 - Files: `CLOUD.IMG` (147x88, raw), `SPR/WPNSEL.IMG` (205x386, RLE,
   `ALLEY` palette).
+- Quirk: `WPNSEL.IMG` starts with a zero-length run (`0x80`), and two of
+  its runs overflow their row by 1-2 pixels. The decoder skips zero runs
+  and drops the overflow. Carrying the overflow into the next row instead
+  shifts the picture by up to 2 pixels; the data alone cannot tell which
+  reading is right.
 
 ## *.IMB: tilesets (proven)
 
@@ -114,9 +122,14 @@ Sprite bank of 15x15 frames: `u16 15, u16 15, u16 2`, then 225 pixels and
 ## *.CHR: 1-bit fonts (proven)
 
 - `PIRATE1`-`4.CHR`: 144 fixed-size entries of `filesize / 144` bytes.
-  - Entry 0 is a header (`01 FF hh 00`).
-  - Entry k is character `0x20 + k`: `u16 inkwidth, u16 advance`, then rows
-    of 4-byte big-endian bitmaps, MSB leftmost.
+  - Entry 0 is a header (`01 FF hh 00`; `hh` may be the space width).
+  - Entry k is character `0x20 + k`, verified on `!`, `0`, `B` and `a`:
+    `u16 ink, u16 advance`, then rows of 4-byte big-endian bitmaps, MSB
+    leftmost.
+  - Most glyphs start at column 8 of their 32-pixel cell, and script
+    swashes overhang to the left of it. The pen origin is therefore
+    probably x = 8. `ink` is roughly the last column measured from there.
+    This is inferred from the bitmaps, not from the game code.
   - Heights are 25, 15, 14 and 30. Ink width can exceed advance, so glyphs
     overlap. Entries above 0x7F are accented Latin letters.
 - `CAPS.CHR`: 33 drop capitals, 208 bytes each: `u16 w, u16 46`, then 34
@@ -131,13 +144,19 @@ The first 512 bytes of the matching PCX, presumably a backup for the
 
 - Both start with `u16 offset[N]`, where `N = offset[0] / 2`.
 - `CSTR`: 322 NUL-terminated entries of prose and dialogue.
-- `CSTN`: 108 groups, each `u16 count` followed by `count` NUL-separated
-  strings. Groups include captain names per nation, months, ship types,
+- `CSTN`: 108 groups, each `u16 count` followed by NUL-terminated
+  strings. The stored count is wrong in some groups: ENG/FRE group 74
+  declares 5 strings and holds 6, group 86 declares 13 and holds 11.
+  Decode the strings present in each span and ignore the stored count.
+  The last group is empty.
+- French `CSTR` #106 lacks its terminating NUL. Groups include captain names per nation, months, ship types,
   wealth levels, wind and compass points, damage levels and log formats.
 - `CSTN` group 8 order (probably the internal ship-type enum): Pinnace,
   Sloop, Barque, Cargo fluyt, Merchantman, Frigate, War galleon, Galleon,
-  Fast galleon, Fort.
+  Fast galleon, Fort, then the suffix " (damaged)".
 - Encoding: ASCII plus Mac Roman for accented letters (not CP437).
+- Control bytes 0x01-0x0C, 0x10, 0x14, 0x18 and 0x1B also occur in the
+  text. Their meaning (colour, formatting or variables) is unknown.
 - Markup:
   - `%s`: substitution, the only printf conversion used.
   - `\r`: newline.

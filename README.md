@@ -32,12 +32,21 @@ Requirements:
 - A C99 compiler (clang or gcc)
 - CMake 3.16 or later
 - [raylib](https://github.com/raysan5/raylib) 5.5 or later (optional: if
-  not installed, CMake downloads and builds raylib 5.5)
+  not installed, CMake downloads and builds raylib 5.5). On FreeBSD:
+  `pkg install cmake raylib`
 
 ```sh
 cmake -B build
 cmake --build build
 ./build/stmalo
+```
+
+Run the tests with `ctest --test-dir build`. Tests that need the original
+game data are skipped unless `STMALO_DATA` points to the GOG `DATA.DAT`
+(or its install directory, or an extracted copy of the CD):
+
+```sh
+STMALO_DATA=~/games/pirates_gold ctest --test-dir build
 ```
 
 ## Contributing
