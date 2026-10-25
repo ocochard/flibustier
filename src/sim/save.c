@@ -24,18 +24,29 @@ int
 save_write(const char *path, const struct sim *s, const char *desc,
     char *err, size_t errlen)
 {
-	struct jbuf b = { 0 };
+	struct jbuf compact = { 0 }, b = { 0 };
+	struct json *j;
 	char tmp[1024];
 	FILE *fp;
 	int ok;
 
-	jb_raw(&b, "{\"format\":\"" SAVE_FORMAT "\",\"version\":");
-	jb_int(&b, SAVE_VERSION);
-	jb_raw(&b, ",\"description\":");
-	jb_str(&b, desc);
-	jb_raw(&b, ",\"state\":");
-	sim_to_json(s, &b);
-	jb_raw(&b, "}\n");
+	jb_raw(&compact, "{\"format\":\"" SAVE_FORMAT "\",\"version\":");
+	jb_int(&compact, SAVE_VERSION);
+	jb_raw(&compact, ",\"description\":");
+	jb_str(&compact, desc);
+	jb_raw(&compact, ",\"state\":");
+	sim_to_json(s, &compact);
+	jb_raw(&compact, "}");
+	/* Saves are for people too: one value per line. */
+	j = compact.err ? NULL : json_parse(compact.s, err, errlen);
+	jb_free(&compact);
+	if (j == NULL) {
+		snprintf(err, errlen, "cannot build the save");
+		return (-1);
+	}
+	json_pretty(j, &b);
+	json_free(j);
+	jb_raw(&b, "\n");
 	if (b.err) {
 		snprintf(err, errlen, "out of memory");
 		jb_free(&b);

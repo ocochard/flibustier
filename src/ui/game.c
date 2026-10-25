@@ -104,6 +104,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	g->exe = b.data;	/* kept for the town and scenario tables */
 	g->exe_len = b.len;
 	g->career.expedition = -1;
+	g->hof_new = -1;
 	g->brightness = 0;
 	g->screen = &screen_intro;
 	g->fading = 1;
@@ -142,7 +143,11 @@ game_background(struct game *g, const char *pic)
 	int rc;
 
 	image_free(&g->bg);
-	/* Red reads well on parchment; screens may change it after this. */
+	/* Dark ink and a red highlight suit parchment; screens may change
+	 * them after this. */
+	g->ink[0] = 55;
+	g->ink[1] = 30;
+	g->ink[2] = 10;
 	g->highlight[0] = 170;
 	g->highlight[1] = 20;
 	g->highlight[2] = 10;

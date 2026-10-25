@@ -91,6 +91,12 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   `~/.local/share/stmalo/saves`. It is created when missing.
 - **Writing:** a save goes to a temporary file that is then renamed, so a
   crash never leaves a broken slot.
+- **Readable:** saves are written one value per line so people can read
+  and edit them; any valid JSON loads.
+- **Hall of Fame:** kept in `halloffame.txt` in the same directory: a
+  `# stmalo hall of fame 1` line, then one line per career, best first,
+  with tab-separated fields: score, rating (0 = best), name, title. A
+  hand-edited file is sorted again on load.
 - **Original saves:** the original's `PIRATES-<n>.SAV` layout is in
   [asset-formats](asset-formats.md). The engine does not read those files
   yet.

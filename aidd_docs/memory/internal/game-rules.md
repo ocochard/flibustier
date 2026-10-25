@@ -132,6 +132,28 @@ Fields, as the scenario loader (VA `0x1386c`) uses them:
 | 0x34 | 4x4 table of signed bytes: initial relations, indexed `[a * 4 + b]` with the town nation order (Spain, England, France, Holland) |
 | 0x14-0x33, 0x44-0x59 | other values copied into game state; meaning not traced |
 
+## Retirement and the Hall of Fame (VA `0x45d0`)
+
+When a career ends:
+
+1. A score is computed from several career values (VA `0x5039`). The
+   computation uses floating point and is not specified yet. Its inputs
+   include the years since the start and five values taken from the
+   start scenario, among others.
+2. The score gives a rating `r`, where 0 is best:
+   - if the score is at least 1: `r = max(19 - score / 5, 1) - 1`;
+   - otherwise: `r = min(20 - score / 10, 22) - 1`.
+3. `r / 4`, capped at 3, picks one of four retirement pictures.
+4. Depending on the difficulty and the years elapsed, the game may offer
+   "Remain in retirement / Return to pirating?" (CSTR 72).
+5. It asks "Do you wish to have your exploits recorded in the Pirate
+   Hall of Fame?" (CSTR 73). On "Yes", the career is recorded with its
+   score and rating.
+6. It asks whether to play another game (CSTR 80).
+
+The engine records careers with a stand-in score (months at sea) until
+the systems the real score weighs exist.
+
 ## Open questions
 
 - The diplomacy `range` variable (VA `0x4707e`). It is probably set

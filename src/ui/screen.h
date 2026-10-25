@@ -29,6 +29,8 @@ extern const struct screen screen_ability;
 extern const struct screen screen_summary;
 extern const struct screen screen_voyage;
 extern const struct screen screen_slots;
+extern const struct screen screen_retire;
+extern const struct screen screen_hof;
 
 /* Fade to another screen; NULL quits. */
 void	game_goto(struct game *g, const struct screen *s);

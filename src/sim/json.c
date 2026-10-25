@@ -410,3 +410,71 @@ jb_free(struct jbuf *b)
 	free(b->s);
 	memset(b, 0, sizeof(*b));
 }
+
+static int
+numbers_only(const struct json *j)
+{
+	size_t i;
+
+	for (i = 0; i < j->count; i++)
+		if (j->items[i]->type != JSON_INT)
+			return (0);
+	return (1);
+}
+
+static void
+indent(struct jbuf *b, int level)
+{
+	int i;
+
+	jb_raw(b, "\n");
+	for (i = 0; i < level; i++)
+		jb_raw(b, "  ");
+}
+
+static void
+pretty(const struct json *j, struct jbuf *b, int level)
+{
+	size_t i;
+	int flat;
+
+	switch (j->type) {
+	case JSON_NULL:
+		jb_raw(b, "null");
+		break;
+	case JSON_BOOL:
+		jb_raw(b, j->num ? "true" : "false");
+		break;
+	case JSON_INT:
+		jb_int(b, j->num);
+		break;
+	case JSON_STRING:
+		jb_str(b, j->str);
+		break;
+	case JSON_ARRAY:
+	case JSON_OBJECT:
+		flat = j->type == JSON_ARRAY && numbers_only(j);
+		jb_raw(b, j->type == JSON_ARRAY ? "[" : "{");
+		for (i = 0; i < j->count; i++) {
+			if (i > 0)
+				jb_raw(b, flat ? ", " : ",");
+			if (!flat)
+				indent(b, level + 1);
+			if (j->type == JSON_OBJECT) {
+				jb_str(b, j->keys[i]);
+				jb_raw(b, ": ");
+			}
+			pretty(j->items[i], b, level + 1);
+		}
+		if (!flat && j->count > 0)
+			indent(b, level);
+		jb_raw(b, j->type == JSON_ARRAY ? "]" : "}");
+		break;
+	}
+}
+
+void
+json_pretty(const struct json *j, struct jbuf *b)
+{
+	pretty(j, b, 0);
+}

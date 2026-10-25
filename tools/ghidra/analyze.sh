@@ -25,9 +25,13 @@ lo=${3:-0x38D00}
 hi=${4:-0x3E900}
 here=$(cd "$(dirname "$0")" && pwd)
 
-mkdir -p "$out/proj"
+# Ghidra refuses project paths with a component starting with '.', such
+# as ~/.cache, and the project is only needed during the run.
+proj=$(mktemp -d "${TMPDIR:-/tmp}/stmalo-ghidra.XXXXXX")
+trap 'rm -rf "$proj"' EXIT
+mkdir -p "$out"
 tail -c +$((IMAGE_OFFSET + 1)) "$exe" > "$out/pirates_flat.bin"
-"$GHIDRA/support/analyzeHeadless" "$out/proj" pirates \
+"$GHIDRA/support/analyzeHeadless" "$proj" pirates \
     -import "$out/pirates_flat.bin" -overwrite \
     -loader BinaryLoader -loader-baseAddr 0x0 \
     -processor x86:LE:32:default -cspec gcc \

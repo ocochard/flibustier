@@ -59,4 +59,10 @@ void	jb_int(struct jbuf *b, int64_t v);
 void	jb_str(struct jbuf *b, const char *s);	/* quoted and escaped */
 void	jb_free(struct jbuf *b);
 
+/*
+ * Write "j" for people: one member or item per line, indented by two
+ * spaces per level; arrays of numbers stay on one line.
+ */
+void	json_pretty(const struct json *j, struct jbuf *b);
+
 #endif

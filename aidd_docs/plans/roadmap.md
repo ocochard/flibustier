@@ -156,8 +156,12 @@ from a stand-in in-game menu and loaded from the welcome menu. The
 original's save layout is documented at block level, so an importer is
 possible later.
 
-Still to do: the Hall of Fame, the title sprites, and the portrait
-positions, which are a guess (see `src/ui/screens.c`).
+The Hall of Fame works (2026-10-26): "Exit game" asks the original
+question, then records the career with a stand-in score, until the real
+score's inputs exist.
+
+Still to do: the title sprites, and the portrait positions, which are a
+guess (see `src/ui/screens.c`).
 
 
 - Indexed framebuffer, palette shader, fades.
@@ -266,9 +270,8 @@ positions, which are a guess (see `src/ui/screens.c`).
 
 ## Open questions for the maintainer
 
-- Must saves be compatible with the original game? The engine has its
-  own format; importing original saves is possible later, since their
-  layout is known at block level.
+- ~~Must saves be compatible with the original game?~~ No (maintainer,
+  2026-10-26). Saves use a simple text format of their own.
 - Should the 16-colour art mode be supported? (Proposed: no.)
 - Should the open pack live in this repository, or in a separate
   repository with its own licence (for example CC BY-SA for art and

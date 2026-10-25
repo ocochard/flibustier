@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "sim/hof.h"
 #include "sim/json.h"
 #include "sim/proto.h"
 #include "sim/rng.h"
@@ -364,6 +365,61 @@ test_snapshot(void)
 	jb_free(&r2);
 }
 
+static void
+test_hof(void)
+{
+	static const char *path = "/tmp/stmalo-test-hof.txt";
+	struct hof h, back;
+	struct hof_entry e;
+	char err[128];
+	FILE *fp;
+	int i;
+
+	/* The original's rating scale: 0 is best, 21 worst. */
+	CHECK(hof_rating(100) == 0 && hof_rating(90) == 0);
+	CHECK(hof_rating(5) == 17 && hof_rating(1) == 18);
+	CHECK(hof_rating(0) == 19 && hof_rating(-100) == 21);
+
+	memset(&h, 0, sizeof(h));
+	memset(&e, 0, sizeof(e));
+	for (i = 0; i < 12; i++) {
+		e.score = (i * 7) % 12;	/* 0, 7, 2, 9, 4, 11, 6, 1, 8, 3... */
+		snprintf(e.name, sizeof(e.name), "Captain\t%d", i);
+		snprintf(e.title, sizeof(e.title), "Title %d", i);
+		hof_add(&h, &e);
+	}
+	CHECK(h.count == HOF_ENTRIES);
+	for (i = 1; i < (int)h.count; i++)
+		CHECK(h.entry[i - 1].score >= h.entry[i].score);
+	CHECK(h.entry[0].score == 11 && h.entry[9].score == 2);
+	CHECK(strchr(h.entry[0].name, '\t') == NULL);	/* tabs removed */
+	e.score = 2;	/* ties the last entry: does not displace it */
+	CHECK(hof_add(&h, &e) == -1);
+	e.score = 5;
+	CHECK(hof_add(&h, &e) == 7 && h.entry[9].score == 3);
+
+	CHECK(hof_save(path, &h, err, sizeof(err)) == 0);
+	CHECK(hof_load(path, &back, err, sizeof(err)) == 0);
+	CHECK(memcmp(&h, &back, sizeof(h)) == 0);
+
+	/* Hand edited out of order: sorted on load. */
+	if ((fp = fopen(path, "w")) != NULL) {
+		fputs("# stmalo hall of fame 1\n3\t17\tA\tX\n9\t0\tB\tY\n",
+		    fp);
+		fclose(fp);
+	}
+	CHECK(hof_load(path, &back, err, sizeof(err)) == 0);
+	CHECK(back.count == 2 && strcmp(back.entry[0].name, "B") == 0);
+	if ((fp = fopen(path, "w")) != NULL) {
+		fputs("12 no tabs here\n", fp);
+		fclose(fp);
+	}
+	CHECK(hof_load(path, &back, err, sizeof(err)) == -1);
+	remove(path);
+	/* No file yet: an empty Hall of Fame. */
+	CHECK(hof_load(path, &back, err, sizeof(err)) == 0 && back.count == 0);
+}
+
 int
 main(void)
 {
@@ -372,6 +428,7 @@ main(void)
 	test_rules();
 	test_protocol();
 	test_snapshot();
+	test_hof();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

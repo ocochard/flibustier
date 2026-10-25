@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "sim/hof.h"
 #include "sim/save.h"
 #include "screen.h"
 
@@ -22,6 +23,7 @@
 #define S_ABILITY_PROMPT	67
 #define S_NATION_PROMPT		70
 #define S_CONTINUE		71
+#define S_HOF_QUESTION		73	/* with its own ~Yes ~No options */
 #define S_SAVE_GAME		290
 #define S_LOAD_GAME		320
 #define S_ERA_TEXT		261	/* six era descriptions */
@@ -90,7 +92,7 @@ style(const struct game *g, int font, int caps, struct text_style *st)
 {
 	st->font = &g->font[font];
 	st->caps = caps ? &g->caps : NULL;
-	st->ink = fb_nearest(&g->fb, 55, 30, 10);
+	st->ink = fb_nearest(&g->fb, g->ink[0], g->ink[1], g->ink[2]);
 	st->highlight = fb_nearest(&g->fb, g->highlight[0], g->highlight[1],
 	    g->highlight[2]);
 	st->line_gap = 2;
@@ -705,8 +707,7 @@ voyage_choose(struct game *g, int i)
 		game_goto(g, &screen_slots);
 		break;
 	case TRAVEL_EXIT:
-		g->started = 0;
-		game_goto(g, &screen_welcome);
+		game_goto(g, &screen_retire);
 		break;
 	}
 }
@@ -837,4 +838,121 @@ slots_draw(struct game *g)
 
 const struct screen screen_slots = {
 	"slots", slots_enter, slots_event, NULL, slots_draw,
+};
+
+/* Retirement: offer the Hall of Fame, as the game does. */
+
+/*
+ * Stand-in career score: months at sea.  The original's score weighs
+ * wealth, land, titles and family (FUN_00005039), which the simulation
+ * does not model yet.
+ */
+static long
+career_score(const struct game *g)
+{
+	return (g->sim.day / 30);
+}
+
+static void
+retire_choose(struct game *g, int i)
+{
+	struct hof h;
+	struct hof_entry e;
+	char path[600];
+
+	g->started = 0;
+	g->hof_new = -1;
+	if (i != 0 || g->save_dir[0] == '\0') {
+		game_goto(g, &screen_welcome);
+		return;
+	}
+	hof_path(g->save_dir, path, sizeof(path));
+	if (hof_load(path, &h, g->err, sizeof(g->err)) != 0) {
+		snprintf(g->msg, sizeof(g->msg), "%s", g->err);
+		memset(&h, 0, sizeof(h));
+	}
+	memset(&e, 0, sizeof(e));
+	e.score = career_score(g);
+	e.rating = hof_rating(e.score);
+	snprintf(e.name, sizeof(e.name), "%s", g->sim.player.name);
+	snprintf(e.title, sizeof(e.title), "%s", g->sim.player.title);
+	g->hof_new = hof_add(&h, &e);
+	if (g->hof_new >= 0 &&
+	    hof_save(path, &h, g->err, sizeof(g->err)) != 0)
+		snprintf(g->msg, sizeof(g->msg), "%s", g->err);
+	game_goto(g, &screen_hof);
+}
+
+static void
+retire_event(struct game *g, const struct ui_event *ev)
+{
+	menu_event(g, ev, 2, NULL, retire_choose, &screen_voyage);
+}
+
+static void
+retire_draw(struct game *g)
+{
+	draw(g, FONT_BODY, 80, 180, 480, game_str(g, S_HOF_QUESTION), 1);
+}
+
+const struct screen screen_retire = {
+	"retire", parchment_enter, retire_event, NULL, retire_draw,
+};
+
+/*
+ * Hall of Fame (pic/fame), with the original's layout: rows 25 pixels
+ * apart from y 200; rank, name, then score columns.
+ */
+#define HOF_TOP		200
+#define HOF_ROW		25
+
+static void
+hof_enter(struct game *g)
+{
+	game_background(g, "pic/fame");
+	game_portrait(g, NULL);
+	/* Light text on the red cloth, gold for the new entry. */
+	g->ink[0] = g->ink[1] = g->ink[2] = 235;
+	g->highlight[0] = 250;
+	g->highlight[1] = 210;
+	g->highlight[2] = 60;
+}
+
+static void
+hof_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || ev->type == EV_KEY)
+		game_goto(g, &screen_welcome);
+}
+
+static void
+hof_draw(struct game *g)
+{
+	struct hof h;
+	char path[600], buf[96], err[256];
+	size_t i;
+	int y;
+
+	if (g->save_dir[0] == '\0')
+		return;
+	hof_path(g->save_dir, path, sizeof(path));
+	if (hof_load(path, &h, err, sizeof(err)) != 0)
+		return;
+	g->selected = 0;	/* the new entry is option 0 of its own line */
+	for (i = 0; i < h.count; i++) {
+		y = HOF_TOP + (int)i * HOF_ROW;
+		/* "~" makes the new entry the highlighted option. */
+		snprintf(buf, sizeof(buf), "%s%zu) %s", (int)i == g->hof_new ?
+		    "~" : "", i + 1, h.entry[i].name);
+		draw(g, FONT_BODY, 120, y, 200, buf, (int)i == g->hof_new);
+		draw(g, FONT_BODY, 300, y, 180, h.entry[i].title, 0);
+		snprintf(buf, sizeof(buf), "%ld", h.entry[i].score);
+		draw(g, FONT_BODY, 480, y, 80, buf, 0);
+	}
+	if (g->msg[0] != '\0')
+		draw_centered(g, FONT_BODY, 450, g->msg);
+}
+
+const struct screen screen_hof = {
+	"hof", hof_enter, hof_event, NULL, hof_draw,
 };

@@ -346,7 +346,22 @@ The first 512 bytes of the matching PCX, presumably a backup for the
 - **Calendar:** the calendar words (VA `0x46052`-`0x46056`) sit right
   after the 0x90 block but are not in the list. The date must be kept
   elsewhere, maybe in the 0x30 player block. Open.
-- **Hall of Fame:** kept in `pirates.hof`. Not traced yet.
+- **Hall of Fame:** kept in `pirates.hof` (read and written at VA
+  `0x529a`).
+  - Layout: 10 records of 70 bytes, best first:
+
+    | Bytes | Content |
+    |---|---|
+    | 4 | score, signed |
+    | 2 | rating |
+    | 32 | name |
+    | 32 | a string of `+` characters, as many as the rating |
+
+  - The new career is inserted by score, highest first, and the top 10
+    are kept.
+  - The screen shows rank, name, the `+` string and score at x = 150,
+    180, 300 and 480. Rows sit at y = 200 + 25 x row (table at VA
+    `0x322d4`). Empty records are not shown.
 
 The engine uses its own save format (see `sim-protocol.md`). With this
 layout, original saves could be imported later.

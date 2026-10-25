@@ -17,6 +17,7 @@
 
 #include "assets/towns.h"
 #include "data/pack.h"
+#include "sim/hof.h"
 #include "sim/json.h"
 #include "sim/proto.h"
 #include "sim/save.h"
@@ -214,6 +215,40 @@ test_saves(void)
 	remove(path);
 }
 
+/* Exit game: "Yes" records the career in the Hall of Fame, "No" not. */
+static void
+test_hall_of_fame(void)
+{
+	struct game *g;
+	struct hof h;
+	char path[600], err[256];
+	static const char *career = "enter enter down down down down enter "
+	    "down enter type:Anne enter enter enter enter ";
+
+	hof_path(saves_tmp, path, sizeof(path));
+	remove(path);
+	g = play_in(saves_tmp, "eng", career);	/* to the voyage screen */
+	if (g == NULL)
+		return;
+	/* Three months, then Exit game, then "No". */
+	CHECK(game_script(g, "enter enter enter down down enter down "
+	    "enter") == 0);
+	CHECK(!g->started);
+	game_free(g);
+	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 0);
+
+	g = play_in(saves_tmp, "eng", career);
+	if (g == NULL)
+		return;
+	CHECK(game_script(g, "enter enter enter down down enter enter") == 0);
+	CHECK(g->hof_new == 0);
+	game_free(g);
+	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 1);
+	CHECK(strcmp(h.entry[0].name, "Anne") == 0 && h.entry[0].score == 3);
+	CHECK(h.entry[0].rating == hof_rating(3));
+	remove(path);
+}
+
 int
 main(void)
 {
@@ -232,6 +267,7 @@ main(void)
 	test_menus();
 	test_languages();
 	test_saves();
+	test_hall_of_fame();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

@@ -30,6 +30,7 @@ add_library(stmalo_core STATIC
 	src/assets/tileset.c
 	src/assets/scenario.c
 	src/assets/towns.c
+	src/sim/hof.c
 	src/sim/json.c
 	src/sim/proto.c
 	src/sim/rng.c

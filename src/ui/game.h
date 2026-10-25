@@ -87,6 +87,7 @@ struct game {
 	struct text_layout	 options;	/* menu options of the last draw */
 	unsigned		 ticks;		/* on the current screen */
 	struct image		 bg;		/* current background */
+	uint8_t			 ink[3];	/* text colour */
 	uint8_t			 highlight[3];	/* selected option colour */
 	struct sprite_bank	 portrait;	/* current portrait, if any */
 	int			 quit;
@@ -99,6 +100,7 @@ struct game {
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */
 	char			 msg[128];	/* one-line feedback */
+	int			 hof_new;	/* new Hall of Fame row, or -1 */
 	char			 err[256];
 };
 
