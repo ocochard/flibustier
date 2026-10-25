@@ -82,11 +82,49 @@ echo '{"cmd":"new_game","era":1660,"seed":7}
 The protocol is described in
 `aidd_docs/memory/internal/sim-protocol.md`.
 
+## Methodology and legal
+
+stmalo is an interoperable re-implementation. It does not contain the
+original game; it reads the files of a copy the player owns.
+
+How the original is studied:
+
+- **File formats** are worked out by examining the game's data files and
+  checking each decoder against every file of its kind.
+- **Behaviour that only exists as code** (game rules, data tables inside
+  the executable, palette animation) is worked out by disassembling and
+  decompiling our own copy of the game's executable with
+  [Ghidra](https://ghidra-sre.org/). This is done for interoperability:
+  to load the original data and reproduce the game's behaviour.
+
+How findings become code:
+
+- Every finding is written down as a specification in plain prose:
+  file formats, data table layouts and game rules, with evidence (see
+  `aidd_docs/memory/internal/`).
+- The engine is written from those specifications. It is not a
+  translation of the original program, and it does not reuse its code.
+- Numbers that are game data (town tables, start scenarios) are not
+  copied into the source. The engine reads them at runtime from the
+  player's executable, which it recognises by checksum.
+
+What the repository never contains:
+
+- original graphics, music, sound or text;
+- original program code, whether disassembled, decompiled or
+  transcribed;
+- the output of the analysis tools. `tools/ghidra/` writes it outside
+  the repository, and it must stay there.
+
+This is how we read the rules on interoperability, not legal advice. If
+you hold rights in the original game and have a concern, please open an
+issue.
+
 ## Contributing
 
-Contributions are welcome. Please work only from your own analysis of the
-game's behavior and file formats; do not submit decompiled or copied
-original code.
+Contributions are welcome. Please follow the method above: document
+behaviour as a specification, then implement from it, and never submit
+original assets or decompiled code.
 
 ## License
 
