@@ -18,6 +18,7 @@
 #include "assets/img.h"
 #include "assets/pcx.h"
 #include "assets/rsd.h"
+#include "assets/scenario.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
@@ -395,6 +396,40 @@ test_views(struct packs *packs)
 	view_close(v);
 }
 
+static void
+test_scenarios(struct packs *packs)
+{
+	const struct exe_layout *layout;
+	struct scenario scn;
+	struct blob b;
+	int i, a, c, named = 0;
+
+	CHECK(packs_load(packs, "program/main", &b) == 0);
+	if ((layout = exe_identify(b.data, b.len)) == NULL) {
+		blob_free(&b);
+		return;
+	}
+	for (i = 0; i < SCENARIO_COUNT; i++) {
+		CHECK(scenario_load(layout, b.data, b.len, i, &scn) == 0);
+		named += scn.name[0] != '\0';
+		for (a = 0; a < 4; a++)
+			for (c = 0; c < 4; c++)
+				CHECK(scn.relations[a][c] == scn.relations[c][a]);
+	}
+	CHECK(named == SCENARIO_COUNT - 1);	/* no Dutch career in 1560 */
+	CHECK(scenario_load(layout, b.data, b.len,
+	    scenario_career(0, SCN_HOLLAND), &scn) == 0 && scn.name[0] == '\0');
+	CHECK(scenario_load(layout, b.data, b.len,
+	    scenario_career(0, SCN_ENGLAND), &scn) == 0);
+	CHECK(strcmp(scn.name, "English Seahawk") == 0);
+	CHECK(scn.relations[NATION_SPAIN][NATION_ENGLAND] == -1 &&
+	    scn.relations[NATION_SPAIN][NATION_FRANCE] == -1);
+	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_CAREERS, &scn) == 0);
+	CHECK(strcmp(scn.name, "John Hawkins") == 0);
+	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_COUNT, &scn) == -1);
+	blob_free(&b);
+}
+
 int
 main(void)
 {
@@ -419,6 +454,7 @@ main(void)
 	test_details(packs);
 	test_towns(packs);
 	test_views(packs);
+	test_scenarios(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

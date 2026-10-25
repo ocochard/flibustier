@@ -28,7 +28,12 @@ add_library(stmalo_core STATIC
 	src/assets/sprite.c
 	src/assets/text.c
 	src/assets/tileset.c
+	src/assets/scenario.c
 	src/assets/towns.c
+	src/sim/json.c
+	src/sim/proto.c
+	src/sim/rng.c
+	src/sim/sim.c
 	src/view/view.c)
 target_include_directories(stmalo_core PUBLIC src)
 target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
@@ -73,16 +78,30 @@ if(UNIX)
 endif()
 target_compile_options(stmalo PRIVATE ${STMALO_WARNINGS})
 
+# Headless simulation, driven by JSON lines (bots, AI agents, tests).
+add_executable(stmalo-sim src/sim_main.c)
+target_link_libraries(stmalo-sim PRIVATE stmalo_core)
+target_compile_options(stmalo-sim PRIVATE ${STMALO_WARNINGS})
+
 # Tests.  test_original needs the game data: set STMALO_DATA to the GOG
 # DATA.DAT (or an install directory) in the environment, otherwise it is
 # reported as skipped.
 include(CTest)
 if(BUILD_TESTING)
-	foreach(t test_formats test_original)
+	foreach(t test_formats test_original test_sim)
 		add_executable(${t} tests/${t}.c)
 		target_link_libraries(${t} PRIVATE stmalo_core)
 		target_compile_options(${t} PRIVATE ${STMALO_WARNINGS})
 		add_test(NAME ${t} COMMAND ${t})
 	endforeach()
 	set_tests_properties(test_original PROPERTIES SKIP_RETURN_CODE 77)
+	file(GLOB replays ${CMAKE_SOURCE_DIR}/tests/replays/*.jsonl)
+	foreach(r ${replays})
+		get_filename_component(name ${r} NAME_WE)
+		add_test(NAME replay_${name} COMMAND ${CMAKE_COMMAND}
+		    -DSIM=$<TARGET_FILE:stmalo-sim> -DREPLAY=${r}
+		    -P ${CMAKE_SOURCE_DIR}/tests/replay.cmake)
+		set_tests_properties(replay_${name} PROPERTIES
+		    SKIP_REGULAR_EXPRESSION "SKIP: ")
+	endforeach()
 endif()

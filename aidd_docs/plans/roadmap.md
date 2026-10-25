@@ -128,6 +128,12 @@ for packs.
 
 ### Phase 1b: simulation core and headless harness
 
+Status (2026-10-26): harness done. `stmalo-sim` runs the monthly world
+update: town growth, conquest, diplomacy and random town events, as
+specified in `game-rules.md`. Treasure fleets and anything involving the
+player are still to come.
+
+
 - `src/sim/`: game state structure, command type, a `step` function, a
   seeded RNG, and text serialisation of the state.
 - `stmalo-sim`: the stdin/stdout JSON protocol, replay files, and a first

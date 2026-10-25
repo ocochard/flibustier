@@ -1,0 +1,8 @@
+# Ten years of world updates in 1660, from the English career start.
+{"cmd":"new_game","era":1660,"nation":"england","seed":1660}
+{"cmd":"advance","days":365}
+{"cmd":"set","town":"Havana","field":"soldiers","value":5}
+{"cmd":"set","relation":[0,1],"value":-1}
+{"cmd":"advance","days":3285}
+{"cmd":"state"}
+{"cmd":"quit"}

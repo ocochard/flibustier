@@ -68,6 +68,20 @@ without opening a window. Use `--frame N` to pick the frame and
 `--tick N` the animation step. `--pack DIR` adds an asset pack on top of
 the original data.
 
+## Headless simulation
+
+`stmalo-sim` runs the game rules without graphics, driven by JSON
+commands on stdin, for bots, AI agents and tests:
+
+```sh
+echo '{"cmd":"new_game","era":1660,"seed":7}
+{"cmd":"advance","days":360}
+{"cmd":"state"}' | ./build/stmalo-sim --data ~/games/pirates_gold
+```
+
+The protocol is described in
+`aidd_docs/memory/internal/sim-protocol.md`.
+
 ## Contributing
 
 Contributions are welcome. Please work only from your own analysis of the
