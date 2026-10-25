@@ -38,6 +38,10 @@
 #define W_WELCOME		100	/* 6 heading lines, then 4 options */
 #define W_NATION_NAME		81	/* Spain, England, France, Holland */
 #define W_TRAVEL		86	/* in-game menu */
+#define W_COMPASS		13	/* S, SSW... clockwise */
+#define W_SAILING		30	/* sailing phrases */
+#define SAILING_FROM		9	/* "from the %s" */
+#define SAILING_KNOTS		12	/* "Knots: " */
 #define TRAVEL_CONTINUE		0
 #define TRAVEL_SAVE		8
 #define TRAVEL_EXIT		9
@@ -699,8 +703,8 @@ voyage_choose(struct game *g, int i)
 {
 	switch (travel_items[i]) {
 	case TRAVEL_CONTINUE:
-		sim_advance(&g->sim, 30);
 		g->msg[0] = '\0';
+		game_goto(g, g->world != NULL ? &screen_sail : &screen_voyage);
 		break;
 	case TRAVEL_SAVE:
 		g->saving = 1;
@@ -726,7 +730,8 @@ voyage_draw(struct game *g)
 	size_t i, kept, first;
 	int y = 30;
 
-	draw_centered(g, FONT_TITLE, y, g->sim.player.name);
+	draw_centered(g, FONT_TITLE, y, g->sim.fleet.leaving >= 0 ?
+	    town_name(g, g->sim.fleet.leaving) : g->sim.player.name);
 	y += 32;
 	date_text(g, line, sizeof(line));
 	snprintf(buf, sizeof(buf), "%s, %s", g->sim.player.title, line);
@@ -799,7 +804,8 @@ slots_choose(struct game *g, int i)
 		game_goto(g, &screen_voyage);
 		return;
 	}
-	if (save_read(path, &g->sim, NULL, 0, g->err, sizeof(g->err)) != 0) {
+	if (save_read(path, &g->sim, NULL, 0, g->err, sizeof(g->err)) != 0 ||
+	    game_attach_world(g) != 0) {
 		snprintf(g->msg, sizeof(g->msg), "%s", g->err);
 		return;
 	}
@@ -955,4 +961,156 @@ hof_draw(struct game *g)
 
 const struct screen screen_hof = {
 	"hof", hof_enter, hof_event, NULL, hof_draw,
+};
+
+/*
+ * Sailing: the map around the ship, as the original shows it.  The view
+ * is tile aligned and jumps when the ship nears an edge, looking ahead in
+ * the direction of travel (VA 0x231b8).  One simulation tick per frame.
+ */
+#define VIEW_EDGE	50	/* pixels from the left or top edge */
+#define VIEW_RIGHT	570
+#define VIEW_BOTTOM	432
+#define VIEW_AHEAD_X	192
+#define VIEW_AHEAD_Y	128
+#define VIEW_MAX_X	(600 * WORLD_TILE)	/* last origin, pixels */
+#define VIEW_MAX_Y	(450 * WORLD_TILE)
+
+/* Lookahead toward the side the heading points at, or 0 when it points
+ * mostly along the other axis (within 0x20 of it). */
+static int
+lookahead(int angle, int amount)
+{
+	int a = (int)(signed char)(uint8_t)angle;
+
+	if (a > 0x60 || a < -0x60 || (a > -0x20 && a < 0x20))
+		return (0);
+	return (a > 0 ? amount : -amount);
+}
+
+static int
+clampi(int v, int lo, int hi)
+{
+	return (v < lo ? lo : v > hi ? hi : v);
+}
+
+static void
+follow_ship(struct game *g, int force)
+{
+	const struct sim_fleet *f = &g->sim.fleet;
+	int sx = f->x - g->view_x, sy = f->y - g->view_y;
+
+	if (force || sx > VIEW_RIGHT || sx < VIEW_EDGE) {
+		g->view_x = (f->x - FB_W / 2 +
+		    lookahead(f->heading, VIEW_AHEAD_X)) / WORLD_TILE;
+		g->view_x = clampi(g->view_x * WORLD_TILE, 0, VIEW_MAX_X);
+	}
+	if (force || sy > VIEW_BOTTOM || sy < VIEW_EDGE) {
+		g->view_y = (f->y - FB_H / 2 +
+		    lookahead(f->heading - 0x40, VIEW_AHEAD_Y)) / WORLD_TILE;
+		g->view_y = clampi(g->view_y * WORLD_TILE, 0, VIEW_MAX_Y);
+	}
+}
+
+/* Sailing sprites by ship size, as the game picks them. */
+static const char *
+ship_sprite(const struct sim_fleet *f)
+{
+	int i, c = 0;
+
+	for (i = 0; i < f->nships; i++)
+		if ((f->ships[i] & 7) > c)
+			c = f->ships[i] & 7;
+	return (c < 3 ? "spr/ship0" : c < 6 ? "spr/ship1" : "spr/ship2");
+}
+
+static void
+sail_enter(struct game *g)
+{
+	struct blob b;
+
+	image_free(&g->bg);
+	game_portrait(g, NULL);
+	memcpy(g->fb.pal, g->world->palette, sizeof(g->fb.pal));
+	sea_init(&g->sea, g->fb.pal);
+	bank_free(&g->ship);
+	if (packs_load(g->packs, ship_sprite(&g->sim.fleet), &b) == 0) {
+		bank_decode_runs(b.data, b.len, &g->ship);
+		blob_free(&b);
+	}
+	g->turn = 0;
+	g->ink[0] = g->ink[1] = g->ink[2] = 240;
+	follow_ship(g, 1);
+}
+
+static void
+sail_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_KEY && ev->key == UI_KEY_LEFT)
+		g->turn = -1;
+	else if (ev->type == EV_KEY && ev->key == UI_KEY_RIGHT)
+		g->turn = 1;
+	else if (ev->type == EV_KEYUP &&
+	    (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT))
+		g->turn = 0;
+	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)
+		game_goto(g, &screen_voyage);
+}
+
+static void
+sail_tick(struct game *g)
+{
+	int town;
+
+	if (g->fading != 0)
+		return;		/* the ship waits for the screen */
+	switch (sim_sail(&g->sim, g->turn, 1, &town)) {
+	case SAIL_TOWN:
+		game_goto(g, &screen_voyage);
+		break;
+	case SAIL_LAND:
+	case SAIL_TICKS:
+		break;
+	}
+	follow_ship(g, 0);
+}
+
+static void
+sail_draw(struct game *g)
+{
+	const struct sim_fleet *f = &g->sim.fleet;
+	const uint8_t *t;
+	const struct frame *fr;
+	char buf[128], from[64];
+	int cx, cy, x0 = g->view_x / WORLD_TILE, y0 = g->view_y / WORLD_TILE;
+
+	sea_animate(&g->sea, g->ticks / 6, g->fb.pal);
+	for (cy = 0; cy < FB_H / WORLD_TILE; cy++)
+		for (cx = 0; cx < FB_W / WORLD_TILE; cx++) {
+			struct image tile;
+
+			t = g->world->tiles + WORLD_TILE * WORLD_TILE *
+			    g->world->map[(y0 + cy) * WORLD_CELLS_W + x0 + cx];
+			tile.w = tile.h = WORLD_TILE;
+			tile.pixels = (uint8_t *)t;
+			tile.has_palette = 0;
+			fb_image(&g->fb, &tile, cx * WORLD_TILE, cy * WORLD_TILE,
+			    0);
+		}
+	if (g->ship.count == 16) {
+		fr = &g->ship.frames[f->heading >> 4];
+		fb_frame(&g->fb, fr, f->x - g->view_x - fr->w / 2,
+		    f->y - g->view_y - fr->h / 2);
+	}
+	date_text(g, buf, sizeof(buf));
+	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
+	    game_word(g, W_COMPASS, (size_t)(g->sim.wind >> 4)), NULL);
+	snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),
+	    "   Wind %s   %s%d", from, game_word(g, W_SAILING, SAILING_KNOTS),
+	    f->speed);
+	draw(g, FONT_BODY, 10, 6, 620, buf, 0);
+}
+
+const struct screen screen_sail = {
+	"sail", sail_enter, sail_event, sail_tick, sail_draw,
 };

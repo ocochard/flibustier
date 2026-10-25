@@ -17,6 +17,7 @@
 #include "sim/proto.h"
 
 struct game_data {
+	struct packs		*packs;
 	uint8_t			*exe;
 	size_t			 len;
 	const struct exe_layout	*layout;
@@ -31,6 +32,20 @@ load_era(void *arg, int era, int scenario, struct era_towns *towns,
 	if (towns_load(gd->layout, gd->exe, gd->len, era, towns) != 0)
 		return (-1);
 	return (scenario_load(gd->layout, gd->exe, gd->len, scenario, scn));
+}
+
+static int
+load_world_cb(void *arg, int era, struct world *w)
+{
+	struct game_data *gd = arg;
+	char err[256];
+
+	if (world_load(w, gd->packs, gd->layout, gd->exe, gd->len, era, err,
+	    sizeof(err)) != 0) {
+		fprintf(stderr, "%s\n", err);
+		return (-1);
+	}
+	return (0);
 }
 
 /* Read a whole line of any length; returns NULL at end of input. */
@@ -96,6 +111,7 @@ main(int argc, char **argv)
 		packs_free(packs);
 		return (1);
 	}
+	gd.packs = packs;
 	gd.exe = b.data;
 	gd.len = b.len;
 	if ((gd.layout = exe_identify(gd.exe, gd.len)) == NULL) {
@@ -107,6 +123,7 @@ main(int argc, char **argv)
 
 	memset(&ss, 0, sizeof(ss));
 	ss.load = load_era;
+	ss.load_world = load_world_cb;
 	ss.load_arg = &gd;
 	while (!quit && (line = read_line(stdin)) != NULL) {
 		if (line[0] == '\0' || line[0] == '#') {
@@ -123,6 +140,7 @@ main(int argc, char **argv)
 		jb_free(&out);
 		free(line);
 	}
+	session_free(&ss);
 	blob_free(&b);
 	packs_free(packs);
 	return (0);

@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	2
+#define STATE_VERSION	3
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -34,7 +34,8 @@ static const struct {
 } town_fields[] = {
 	FIELD(flags), FIELD(x), FIELD(y), FIELD(nation), FIELD(forts),
 	FIELD(soldiers), FIELD(citizens), FIELD(gold), FIELD(wealth),
-	FIELD(standing), FIELD(governor), FIELD(id),
+	FIELD(standing), FIELD(governor), FIELD(id), FIELD(sea_x),
+	FIELD(sea_y),
 };
 #define NFIELDS	(sizeof(town_fields) / sizeof(town_fields[0]))
 
@@ -156,7 +157,37 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->player.ability);
 	jb_raw(b, ",\"expedition\":");
 	jb_int(b, s->player.expedition);
-	jb_raw(b, "},\"era\":");
+	jb_raw(b, "},\"fleet\":{\"ships\":[");
+	for (a = 0; a < s->fleet.nships && a < SCENARIO_SHIPS; a++) {
+		if (a > 0)
+			jb_raw(b, ",");
+		jb_int(b, s->fleet.ships[a]);
+	}
+	jb_raw(b, "],\"crew\":");
+	jb_int(b, s->fleet.crew);
+	jb_raw(b, ",\"guns\":");
+	jb_int(b, s->fleet.guns);
+	jb_raw(b, ",\"gold\":");
+	jb_int(b, s->fleet.gold);
+	jb_raw(b, ",\"x\":");
+	jb_int(b, s->fleet.x);
+	jb_raw(b, ",\"y\":");
+	jb_int(b, s->fleet.y);
+	jb_raw(b, ",\"fx\":");
+	jb_int(b, s->fleet.fx);
+	jb_raw(b, ",\"fy\":");
+	jb_int(b, s->fleet.fy);
+	jb_raw(b, ",\"heading\":");
+	jb_int(b, s->fleet.heading);
+	jb_raw(b, ",\"speed\":");
+	jb_int(b, s->fleet.speed);
+	jb_raw(b, ",\"ticks\":");
+	jb_int(b, s->fleet.ticks);
+	jb_raw(b, ",\"leaving\":");
+	jb_int(b, s->fleet.leaving);
+	jb_raw(b, "},\"wind\":");
+	jb_int(b, s->wind);
+	jb_raw(b, ",\"era\":");
 	jb_int(b, s->era_year);
 	jb_raw(b, ",\"year\":");
 	jb_int(b, s->year);
@@ -266,6 +297,48 @@ player_from_json(struct sim_player *p, const struct json *j, char *err,
 	return (0);
 }
 
+static int
+fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
+    size_t errlen)
+{
+	const struct json *ships = json_get(j, "ships");
+	size_t i;
+
+	memset(f, 0, sizeof(*f));
+	if (ships == NULL || ships->type != JSON_ARRAY || ships->count == 0 ||
+	    ships->count > SCENARIO_SHIPS) {
+		snprintf(err, errlen, "bad fleet ships");
+		return (-1);
+	}
+	f->nships = (int)ships->count;
+	for (i = 0; i < ships->count; i++) {
+		if (ships->items[i]->type != JSON_INT ||
+		    ships->items[i]->num < 0 || ships->items[i]->num > 9) {
+			snprintf(err, errlen, "bad ship type");
+			return (-1);
+		}
+		f->ships[i] = (uint8_t)ships->items[i]->num;
+	}
+	f->crew = (int)json_get_int(j, "crew", -1);
+	f->guns = (int)json_get_int(j, "guns", -1);
+	f->gold = (long)json_get_int(j, "gold", -1);
+	f->x = (int32_t)json_get_int(j, "x", -1);
+	f->y = (int32_t)json_get_int(j, "y", -1);
+	f->fx = (uint8_t)json_get_int(j, "fx", 0);
+	f->fy = (uint8_t)json_get_int(j, "fy", 0);
+	f->heading = (uint8_t)json_get_int(j, "heading", 0);
+	f->speed = (int)json_get_int(j, "speed", 0);
+	f->ticks = (uint32_t)json_get_int(j, "ticks", 0);
+	f->leaving = (int)json_get_int(j, "leaving", -1);
+	if (f->crew < 0 || f->guns < 0 || f->gold < 0 || f->x < 0 ||
+	    f->x >= WORLD_PX_W || f->y < 0 || f->y >= WORLD_PX_H ||
+	    f->fx > 7 || f->fy > 7 || f->speed < 0 || f->speed > 12) {
+		snprintf(err, errlen, "bad fleet");
+		return (-1);
+	}
+	return (0);
+}
+
 int
 sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 {
@@ -291,6 +364,10 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	if (player_from_json(&tmp.player, json_get(j, "player"), err,
 	    errlen) != 0)
 		return (-1);
+	if (fleet_from_json(&tmp.fleet, json_get(j, "fleet"), err,
+	    errlen) != 0)
+		return (-1);
+	tmp.wind = (uint8_t)json_get_int(j, "wind", 0);
 	tmp.era_year = (int)json_get_int(j, "era", 0);
 	tmp.year = (int)json_get_int(j, "year", 0);
 	tmp.day_of_year = (int)json_get_int(j, "day_of_year", -1);
@@ -389,6 +466,42 @@ bad_rel:
 	return (-1);
 }
 
+void
+session_free(struct session *ss)
+{
+	free(ss->world);
+	ss->world = NULL;
+	ss->sim.world = NULL;
+}
+
+/* Attach the world of the state's era, loading it when it changed. */
+static int
+attach_world(struct session *ss)
+{
+	int era;
+
+	ss->sim.world = NULL;
+	if (ss->load_world == NULL)
+		return (0);
+	for (era = 0; era < EXE_ERAS; era++)
+		if (town_era_years[era] == ss->sim.era_year)
+			break;
+	if (era == EXE_ERAS)
+		return (-1);
+	if (ss->world == NULL || ss->world->era != era) {
+		if (ss->world == NULL &&
+		    (ss->world = malloc(sizeof(*ss->world))) == NULL)
+			return (-1);
+		if (ss->load_world(ss->load_arg, era, ss->world) != 0) {
+			free(ss->world);
+			ss->world = NULL;
+			return (-1);
+		}
+	}
+	ss->sim.world = ss->world;
+	return (0);
+}
+
 static void
 reply_error(struct jbuf *out, const char *msg)
 {
@@ -447,6 +560,10 @@ cmd_new_game(struct session *ss, const struct json *cmd, struct jbuf *out)
 	sim_new_game(&ss->sim, &towns, &scn, (uint64_t)seed);
 	ss->sim.player.nation = nat;
 	ss->started = 1;
+	if (attach_world(ss) != 0) {
+		reply_error(out, "cannot load the era's world");
+		return;
+	}
 	jb_raw(out, "{\"ok\":true,\"scenario\":");
 	jb_str(out, scn.name);
 	jb_raw(out, ",\"towns\":");
@@ -557,6 +674,47 @@ cmd_set(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "{\"ok\":true}");
 }
 
+static void
+cmd_sail(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *stops[] = { "ticks", "land", "town" };
+	int64_t ticks = json_get_int(cmd, "ticks", 64);
+	int64_t turn = json_get_int(cmd, "turn", 0);
+	const struct sim_fleet *f = &ss->sim.fleet;
+	enum sail_stop stop;
+	int town;
+
+	if (ss->sim.world == NULL) {
+		reply_error(out, "sailing needs the era's world");
+		return;
+	}
+	if (ticks < 1 || ticks > 64 * 365 || turn < -1 || turn > 1) {
+		reply_error(out, "sail needs \"ticks\" (1..23360) and "
+		    "\"turn\" (-1, 0, 1)");
+		return;
+	}
+	stop = sim_sail(&ss->sim, (int)turn, (int)ticks, &town);
+	jb_raw(out, "{\"ok\":true,\"stop\":");
+	jb_str(out, stops[stop]);
+	if (stop == SAIL_TOWN) {
+		jb_raw(out, ",\"town\":");
+		jb_str(out, ss->sim.towns[town].name);
+	}
+	jb_raw(out, ",\"x\":");
+	jb_int(out, f->x);
+	jb_raw(out, ",\"y\":");
+	jb_int(out, f->y);
+	jb_raw(out, ",\"heading\":");
+	jb_int(out, f->heading);
+	jb_raw(out, ",\"speed\":");
+	jb_int(out, f->speed);
+	jb_raw(out, ",\"wind\":");
+	jb_int(out, ss->sim.wind);
+	jb_raw(out, ",\"day\":");
+	jb_int(out, ss->sim.day);
+	jb_raw(out, "}");
+}
+
 int
 proto_handle(struct session *ss, const char *line, struct jbuf *out)
 {
@@ -580,6 +738,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		if (sim_from_json(&ss->sim, json_get(cmd, "state"), err,
 		    sizeof(err)) != 0)
 			reply_error(out, err);
+		else if (attach_world(ss) != 0)
+			reply_error(out, "cannot load the era's world");
 		else {
 			ss->started = 1;
 			jb_raw(out, "{\"ok\":true}");
@@ -594,6 +754,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		jb_raw(out, "}");
 	} else if (strcmp(name, "set") == 0)
 		cmd_set(ss, cmd, out);
+	else if (strcmp(name, "sail") == 0)
+		cmd_sail(ss, cmd, out);
 	else
 		reply_error(out, "unknown command");
 	json_free(cmd);

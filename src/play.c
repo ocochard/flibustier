@@ -65,13 +65,19 @@ feed_input(struct game *g, Vector2 *last_mouse)
 	size_t i;
 	int c;
 
-	for (i = 0; i < sizeof(keymap) / sizeof(keymap[0]); i++)
+	for (i = 0; i < sizeof(keymap) / sizeof(keymap[0]); i++) {
 		if (IsKeyPressed(keymap[i].raylib) ||
 		    IsKeyPressedRepeat(keymap[i].raylib)) {
 			ev.type = EV_KEY;
 			ev.key = keymap[i].ui;
 			game_event(g, &ev);
 		}
+		if (IsKeyReleased(keymap[i].raylib)) {
+			ev.type = EV_KEYUP;
+			ev.key = keymap[i].ui;
+			game_event(g, &ev);
+		}
+	}
 	while ((c = GetCharPressed()) != 0) {
 		ev.type = EV_CHAR;
 		ev.ch = c;

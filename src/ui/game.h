@@ -16,6 +16,8 @@
 #include "data/pack.h"
 #include "assets/image.h"
 #include "assets/sprite.h"
+#include "assets/world.h"
+#include "gfx/sea.h"
 #include "gfx/fb.h"
 #include "gfx/text.h"
 #include "sim/sim.h"
@@ -38,7 +40,8 @@ enum ui_key {
 };
 
 enum ui_event_type {
-	EV_KEY,		/* key */
+	EV_KEY,		/* key pressed */
+	EV_KEYUP,	/* key released */
 	EV_CHAR,	/* ch: a typed character, Unicode */
 	EV_MOVE,	/* x, y: pointer position on the 640x480 screen */
 	EV_CLICK	/* x, y */
@@ -96,6 +99,11 @@ struct game {
 	struct sim		 sim;
 	int			 started;	/* sim holds a game */
 	size_t			 news_seen;	/* news shown so far */
+	struct world		*world;		/* the career's era, for sailing */
+	struct sprite_bank	 ship;		/* sailing ship, 16 headings */
+	struct sea		 sea;
+	int			 view_x, view_y;	/* sailing view origin, pixels */
+	int			 turn;		/* steering input: -1, 0, +1 */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

@@ -66,6 +66,29 @@ game_script(struct game *g, const char *script)
 			ev.x = x;
 			ev.y = y;
 			game_event(g, &ev);
+		} else if (strncmp(step, "hold:", 5) == 0) {
+			char key[16];
+
+			if (sscanf(step, "hold:%15[a-z]:%d", key, &ticks) != 2) {
+				snprintf(g->err, sizeof(g->err),
+				    "bad script step \"%s\"", step);
+				return (-1);
+			}
+			for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
+				if (strcmp(key, keys[i].name) == 0)
+					break;
+			if (i == sizeof(keys) / sizeof(keys[0])) {
+				snprintf(g->err, sizeof(g->err),
+				    "unknown key \"%s\"", key);
+				return (-1);
+			}
+			ev.type = EV_KEY;
+			ev.key = keys[i].key;
+			game_event(g, &ev);
+			settle(g, ticks);
+			ev.type = EV_KEYUP;
+			game_event(g, &ev);
+			continue;
 		} else if (sscanf(step, "wait:%d", &ticks) == 1) {
 			settle(g, ticks);
 			continue;

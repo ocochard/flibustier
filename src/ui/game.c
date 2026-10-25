@@ -11,6 +11,7 @@
 #include "assets/pcx.h"
 #include "assets/scenario.h"
 #include "assets/towns.h"
+#include "assets/world.h"
 #include "game.h"
 #include "screen.h"
 
@@ -124,6 +125,8 @@ game_free(struct game *g)
 	font_free(&g->caps);
 	image_free(&g->bg);
 	bank_free(&g->portrait);
+	bank_free(&g->ship);
+	free(g->world);
 	free(g->exe);
 }
 
@@ -227,6 +230,30 @@ game_draw(struct game *g)
 	g->screen->draw(g);
 }
 
+int
+game_attach_world(struct game *g)
+{
+	int era;
+
+	for (era = 0; era < EXE_ERAS; era++)
+		if (town_era_years[era] == g->sim.era_year)
+			break;
+	if (era == EXE_ERAS)
+		return (-1);
+	if (g->world == NULL && (g->world = calloc(1, sizeof(*g->world))) == NULL)
+		return (-1);
+	if (g->world->era != era || g->world->sine[64] == 0) {
+		if (world_load(g->world, g->packs, g->layout, g->exe,
+		    g->exe_len, era, g->err, sizeof(g->err)) != 0) {
+			free(g->world);
+			g->world = NULL;
+			return (-1);
+		}
+	}
+	g->sim.world = g->world;
+	return (0);
+}
+
 /* Start the simulation from the player's choices. */
 int
 game_start_career(struct game *g)
@@ -254,5 +281,5 @@ game_start_career(struct game *g)
 	g->sim.player.expedition = g->career.expedition;
 	g->started = 1;
 	g->news_seen = g->sim.nnews;
-	return (0);
+	return (game_attach_world(g));
 }

@@ -30,6 +30,7 @@ add_library(stmalo_core STATIC
 	src/assets/tileset.c
 	src/assets/scenario.c
 	src/assets/towns.c
+	src/assets/world.c
 	src/sim/hof.c
 	src/sim/json.c
 	src/sim/proto.c
@@ -37,6 +38,7 @@ add_library(stmalo_core STATIC
 	src/sim/save.c
 	src/sim/sim.c
 	src/gfx/fb.c
+	src/gfx/sea.c
 	src/gfx/text.c
 	src/ui/game.c
 	src/ui/screens.c

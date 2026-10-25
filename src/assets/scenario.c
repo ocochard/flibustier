@@ -9,7 +9,20 @@
 #include "scenario.h"
 
 #define NAME_LEN	20
+#define CREW_OFF	0x14
+#define GUNS_OFF	0x16
+#define NATION_OFF	0x17
+#define GOLD_OFF	0x18	/* tens of gold pieces */
+#define NSHIPS_OFF	0x20
+#define SHIPS_OFF	0x21
 #define RELATIONS_OFF	0x34
+#define STARTS_OFF	0x44
+
+static unsigned
+le16(const uint8_t *p)
+{
+	return ((unsigned)p[0] | (unsigned)p[1] << 8);
+}
 
 int
 scenario_career(int era, enum scenario_nation nation)
@@ -33,6 +46,18 @@ scenario_load(const struct exe_layout *layout, const uint8_t *exe,
 	memcpy(out->raw, r, SCENARIO_LEN);
 	memcpy(out->name, r, NAME_LEN);
 	out->name[NAME_LEN] = '\0';
+	out->crew = (int)le16(r + CREW_OFF);
+	out->guns = r[GUNS_OFF];
+	out->nation = r[NATION_OFF];
+	out->gold = (long)le16(r + GOLD_OFF) * 10;
+	out->nships = r[NSHIPS_OFF];
+	memcpy(out->ships, r + SHIPS_OFF, SCENARIO_SHIPS);
+	for (a = 0; a < SCENARIO_STARTS; a++) {
+		out->start[a][0] = (uint16_t)le16(r + STARTS_OFF + 4 * a);
+		out->start[a][1] = (uint16_t)le16(r + STARTS_OFF + 4 * a + 2);
+	}
+	if (out->nships > SCENARIO_SHIPS || out->nation > 3)
+		return (-1);
 	for (a = 0; a < 4; a++)
 		for (b = 0; b < 4; b++) {
 			out->relations[a][b] = (int8_t)r[RELATIONS_OFF + a * 4 + b];

@@ -420,6 +420,170 @@ test_hof(void)
 	CHECK(hof_load(path, &back, err, sizeof(err)) == 0 && back.count == 0);
 }
 
+/*
+ * A synthetic world: all sea, except a land block of cells around
+ * (110..129, 40..49).  Triangle "sine" and a flat speed table, enough to
+ * check the rules' mechanics.
+ */
+static struct world test_world;
+
+static void
+make_world(struct world *w)
+{
+	int x, y, i;
+
+	memset(w, 0, sizeof(*w));
+	w->era = 4;
+	memset(w->colour_class, TERRAIN_SEA, sizeof(w->colour_class));
+	w->colour_class[99] = TERRAIN_LAND;
+	memset(w->tiles + 1 * WORLD_TILE * WORLD_TILE, 99,
+	    WORLD_TILE * WORLD_TILE);	/* tile 1: land */
+	for (y = 40; y < 50; y++)
+		for (x = 110; x < 130; x++)
+			w->map[y * WORLD_CELLS_W + x] = 1;
+	for (i = 0; i < 128; i++)
+		w->sine[i] = (uint8_t)(i < 64 ? i * 4 : i == 64 ? 255 :
+		    (128 - i) * 4);
+	for (y = 0; y < SHIP_CLASSES; y++)
+		for (x = 0; x < WIND_SECTORS; x++)
+			w->speed[y][x] = x == 8 ? -1 : 7;
+}
+
+static int
+world_cb(void *arg, int era, struct world *w)
+{
+	(void)arg;
+	make_world(w);
+	w->era = era;
+	return (0);
+}
+
+/* A game on the synthetic world, fleet at cell (cx, cy) heading "h". */
+static void
+sea_game(struct sim *s, int cx, int cy, int heading)
+{
+	struct era_towns era;
+	struct scenario scn;
+
+	make_era(&era, &scn);
+	scn.nships = 1;
+	sim_new_game(s, &era, &scn, 21);
+	s->world = &test_world;
+	s->fleet.x = cx * WORLD_TILE + 8;
+	s->fleet.y = cy * WORLD_TILE + 8;
+	s->fleet.heading = (uint8_t)heading;
+	s->fleet.leaving = -1;
+}
+
+static void
+test_sailing(void)
+{
+	struct sim s;
+	int town, x0, y0;
+	uint8_t w0;
+
+	make_world(&test_world);
+
+	/* North: y falls, x stays; speed ramps up and settles at 12. */
+	sea_game(&s, 120, 100, 0x00);
+	x0 = s.fleet.x;
+	y0 = s.fleet.y;
+	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_TICKS);
+	CHECK(s.fleet.x == x0 && s.fleet.y < y0 && s.fleet.speed == 12);
+	/* East: x grows. */
+	sea_game(&s, 120, 100, 0x40);
+	x0 = s.fleet.x;
+	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_TICKS && s.fleet.x > x0);
+	/* Heading east into a wind blowing west is sector 8, the slowest:
+	 * (-1 + 2) x 3 = 3, clamped up to 4. */
+	sea_game(&s, 120, 100, 0x40);
+	s.wind = 0xC0;
+	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_TICKS && s.fleet.speed == 4);
+
+	/* Turning: +16 on each tick where bit 2 of the counter is clear, so
+	 * 8 of 16 consecutive ticks. */
+	sea_game(&s, 300, 300, 0x00);
+	s.fleet.ticks = 0;
+	CHECK(sim_sail(&s, 1, 16, &town) == SAIL_TICKS);
+	CHECK(s.fleet.heading == 0x80);
+
+	/* Land stops the ship on the water, before the coast. */
+	sea_game(&s, 120, 60, 0x00);
+	CHECK(sim_sail(&s, 0, 2000, &town) == SAIL_LAND);
+	CHECK(world_terrain(&test_world, s.fleet.x, s.fleet.y) == TERRAIN_SEA);
+	CHECK(s.fleet.y / WORLD_TILE == 50 && s.fleet.speed == 0);
+
+	/* World edge: the ship turns back in. */
+	sea_game(&s, 4, 300, 0xC0);
+	CHECK(sim_sail(&s, 0, 200, &town) == SAIL_TICKS);
+	CHECK(s.fleet.heading == 0x40 && s.fleet.x >= 0x41);
+
+	/* Time: a day per 64 ticks; the wind may only shift every 128. */
+	sea_game(&s, 300, 300, 0x00);
+	s.fleet.ticks = 0;
+	w0 = s.wind;
+	sim_sail(&s, 0, 127, &town);
+	CHECK(s.day == 1 && s.wind == w0);
+	sim_sail(&s, 0, 64 * 30, &town);
+	CHECK(s.day == 31 && s.month == 1);
+
+	/* Arrival at a town; not at the one just left. Gamma is at cell
+	 * (110, 130): start beside it, leaving it, sail away and back. */
+	sea_game(&s, 110, 133, 0x00);
+	s.fleet.leaving = 2;
+	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_TICKS);	/* in harbour */
+	sea_game(&s, 110, 140, 0x00);
+	CHECK(sim_sail(&s, 0, 2000, &town) == SAIL_TOWN && town == 2);
+	CHECK(s.fleet.leaving == 2 && s.fleet.speed == 0);
+}
+
+/* A saved fleet reloads and sails on identically. */
+static void
+test_sail_snapshot(void)
+{
+	struct session s1, s2;
+	struct jbuf st = { 0 }, cmd = { 0 }, out = { 0 }, r1 = { 0 },
+	    r2 = { 0 };
+
+	memset(&s1, 0, sizeof(s1));
+	s1.load = loader;
+	s1.load_world = world_cb;
+	proto_handle(&s1, "{\"cmd\":\"new_game\",\"era\":1660}", &out);
+	jb_free(&out);
+	s1.sim.fleet.x = 300 * WORLD_TILE;	/* open sea */
+	s1.sim.fleet.y = 300 * WORLD_TILE;
+	proto_handle(&s1, "{\"cmd\":\"sail\",\"turn\":1,\"ticks\":300}",
+	    &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"stop\":\"ticks\"") != NULL);
+	jb_free(&out);
+	sim_to_json(&s1.sim, &st);
+	jb_raw(&cmd, "{\"cmd\":\"load\",\"state\":");
+	jb_raw(&cmd, st.s);
+	jb_raw(&cmd, "}");
+	memset(&s2, 0, sizeof(s2));
+	s2.load = loader;
+	s2.load_world = world_cb;
+	proto_handle(&s2, cmd.s, &out);
+	CHECK(out.s != NULL && strcmp(out.s, "{\"ok\":true}") == 0);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"sail\",\"turn\":-1,\"ticks\":500}",
+	    &r1);
+	proto_handle(&s2, "{\"cmd\":\"sail\",\"turn\":-1,\"ticks\":500}",
+	    &r2);
+	CHECK(r1.s != NULL && r2.s != NULL && strcmp(r1.s, r2.s) == 0);
+	/* Without a world, sailing is refused. */
+	s2.load_world = NULL;
+	session_free(&s2);
+	proto_handle(&s2, "{\"cmd\":\"sail\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+	session_free(&s1);
+	jb_free(&st);
+	jb_free(&cmd);
+	jb_free(&r1);
+	jb_free(&r2);
+}
+
 int
 main(void)
 {
@@ -429,6 +593,8 @@ main(void)
 	test_protocol();
 	test_snapshot();
 	test_hof();
+	test_sailing();
+	test_sail_snapshot();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

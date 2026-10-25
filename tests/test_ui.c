@@ -172,12 +172,13 @@ test_saves(void)
 	struct jbuf before = { 0 }, after = { 0 };
 	char path[600], desc[128], err[256];
 
+	/* Sail for a while, back to the menu, then save in slot 4. */
 	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
-	    "down enter type:Kidd enter enter enter enter enter enter "
+	    "down enter type:Kidd enter enter enter enter enter wait:100 esc "
 	    "down enter down down down enter");
 	if (g == NULL)
 		return;
-	CHECK(g->started && g->sim.day == 60);
+	CHECK(g->started && g->sim.day >= 1 && g->sim.fleet.ticks >= 100);
 	CHECK(strncmp(g->msg, "Kidd, English Buccaneer, ", 25) == 0);
 	sim_to_json(&g->sim, &before);
 	game_free(g);
@@ -230,9 +231,9 @@ test_hall_of_fame(void)
 	g = play_in(saves_tmp, "eng", career);	/* to the voyage screen */
 	if (g == NULL)
 		return;
-	/* Three months, then Exit game, then "No". */
-	CHECK(game_script(g, "enter enter enter down down enter down "
-	    "enter") == 0);
+	/* Three months at sea, then Exit game, then "No". */
+	g->sim.day = 90;
+	CHECK(game_script(g, "down down enter down enter") == 0);
 	CHECK(!g->started);
 	game_free(g);
 	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 0);
@@ -240,13 +241,42 @@ test_hall_of_fame(void)
 	g = play_in(saves_tmp, "eng", career);
 	if (g == NULL)
 		return;
-	CHECK(game_script(g, "enter enter enter down down enter enter") == 0);
+	g->sim.day = 90;
+	CHECK(game_script(g, "down down enter enter") == 0);
 	CHECK(g->hof_new == 0);
 	game_free(g);
 	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 1);
 	CHECK(strcmp(h.entry[0].name, "Anne") == 0 && h.entry[0].score == 3);
 	CHECK(h.entry[0].rating == hof_rating(3));
 	remove(path);
+}
+
+/* Sailing: the ship leaves port, time passes, steering turns it. */
+static void
+test_sailing(void)
+{
+	struct game *g;
+	int y0, h0;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Low enter enter enter enter");	/* at Port Royale */
+	if (g == NULL)
+		return;
+	CHECK(g->started && g->world != NULL && g->sim.world == g->world);
+	/* The fleet starts outside the harbour, bows north toward the
+	 * island: half a turn to starboard, then out to sea, southward. */
+	CHECK(world_terrain(g->world, g->sim.fleet.x, g->sim.fleet.y) !=
+	    TERRAIN_LAND);
+	CHECK(game_script(g, "enter") == 0);	/* set sail */
+	h0 = g->sim.fleet.heading;
+	CHECK(game_script(g, "hold:right:16") == 0);
+	CHECK(g->sim.fleet.heading == ((h0 + 0x80) & 0xFF));
+	y0 = g->sim.fleet.y;
+	CHECK(game_script(g, "wait:64") == 0);
+	CHECK(g->sim.fleet.ticks >= 64 && g->sim.day >= 1);
+	CHECK(g->sim.fleet.y > y0);
+	CHECK(game_script(g, "esc") == 0);	/* back to the menu */
+	game_free(g);
 }
 
 int
@@ -268,6 +298,7 @@ main(void)
 	test_languages();
 	test_saves();
 	test_hall_of_fame();
+	test_sailing();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

@@ -12,11 +12,12 @@
 #include "assets/font.h"
 #include "assets/img.h"
 #include "assets/pcx.h"
-#include "assets/rsd.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
+#include "assets/world.h"
+#include "gfx/sea.h"
 #include "gfx/text.h"
 #include "view.h"
 
@@ -65,9 +66,9 @@ struct view {
 	uint8_t			 pal[256 * 3];
 	char			 pal_id[64];
 
-	uint8_t			*map;		/* WORLD_W * WORLD_H tiles */
+	struct world		*world;		/* world and towns views */
 	uint8_t			 classes[256];
-	uint8_t			 snap[4][8][3];	/* sea colour ranges */
+	struct sea		 sea;		/* sea colour animation */
 	struct era_towns	 era;
 
 	struct rgb		 out;
@@ -308,14 +309,13 @@ view_set_palette(struct view *v, const char *pic_id)
 	return (load_palette(v, pic_id));
 }
 
-/* Load the era's tile map: the 1560 map, patched for later eras. */
+/* Load the era's world (map, tiles), towns and tile classes. */
 static int
 load_world(struct view *v, int year, char *err, size_t errlen)
 {
-	struct image base;
 	struct blob b;
 	const struct exe_layout *layout;
-	char id[32];
+	const uint8_t *classes;
 	int era, rc;
 
 	for (era = 0; era < EXE_ERAS; era++)
@@ -325,91 +325,29 @@ load_world(struct view *v, int year, char *err, size_t errlen)
 		snprintf(err, errlen, "no era %d", year);
 		return (-1);
 	}
-	if (packs_load(v->packs, "pic/map1560", &b) != 0) {
-		snprintf(err, errlen, "cannot load the 1560 map");
-		return (-1);
-	}
-	rc = pcx_decode(b.data, b.len, &base);
-	blob_free(&b);
-	if (rc != 0 || base.w != WORLD_W || base.h != WORLD_H) {
-		image_free(&base);
-		snprintf(err, errlen, "cannot decode the 1560 map");
-		return (-1);
-	}
-	v->map = base.pixels;	/* the pixels are tile numbers */
-	if (year != 1560) {
-		/* Every era patches the 1560 map, as the game does. */
-		snprintf(id, sizeof(id), "patch/map%d", year);
-		if (packs_load(v->packs, id, &b) != 0 ||
-		    rsd_apply(b.data, b.len, v->map, WORLD_W * WORLD_H) != 0) {
-			blob_free(&b);
-			snprintf(err, errlen, "cannot apply %s", id);
-			return (-1);
-		}
-		blob_free(&b);
-	}
-	if (packs_load(v->packs, "tiles/map", &b) != 0 ||
-	    tileset_decode(b.data, b.len, &v->tiles) != 0 ||
-	    v->tiles.tile_w != TILE || v->tiles.count != 256) {
-		blob_free(&b);
-		snprintf(err, errlen, "cannot load tiles/map");
-		return (-1);
-	}
-	blob_free(&b);
-	memcpy(v->pal, v->tiles.palette, sizeof(v->pal));
-	snprintf(v->pal_id, sizeof(v->pal_id), "tiles/map");
-
-	/* Tile classes and towns come from the executable. */
 	if (packs_load(v->packs, "program/main", &b) != 0 ||
 	    (layout = exe_identify(b.data, b.len)) == NULL ||
-	    towns_load(layout, b.data, b.len, era, &v->era) != 0) {
+	    towns_load(layout, b.data, b.len, era, &v->era) != 0 ||
+	    (classes = exe_at(layout, b.data, b.len, layout->tile_class_va,
+	    256)) == NULL) {
 		blob_free(&b);
 		snprintf(err, errlen, "unknown or missing program/main");
 		return (-1);
 	}
-	if (exe_at(layout, b.data, b.len, layout->tile_class_va, 256) == NULL) {
+	memcpy(v->classes, classes, 256);
+	if ((v->world = malloc(sizeof(*v->world))) == NULL) {
 		blob_free(&b);
-		snprintf(err, errlen, "no tile class table");
+		snprintf(err, errlen, "out of memory");
 		return (-1);
 	}
-	memcpy(v->classes, exe_at(layout, b.data, b.len,
-	    layout->tile_class_va, 256), 256);
+	rc = world_load(v->world, v->packs, layout, b.data, b.len, era, err,
+	    errlen);
 	blob_free(&b);
+	if (rc != 0)
+		return (-1);
+	memcpy(v->pal, v->world->palette, sizeof(v->pal));
+	snprintf(v->pal_id, sizeof(v->pal_id), "tiles/map");
 	return (0);
-}
-
-/*
- * Sea animation, as the game does it: four 8-colour ranges of the tile
- * palette are snapshotted, then rewritten each tick from a rotating
- * offset.  Ranges 208-215 and 216-223 rotate every tick (the latter
- * written in reverse order), 64-71 and 72-79 every other tick.
- */
-static const int sea_range[4] = { 208, 64, 72, 216 };
-
-static void
-snapshot_sea(struct view *v)
-{
-	int r, i;
-
-	for (r = 0; r < 4; r++)
-		for (i = 0; i < 8; i++)
-			memcpy(v->snap[r][i], v->pal + 3 * (sea_range[r] + i), 3);
-}
-
-static void
-animate_sea(struct view *v, unsigned tick)
-{
-	unsigned c[4];
-	int r, i, entry;
-
-	c[0] = tick;
-	c[1] = c[2] = tick / 2;
-	c[3] = tick;
-	for (r = 0; r < 4; r++)
-		for (i = 0; i < 8; i++) {
-			entry = r == 3 ? sea_range[r] + 7 - i : sea_range[r] + i;
-			memcpy(v->pal + 3 * entry, v->snap[r][(c[r] + i) & 7], 3);
-		}
 }
 
 static int
@@ -420,13 +358,14 @@ render_world(struct view *v, size_t frame, unsigned tick)
 
 	if (alloc_out(v, VIEW_W, VIEW_H) != 0)
 		return (-1);
-	animate_sea(v, tick);
+	sea_animate(&v->sea, tick, v->pal);
 	cx0 = (int)(frame % WORLD_STEPS_X) * WORLD_STEP;
 	cy0 = (int)(frame / WORLD_STEPS_X) * WORLD_STEP;
 	for (cy = 0; cy < VIEW_CELLS_Y; cy++)
 		for (cx = 0; cx < VIEW_CELLS_X; cx++) {
-			t = v->tiles.pixels + (size_t)TILE * TILE *
-			    v->map[(size_t)(cy0 + cy) * WORLD_W + cx0 + cx];
+			t = v->world->tiles + (size_t)TILE * TILE *
+			    v->world->map[(size_t)(cy0 + cy) * WORLD_W + cx0 +
+			    cx];
 			blit(&v->out, cx * TILE, cy * TILE, TILE, TILE, t, NULL,
 			    v->pal);
 		}
@@ -445,7 +384,7 @@ render_towns(struct view *v)
 	for (y = 0; y < WORLD_H; y++)
 		for (x = 0; x < WORLD_W; x++)
 			put(&v->out, x, y, class_rgb[v->classes[
-			    v->map[(size_t)y * WORLD_W + x]] % 5]);
+			    v->world->map[(size_t)y * WORLD_W + x]] % 5]);
 	for (i = 0; i < v->era.count; i++) {
 		t = &v->era.towns[i];
 		for (y = -2; y <= 2; y++)
@@ -682,7 +621,7 @@ view_open(struct packs *packs, const char *id, char *err, size_t errlen)
 		if (starts(id, "world/")) {
 			v->kind = K_WORLD;
 			v->nframes = WORLD_STEPS_X * WORLD_STEPS_Y;
-			snapshot_sea(v);
+			sea_init(&v->sea, v->pal);
 		} else {
 			v->kind = K_TOWNS;
 			v->nframes = 1;
@@ -718,7 +657,7 @@ view_close(struct view *v)
 	font_free(&v->textfont);
 	strtab_free(&v->tab);
 	strgroups_free(&v->groups);
-	free(v->map);
+	free(v->world);
 	free(v->out.px);
 	free(v);
 }

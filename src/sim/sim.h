@@ -12,6 +12,7 @@
 
 #include "assets/scenario.h"
 #include "assets/towns.h"
+#include "assets/world.h"
 #include "rng.h"
 
 /*
@@ -52,12 +53,23 @@ struct sim_town {
 	uint16_t	standing;	/* field 9, reset by a new governor */
 	uint16_t	governor;	/* field 11 */
 	uint16_t	id;
+	uint16_t	sea_x, sea_y;	/* fields 26, 27: water outside the
+					 * harbour, 0 for inland towns */
 };
 
 struct sim_news {
 	int32_t		day;
 	int		code;		/* enum news_code */
 	int		a, b;
+};
+
+/* Special abilities, in the order of the game's list (CSTN group 83). */
+enum ability {
+	ABILITY_FENCING,
+	ABILITY_CHARM,
+	ABILITY_NAVIGATION,
+	ABILITY_GUNNERY,
+	ABILITY_MEDICINE
 };
 
 /* Who the player is: set by the start screens, kept in saves. */
@@ -70,9 +82,34 @@ struct sim_player {
 	int		expedition;	/* -1, or famous expedition 0..5 */
 };
 
+/* The player's fleet and its flagship's position at sea. */
+struct sim_fleet {
+	int		nships;
+	uint8_t		ships[SCENARIO_SHIPS];	/* types, 0 = pinnace */
+	int		crew;
+	int		guns;
+	long		gold;
+	int32_t		x, y;		/* world pixels */
+	uint8_t		fx, fy;		/* 1/8 pixel remainders */
+	uint8_t		heading;	/* 0 north, 0x40 east... */
+	int		speed;		/* 4..12 once under way */
+	uint32_t	ticks;		/* sailing ticks, 64 per day */
+	int		leaving;	/* town just left, or -1 */
+};
+
+/* Why sim_sail() stopped. */
+enum sail_stop {
+	SAIL_TICKS,	/* all requested ticks done */
+	SAIL_LAND,	/* the next move would run aground on land */
+	SAIL_TOWN	/* arrived at a town: sim_sail()'s "town" says which */
+};
+
 struct sim {
 	struct rng	rng;
 	struct sim_player player;
+	struct sim_fleet fleet;
+	uint8_t		wind;		/* direction it blows toward */
+	const struct world *world;	/* not saved; NULL: no sailing */
 	int		era_year;	/* era of the towns, 1560..1680 */
 	int		year;		/* calendar year */
 	int		day_of_year;	/* 0..359: twelve 30-day months */
@@ -99,6 +136,13 @@ void	sim_new_game(struct sim *s, const struct era_towns *era,
  * year turns every 360 days.
  */
 void	sim_advance(struct sim *s, int32_t days);
+
+/*
+ * Sail for up to "ticks" ticks with a turn input of -1, 0 or +1, stopping
+ * early at land or a town.  Days pass every 64 ticks.  Needs s->world.
+ * Returns why it stopped; "town" receives the town index on SAIL_TOWN.
+ */
+enum sail_stop sim_sail(struct sim *s, int turn, int ticks, int *town);
 
 /* One world update; exposed for tests. */
 void	sim_world_update(struct sim *s);

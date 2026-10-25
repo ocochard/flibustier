@@ -264,7 +264,9 @@ The first 512 bytes of the matching PCX, presumably a backup for the
     - f10: set on the town a fleet currently targets (VA `0xcba7`).
     - f11: re-rolled 0-15 by "New governor" unless bit `0x40` is set.
     - f14: town ID, stable across eras.
-    - f24-f27: approach points (zero for the second one of inland towns).
+    - f24-f27: approach points. f26, f27 is on the water outside the
+      harbour (Port Royale: (341, 269), open sea south of the town); it is
+      zero for inland towns.
     - f29, f30: about 0.75 x (x, y). Probably coordinates on a smaller
       map.
     - f12, f13, f15-f23, f28, f31: unknown.

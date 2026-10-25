@@ -14,7 +14,9 @@
  * copies 0xF24 bytes from one of these addresses into the live town
  * table (VA 0x13555 in the GOG build).  The tile class table is read by
  * the sailing setup (VA 0x2ab09) to find open sea.  Start scenarios are
- * read by the scenario loader (VA 0x1386c).
+ * read by the scenario loader (VA 0x1386c).  The sailing loop (VA 0x231b8)
+ * uses the sine and colour class tables, and the per-era block that VA
+ * 0x1361c copies, which starts with the speed table.
  */
 static const struct exe_layout layouts[] = {
 	{
@@ -24,6 +26,9 @@ static const struct exe_layout layouts[] = {
 		{ 0x38d58, 0x39c7c, 0x3aba0, 0x3bac4, 0x3c9e8, 0x3d90c },
 		0x4103c,
 		0x35b90,
+		0x36628,
+		0x4113c,
+		0x34d68,
 	},
 };
 

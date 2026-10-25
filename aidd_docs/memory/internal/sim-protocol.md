@@ -22,6 +22,7 @@ with a message. Numbers are integers only.
 | `advance` | `days` (1..36500) | `day`, `news` (items logged by this advance) |
 | `state` | none | `state`: the full game state (below) |
 | `load` | `state`: an object as returned by `state` | none |
+| `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land` or `town`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `set` | `town` (name or index), `field`, `value` | none |
 | `set` | `relation` ([a, b], nation indices), `value` (-1, 0, 1) | none |
 | `set` | `field`: `player_town` (-1 or town index), `value` | none |
@@ -37,11 +38,15 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
              "expedition": -1},
+  "fleet": {"ships": [1], "crew": 40, "guns": 8, "gold": 2000,
+            "x": 5477, "y": 4319, "fx": 0, "fy": 0, "heading": 0,
+            "speed": 0, "ticks": 0, "leaving": 24},
+  "wind": 192,
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
   "player_town": -1,
@@ -57,6 +62,11 @@ with a message. Numbers are integers only.
 }
 ```
 
+- `sail` steers and sails, 64 ticks a day; it stops early on land or at
+  a town. `fleet` holds the flagship's position in world pixels (16 per
+  map cell) with 1/8-pixel remainders. `heading` and `wind` are
+  directions in 256ths of a turn, 0 north, 64 east; `wind` is the
+  direction it blows toward. `leaving` is the town just left, or -1.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.
 - Nations are indexed 0 Spain, 1 England, 2 France, 3 Holland.

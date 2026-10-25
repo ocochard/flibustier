@@ -28,9 +28,19 @@ enum scenario_nation {
  * England, France, Holland): -1 war, 0 peace, +1 alliance.  "raw" keeps
  * the whole record for the fields not understood yet.
  */
+#define SCENARIO_SHIPS	8
+#define SCENARIO_STARTS	4
+
 struct scenario {
 	char		 name[21];	/* empty for the unused Dutch 1560 slot */
 	int8_t		 relations[4][4];
+	int		 crew;
+	int		 guns;
+	int		 nation;	/* town nation order */
+	long		 gold;
+	int		 nships;
+	uint8_t		 ships[SCENARIO_SHIPS];	/* ship types, 0 = pinnace */
+	uint16_t	 start[SCENARIO_STARTS][2];	/* x, y in map cells */
 	uint8_t		 raw[SCENARIO_LEN];
 };
 

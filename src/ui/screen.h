@@ -31,6 +31,7 @@ extern const struct screen screen_voyage;
 extern const struct screen screen_slots;
 extern const struct screen screen_retire;
 extern const struct screen screen_hof;
+extern const struct screen screen_sail;
 
 /* Fade to another screen; NULL quits. */
 void	game_goto(struct game *g, const struct screen *s);
@@ -40,5 +41,7 @@ int	game_background(struct game *g, const char *pic);
 int	game_portrait(struct game *g, const char *spr);
 /* Create the simulation from g->career. */
 int	game_start_career(struct game *g);
+/* Load the world of the simulation's era and attach it; 0 or -1. */
+int	game_attach_world(struct game *g);
 
 #endif

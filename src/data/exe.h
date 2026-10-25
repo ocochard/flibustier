@@ -25,6 +25,9 @@ struct exe_layout {
 	uint32_t	 town_va[EXE_ERAS];	/* era blocks, 1560 to 1680 */
 	uint32_t	 tile_class_va;		/* 256 bytes: class per map tile */
 	uint32_t	 scenario_va;		/* 30 start scenarios */
+	uint32_t	 sine_va;		/* 128 bytes: half-circle sine */
+	uint32_t	 colour_class_va;	/* 256 bytes: terrain per colour */
+	uint32_t	 era_block_va;		/* 0x200 bytes per era: speeds */
 };
 
 /* Returns the layout of a known build, or NULL. */

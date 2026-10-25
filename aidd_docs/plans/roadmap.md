@@ -201,6 +201,19 @@ guess (see `src/ui/screens.c`).
 
 ### Phase 4: sailing the Caribbean
 
+Status (2026-10-26): first slice done.
+- **Traced and specified:** steering, speed by point of sail and ship
+  class, the wind, collisions through the terrain classes, the world
+  edges and the view.
+- **Implemented:** in the simulation (`sail` command) and on screen.
+  The sailing screen shows the tiles, the animated sea, the ship and the
+  wind, and arriving at a town opens the stand-in town menu.
+
+Still to do: shoals and running aground, storms, night, the overview
+map, encounters ("Sail ho!"), landing parties, and the values that halve
+speed (VA `0x4d292`).
+
+
 - World map, town placement per era, wind and points of sail per ship
   type, shoals and running aground, day and month progression, fleet
   encounters ("Sail ho!"), landing, and the overview map with RSD era
