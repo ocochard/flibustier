@@ -1,0 +1,15 @@
+# Build output
+/build/
+*.o
+*.a
+*.so
+*.dSYM/
+
+# Original game data (copyrighted, never commit)
+/data/
+/gamedata/
+
+# Editor / OS
+*.swp
+*~
+.DS_Store
