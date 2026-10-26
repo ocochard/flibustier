@@ -19,20 +19,17 @@
 #define SIGHT		31	/* units in cover are seen from this near */
 #define LONG_IDLE	999	/* passes without a fight: the attack fails */
 
-/* Terrain class at field pixel (x, y): 0 clear, 1 cover, 2 swamp, 3
- * water (VA 0x7147, 0x7197). */
+/* Ground at field pixel (x, y), GROUND_* (VA 0x7147, 0x7197). */
 static int
 terrain(const struct sim *s, int x, int y)
 {
 	const struct sim_land *l = &s->land;
-	int c;
 
 	if (x < 0 || y < 0 || x >= BATTLE_SCREEN * CELL ||
 	    y >= BATTLE_SCREEN * CELL)
-		return (0);
-	c = s->world->land_class[s->world->land_screens[l->screen]
-	    [(y / CELL) * BATTLE_SCREEN + x / CELL]];
-	return (c > 7 ? 3 : c > 4 ? 0 : c < 4 ? 1 : 2);
+		return (GROUND_CLEAR);
+	return (s->world->land_ground[s->world->land_screens[l->screen]
+	    [(y / CELL) * BATTLE_SCREEN + x / CELL]]);
 }
 
 static int

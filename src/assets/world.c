@@ -81,6 +81,14 @@ classify(const uint8_t *classes, const uint8_t *px, size_t n, uint8_t *out)
 		out[i] = classes[px[i]];
 }
 
+/* The ground of the executable's land tile code (VA 0x7197). */
+static uint8_t
+ground(uint8_t c)
+{
+	return (c > 7 ? GROUND_WATER : c > 4 ? GROUND_CLEAR : c < 4 ?
+	    GROUND_COVER : GROUND_SWAMP);
+}
+
 static int
 load_map(struct world *w, struct packs *packs, int era,
     const uint8_t *classes, char *err, size_t errlen)
@@ -126,7 +134,11 @@ load_map(struct world *w, struct packs *packs, int era,
 	}
 	memcpy(w->tiles, ts.pixels, sizeof(w->tiles));
 	memcpy(w->palette, ts.palette, sizeof(w->palette));
-	classify(classes, w->tiles, sizeof(w->tiles), w->map_terrain);
+	/* A tile sheet may bring its own terrain. */
+	if (ts.terrain != NULL)
+		memcpy(w->map_terrain, ts.terrain, sizeof(w->map_terrain));
+	else
+		classify(classes, w->tiles, sizeof(w->tiles), w->map_terrain);
 	tileset_free(&ts);
 	rc = tileset_load(packs, "tiles/battle", &ts);
 	if (rc != 0 || ts.tile_w != BATTLE_TILE || ts.count != 256) {
@@ -134,8 +146,14 @@ load_map(struct world *w, struct packs *packs, int era,
 		snprintf(err, errlen, "bad tiles/battle");
 		return (-1);
 	}
-	classify(classes, ts.pixels, sizeof(w->battle_terrain),
-	    w->battle_terrain);
+	if (ts.terrain != NULL)
+		memcpy(w->battle_terrain, ts.terrain,
+		    sizeof(w->battle_terrain));
+	else
+		classify(classes, ts.pixels, sizeof(w->battle_terrain),
+		    w->battle_terrain);
+	if (ts.ground != NULL)
+		memcpy(w->land_ground, ts.ground, sizeof(w->land_ground));
 	tileset_free(&ts);
 	return (load_screens(w, packs, err, errlen));
 }
@@ -232,6 +250,14 @@ world_load(struct world *w, struct packs *packs,
 		return (-1);
 	}
 	w->era = era;
+	/* The original ground first: a tile sheet may replace it. */
+	if ((p = exe_at(layout, exe, len, layout->land_class_va, 256)) ==
+	    NULL) {
+		snprintf(err, errlen, "no land battle terrain");
+		return (-1);
+	}
+	for (i = 0; i < 256; i++)
+		w->land_ground[i] = ground(p[i]);
 	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
 	    NULL)
 		goto bad;
@@ -248,12 +274,6 @@ world_load(struct world *w, struct packs *packs,
 	for (i = 0; i < BATTLE_SETS * BATTLE_PIECES; i++)
 		w->battle_sets[i / BATTLE_PIECES][i % BATTLE_PIECES] =
 		    (uint8_t)(p[2 * i] < BATTLE_SCREENS ? p[2 * i] : 0);
-	if ((p = exe_at(layout, exe, len, layout->land_class_va, 256)) ==
-	    NULL) {
-		snprintf(err, errlen, "no land battle terrain");
-		return (-1);
-	}
-	memcpy(w->land_class, p, 256);
 	if (read_words(layout, exe, len, layout->treasure_va,
 	    &w->treasure[0][0], 2 * TREASURE_SPOTS) != 0) {
 		snprintf(err, errlen, "no treasure spots");

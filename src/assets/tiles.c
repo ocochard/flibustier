@@ -11,6 +11,7 @@
 
 #include "png.h"
 #include "tiles.h"
+#include "world.h"
 
 #define SCREEN_H	480
 #define MAX_TILES	1024
@@ -18,7 +19,25 @@
 
 struct desc {
 	char	image[256];
+	char	terrain[256];
 	int	tile, count, frames, period;
+	int	has_ground;
+	uint8_t	ground[MAX_TILES];
+};
+
+/* Terrain mask colours. */
+static const struct {
+	uint8_t	rgb[3];
+	uint8_t	terrain;
+} terrain_colours[] = {
+	{ { 0x00, 0x00, 0xFF }, TERRAIN_SEA },
+	{ { 0x00, 0xFF, 0xFF }, TERRAIN_SHALLOWS },
+	{ { 0x00, 0xFF, 0x00 }, TERRAIN_LAND },
+};
+
+static const char *const ground_names[] = {
+	[GROUND_CLEAR] = "clear", [GROUND_COVER] = "cover",
+	[GROUND_SWAMP] = "swamp", [GROUND_WATER] = "water",
 };
 
 static char *
@@ -50,9 +69,10 @@ static int
 parse(const uint8_t *data, size_t len, struct desc *d)
 {
 	char *text, *line, *next, *eq, *key, *val;
-	int in_tiles = 0, rc = -1;
+	enum { NONE, TILES, GROUND } section = NONE;
+	int rc = -1, tile, g;
 
-	memset(d, 0, sizeof(*d));
+	memset(d, 0, sizeof(*d));	/* ground: all clear */
 	d->count = 256;
 	d->frames = 1;
 	d->period = 4;
@@ -66,16 +86,29 @@ parse(const uint8_t *data, size_t len, struct desc *d)
 		line = trim(line);
 		if (*line == '\0' || *line == '#' || *line == ';')
 			continue;
-		if (strcmp(line, "[tiles]") == 0) {
-			in_tiles = 1;
+		if (strcmp(line, "[tiles]") == 0 ||
+		    strcmp(line, "[ground]") == 0) {
+			section = line[1] == 't' ? TILES : GROUND;
 			continue;
 		}
-		if ((eq = strchr(line, '=')) == NULL || !in_tiles)
+		if ((eq = strchr(line, '=')) == NULL || section == NONE)
 			goto out;
 		*eq = '\0';
 		key = trim(line);
 		val = trim(eq + 1);
-		if (strcmp(key, "image") == 0)
+		if (section == GROUND) {
+			for (g = 0; g < 4; g++)
+				if (strcmp(val, ground_names[g]) == 0)
+					break;
+			if (whole(key, 0, MAX_TILES - 1, &tile) != 0 || g == 4)
+				goto out;
+			d->ground[tile] = (uint8_t)g;
+			d->has_ground = 1;
+			continue;
+		}
+		if (strcmp(key, "terrain") == 0)
+			snprintf(d->terrain, sizeof(d->terrain), "%s", val);
+		else if (strcmp(key, "image") == 0)
 			snprintf(d->image, sizeof(d->image), "%s", val);
 		else if ((strcmp(key, "tile") == 0 &&
 		    whole(val, 1, 1024, &d->tile) != 0) ||
@@ -90,6 +123,9 @@ parse(const uint8_t *data, size_t len, struct desc *d)
 	}
 	if (d->image[0] != '\0' && d->tile > 0)
 		rc = 0;
+	for (tile = 0; tile < MAX_TILES; tile++)
+		if (d->ground[tile] != GROUND_CLEAR && tile >= d->count)
+			rc = -1;	/* ground for a tile not there */
 out:
 	free(text);
 	return (rc);
@@ -121,6 +157,58 @@ reduce(struct tileset *ts)
 		}
 	}
 	free(art);
+	return (0);
+}
+
+/*
+ * The terrain mask "file" beside sheet "b": tiles in the art's grid at
+ * 640x480 resolution, each pixel one of terrain_colours.
+ */
+static int
+load_terrain(struct packs *packs, const struct blob *b, const char *file,
+    struct tileset *ts)
+{
+	struct blob mb;
+	struct image mask;
+	const uint8_t *p;
+	size_t i, k, n = (size_t)ts->tile_w * ts->tile_h;
+	int x, y, mx, my, rc;
+
+	if (packs_load_beside(packs, b, file, &mb) != 0)
+		return (-1);
+	rc = png_decode(mb.data, mb.len, SCREEN_H, &mask);
+	blob_free(&mb);
+	if (rc != 0)
+		return (-1);
+	if (mask.rgba_w < ts->columns * ts->tile_w ||
+	    mask.rgba_h < ts->frame_rows * ts->tile_h ||
+	    (ts->terrain = malloc(ts->count * n)) == NULL) {
+		image_free(&mask);
+		return (-1);
+	}
+	for (i = 0; i < ts->count; i++)
+		for (y = 0; y < ts->tile_h; y++)
+			for (x = 0; x < ts->tile_w; x++) {
+				mx = (int)(i % (size_t)ts->columns) *
+				    ts->tile_w + x;
+				my = (int)(i / (size_t)ts->columns) *
+				    ts->tile_h + y;
+				p = mask.rgba + ((size_t)my * mask.rgba_w + mx) *
+				    4;
+				for (k = 0; k < sizeof(terrain_colours) /
+				    sizeof(terrain_colours[0]); k++)
+					if (memcmp(p, terrain_colours[k].rgb,
+					    3) == 0)
+						break;
+				if (k == sizeof(terrain_colours) /
+				    sizeof(terrain_colours[0])) {
+					image_free(&mask);
+					return (-1);	/* not a terrain */
+				}
+				ts->terrain[i * n + (size_t)y * ts->tile_w +
+				    x] = terrain_colours[k].terrain;
+			}
+	image_free(&mask);
 	return (0);
 }
 
@@ -185,9 +273,17 @@ tileset_from_blob(struct packs *packs, const char *id, const struct blob *b,
 		}
 		blob_free(&ob);
 	}
-	if (rc != 0 && reduce(out) != 0) {
+	if ((rc != 0 && reduce(out) != 0) || (d.terrain[0] != '\0' &&
+	    load_terrain(packs, b, d.terrain, out) != 0)) {
 		tileset_free(out);
 		return (-1);
+	}
+	if (d.has_ground) {
+		if ((out->ground = malloc(out->count)) == NULL) {
+			tileset_free(out);
+			return (-1);
+		}
+		memcpy(out->ground, d.ground, out->count);
 	}
 	return (0);
 }

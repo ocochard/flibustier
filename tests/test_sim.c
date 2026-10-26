@@ -1942,7 +1942,8 @@ test_land_battle(void)
 	struct sim_land *l = &s.land;
 	int i, x, ev = 0;
 
-	memset(test_world.land_class, 5, sizeof(test_world.land_class));
+	memset(test_world.land_ground, GROUND_CLEAR,
+	    sizeof(test_world.land_ground));
 	sea_game(&s, 300, 300, 0);
 	t = &s.towns[1];
 	t->id = 0;

@@ -27,6 +27,12 @@ struct tileset {
 	int		 art_tile, columns, frame_rows;
 	int		 frames;
 	int		 period;	/* animation passes per frame */
+
+	/* Replacement terrain (tile sheets): the class (TERRAIN_*) of
+	 * every tile pixel, count * tile_w * tile_h, and the land battle
+	 * ground (GROUND_*) of every tile, count; or NULL. */
+	uint8_t		*terrain;
+	uint8_t		*ground;
 };
 
 /*

@@ -6757,7 +6757,7 @@ land_side(struct game *g, const struct land_unit *u, int y_morale,
 {
 	const struct sim_land *l = &g->sim.land;
 	char buf[32];
-	int t, c, m;
+	int t, m;
 
 	if (u->flags == 0 && (u->flags & 7) != LAND_FORT)
 		return;
@@ -6769,9 +6769,8 @@ land_side(struct game *g, const struct land_unit *u, int y_morale,
 	draw(g, FONT_SMALL, 512, y_men, 60, buf, 0);
 	snprintf(buf, sizeof(buf), "%d", u->muskets);
 	draw(g, FONT_SMALL, 590, y_men, 40, buf, 0);
-	c = g->world->land_class[g->world->land_screens[l->screen][((u->y /
+	t = g->world->land_ground[g->world->land_screens[l->screen][((u->y /
 	    32) % 15) * 15 + (u->x / 32) % 15]];
-	t = c > 7 ? 3 : c > 4 ? 0 : c < 4 ? 1 : 2;
 	draw(g, FONT_SMALL, 496, y_terrain, 80, game_word(g, W_LAND, 8), 0);
 	draw(g, FONT_SMALL, 570, y_terrain, 70, game_word(g, W_LAND,
 	    (size_t)t), 0);

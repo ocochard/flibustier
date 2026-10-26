@@ -31,6 +31,7 @@
 #include "assets/tiles.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
+#include "assets/world.h"
 #include "gfx/fb.h"
 #include "gfx/text.h"
 
@@ -1177,6 +1178,96 @@ test_tiles(void)
 	remove_files(high, high_files);
 }
 
+/*
+ * 4x4 terrain masks for the tile atlas (2x2 pixel tiles, two a row):
+ * sea; land; shallows; land over sea.  The bad one has a red pixel.
+ */
+static const uint8_t png_mask[] = {
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0xa9, 0xf1, 0x9e, 0x7e, 0x00, 0x00, 0x00,
+	0x19, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0x60, 0x60, 0xf8, 0xff,
+	0x1f, 0x8c, 0x61, 0x10, 0x53, 0xe0, 0x3f, 0x88, 0x83, 0x4d, 0x00, 0xaa,
+	0x12, 0x00, 0x78, 0x04, 0x23, 0xdd, 0xe1, 0x14, 0x4c, 0xfe, 0x00, 0x00,
+	0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+};
+static const uint8_t png_mask_bad[] = {
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0xa9, 0xf1, 0x9e, 0x7e, 0x00, 0x00, 0x00,
+	0x1e, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0x60, 0x60, 0xf8, 0xff,
+	0x1f, 0x8c, 0x61, 0x10, 0xc4, 0x01, 0x89, 0x20, 0x04, 0x40, 0xfc, 0xff,
+	0xff, 0xb1, 0x08, 0x40, 0xb5, 0x02, 0x00, 0x7a, 0x02, 0x23, 0xdd, 0x7d,
+	0x76, 0xfa, 0xac, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+	0x42, 0x60, 0x82,
+};
+
+/* Tile sheets with their own terrain and land battle ground. */
+static void
+test_tile_terrain(void)
+{
+	static const char *const files[] = { "pack.ini", "atlas.png",
+	    "mask.png", "bad.png", "sea.tiles", NULL };
+	static const char head[] = "[tiles]\nimage = atlas.png\ntile = 4\n"
+	    "count = 4\n";
+	static const uint8_t want[4][4] = {
+		{ TERRAIN_SEA, TERRAIN_SEA, TERRAIN_SEA, TERRAIN_SEA },
+		{ TERRAIN_LAND, TERRAIN_LAND, TERRAIN_LAND, TERRAIN_LAND },
+		{ TERRAIN_SHALLOWS, TERRAIN_SHALLOWS, TERRAIN_SHALLOWS,
+		    TERRAIN_SHALLOWS },
+		{ TERRAIN_LAND, TERRAIN_LAND, TERRAIN_SEA, TERRAIN_SEA },
+	};
+	char dir[] = "/tmp/stmalo-test-XXXXXX";
+	char text[512];
+	struct packs *packs;
+	struct tileset ts;
+
+	if (mkdtemp(dir) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	CHECK(write_text(dir, "pack.ini", "[pack]\nart_height = 960\n"
+	    "[assets]\ntiles/sea = sea.tiles\n") == 0);
+	CHECK(write_bytes(dir, "atlas.png", png_tiles, sizeof(png_tiles)) ==
+	    0);
+	CHECK(write_bytes(dir, "mask.png", png_mask, sizeof(png_mask)) == 0);
+	CHECK(write_bytes(dir, "bad.png", png_mask_bad, sizeof(png_mask_bad))
+	    == 0);
+	snprintf(text, sizeof(text), "%sterrain = mask.png\n\n[ground]\n"
+	    "# tile = kind\n1 = cover\n3 = water\n", head);
+	CHECK(write_text(dir, "sea.tiles", text) == 0);
+
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, dir) == 0);
+	CHECK(tileset_load(packs, "tiles/sea", &ts) == 0);
+	CHECK(ts.terrain != NULL && ts.ground != NULL);
+	if (ts.terrain != NULL)
+		CHECK(memcmp(ts.terrain, want, sizeof(want)) == 0);
+	if (ts.ground != NULL)
+		CHECK(ts.ground[0] == GROUND_CLEAR &&
+		    ts.ground[1] == GROUND_COVER &&
+		    ts.ground[2] == GROUND_CLEAR &&
+		    ts.ground[3] == GROUND_WATER);
+	tileset_free(&ts);
+	packs_free(packs);
+
+	/* Without them, none: the world falls back on colours. */
+	CHECK(try_tiles(dir, head) == 0);
+	snprintf(text, sizeof(text), "%sterrain = bad.png\n", head);
+	CHECK(try_tiles(dir, text) == -1);	/* a red pixel */
+	snprintf(text, sizeof(text), "%sterrain = atlas.png\n", head);
+	CHECK(try_tiles(dir, text) == -1);	/* art is not terrain */
+	snprintf(text, sizeof(text), "%sterrain = none.png\n", head);
+	CHECK(try_tiles(dir, text) == -1);
+	snprintf(text, sizeof(text), "%s[ground]\n4 = cover\n", head);
+	CHECK(try_tiles(dir, text) == -1);	/* only 4 tiles */
+	snprintf(text, sizeof(text), "%s[ground]\n1 = rock\n", head);
+	CHECK(try_tiles(dir, text) == -1);
+	snprintf(text, sizeof(text), "%s[ground]\nx = cover\n", head);
+	CHECK(try_tiles(dir, text) == -1);
+	remove_files(dir, files);
+}
+
 int
 main(void)
 {
@@ -1196,6 +1287,7 @@ main(void)
 	test_sheets();
 	test_fonts();
 	test_tiles();
+	test_tile_terrain();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

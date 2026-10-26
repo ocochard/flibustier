@@ -138,6 +138,14 @@ count = 256
 # below the previous one, and sailing passes per frame (default 4)
 frames = 8
 period = 4
+# optional: terrain, the same grid at 640x480 resolution in three
+# colours: sea #0000FF, shallows #00FFFF, land #00FF00
+terrain = map-terrain.png
+
+# optional, battle tiles: land battle ground per tile, clear, cover,
+# swamp or water; unlisted tiles are clear
+[ground]
+12 = cover
 ```
 
 - Tiles fill the image in rows, left to right, top to bottom; the image
@@ -145,17 +153,20 @@ period = 4
 - A tile covers its art size times `480 / art_height` in 640x480 pixels,
   rounded. The game needs 16 pixel map tiles (`tiles/map`) and 32 pixel
   battle tiles (`tiles/battle`), 256 of each.
-- Palette indices and a palette come with the tiles, because game logic
-  reads terrain from tile colours: the original tileset's when it is
-  installed with the same tiles, otherwise the first frame reduced to the
-  fixed palette.
+- Terrain: the world keeps a class per tile pixel. With `terrain`, the
+  sheet gives it; without, it comes from the tiles' palette indices
+  through the executable's colour classes, which only describe the
+  original's indices. A sheet for an open pack therefore needs
+  `terrain`, and the battle tiles a `[ground]` section.
+- Palette indices and a palette still come with the tiles, for code that
+  reads them: the original tileset's when it is installed with the same
+  tiles, otherwise the first frame reduced to the fixed palette.
 - Animation stands in for the original's palette shimmer of the sea:
   frame `pass / period % frames`, counted in sailing passes (12.2 a
   second). Battles draw frame 0.
 - Limits:
-  - Without original data, terrain comes from the fixed-palette indices,
-    which the executable's colour classes do not describe. A fully open
-    pack needs its own terrain data.
+  - The map grid, battle screens, towns and treasure spots still come
+    from the original (`plans/open-terrain.md`, T3).
   - The treasure map's tiles are composed on indices (original
     resolution).
   - The shimmer pause while the ship touches land is not reproduced.

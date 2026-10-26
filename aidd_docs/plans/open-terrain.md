@@ -51,6 +51,11 @@ pixel of 1660.
 
 ### T2: terrain masks in tile sheets
 
+Status (2026-10-26): done (`asset-packs.md`, tile sheets). The world
+keeps the land battle ground reduced to four kinds (`GROUND_*`), and
+`test_original` loads full-size sheets with their own terrain over the
+original data.
+
 - `.tiles` gains `terrain = map-terrain.png`: the same grid as the art,
   at 640x480 resolution (16 pixels per map tile, 32 per battle tile).
   Each pixel is one of three exact colours (sea, shallows, land); any

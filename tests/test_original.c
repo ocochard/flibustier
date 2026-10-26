@@ -496,6 +496,219 @@ test_terrain(struct packs *packs)
 	blob_free(&b);
 }
 
+static uint32_t
+crc32_update(uint32_t crc, const uint8_t *p, size_t n)
+{
+	int k;
+
+	crc = ~crc;
+	while (n-- > 0) {
+		crc ^= *p++;
+		for (k = 0; k < 8; k++)
+			crc = crc & 1 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+	}
+	return (~crc);
+}
+
+static void
+put32be(uint8_t *p, uint32_t v)
+{
+	p[0] = (uint8_t)(v >> 24);
+	p[1] = (uint8_t)(v >> 16);
+	p[2] = (uint8_t)(v >> 8);
+	p[3] = (uint8_t)v;
+}
+
+static void
+chunk(FILE *fp, const char *type, const uint8_t *data, size_t n)
+{
+	uint8_t b[8];
+	uint32_t crc;
+
+	put32be(b, (uint32_t)n);
+	memcpy(b + 4, type, 4);
+	fwrite(b, 1, 8, fp);
+	fwrite(data, 1, n, fp);
+	crc = crc32_update(crc32_update(0, (const uint8_t *)type, 4), data, n);
+	put32be(b, crc);
+	fwrite(b, 1, 4, fp);
+}
+
+/*
+ * Write a w x h RGBA PNG of one colour per tile of "side" pixels, from
+ * colour(i, arg) for tile i (16 tiles a row), uncompressed.
+ */
+static int
+write_png(const char *path, int w, int h, int side,
+    void (*colour)(int, void *, uint8_t *), void *arg)
+{
+	static const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', '\r', '\n',
+	    0x1a, '\n' };
+	size_t row = 1 + (size_t)w * 4, raw_len = row * h, n, o, k;
+	uint8_t ihdr[13] = { 0 }, *raw, *z;
+	uint32_t a = 1, b = 0;
+	FILE *fp;
+	int x, y;
+
+	if ((raw = calloc(raw_len, 1)) == NULL ||
+	    (z = malloc(raw_len + raw_len / 65535 * 5 + 16)) == NULL) {
+		free(raw);
+		return (-1);
+	}
+	for (y = 0; y < h; y++)
+		for (x = 0; x < w; x++)
+			colour((y / side) * 16 + x / side, arg,
+			    raw + (size_t)y * row + 1 + (size_t)x * 4);
+	/* zlib: stored blocks, then Adler-32. */
+	z[0] = 0x78;
+	z[1] = 0x01;
+	for (o = 0, n = 2; o < raw_len; o += k) {
+		k = raw_len - o < 65535 ? raw_len - o : 65535;
+		z[n++] = o + k == raw_len;
+		z[n++] = (uint8_t)k;
+		z[n++] = (uint8_t)(k >> 8);
+		z[n++] = (uint8_t)~k;
+		z[n++] = (uint8_t)(~k >> 8);
+		memcpy(z + n, raw + o, k);
+		n += k;
+	}
+	for (o = 0; o < raw_len; o++) {
+		a = (a + raw[o]) % 65521;
+		b = (b + a) % 65521;
+	}
+	put32be(z + n, b << 16 | a);
+	n += 4;
+	put32be(ihdr, (uint32_t)w);
+	put32be(ihdr + 4, (uint32_t)h);
+	ihdr[8] = 8;		/* bits */
+	ihdr[9] = 6;		/* RGBA */
+	if ((fp = fopen(path, "wb")) == NULL) {
+		free(raw);
+		free(z);
+		return (-1);
+	}
+	fwrite(sig, 1, 8, fp);
+	chunk(fp, "IHDR", ihdr, sizeof(ihdr));
+	chunk(fp, "IDAT", z, n);
+	chunk(fp, "IEND", NULL, 0);
+	free(raw);
+	free(z);
+	return (fclose(fp));
+}
+
+/* Tile art: grey.  Terrain masks: the colour passed, for every tile. */
+static void
+grey(int i, void *arg, uint8_t *p)
+{
+	(void)i;
+	(void)arg;
+	memset(p, 128, 3);
+	p[3] = 255;
+}
+
+static void
+plain(int i, void *arg, uint8_t *p)
+{
+	(void)i;
+	memcpy(p, arg, 3);
+	p[3] = 255;
+}
+
+static int
+write_file(const char *dir, const char *name, const char *text)
+{
+	char path[1024];
+	FILE *fp;
+
+	snprintf(path, sizeof(path), "%s/%s", dir, name);
+	if ((fp = fopen(path, "w")) == NULL)
+		return (-1);
+	fputs(text, fp);
+	return (fclose(fp));
+}
+
+/*
+ * Tile sheets with terrain over the original data: the world takes its
+ * terrain from them, and land battle ground from a [ground] section.
+ */
+static void
+test_sheet_terrain(struct packs *orig)
+{
+	static struct world w, ref;
+	static const uint8_t land[3] = { 0x00, 0xFF, 0x00 };
+	static const uint8_t shallows[3] = { 0x00, 0xFF, 0xFF };
+	static const char *const files[] = { "pack.ini", "map.tiles",
+	    "map.png", "map-terrain.png", "battle.tiles", "battle.png",
+	    "battle-terrain.png", NULL };
+	const char *data = getenv("STMALO_DATA");
+	const struct exe_layout *layout;
+	char dir[] = "/tmp/stmalo-test-XXXXXX", path[1024], err[256];
+	struct packs *packs;
+	struct blob b;
+	size_t i, bad;
+
+	if (mkdtemp(dir) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	snprintf(path, sizeof(path), "%s/map.png", dir);
+	CHECK(write_png(path, 256, 256, 16, grey, NULL) == 0);
+	snprintf(path, sizeof(path), "%s/map-terrain.png", dir);
+	CHECK(write_png(path, 256, 256, 16, plain, (void *)land) == 0);
+	snprintf(path, sizeof(path), "%s/battle.png", dir);
+	CHECK(write_png(path, 512, 512, 32, grey, NULL) == 0);
+	snprintf(path, sizeof(path), "%s/battle-terrain.png", dir);
+	CHECK(write_png(path, 512, 512, 32, plain, (void *)shallows) == 0);
+	CHECK(write_file(dir, "pack.ini", "[assets]\n"
+	    "tiles/map = map.tiles\ntiles/battle = battle.tiles\n") == 0);
+	CHECK(write_file(dir, "map.tiles", "[tiles]\nimage = map.png\n"
+	    "tile = 16\nterrain = map-terrain.png\n") == 0);
+	CHECK(write_file(dir, "battle.tiles", "[tiles]\nimage = battle.png\n"
+	    "tile = 32\nterrain = battle-terrain.png\n[ground]\n0 = water\n")
+	    == 0);
+
+	packs = packs_new();
+	CHECK(packs_add_original(packs, data) == 0);
+	CHECK(packs_add_dir(packs, dir) == 0);
+	CHECK(packs_load(orig, "program/main", &b) == 0);
+	if ((layout = exe_identify(b.data, b.len)) != NULL) {
+		CHECK(world_load(&w, packs, layout, b.data, b.len, 4, err,
+		    sizeof(err)) == 0);
+		CHECK(world_load(&ref, orig, layout, b.data, b.len, 4, err,
+		    sizeof(err)) == 0);
+		for (bad = 0, i = 0; i < sizeof(w.map_terrain); i++)
+			bad += w.map_terrain[i] != TERRAIN_LAND;
+		CHECK(bad == 0);
+		for (bad = 0, i = 0; i < sizeof(w.battle_terrain); i++)
+			bad += w.battle_terrain[i] != TERRAIN_SHALLOWS;
+		CHECK(bad == 0);
+		/* Open sea in the original is land with the sheet. */
+		for (i = 0; i < (size_t)WORLD_PX_W &&
+		    world_terrain(&ref, (int)i, WORLD_PX_H / 2) != TERRAIN_SEA;
+		    i++)
+			;
+		CHECK(i < (size_t)WORLD_PX_W &&
+		    world_terrain(&w, (int)i, WORLD_PX_H / 2) == TERRAIN_LAND);
+		/* The section replaces the ground: listed, else clear. */
+		CHECK(w.land_ground[0] == GROUND_WATER);
+		for (bad = 0, i = 1; i < 256; i++)
+			bad += w.land_ground[i] != GROUND_CLEAR;
+		CHECK(bad == 0);
+		for (bad = 0, i = 0; i < 256; i++)
+			bad += ref.land_ground[i] != GROUND_CLEAR;
+		CHECK(bad > 0);		/* the original has other ground */
+		/* The map and everything else stay the original's. */
+		CHECK(memcmp(w.map, ref.map, sizeof(w.map)) == 0);
+	}
+	blob_free(&b);
+	packs_free(packs);
+	for (i = 0; files[i] != NULL; i++) {
+		snprintf(path, sizeof(path), "%s/%s", dir, files[i]);
+		remove(path);
+	}
+	remove(dir);
+}
+
 int
 main(void)
 {
@@ -522,6 +735,7 @@ main(void)
 	test_views(packs);
 	test_scenarios(packs);
 	test_terrain(packs);
+	test_sheet_terrain(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

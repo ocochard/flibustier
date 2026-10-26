@@ -72,6 +72,14 @@ enum terrain {
 	TERRAIN_SEA = 3
 };
 
+/* Ground of a land battle tile. */
+enum {
+	GROUND_CLEAR,
+	GROUND_COVER,
+	GROUND_SWAMP,
+	GROUND_WATER
+};
+
 /*
  * Everything sailing needs about an era's world: the map (one tile number
  * per cell), the tiles' pixels, and tables from the executable.  Built
@@ -95,11 +103,12 @@ struct world {
 	uint8_t		battle_screens[BATTLE_SCREENS][BATTLE_SCREEN *
 			    BATTLE_SCREEN];
 	uint8_t		battle_sets[BATTLE_SETS][BATTLE_PIECES];
-	/* Land battles: their screens, and each tile's terrain code (VA
-	 * 0x3235c, grouped by VA 0x7197). */
+	/* Land battles: their screens, and each tile's ground (GROUND_*;
+	 * for the original data the executable's code at VA 0x3235c,
+	 * grouped as VA 0x7197 does). */
 	uint8_t		land_screens[LAND_SCREENS][BATTLE_SCREEN *
 			    BATTLE_SCREEN];
-	uint8_t		land_class[256];
+	uint8_t		land_ground[256];
 	int16_t		treasure[TREASURE_SPOTS][2];	/* x, y cells */
 	uint8_t		coast[256];	/* per map tile (VA 0x33b18) */
 	uint8_t		sine[128];
