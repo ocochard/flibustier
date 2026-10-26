@@ -357,6 +357,7 @@ intro_enter(struct game *g)
 {
 	int step;
 
+	game_music(g, MUS_TITLE);
 	if (g->intro_next) {	/* changed only once the fade is over */
 		g->intro_step++;
 		g->intro_next = 0;
@@ -647,6 +648,7 @@ enum { WELCOME_NEW, WELCOME_LOAD, WELCOME_FAMOUS, WELCOME_QUIT };
 static void
 welcome_enter(struct game *g)
 {
+	game_music(g, MUS_TITLE);	/* kept on if playing */
 	game_background(g, "pic/textback");
 	game_portrait(g, NULL);
 }
@@ -2674,6 +2676,7 @@ sail_enter(struct game *g)
 	default:
 		break;
 	}
+	game_music(g, MUS_STOP);	/* setting sail (VA 0x28789) */
 	image_free(&g->bg);
 	game_portrait(g, NULL);
 	memcpy(g->fb.pal, g->world->palette, sizeof(g->fb.pal));
@@ -2916,8 +2919,10 @@ encounter_enter(struct game *g)
 	game_portrait(g, NULL);
 	g->enc_result = -1;
 	encounter_background(g);
-	if (g->sim.encounter.stage == ENC_SIGHTED)
+	if (g->sim.encounter.stage == ENC_SIGHTED) {
 		game_sfx(g, SFX_SAIL_HO);
+		game_music(g, MUS_SAIL_HO);
+	}
 }
 
 static void
@@ -3205,6 +3210,7 @@ prize_show(struct game *g)
 {
 	g->btl_stage = 2;
 	g->selected = 0;
+	game_music(g, MUS_PRIZE);
 	game_background(g, "pic/plunder");
 	if (g->bg.pixels != NULL) {
 		memcpy(g->ink, g->bg.palette, 3);
@@ -3681,6 +3687,7 @@ sword_enter(struct game *g)
 {
 	struct blob b;
 
+	game_music(g, MUS_STOP);
 	g->sw_stage = 0;
 	g->sw_held = 0;
 	g->selected = SWORD_WEAPONS - 1;	/* the cutlass, named */
@@ -4479,6 +4486,7 @@ wright_note(struct game *g, int cstr)
 static void
 shipwright_enter(struct game *g)
 {
+	game_music(g, MUS_TRADE);
 	game_background(g, "pic/swright");
 	game_portrait(g, NULL);
 	g->ink[0] = 240;	/* light, on the dark blue */
@@ -4735,6 +4743,8 @@ merchant_enter(struct game *g)
 		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
 	g->selected = 0;
 	g->shop_buying = 1;
+	game_music(g, g->looting && !g->jettison ? MUS_PLUNDER : g->jettison ?
+	    -1 : MUS_TRADE);
 	if (g->jettison) {
 		/* "You have more cargo than will fit in your hold! You
 		 * must throw some overboard!" (CSTR 113, VA 0x1f65f), then
@@ -5006,6 +5016,7 @@ tavern_enter(struct game *g)
 {
 	char id[96];
 
+	game_music(g, MUS_TAVERN);
 	game_background(g, game_town_asset(g, "pic/tavern", id, sizeof(id)));
 	game_portrait(g, NULL);
 	load_bank(g, game_town_asset(g, "spr/tavern", id, sizeof(id)), 0,
@@ -5424,6 +5435,7 @@ governor_enter(struct game *g)
 		if (g->gov_stage == GOV_WEDDING) {
 			/* The suitor beaten: the wedding (VA 0x128c1). */
 			governor_inks(g, "pic/wedding");
+			game_music(g, MUS_WEDDING);
 			return;
 		}
 		/* Back from the villain (VA 0x13269 goes on with the
@@ -5432,6 +5444,10 @@ governor_enter(struct game *g)
 		return;
 	}
 	g->sim.visit_flags |= VISIT_GOVERNOR;
+	/* His news, warmer for a titled player (VA 0x11d64). */
+	game_music(g, g->sim.player_town >= 0 && g->sim.standing[
+	    g->sim.towns[g->sim.player_town].nation & 3] >= 2 ?
+	    MUS_NEWS_TITLED : MUS_NEWS);
 	g->gov_rank = g->gov_acres = 0;
 	g->gov_villain = -1;
 	g->gov_tries = 0;
@@ -5485,6 +5501,7 @@ governor_next(struct game *g)
 			load_bank(g, game_town_asset(g, "spr/gov", id,
 			    sizeof(id)), 0, &g->gov_spr);
 			g->gov_stage = GOV_PROMOTED;
+			game_music(g, MUS_PROMOTION);	/* VA 0x12549 */
 			return;
 		}
 		/* FALLTHROUGH */
@@ -5894,6 +5911,8 @@ bank_enter(struct game *g)
 	if (g->bank_stage == BANK_PLAN && (g->sim.player.expedition >= 0 ||
 	    sim_health(&g->sim) == 3))
 		g->bank_stage = BANK_OVER;
+	if (g->bank_stage == BANK_ASK)
+		game_music(g, MUS_BANK);
 	game_background(g, g->bank_stage == BANK_OVER ? "pic/textback" :
 	    "pic/bank");
 	game_portrait(g, NULL);
@@ -6249,6 +6268,8 @@ arrive_enter(struct game *g)
 	/* Into a harbour from the sea (VA 0x18fa9, arr_sea.pcx). */
 	if (g->arrive_stage == ARRIVE_MENU && t != NULL && !inland)
 		game_sfx(g, SFX_HARBOUR);
+	if (g->arrive_stage == ARRIVE_MENU && t != NULL)
+		game_music(g, MUS_HARBOUR);		/* VA 0x18fa9 */
 }
 
 static void
@@ -6629,6 +6650,7 @@ static void	retire_choose(struct game *, int);
 static void
 prison_enter(struct game *g)
 {
+	game_music(g, MUS_PRISON);
 	game_background(g, g->sim.jail.cause == JAIL_MAROONED ?
 	    "pic/maroon" : "pic/prison");
 	game_portrait(g, NULL);
@@ -6871,6 +6893,7 @@ barmaid_enter(struct game *g)
 {
 	char id[96];
 
+	game_music(g, MUS_TAVERN);
 	game_background(g, game_town_asset(g, "pic/barmaid", id,
 	    sizeof(id)));
 	game_portrait(g, NULL);
@@ -7579,6 +7602,9 @@ dig_page(struct game *g)
 	const struct sim_find *f = &g->dig[g->dig_i];
 	const char *pic;
 
+	if (g->dig_n > 0 && g->dig_page == 0)	/* VA 0xa801 */
+		game_music(g, f->map == MAP_PIRATE ? MUS_TREASURE :
+		    f->map == MAP_RELATIVE ? MUS_RESCUE : MUS_LOST_TREASURE);
 	if (g->dig_n == 0)
 		pic = "pic/search";
 	else if (f->map == MAP_PIRATE)
@@ -8147,6 +8173,7 @@ const struct screen screen_hostage = {
 static void
 merdaugh_page(struct game *g)
 {
+	game_music(g, g->merdaugh == 299 ? MUS_WEDDING : MUS_FAMILY);
 	game_background(g, g->merdaugh == 300 ? "pic/merchant" :
 	    g->merdaugh == 299 ? "pic/wedding" : "pic/merdaugh");
 	game_portrait(g, NULL);
@@ -8392,6 +8419,8 @@ ending_event(struct game *g, const struct ui_event *ev)
 	if (g->end_page == END_REPUTE && g->sim.player.expedition >= 0)
 		g->end_page = END_LIFE;		/* straight to the verdict */
 	g->end_page++;
+	if (g->end_page == END_VERDICT)
+		game_music(g, MUS_VERDICT);		/* VA 0x51c2 */
 }
 
 /* The titles held: "a Spanish Captain and an English Major". */
@@ -8532,6 +8561,7 @@ const struct screen screen_ending = {
 static void
 lastship_enter(struct game *g)
 {
+	game_music(g, MUS_PRISON);
 	game_background(g, "pic/plunder");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)

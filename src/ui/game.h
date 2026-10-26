@@ -258,6 +258,9 @@ struct game {
 	struct digital		 sfx;
 	unsigned		 sfx_pending;
 	int			 sfx_last;
+	/* The tune asked for (MUS_*), -1 none, until the front end takes
+	 * it. */
+	int			 music_request;
 	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the
@@ -322,6 +325,33 @@ enum {
 	SFX_HIT_FOE,		/* the player's blow lands */
 	SFX_HIT_YOU		/* the opponent's blow lands */
 };
+
+/* The music driver's commands, by where the original plays them (VA
+ * 0x1b8cb calls; MUS_STOP is VA 0x1b8ee). */
+enum {
+	MUS_STOP = 1,
+	MUS_TITLE = 9,		/* the intro and the welcome menu */
+	MUS_LOST_TREASURE = 10,	/* the lost treasure dug up */
+	MUS_FAMILY = 11,	/* dinner with the merchant's family */
+	MUS_BANK = 14,
+	MUS_TREASURE = 16,	/* a pirate's treasure dug up */
+	MUS_NEWS = 17,		/* the governor's political news */
+	MUS_NEWS_TITLED = 18,	/* the same, titled by his nation */
+	MUS_PROMOTION = 19,
+	MUS_TRADE = 20,		/* the merchant, the shipwright */
+	MUS_PLUNDER = 21,	/* a capture's or a sack's loot */
+	MUS_RESCUE = 22,	/* a relative rescued */
+	MUS_TAVERN = 23,
+	MUS_WEDDING = 24,
+	MUS_SAIL_HO = 25,	/* a sail sighted */
+	MUS_VERDICT = 27,	/* the end of a career */
+	MUS_PRIZE = 28,		/* "Shall we keep her?" */
+	MUS_PRISON = 43,	/* prison, or marooned */
+	MUS_HARBOUR = 44	/* arriving in a town */
+};
+
+/* Ask for driver command "cmd" (MUS_*). */
+void	game_music(struct game *g, int cmd);
 
 /* Ask for digitised effect n (SFX_*) to play. */
 void	game_sfx(struct game *g, int n);

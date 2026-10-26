@@ -290,7 +290,9 @@ Status (2026-10-26): first slice.
 - **Reefs:** big ships lost on the shallows.
 - **Forced retirement:** age and wounds end a career at the bank.
 - **Sound effects:** the digitised effects at the original's moments.
-- **Next:** music (the AdLib driver's tunes and an OPL2 emulator).
+- **Music:** the OPL3 driver's tunes on an emulated YMF262, at the
+  original's moments.
+- **Next:** percussion noise, the fade between tunes, the FM effects.
 - **A capture's plunder:** gold, the loot board with cannon, the
   volunteers.
 - **Near a town:** the hunted pirate off his town; a battle's heat, a

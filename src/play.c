@@ -12,6 +12,8 @@
 
 #include "raylib.h"
 
+#include "assets/fmmusic.h"
+#include "audio/music.h"
 #include "crt.h"
 #include "play.h"
 #include "sim/save.h"
@@ -150,6 +152,75 @@ sounds_unload(Sound sfx[DIGITAL_EFFECTS])
 		CloseAudioDevice();
 }
 
+/*
+ * The music: the FM driver's tunes rendered as the stream asks, the
+ * game's requests taken each frame.  Without the driver or a device,
+ * no music.
+ */
+#define MUSIC_CHUNK	2048	/* frames per stream buffer */
+
+struct jukebox {
+	struct music	*m;
+	AudioStream	 stream;
+	int		 playing;	/* the last tune started */
+};
+
+static void
+jukebox_open(struct game *g, struct jukebox *j)
+{
+	struct fmmusic d;
+	struct blob b;
+
+	memset(j, 0, sizeof(*j));
+	j->playing = -1;
+	if (!IsAudioDeviceReady() ||
+	    packs_load(g->packs, "driver/psound", &b) != 0)
+		return;
+	if (fmmusic_decode(b.data, b.len, &d) == 0) {
+		j->m = music_new(&d);
+		fmmusic_free(&d);
+	}
+	blob_free(&b);
+	if (j->m == NULL)
+		return;
+	SetAudioStreamBufferSizeDefault(MUSIC_CHUNK);
+	j->stream = LoadAudioStream(MUSIC_RATE, 16, 2);
+	PlayAudioStream(j->stream);
+}
+
+static void
+jukebox_feed(struct game *g, struct jukebox *j)
+{
+	static int16_t buf[2 * MUSIC_CHUNK];
+	int req = g->music_request;
+
+	if (j->m == NULL)
+		return;
+	g->music_request = -1;
+	if (req == MUS_STOP) {
+		music_stop(j->m);
+		j->playing = -1;
+	} else if (req > 0 && !(req == j->playing && music_active(j->m))) {
+		/* A tune already playing goes on, as the title's handler
+		 * checks (driver VA 0x82b). */
+		music_command(j->m, req);
+		j->playing = req;
+	}
+	while (IsAudioStreamProcessed(j->stream)) {
+		music_render(j->m, buf, MUSIC_CHUNK);
+		UpdateAudioStream(j->stream, buf, MUSIC_CHUNK);
+	}
+}
+
+static void
+jukebox_close(struct jukebox *j)
+{
+	if (j->m == NULL)
+		return;
+	UnloadAudioStream(j->stream);
+	music_free(j->m);
+}
+
 int
 play_run(struct packs *packs, const char *lang, const char *saves,
     const char *shot, int shot_frames, int crt_on)
@@ -163,6 +234,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	int frames = 0, rc = 0, k, big_k, tw, th;
 	RenderTexture2D big;
 	Sound sfx[DIGITAL_EFFECTS];
+	struct jukebox jb;
 	struct crt crt = { 0 };
 	Rectangle box;
 
@@ -186,6 +258,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	HideCursor();		/* the game draws its own sword pointer */
 	SetTargetFPS(60);
 	sounds_load(&g, sfx);
+	jukebox_open(&g, &jb);
 	im = (Image){ rgb, tw, th, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
 	tex = LoadTextureFromImage(im);
 	SetTextureFilter(tex, TEXTURE_FILTER_POINT);
@@ -203,6 +276,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		feed_input(&g, &last_mouse);
 		game_tick(&g);
 		sounds_play(&g, sfx);
+		jukebox_feed(&g, &jb);
 		game_draw(&g);
 		fb_to_rgb(&g.fb, g.brightness, rgb);
 		UpdateTexture(tex, rgb);
@@ -250,6 +324,7 @@ shown:
 		UnloadRenderTexture(big);
 	crt_unload(&crt);
 	UnloadTexture(tex);
+	jukebox_close(&jb);
 	sounds_unload(sfx);
 	CloseWindow();
 	free(rgb);

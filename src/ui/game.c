@@ -155,6 +155,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 		blob_free(&b);
 	}
 	g->sfx_last = -1;
+	g->music_request = -1;
 	g->career.expedition = -1;
 	g->hof_new = -1;
 	g->brightness = 0;
@@ -452,4 +453,10 @@ game_sfx(struct game *g, int n)
 		return;
 	g->sfx_pending |= 1u << n;
 	g->sfx_last = n;
+}
+
+void
+game_music(struct game *g, int cmd)
+{
+	g->music_request = cmd;
 }

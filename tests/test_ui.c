@@ -384,7 +384,8 @@ test_encounter_screens(void)
 		CHECK(game_script(g, "wait:32") == 0);
 	CHECK(g->sim.encounter.stage == ENC_SIGHTED);
 	CHECK(game_script(g, "wait:40") == 0 &&
-	    g->sfx_last == SFX_SAIL_HO);	/* "Sail ho!" */
+	    g->sfx_last == SFX_SAIL_HO &&	/* "Sail ho!" */
+	    g->music_request == MUS_SAIL_HO);
 	CHECK(game_script(g, "enter") == 0);	/* investigate */
 	CHECK(g->sim.encounter.stage == ENC_IDENTIFIED);
 	if (!g->sim.encounter.hostile) {
@@ -689,7 +690,8 @@ test_town(void)
 	CHECK(game_script(g, "wait:40") == 0);
 	/* The arrival menu; sailing into the home port. */
 	CHECK(g->screen == &screen_arrive && g->sim.player_town == -1);
-	CHECK(g->sfx_last == SFX_HARBOUR);	/* into the harbour */
+	CHECK(g->sfx_last == SFX_HARBOUR &&	/* into the harbour */
+	    g->music_request == MUS_HARBOUR);
 	CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->screen == &screen_town && g->sim.player_town >= 0);
 	t = &g->sim.towns[g->sim.player_town];
@@ -1715,7 +1717,8 @@ test_crew(void)
 	game_goto(g, &screen_battle_end);
 	CHECK(game_script(g, "wait:40") == 0 &&
 	    g->screen == &screen_merchant && g->prize_loot &&
-	    g->sim.market.plunder && g->sim.market.stock[3] == 4);
+	    g->sim.market.plunder && g->sim.market.stock[3] == 4 &&
+	    g->music_request == MUS_PLUNDER);
 	CHECK(game_script(g, "down down down right right") == 0 &&
 	    g->selected == 3 && g->sim.fleet.guns == rep + 2 &&
 	    g->sim.market.stock[3] == 2);

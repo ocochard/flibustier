@@ -2180,9 +2180,37 @@ The engine plays the OPL3 driver `PSOUND.PIR` (Sound Blaster Pro 2 /
 Pro Audio Spectrum class), the best of the game's FM arrangements and
 in stereo; the Roland MT-32 one would need Roland's ROMs. Its scripts
 run 60.9 times a second on an emulated YMF262 (ymfm, vendored); see "The
-FM music engine" in asset-formats.md. Not yet: the percussion instruments'
-noise bursts (played as plain notes), the fade when a tune stops (it
-stops at once), and which tune the game plays when (VA `0x1b8cb` calls).
+FM music engine" in asset-formats.md.
+
+The game starts driver command n through VA `0x1b8cb` (unless the flag at
+VA `0x4c0ec` mutes it) and stops the music through VA `0x1b8ee`
+(command 1). A tune already playing goes on when asked again (the
+title's handler checks, VA `0x82b`).
+
+| Command | Where (VA) |
+|---|---|
+| 9 | the intro (`0x3022`), the welcome menu (`0x132f8`) |
+| 10, 16, 22 | the lost treasure, a pirate's treasure, a relative found (`0xa801`) |
+| 11 | dinner with the merchant's wife or daughter (`0x21e56`) |
+| 12, 13 | the governor's daughter, by town (`0x128c1`; not wired yet) |
+| 14 | the bank (`0x180c8`) |
+| 15, 23 | the barmaid's two outcomes; 23 also the tavern and its bartender (`0x114d4`, `0x11867`) |
+| 17, 18 | the governor's news; 18 with standing 2 or more with his nation (`0x11d64`) |
+| 19 | a promotion (`0x12549`) |
+| 20 | the merchant, the shipwright (`0x21e56`, `0x218c2`) |
+| 21 | the loot of a capture or a sack (`0xdb7b`, `0x22764`) |
+| 24 | a wedding (`0x128c1`, `0x21e56`) |
+| 25 | a sail sighted (`0xd1fc`) |
+| 26 | a villain's news (`0x18913`; empty in this driver) |
+| 27 | the verdict at a career's end (`0x51c2`) |
+| 28 | "Shall we keep her?" (`0xdb7b`) |
+| 43 | prison, marooned (`0x16647`, `0x1f2a1`) |
+| 44 | arriving in a town (`0x18fa9`) |
+| stop | setting sail (`0x28789`), sword fights (`0x16205`), a sea battle's end (`0xe245`), leaving some screens |
+
+Not yet: the percussion instruments' noise bursts (played as plain
+notes), the fade when a tune stops (it stops at once), the daughter's
+two tunes and the barmaid's second one.
 
 ## Open questions
 
