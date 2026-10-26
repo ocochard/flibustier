@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	19
+#define STATE_VERSION	20
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -30,6 +30,12 @@ static const struct {
 	{ "not_taken", NEWS_NOT_TAKEN },
 	{ "lost_treasure", NEWS_LOST_TREASURE }, { "treasure", NEWS_TREASURE },
 	{ "rescued", NEWS_RESCUED },
+	{ "villain", NEWS_VILLAIN }, { "letter", NEWS_LETTER },
+	{ "papers", NEWS_PAPERS }, { "pirate_off", NEWS_PIRATE_OFF },
+	{ "rescue", NEWS_RESCUE }, { "delivered_letter", NEWS_DELIVERED_LETTER },
+	{ "delivered_papers", NEWS_DELIVERED_PAPERS },
+	{ "pirate_taken", NEWS_PIRATE_TAKEN }, { "son_freed", NEWS_SON_FREED },
+	{ "displeased", NEWS_DISPLEASED },
 };
 
 /* Town fields addressable by name in state and "set" commands. */
@@ -451,6 +457,8 @@ encounter_json(const struct sim_encounter *e, struct jbuf *b)
 	jb_int(b, e->hostile);
 	jb_raw(b, ",\"town\":");
 	jb_int(b, e->town);
+	jb_raw(b, ",\"named\":");
+	jb_int(b, e->named);
 	jb_raw(b, "}");
 }
 
@@ -475,8 +483,46 @@ encounter_from_json(struct sim_encounter *e, const struct json *j)
 	e->gold = (int)json_get_int(j, "gold", 0);
 	e->hostile = (int)json_get_int(j, "hostile", 0);
 	e->town = (int)json_get_int(j, "town", -1);
+	e->named = json_get_int(j, "named", 0) != 0;
 	return (e->type < 0 || e->type > 8 || e->nation < 0 ||
 	    e->nation > NATION_PIRATE ? -1 : 0);
+}
+
+/* A governor's mission, as "name":{type, giver, dest, nation, pirate}. */
+static void
+mission_json(struct jbuf *b, const char *name, const struct sim_mission *m)
+{
+	jb_raw(b, ",");
+	jb_str(b, name);
+	jb_raw(b, ":{\"type\":");
+	jb_int(b, m->type);
+	jb_raw(b, ",\"giver\":");
+	jb_int(b, m->giver);
+	jb_raw(b, ",\"dest\":");
+	jb_int(b, m->dest);
+	jb_raw(b, ",\"nation\":");
+	jb_int(b, m->nation);
+	jb_raw(b, ",\"pirate\":");
+	jb_int(b, m->pirate);
+	jb_raw(b, "}");
+}
+
+/* Missing or bad: no mission. */
+static void
+mission_from_json(const struct json *j, struct sim_mission *m)
+{
+	memset(m, 0, sizeof(*m));
+	if (j == NULL)
+		return;
+	m->type = (int)json_get_int(j, "type", 0);
+	m->giver = (int)json_get_int(j, "giver", 0);
+	m->dest = (int)json_get_int(j, "dest", 0);
+	m->nation = (int)(json_get_int(j, "nation", 0) & 3);
+	m->pirate = (int)(json_get_int(j, "pirate", 0) & 0xFFFF);
+	if (m->type < -MISSION_SON || m->type > MISSION_SON ||
+	    m->giver < 0 || m->giver >= TOWN_MAX || m->dest < 0 ||
+	    m->dest >= TOWN_MAX)
+		memset(m, 0, sizeof(*m));
 }
 
 void
@@ -610,6 +656,26 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 		jb_int(b, s->rank[i]);
 	}
 	jb_raw(b, "]");
+	for (i = 0; i < SIM_VILLAINS; i++) {
+		const struct sim_villain *v = &s->villains[i];
+
+		jb_raw(b, i == 0 ? ",\"villains\":[{\"active\":" :
+		    ",{\"active\":");
+		jb_int(b, v->active);
+		jb_raw(b, ",\"surname\":");
+		jb_int(b, v->surname);
+		jb_raw(b, ",\"rank\":");
+		jb_int(b, v->rank);
+		jb_raw(b, ",\"nation\":");
+		jb_int(b, v->nation);
+		jb_raw(b, ",\"town\":");
+		jb_int(b, v->town);
+		jb_raw(b, "}");
+	}
+	jb_raw(b, "],\"villain_duel\":");
+	jb_int(b, s->villain_duel);
+	mission_json(b, "mission", &s->mission);
+	mission_json(b, "mission_offer", &s->mission_offer);
 	jb_raw(b, ",\"tavern_spots\":");
 	jb_int(b, s->tavern_spots);
 	jb_raw(b, ",\"recruits\":");
@@ -922,6 +988,38 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		}
 		if (tmp.relative < 0 || tmp.relative > 4)
 			tmp.relative = 0;
+	}
+	{
+		/* Absent before version 20: none. */
+		const struct json *vs = json_get(j, "villains"), *vj;
+		int k;
+
+		if (vs != NULL && (vs->type != JSON_ARRAY ||
+		    vs->count != SIM_VILLAINS)) {
+			snprintf(err, errlen, "bad villains");
+			return (-1);
+		}
+		for (k = 0; vs != NULL && k < SIM_VILLAINS; k++) {
+			vj = vs->items[k];
+			tmp.villains[k].active = json_get_int(vj, "active", 0)
+			    != 0;
+			tmp.villains[k].surname = (int)(json_get_int(vj,
+			    "surname", 0) & 15);
+			tmp.villains[k].rank = (int)(json_get_int(vj, "rank", 0)
+			    & 7);
+			tmp.villains[k].nation = (int)(json_get_int(vj,
+			    "nation", 0) & 3);
+			tmp.villains[k].town = (int)json_get_int(vj, "town", 0);
+			if (tmp.villains[k].town < 0 ||
+			    tmp.villains[k].town >= TOWN_MAX)
+				tmp.villains[k].active = 0;
+		}
+		tmp.villain_duel = (int)json_get_int(j, "villain_duel", -1);
+		if (tmp.villain_duel < -1 || tmp.villain_duel >= SIM_VILLAINS)
+			tmp.villain_duel = -1;
+		mission_from_json(json_get(j, "mission"), &tmp.mission);
+		mission_from_json(json_get(j, "mission_offer"),
+		    &tmp.mission_offer);
 	}
 	{
 		const struct json *mk = json_get(j, "market");
@@ -1661,7 +1759,8 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 	    "daughter" };
 	const char *action = json_get_str(cmd, "action");
 	struct sim *s = &ss->sim;
-	int promoted = 0, acres = 0, paid = 0;
+	int promoted = 0, acres = 0, paid = 0, report = 0, offer = 0;
+	int villain = -1, here = -1;
 	long price;
 	enum governor_offer o;
 
@@ -1676,7 +1775,16 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 			return;
 		}
 		s->visit_flags |= VISIT_GOVERNOR;
+		/* A villain hiding here, the mission, the promotion and
+		 * the news of a villain (VA 0x13269). */
+		here = sim_villain_at(s, s->player_town);
+		if (s->mission.type != MISSION_NONE)
+			report = sim_mission_report(s);
+		else
+			offer = sim_mission_draw(s);
 		promoted = sim_governor_promote(s, &acres);
+		if (promoted)
+			villain = sim_villain_appear(s);
 	} else if (action != NULL && strcmp(action, "pay") == 0)
 		paid = sim_governor_pay(s);
 	else {
@@ -1696,6 +1804,83 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, price);
 	jb_raw(out, ",\"gold\":");
 	jb_int(out, s->fleet.gold);
+	jb_raw(out, ",\"villain_here\":");
+	jb_int(out, here);
+	jb_raw(out, ",\"report\":");
+	jb_int(out, report);
+	jb_raw(out, ",\"mission_offer\":");
+	jb_int(out, offer);
+	jb_raw(out, ",\"mission_dest\":");
+	jb_int(out, offer ? s->mission_offer.dest : -1);
+	jb_raw(out, ",\"villain\":");
+	jb_int(out, villain);
+	jb_raw(out, "}");
+}
+
+/*
+ * The villain hiding in the town the player is in: "duel" (weapon)
+ * starts the fight, run with "sword" ticks; "end" settles it.
+ */
+static void
+cmd_villain(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	int k = sim_villain_at(s, s->player_town);
+
+	if (action != NULL && strcmp(action, "duel") == 0) {
+		if (k < 0) {
+			reply_error(out, "no villain in this town");
+			return;
+		}
+		sim_villain_duel(s, k, (int)(json_get_int(cmd, "weapon", 2) %
+		    SWORD_WEAPONS));
+		jb_raw(out, "{\"ok\":true,\"villain\":");
+		jb_int(out, k);
+		jb_raw(out, "}");
+	} else if (action != NULL && strcmp(action, "end") == 0) {
+		if (s->villain_duel < 0) {
+			reply_error(out, "no duel with a villain");
+			return;
+		}
+		jb_raw(out, "{\"ok\":true,\"won\":");
+		jb_int(out, sim_villain_duel_end(s));
+		jb_raw(out, ",\"reputation\":");
+		jb_int(out, s->reputation);
+		jb_raw(out, "}");
+	} else
+		reply_error(out, "villain needs \"action\": duel or end");
+}
+
+/* The mission: "accept" the governor's offer, "deliver" to the contact
+ * in the tavern of the town the player is in. */
+static void
+cmd_mission(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+
+	if (action != NULL && strcmp(action, "accept") == 0) {
+		if (s->mission_offer.type == MISSION_NONE) {
+			reply_error(out, "no mission offered");
+			return;
+		}
+		sim_mission_accept(s);
+	} else if (action != NULL && strcmp(action, "deliver") == 0) {
+		if (!sim_mission_contact(s, s->player_town)) {
+			reply_error(out, "no contact in this town");
+			return;
+		}
+		sim_mission_done(s);
+	} else {
+		reply_error(out, "mission needs \"action\": accept or "
+		    "deliver");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"type\":");
+	jb_int(out, s->mission.type);
+	jb_raw(out, ",\"dest\":");
+	jb_int(out, s->mission.dest);
 	jb_raw(out, "}");
 }
 
@@ -2041,6 +2226,10 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_shore(ss, cmd, out);
 	else if (strcmp(name, "search") == 0)
 		cmd_search(ss, out);
+	else if (strcmp(name, "villain") == 0)
+		cmd_villain(ss, cmd, out);
+	else if (strcmp(name, "mission") == 0)
+		cmd_mission(ss, cmd, out);
 	else if (strcmp(name, "march") == 0)
 		cmd_march(ss, cmd, out);
 	else if (strcmp(name, "assault") == 0)

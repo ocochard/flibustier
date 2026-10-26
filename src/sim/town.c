@@ -13,7 +13,6 @@
 
 #include "internal.h"
 
-#define SCENE_ALLEY	0	/* sword fight pictures (VA 0x3361c) */
 #define SCENE_FORT	1	/* 2 inland: the same picture */
 
 #define PURSE_MAX	50000	/* the shipwright's gold */
@@ -322,8 +321,11 @@ sim_tavern_open(struct sim *s)
 		n = 1;
 	s->recruits = n;
 people:
-	/* No personal enemy nor mission is modelled: no mystery man. */
-	s->tavern_spots &= ~TAVERN_MYSTERY;
+	/* The mystery man (VA 0x10ffe): a villain hiding here, or the
+	 * mission's contact. */
+	if (sim_villain_at(s, s->player_town) < 0 &&
+	    !sim_mission_contact(s, s->player_town))
+		s->tavern_spots &= ~TAVERN_MYSTERY;
 	/* The traveller (VA 0x110c7): a price and a town not known yet,
 	 * tried until one is found or the price comes out at 50. */
 	if (s->tavern_spots & TAVERN_NEWS) {
@@ -795,6 +797,11 @@ sim_sack(struct sim *s, int town, struct sack *out)
 	gold = (long)t->gold * 1500 / (s->heat + 15);
 	t->gold = gold / 50 > t->gold ? 0 : (uint16_t)(t->gold - gold / 50);
 	t->wealth = t->wealth < 20 ? 0 : (uint16_t)(t->wealth - 20);
+	/* The governor's son held here is freed (VA 0x22764). */
+	if (s->mission.type == MISSION_SON && s->mission.dest == town) {
+		sim_mission_done(s);
+		out->son_freed = 1;
+	}
 	sim_attack_nation(s, t->nation, -1);
 	if (gold > 99) {
 		sim_attack_nation(s, t->nation, -2);

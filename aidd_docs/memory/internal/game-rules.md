@@ -249,6 +249,73 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   is at most `soldiers x 15`, the town has forts and more than 9
   soldiers; otherwise straight to the assault. No fort battle on foot.
 
+### Villains (VA `0x12178`, `0x18913`)
+
+- **Four slots (VA `0x471da`, 12 bytes each):** +0 active, +1 6 (not
+  identified), +2 surname (0-15), +3 rank (0-7), +4 nation (0-3), +5
+  the town he hides in, +6..+9 towns he was seen in (set to "none" and
+  not modelled further).
+- **Named (VA `0x12178`):** at a promotion, unless the fourth slot is
+  taken; the first free slot. His town is drawn `rand(towns)` again
+  until a Spanish one; then surname `rand(16)`, rank `rand(8)`, nation
+  `rand(4)`. On `evilone.pcx` at (340, 150) up to x 620: "I have
+  recently had news of your long-lost %s... The evil %s %s knows the
+  whereabouts of your %s!" (CSTR 137: the relative, CSTN 97 the
+  nationality, the name), then "He was last seen in the city of %s"
+  (CSTR 138). Log code 9, "%s in %s."
+- **His name (VA `0x1a040`):** the rank (CSTN 78) and the surname from
+  CSTN group 2 + nation (Montalban, Delgado...).
+- **Met (VA `0x18913`):** in his town, at the tavern (the mystery man),
+  the governor's mansion and after a sack. On `evilone.pcx`: "You spot
+  the evil %s %s sneaking out a back entrance" (CSTR 131). He moves to
+  `rand(towns)`, then the duel (VA `0x161ba`: scene 0, the alley, one
+  man each at factor 9, labelled with his name).
+  - Beaten: his slot is cleared, "I will tell you what I know. Your %s
+    is held captive on a remote plantation" (CSTR 132) and a piece of
+    the relative's map (VA `0x1f08a`, map 1).
+  - A loss is the duels' disgrace (reputation -1).
+- **A relative rescued** clears all four slots.
+
+### Missions (VA `0x12e88`, `0x1f8f7`)
+
+- **State (VA `0x471aa`):** the type (1 letter, 2 papers, 3 pirate, 4
+  the son; negative once fulfilled), the giving town, the destination,
+  the giver's nation, the hunted pirate's id.
+- **At the giver's governor**, with a mission under way:
+  - Fulfilled: "I am greatly pleased..." (CSTR 209), or for the pirate
+    "So you have brought me that despicable pirate, %s" (CSTR 133). The
+    standing with the giver's nation rises by 1, and the town's word 9
+    drops by the type.
+  - Not fulfilled: "I am disappointed..." (CSTR 199); standing -1 with
+    the town's nation, its word 9 -1, log code 36.
+  - Either way the mission ends. Elsewhere nothing is said.
+- **An offer**, with none under way:
+  - Draw: type `rand(5) + 1`, then up to 10 towns `rand(towns)` other
+    than this one. Papers and the son need an enemy town (relation
+    below 0); the letter a town not at war; the pirate a town of the
+    same nation without flag 0x40. After 10 failures the type is drawn
+    again.
+  - Offered when type 5 was not drawn, `standing >> 2 >= type`, and
+    the town's word 9 is not negative. "I have an urgent mission for
+    you... Accept / Decline" (CSTR 200).
+  - Accepted: the task (CSTR 201 letter, 202 papers, 204 son, with the
+    destination; CSTR 203 the pirate, with his name and the
+    destination). Logs 28, 29, 31; for the pirate log 30, his id
+    `(nation << 2 | rand(4)) << 3 | 0x8000`, named as captains are (VA
+    `0x19fbb`: rank CSTN 78 `(id & 7) + 2`, surname CSTN 2 + `(id >> 6 &
+    3)` entry `(id >> 3) & 7`).
+- **Fulfilling (VA `0x1f8f7`):** CSTR 204 + type at (200, 200) up to x
+  620, the giving town and the pirate's name; logs 32 to 35 (34 "Captured
+  the pirate %s"). The original first clears the screen (VA `0x262d3`);
+  the engine writes on `textback.pcx`.
+  - Letter, papers: the mystery man in the destination's tavern.
+  - The son: the sack of the destination (after "at your mercy").
+  - The pirate: off the destination (the encounter's nearest town), a
+    pirate ship is him (VA `0xd1fc`), cannot be avoided once seen, and
+    capturing it fulfils the mission (VA `0xdb7b`). The original also
+    gives him a level bonus and the CSTR 121 hail, not done.
+- Prison clears the mission (VA `0x1f803`), not done.
+
 ### Treasure maps (VA `0x1f08a`, `0x29ece`, `0xa801`)
 
 - **Three maps (VA `0x47186`, 12 bytes each):** the pirate's (0), the
@@ -269,8 +336,8 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     drawn again while held.
   - On the easiest level the map is whole at once. The map is then
     shown (VA `0x29ece`).
-  - Givers: the map seller and the barmaid (map 0), the mystery man
-    (map 1, VA `0x18913`, not modelled), and a rescued relative (map 2).
+  - Givers: the map seller and the barmaid (map 0), a beaten villain
+    (map 1, VA `0x18913`), and a rescued relative (map 2).
 - **The page (VA `0x29ece`), in `tmap.imb`'s palette (`tmap16.imb` in
   16 colours):**
   - `wood.pcx`, then each held quarter of `mapframe.pcx` over it,
@@ -1337,8 +1404,10 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - The map seller (VA `0x112b1`) is there one time in five, and never
     once the pirate's map is whole (its slot reads `0x1f`; another
     condition, the flag at VA `0x44ae2`, is not identified).
-  - The mystery man comes with a personal enemy (VA `0x18913`) or a
-    mission (VA `0x1f8f7`); neither is modelled, so he stays away.
+  - The mystery man (VA `0x10ffe`) is there while a villain hides in
+    the town or the mission's contact lives there (see "Villains" and
+    "Missions"). Clicking him meets the villain, else hands over the
+    letter or papers; he then leaves for the stay.
 - **Labels:** pointing at someone writes their name on the scroll
   (CSTN 90: Map Seller, Traveller, Unemployed Sailors, Bartender,
   Barmaid, Mystery Man, Exit).
@@ -1411,9 +1480,9 @@ order:
    nations his own is allied with and at war with (CSTN 25, names from
    CSTN 81). It ends with a charge to fight them when at war and the
    standing is 2 or more. With neither allies nor enemies: CSTR 149.
-2. The family quest (VA `0x18913`), missions and captured pirates (VA
-   `0x12e88`), and prisoners and ransoms (VA `0x12432`, `0x127da`): not
-   done yet.
+2. A villain hiding in the town (VA `0x18913`, see "Villains"), then
+   the mission (VA `0x12e88`, see "Missions"). Prisoners and ransoms
+   (VA `0x12432`, `0x127da`) are not done yet.
 3. **Promotion (VA `0x12549`):**
    - With `r` the next rank, when `standing >= r^2 + 2` and `r <= 9`:
      the rank rises, and the standing drops to `r^2 + 2`.
@@ -1421,6 +1490,9 @@ order:
      (140, 35) and (113, 262)).
    - When the surplus plus the town's word 9 is positive, that many
      times 50 acres are granted (CSTR 135, total at VA `0x45f02`).
+   - After a promotion, while a relative is still lost (and a flag at
+     VA `0x45e84` bit 0, not identified, is clear), a new villain is
+     named (VA `0x12178`, see "Villains").
 4. **His offer, by standing s:**
    - With `s > -4`, the price is `(4 - s^3) x 200` gold.
    - From s = 2 the price is negative and his daughter is met instead

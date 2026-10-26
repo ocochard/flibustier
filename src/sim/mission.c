@@ -1,0 +1,220 @@
+/*
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026, Olivier Cochard-Labbé
+ *
+ * The relatives' villains and the governors' missions: the "Villains"
+ * and "Missions" sections of aidd_docs/memory/internal/game-rules.md
+ * (VA 0x12178, 0x18913, 0x12e88, 0x1f8f7).
+ */
+
+#include <string.h>
+
+#include "internal.h"
+
+#define RELATIVES	4
+#define DRAWS_MAX	4096	/* the original draws for ever */
+
+static int8_t
+clamp8(int v)
+{
+	return ((int8_t)(v < -128 ? -128 : v > 127 ? 127 : v));
+}
+
+/* Town field 9 is a signed word. */
+static void
+town_word9(struct sim_town *t, int d)
+{
+	t->standing = (uint16_t)(int16_t)((int16_t)t->standing + d);
+}
+
+int
+sim_villain_appear(struct sim *s)
+{
+	struct sim_villain *v;
+	int k, t, tries = 0;
+
+	if (s->relative >= RELATIVES || s->villains[SIM_VILLAINS - 1].active ||
+	    s->ntowns == 0)
+		return (-1);
+	for (k = 0; s->villains[k].active; k++)
+		;
+	/* A Spanish town. */
+	do
+		t = rng_below(&s->rng, (int)s->ntowns);
+	while (s->towns[t].nation != NATION_SPAIN && ++tries < DRAWS_MAX);
+	v = &s->villains[k];
+	v->active = 1;
+	v->town = t;
+	v->surname = rng_below(&s->rng, 16);
+	v->rank = rng_below(&s->rng, 8);
+	v->nation = rng_below(&s->rng, 4);
+	sim_log_news(s, NEWS_VILLAIN, k, t);
+	return (k);
+}
+
+int
+sim_villain_at(const struct sim *s, int town)
+{
+	int k;
+
+	if (town < 0)
+		return (-1);
+	for (k = 0; k < SIM_VILLAINS; k++)
+		if (s->villains[k].active && s->villains[k].town == town)
+			return (k);
+	return (-1);
+}
+
+void
+sim_villain_duel(struct sim *s, int villain, int weapon)
+{
+	struct sword_setup in;
+
+	if (villain < 0 || villain >= SIM_VILLAINS || s->ntowns == 0)
+		return;
+	/* He flees to any town, whatever the fight's outcome. */
+	s->villains[villain].town = rng_below(&s->rng, (int)s->ntowns);
+	s->villain_duel = villain;
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_DUEL;
+	in.you_men = in.foe_men = 1;
+	in.you_factor = in.foe_factor = 9;
+	in.title = 0;
+	in.nation = -2;			/* labelled with the villain's name */
+	in.extra = 0;
+	in.weapon = weapon;
+	sim_sword_start(s, &in);
+	s->sword.scene = SCENE_ALLEY;
+}
+
+int
+sim_villain_duel_end(struct sim *s)
+{
+	int k = s->villain_duel, won = s->sword.result == SWORD_WON;
+
+	sim_duel_end(s);
+	s->villain_duel = -1;
+	if (!won || k < 0)
+		return (0);
+	s->villains[k].active = 0;
+	sim_map_piece(s, MAP_RELATIVE);
+	return (1);
+}
+
+int
+sim_mission_report(struct sim *s)
+{
+	struct sim_mission *m = &s->mission;
+	struct sim_town *t;
+	int r, n;
+
+	if (m->type == MISSION_NONE || s->player_town < 0 ||
+	    m->giver != s->player_town)
+		return (0);
+	t = &s->towns[s->player_town];
+	if (m->type < 0) {
+		r = m->type == -MISSION_PIRATE ? 2 : 1;
+		n = m->nation & 3;
+		s->standing[n] = clamp8(s->standing[n] + 1);
+		town_word9(t, m->type);		/* less by the type */
+	} else {
+		r = -1;
+		n = t->nation & 3;
+		s->standing[n] = clamp8(s->standing[n] - 1);
+		town_word9(t, -1);
+		sim_log_news(s, NEWS_DISPLEASED, 0, 0);
+	}
+	m->type = MISSION_NONE;
+	return (r);
+}
+
+/* Relations between two nations, read from the game's 4 x 4 table as
+ * a flat array (a town's nation 4 reads the next row). */
+static int
+relation(const struct sim *s, int a, int b)
+{
+	int i = a * 4 + b;
+
+	return (i >= 0 && i < 16 ? s->relations[i / 4][i % 4] : 0);
+}
+
+int
+sim_mission_draw(struct sim *s)
+{
+	struct sim_mission *o = &s->mission_offer;
+	const struct sim_town *here;
+	int type, i, t = 0, c, gov, tries = 0;
+
+	o->type = MISSION_NONE;
+	if (s->mission.type != MISSION_NONE || s->player_town < 0 ||
+	    s->ntowns < 2)
+		return (0);
+	here = &s->towns[s->player_town];
+	gov = here->nation & 3;
+	do {
+		type = rng_below(&s->rng, 5) + 1;
+		for (i = 0; i < 10; i++) {
+			t = rng_below(&s->rng, (int)s->ntowns);
+			if (t == s->player_town)
+				continue;
+			c = relation(s, gov, s->towns[t].nation);
+			if ((type & 1) == 0) {
+				if (c < 0)	/* papers, the son: an enemy */
+					break;
+			} else if ((type == MISSION_PIRATE &&
+			    s->towns[t].nation == gov &&
+			    !(s->towns[t].flags & 0x40)) ||
+			    (type != MISSION_PIRATE && c >= 0))
+				break;
+		}
+	} while (i == 10 && ++tries < DRAWS_MAX);
+	if (i == 10 || s->standing[gov] >> 2 < type || type == 5 ||
+	    (int16_t)here->standing < 0)
+		return (0);
+	o->type = type;
+	o->giver = s->player_town;
+	o->dest = t;
+	o->nation = gov;
+	o->pirate = 0;
+	return (type);
+}
+
+void
+sim_mission_accept(struct sim *s)
+{
+	struct sim_mission *o = &s->mission_offer;
+	int r;
+
+	if (o->type == MISSION_NONE)
+		return;
+	s->mission = *o;
+	if (o->type == MISSION_PIRATE) {
+		r = rng_below(&s->rng, 4);
+		s->mission.pirate = ((o->nation << 2 | r) << 3) | 0x8000;
+		sim_log_news(s, NEWS_PIRATE_OFF, s->mission.pirate, o->dest);
+	} else
+		sim_log_news(s, NEWS_LETTER + o->type - 1, o->dest, 0);
+	o->type = MISSION_NONE;
+}
+
+void
+sim_mission_done(struct sim *s)
+{
+	struct sim_mission *m = &s->mission;
+
+	if (m->type <= 0)
+		return;
+	if (m->type == MISSION_PIRATE)
+		sim_log_news(s, NEWS_PIRATE_TAKEN, m->pirate, m->dest);
+	else
+		sim_log_news(s, NEWS_DELIVERED_LETTER + m->type - 1, m->dest, 0);
+	m->type = -m->type;
+}
+
+int
+sim_mission_contact(const struct sim *s, int town)
+{
+	return (town >= 0 && (s->mission.type == MISSION_LETTER ||
+	    s->mission.type == MISSION_PAPERS) && s->mission.dest == town);
+}

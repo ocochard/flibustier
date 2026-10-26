@@ -80,7 +80,7 @@ sim_search(struct sim *s, struct sim_find found[SIM_MAPS])
 {
 	struct sim_map *m;
 	int cx = s->fleet.x / WORLD_TILE, cy = s->fleet.y / WORLD_TILE;
-	int i, n = 0;
+	int i, k, n = 0;
 
 	sim_advance(s, SEARCH_DAYS);
 	for (i = 0; i < SIM_MAPS; i++) {
@@ -102,6 +102,9 @@ sim_search(struct sim *s, struct sim_find found[SIM_MAPS])
 			sim_log_news(s, NEWS_RESCUED, s->relative, 0);
 			if (s->relative < RELATIVES)
 				s->relative++;
+			/* The villains' trail goes cold. */
+			for (k = 0; k < SIM_VILLAINS; k++)
+				s->villains[k].active = 0;
 		} else {
 			found[n].gold = LOST_GOLD;
 			found[n].value = m->value;

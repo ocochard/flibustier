@@ -24,6 +24,7 @@
  */
 
 #define SIM_MAPS	3	/* treasure maps */
+#define SIM_VILLAINS	4
 #define SIM_NEWS_MAX	256	/* most recent news kept in the state */
 #define SIM_NO_TOWN	(-1)
 
@@ -32,6 +33,7 @@ enum news_code {
 	NEWS_PLUNDERED = 3,	/* a: town, sacked by the player */
 	NEWS_LOST_TREASURE = 7,	/* a: the civilisation (CSTN 93) */
 	NEWS_TREASURE = 8,	/* buried treasure dug up */
+	NEWS_VILLAIN = 9,	/* a: the villain, b: the town he is in */
 	NEWS_AMNESTY = 10,	/* a: nation */
 	NEWS_INDIANS = 11,	/* a: town */
 	NEWS_GOLD_MINE = 12,
@@ -44,7 +46,16 @@ enum news_code {
 	NEWS_CAPTURE = 19,	/* a: nation, b: town */
 	NEWS_TAKEN = 22,	/* a: town, b: nation it was taken for */
 	NEWS_NOT_TAKEN = 23,	/* a: town */
-	NEWS_RESCUED = 26	/* a: the relative (CSTN 37) */
+	NEWS_RESCUED = 26,	/* a: the relative (CSTN 37) */
+	NEWS_LETTER = 28,	/* a: the town to deliver to */
+	NEWS_PAPERS = 29,
+	NEWS_PIRATE_OFF = 30,	/* a: the pirate's id, b: the town */
+	NEWS_RESCUE = 31,	/* a: the town holding the son */
+	NEWS_DELIVERED_LETTER = 32,	/* a: the town */
+	NEWS_DELIVERED_PAPERS = 33,
+	NEWS_PIRATE_TAKEN = 34,	/* a: the pirate's id */
+	NEWS_SON_FREED = 35,	/* a: the town */
+	NEWS_DISPLEASED = 36	/* a mission failed */
 };
 
 struct sim_town {
@@ -340,6 +351,7 @@ struct sim_encounter {
 	int		cargo, gold;	/* record bytes 5 and 6, not decoded */
 	int		hostile;	/* she chases the player */
 	int		town;		/* nearest town when sighted */
+	int		named;		/* the pirate a mission hunts */
 };
 
 struct sim {
@@ -383,6 +395,23 @@ struct sim {
 		int16_t		town;	/* the town it is near */
 	} maps[SIM_MAPS];
 	int		relative;	/* the next lost relative, 0..4 */
+	/* The villains who know where the relatives are (VA 0x471da). */
+	struct sim_villain {
+		int	active;
+		int	surname;	/* CSTN 2 + nation, 0..15 */
+		int	rank;		/* CSTN 78, 0..7 */
+		int	nation;		/* CSTN 97: Spaniard... */
+		int	town;
+	} villains[SIM_VILLAINS];
+	int		villain_duel;	/* the villain fought, or -1 */
+	/* The governor's mission (VA 0x471aa): a type, negative once
+	 * done; the giving town and nation, the destination, the pirate
+	 * hunted; "offer" is the one proposed. */
+	struct sim_mission {
+		int	type;		/* enum mission_type, -type when done */
+		int	giver, dest, nation;
+		int	pirate;		/* a captain id (VA 0x19fbb) */
+	} mission, mission_offer;
 	struct sim_market {
 		int	open;
 		int	stock[3];	/* food, goods, sugar */
@@ -586,6 +615,38 @@ enum governor_offer sim_governor_offer(const struct sim *s, long *price);
 /* Pay for the Letter of Marque or the pardon; 0 if short of gold. */
 int	sim_governor_pay(struct sim *s);
 
+/*
+ * The relatives' villains.  After a promotion, while a relative is
+ * still lost, the governor names a new villain hiding in a Spanish town
+ * (VA 0x12178): sim_villain_appear returns his slot, or -1.  Met in his
+ * town (VA 0x18913: the tavern's mystery man, the governor's mansion, a
+ * sacked town), he flees to a random town and duels the player
+ * (sim_villain_duel); beaten, he gives a piece of the relative's map
+ * (sim_villain_duel_end returns 1; a loss disgraces as any duel).
+ */
+int	sim_villain_appear(struct sim *s);
+int	sim_villain_at(const struct sim *s, int town);
+void	sim_villain_duel(struct sim *s, int villain, int weapon);
+int	sim_villain_duel_end(struct sim *s);
+
+/*
+ * Governors' missions (VA 0x12e88).  At the giver's governor,
+ * sim_mission_report ends a mission: 1 fulfilled, 2 the pirate brought
+ * in (CSTR 133), -1 failed (CSTR 199), 0 none to report.  Otherwise
+ * sim_mission_draw proposes one (mission_offer; returns its type, or 0)
+ * and sim_mission_accept takes it.  sim_mission_done (VA 0x1f8f7)
+ * fulfils it: a letter or papers handed to the mystery man in the
+ * destination's tavern, the son freed in its sack, the pirate captured.
+ */
+enum mission_type { MISSION_NONE, MISSION_LETTER, MISSION_PAPERS,
+    MISSION_PIRATE, MISSION_SON };
+int	sim_mission_report(struct sim *s);
+int	sim_mission_draw(struct sim *s);
+void	sim_mission_accept(struct sim *s);
+void	sim_mission_done(struct sim *s);
+/* The mission's contact is in this town's tavern (VA 0x1108c). */
+int	sim_mission_contact(const struct sim *s, int town);
+
 /* The bank (VA 0x180c8): dividing the plunder ends an expedition. */
 struct plunder {
 	int	share;		/* each crew member's gold */
@@ -652,6 +713,7 @@ struct sack {
 	int	goods[3];	/* food, goods, sugar to take for nothing */
 	int	cannon;		/* forts x 6 */
 	int	conquest;	/* 1: the player may install a governor */
+	int	son_freed;	/* a governor's son was held there */
 };
 void	sim_sack(struct sim *s, int town, struct sack *out);
 /*

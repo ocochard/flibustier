@@ -835,7 +835,7 @@ test_governor(void)
 	CHECK(g->sim.visit_flags & VISIT_GOVERNOR);
 	/* Standing 0 with England: a Letter of Marque for 800. */
 	gold = g->sim.fleet.gold;
-	CHECK(game_script(g, "enter") == 0 && g->gov_stage == 3);
+	CHECK(game_script(g, "enter") == 0 && g->gov_stage == 9);
 	CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->sim.fleet.gold == gold - 800 &&
 	    g->sim.standing[NATION_ENGLAND] == 2);
@@ -843,6 +843,31 @@ test_governor(void)
 	/* He will not receive the player again this stay. */
 	CHECK(game_script(g, "click:580,220 wait:5") == 0 &&
 	    g->screen == &screen_town);
+	/* Another stay, standing 8 (no promotion at rank 2): offers come
+	 * until one is drawn; accepting shows the task. */
+	{
+		int k, offered = 0;
+
+		g->sim.rank[NATION_ENGLAND] = 3;
+		for (k = 0; k < 30 && !offered; k++) {
+			g->sim.visit_flags &= ~VISIT_GOVERNOR;
+			g->sim.standing[NATION_ENGLAND] = 8;
+			g->sim.mission.type = MISSION_NONE;
+			CHECK(game_script(g, "click:580,220 wait:40 enter") ==
+			    0);
+			if (g->gov_stage == 3) {
+				offered = 1;
+				CHECK(game_script(g, "enter") == 0 &&
+				    g->gov_stage == 4 &&
+				    g->sim.mission.type > 0 &&
+				    g->sim.mission.giver ==
+				    g->sim.player_town);
+			}
+			while (g->screen == &screen_governor)
+				CHECK(game_script(g, "esc wait:40") == 0);
+		}
+		CHECK(offered);
+	}
 	game_free(g);
 }
 
@@ -1061,6 +1086,37 @@ test_tavern_people(void)
 	    g->screen == &screen_barmaid && g->talk == 1);
 	CHECK(game_script(g, "down down enter") == 0 && g->talk == 2 &&
 	    g->sim.towns[g->sim.player_town].barmaid == 3);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	/* The mystery man: a villain hiding here, fought in the alley;
+	 * beaten, he gives a piece of the relative's map. */
+	g->sim.villains[1].active = 1;
+	g->sim.villains[1].town = g->sim.player_town;
+	g->sim.tavern_spots |= TAVERN_MYSTERY;
+	CHECK(game_script(g, "click:380,260 wait:40") == 0 &&
+	    g->screen == &screen_villain && g->villain == 1 &&
+	    !(g->sim.tavern_spots & TAVERN_MYSTERY));
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sword && g->sw_stage == 1);
+	CHECK(game_script(g, "enter") == 0 && g->sw_stage == 2 &&
+	    g->sim.villain_duel == 1 && g->sim.sword.nation == -2);
+	g->sim.sword.result = SWORD_WON;
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_villain && g->villain_stage == 1 &&
+	    !g->sim.villains[1].active &&
+	    g->sim.maps[MAP_RELATIVE].pieces != 0);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_tmap);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	/* The contact for a letter: delivered. */
+	g->sim.mission.type = MISSION_LETTER;
+	g->sim.mission.giver = 2;
+	g->sim.mission.dest = g->sim.player_town;
+	g->sim.tavern_spots |= TAVERN_MYSTERY;
+	CHECK(game_script(g, "click:380,260 wait:40") == 0 &&
+	    g->screen == &screen_contact &&
+	    g->sim.mission.type == -MISSION_LETTER);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_tavern);
 	game_free(g);

@@ -186,6 +186,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->era_year = era->year;
 	s->year = era->year;
 	s->diplomacy_range = SIM_DIPLOMACY_RANGE;
+	s->villain_duel = -1;
 	s->player_town = SIM_NO_TOWN;
 	s->visit_town = SIM_NO_TOWN;
 	s->wright_gold = -1;
@@ -801,6 +802,10 @@ pick_ship(struct sim *s, int town, int dist)
 	e->gold = rec[6];
 	e->hostile = e->role > 5 && s->standing[e->nation] < 0;
 	e->town = town;
+	/* Off the town a governor sent the player to: the pirate he
+	 * hunts (VA 0xd1fc). */
+	e->named = s->mission.type == MISSION_PIRATE &&
+	    s->mission.dest == town && e->nation == NATION_PIRATE;
 }
 
 /* Every 32 ticks: maybe a sail on the horizon (game-rules.md). */
@@ -864,8 +869,9 @@ sim_encounter_act(struct sim *s, enum encounter_action action)
 		e->stage = ENC_IDENTIFIED;
 		return (RES_CONTINUE);
 	case ENC_IDENTIFIED:
-		/* A hunter cannot be avoided once she is seen. */
-		if (action == ACT_IGNORE && !e->hostile)
+		/* A hunter, or the pirate hunted, cannot be avoided once
+		 * she is seen. */
+		if (action == ACT_IGNORE && !e->hostile && !e->named)
 			return (end_encounter(s, RES_ESCAPED));
 		e->stage = ENC_COLOURS;
 		return (RES_CONTINUE);

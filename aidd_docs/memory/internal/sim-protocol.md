@@ -31,13 +31,15 @@ with a message. Numbers are integers only.
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
 | `shore` | after a `sail` stop at `land`: `ashore` 1 goes ashore, 0 turns the ship about | `ashore` |
+| `villain` | `action`: `duel` (`weapon`) against the villain hiding in the town, run with `sword` ticks, then `end` | `villain`; `won`, `reputation` |
+| `mission` | `action`: `accept` (the governor's offer) or `deliver` (to the contact in this town) | `type`, `dest` |
 | `search` | on foot: digs at the treasure maps' spots (3 days) | `found` (`[{map: pirate, relative or lost, gold, value}]`) |
 | `march` | on foot: `dx`, `dy` (-1..1), `ticks` (1..23360) | `stop` (`ticks`, `town`, `boarded`), `town`, `x`, `y`, `day` |
 | `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
 | `bank` | `action`: `divide` (the plunder), or `continue` (another expedition; `advance`: 0 or 1) | `share`, `mood` (0-3), `yours`, `fortune`, `gold`, `crew`, `difficulty` |
 | `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`) or `close` | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
 | `tavern` | `action`: `open` (counts the recruits) or `recruit` (`accept`: 0 or 1) | `recruits`, `crew`, `tavern_spots` |
-| `governor` | `action`: `visit` (once a stay: promotion, then his offer) or `pay` | `promoted`, `acres`, `paid`, `offer` (none, marque, pardon, daughter), `price`, `gold` |
+| `governor` | `action`: `visit` (once a stay: the mission's report or an offer, promotion, a new villain, then his offer) or `pay` | `promoted`, `acres`, `paid`, `offer` (none, marque, pardon, daughter), `price`, `gold`, `villain_here` (a villain hiding in the town, or -1: fight him with `villain`), `report` (1, 2 the pirate, -1 failed, 0), `mission_offer` (its type, 0 none) and `mission_dest`, `villain` (the slot named, or -1) |
 | `board` | `weapon` (0 rapier, 1 longsword, 2 cutlass; default 2), after a `boarding` outcome | `sword` |
 | `sword` | `ticks` (1..10000; default 1), `input` (0..11, optional: the move to take next) | `events` (bits, below), `sword` |
 | `set` | `town` (name or index), `field`, `value` | none |
@@ -56,7 +58,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 19,
+  "version": 20,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -194,6 +196,11 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   (cells), `value` (the lost treasure's people) and `town`; `relative`
   is the next lost relative (0-3, 4 all found). Both are absent before
   version 19 and then read as none.
+- **Villains and missions:** `villains` (4 of `active`, `surname`,
+  `rank`, `nation`, `town`), `villain_duel`, and `mission` and
+  `mission_offer` (`type`, negative once done, `giver`, `dest`,
+  `nation`, `pirate`); the encounter has `named`. Absent before version
+  20: none.
 - **Older states:** states from version 14 on still load. The town
   fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
   `party_x`, `party_y`) then read as 65535 until the player's program

@@ -35,6 +35,7 @@ add_library(stmalo_core STATIC
 	src/sim/sword.c
 	src/sim/land.c
 	src/sim/treasure.c
+	src/sim/mission.c
 	src/sim/town.c
 	src/sim/hof.c
 	src/sim/json.c

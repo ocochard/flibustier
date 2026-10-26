@@ -101,6 +101,9 @@
 #define FONT_SMALL		2	/* PIRATE3, 14 px */
 #define FONT_PIRATE4		3
 
+static void	villain_name(const struct game *, int, char *, size_t);
+static void	captain_name(const struct game *, int, char *, size_t);
+
 /* Era of each famous expedition, from its year. */
 static const int expedition_era[6] = { 0, 0, 2, 4, 4, 5 };
 
@@ -1734,6 +1737,7 @@ news_body(const struct game *g, const struct sim_news *n, char *out,
     size_t len)
 {
 	const char *fmt = game_word(g, W_LOG, (size_t)n->code);
+	char name[80];
 
 	switch (n->code) {
 	case NEWS_WAR:
@@ -1749,6 +1753,18 @@ news_body(const struct game *g, const struct sim_news *n, char *out,
 	case NEWS_CAPTURE:
 		fill(out, len, fmt, game_word(g, W_NATION_NAME,
 		    (size_t)n->a & 3), town_name(g, n->b));
+		break;
+	case NEWS_VILLAIN:
+		villain_name(g, n->a, name, sizeof(name));
+		fill(out, len, fmt, name, town_name(g, n->b));
+		break;
+	case NEWS_RESCUED:
+		fill(out, len, fmt, game_word(g, 37, (size_t)n->a & 3), NULL);
+		break;
+	case NEWS_PIRATE_OFF:
+	case NEWS_PIRATE_TAKEN:
+		captain_name(g, n->a, name, sizeof(name));
+		fill(out, len, fmt, name, town_name(g, n->b));
 		break;
 	default:
 		fill(out, len, fmt, town_name(g, n->a), NULL);
@@ -2818,6 +2834,7 @@ battle_sprites(struct game *g, int side, int type)
 
 static void	prize_show(struct game *);
 
+
 static void
 battle_enter(struct game *g)
 {
@@ -2889,9 +2906,16 @@ battle_finish(struct game *g, int keep)
 	int landed = g->sim.battle.fort &&
 	    g->sim.battle.outcome == BAT_LANDED;
 	int aboard = g->sim.battle.crew_ashore;
+	int hunted = g->sim.mission.type == MISSION_PIRATE;
 
 	g->btl_chosen = 0;
 	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
+	if (hunted && g->sim.mission.type == -MISSION_PIRATE) {
+		/* The pirate a governor wanted (CSTR 207, VA 0x1f8f7). */
+		g->villain_back = &screen_sail;
+		game_goto(g, &screen_contact);
+		return;
+	}
 	if (landed) {
 		/* The assault follows (VA 0x18c2c). */
 		g->assault_town = g->sim.encounter.town;
@@ -3270,7 +3294,7 @@ sword_enter(struct game *g)
 		blob_free(&b);
 	}
 	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);
-	if (g->sw_guard) {
+	if (g->sw_guard || g->sw_villain) {
 		/* The weapon is chosen on the alley itself (VA 0x16205). */
 		game_background(g, "pic/alley");
 		g->sw_stage = 1;
@@ -3397,6 +3421,17 @@ sword_outcome_done(struct game *g)
 			game_goto(g, r < 0 ? &screen_prison : &screen_sail);
 		return;
 	}
+	if (g->sw_villain) {
+		g->sw_villain = 0;
+		if (sim_villain_duel_end(&g->sim)) {
+			g->villain_stage = 1;
+			game_goto(g, &screen_villain);
+		} else {
+			g->disgrace_back = g->villain_back;
+			game_goto(g, &screen_disgrace);
+		}
+		return;
+	}
 	if (g->sw_guard) {
 		g->sw_guard = 0;
 		/* Back to sea either way (VA 0x195f5); a loss or a retreat
@@ -3476,6 +3511,10 @@ sword_event(struct game *g, const struct ui_event *ev)
 		} else if (g->sw_guard) {
 			sim_guard_duel(&g->sim, g->sim.fleet.leaving,
 			    g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		} else if (g->sw_villain) {
+			sim_villain_duel(&g->sim, g->villain, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
 		} else {
@@ -3631,7 +3670,9 @@ sword_draw(struct game *g)
 
 	/* The nation leads the title only in crew fights against a known
 	 * nation (VA 0x16205). */
-	if (sw->kind == SWORD_CREW && sw->nation >= 0 && sw->nation != 5)
+	if (sw->nation == -2 && g->sim.villain_duel >= 0)
+		villain_name(g, g->sim.villain_duel, label, sizeof(label));
+	else if (sw->kind == SWORD_CREW && sw->nation >= 0 && sw->nation != 5)
 		snprintf(label, sizeof(label), "%s %s",
 		    game_word(g, W_NATION, (size_t)sw->nation),
 		    game_word(g, W_TITLE, (size_t)sw->title));
@@ -4481,7 +4522,21 @@ tavern_choose(struct game *g, int i)
 		game_goto(g, &screen_barmaid);
 	else if (i == SPOT_CABIN)
 		game_goto(g, &screen_cabin);
-	else
+	else if (i == TAVERN_STRANGER) {
+		/* The mystery man (VA 0x11867): a villain, else the
+		 * mission's contact; he then leaves. */
+		g->sim.tavern_spots &= ~TAVERN_MYSTERY;
+		g->villain_back = &screen_tavern;
+		g->villain = sim_villain_at(&g->sim, g->sim.player_town);
+		if (g->villain >= 0) {
+			g->villain_stage = 0;
+			game_goto(g, &screen_villain);
+		} else if (sim_mission_contact(&g->sim,
+		    g->sim.player_town)) {
+			sim_mission_done(&g->sim);
+			game_goto(g, &screen_contact);
+		}
+	} else
 		snprintf(g->msg, sizeof(g->msg), "(Not implemented yet.)");
 }
 
@@ -4694,12 +4749,79 @@ const struct screen screen_rumours = {
 #define GOV_TEXT_X		320
 #define GOV_TEXT_Y		150
 #define GOV_TEXT_W		300
-enum { GOV_GREET, GOV_PROMOTED, GOV_LAND, GOV_OFFER, GOV_SHORT, GOV_DONE };
+#define S_MISSION_FAILED	199
+#define S_MISSION_ASK		200
+#define S_MISSION_TASK		200	/* + type: 201-204 */
+#define S_MISSION_THANKS	209
+#define S_PIRATE_BROUGHT	133
+#define S_VILLAIN_NEWS		137
+#define S_VILLAIN_SEEN		138
+enum { GOV_GREET, GOV_MISSION, GOV_REPORT, GOV_ASK, GOV_TASK, GOV_PROMOTED, GOV_LAND,
+    GOV_VILLAIN_NEWS, GOV_VILLAIN_SEEN, GOV_OFFER, GOV_SHORT, GOV_DONE };
+
+/* A captain's name from his id (VA 0x19fbb): the rank (CSTN 78, from
+ * Captain), and a surname of the list CSTN 2 + (id >> 6 & 3). */
+static void
+captain_name(const struct game *g, int id, char *out, size_t len)
+{
+	snprintf(out, len, "%s %s", game_word(g, W_RANK,
+	    (size_t)((id & 7) + 2)), game_word(g, 2 + (id >> 6 & 3),
+	    (size_t)(id >> 3 & 7)));
+}
+
+/* A villain's name (VA 0x1a040): his rank and his nation's surname. */
+static void
+villain_name(const struct game *g, int k, char *out, size_t len)
+{
+	const struct sim_villain *v = &g->sim.villains[k & 3];
+
+	snprintf(out, len, "%s %s", game_word(g, W_RANK, (size_t)v->rank),
+	    game_word(g, 2 + v->nation, (size_t)v->surname));
+}
+
+#define W_VILLAIN_NATION	97	/* Spaniard, Englishman... */
+#define W_RELATIVE_WHO		37	/* sister, father, niece, uncle */
+
+/* The texts about a villain: 131 met, 132 beaten, 137 named, 138 where
+ * he was last seen. */
+static void
+villain_text(struct game *g, int k, int str, char *out, size_t len)
+{
+	const struct sim_villain *v = &g->sim.villains[k & 3];
+	const char *arg[4];
+	char name[80];
+
+	villain_name(g, k, name, sizeof(name));
+	switch (str) {
+	case 131:
+		arg[0] = game_word(g, W_VILLAIN_NATION, (size_t)v->nation);
+		arg[1] = name;
+		fill_args(out, len, game_str(g, str), arg, 2);
+		break;
+	case 132:
+		arg[0] = game_word(g, W_RELATIVE_WHO,
+		    (size_t)(g->sim.relative & 3));
+		fill_args(out, len, game_str(g, str), arg, 1);
+		break;
+	case 137:
+		arg[0] = arg[3] = game_word(g, W_RELATIVE_WHO,
+		    (size_t)(g->sim.relative & 3));
+		arg[1] = game_word(g, W_VILLAIN_NATION, (size_t)v->nation);
+		arg[2] = name;
+		fill_args(out, len, game_str(g, str), arg, 4);
+		break;
+	default:
+		arg[0] = (size_t)v->town < g->sim.ntowns ?
+		    g->sim.towns[v->town].name : "";
+		fill_args(out, len, game_str(g, str), arg, 1);
+		break;
+	}
+}
 
 static void
-governor_enter(struct game *g)
+governor_inks(struct game *g, const char *pic)
 {
-	game_background(g, "pic/governor");
+	game_background(g, pic);
 	game_portrait(g, NULL);
 	g->ink[0] = 240;
 	g->ink[1] = 220;
@@ -4707,46 +4829,118 @@ governor_enter(struct game *g)
 	g->highlight[0] = 255;
 	g->highlight[1] = 200;
 	g->highlight[2] = 60;
-	g->sim.visit_flags |= VISIT_GOVERNOR;
-	g->gov_rank = sim_governor_promote(&g->sim, &g->gov_acres);
-	g->gov_stage = GOV_GREET;
-	if (g->gov_rank > 0)
-		load_bank(g, "spr/gov", 0, &g->gov_spr);
 }
 
-/* The stage after "from", skipping those with nothing to say. */
+static void	governor_next(struct game *);
+
+static void
+governor_enter(struct game *g)
+{
+	governor_inks(g, "pic/governor");
+	if (g->gov_resume) {
+		/* Back from the villain (VA 0x13269 goes on with the
+		 * missions). */
+		g->gov_resume = 0;
+		governor_next(g);
+		return;
+	}
+	g->sim.visit_flags |= VISIT_GOVERNOR;
+	g->gov_rank = g->gov_acres = 0;
+	g->gov_villain = -1;
+	g->gov_stage = GOV_GREET;
+}
+
+/*
+ * The next stage with something to say, in the order of VA 0x13269: a
+ * villain hiding here, the mission (its report, or an offer), the
+ * promotion and its land, the news of a new villain, his offer.
+ */
 static void
 governor_next(struct game *g)
 {
 	long price;
-	enum governor_offer o = sim_governor_offer(&g->sim, &price);
+	enum governor_offer o;
+	int v;
 
 	switch (g->gov_stage) {
 	case GOV_GREET:
+		v = sim_villain_at(&g->sim, g->sim.player_town);
+		if (v >= 0) {
+			g->villain = v;
+			g->villain_stage = 0;
+			g->villain_back = &screen_governor;
+			g->gov_resume = 1;
+			g->gov_stage = GOV_MISSION;
+			game_goto(g, &screen_villain);
+			return;
+		}
+		/* FALLTHROUGH */
+	case GOV_MISSION:
+		if (g->sim.mission.type != MISSION_NONE) {
+			g->gov_report = sim_mission_report(&g->sim);
+			if (g->gov_report != 0) {
+				g->gov_stage = GOV_REPORT;
+				return;
+			}
+		} else if (sim_mission_draw(&g->sim) != MISSION_NONE) {
+			g->gov_stage = GOV_ASK;
+			g->selected = 0;
+			return;
+		}
+		/* FALLTHROUGH */
+	case GOV_REPORT:
+	case GOV_ASK:
+	case GOV_TASK:
+		g->gov_rank = sim_governor_promote(&g->sim, &g->gov_acres);
 		if (g->gov_rank > 0) {
+			load_bank(g, "spr/gov", 0, &g->gov_spr);
 			g->gov_stage = GOV_PROMOTED;
-			break;
+			return;
 		}
 		/* FALLTHROUGH */
 	case GOV_PROMOTED:
 		if (g->gov_stage == GOV_PROMOTED && g->gov_acres > 0) {
 			g->gov_stage = GOV_LAND;
-			break;
+			return;
 		}
 		/* FALLTHROUGH */
 	case GOV_LAND:
+		if (g->gov_rank > 0 &&
+		    (g->gov_villain = sim_villain_appear(&g->sim)) >= 0) {
+			governor_inks(g, "pic/evilone");
+			g->gov_stage = GOV_VILLAIN_NEWS;
+			return;
+		}
+		/* FALLTHROUGH */
+	case GOV_VILLAIN_SEEN:
+		if (g->gov_stage == GOV_VILLAIN_SEEN)
+			governor_inks(g, "pic/governor");
+		o = sim_governor_offer(&g->sim, &price);
 		if (o == OFFER_MARQUE || o == OFFER_PARDON) {
 			g->gov_stage = GOV_OFFER;
 			g->selected = 0;
-			break;
+			return;
 		}
 		/* FALLTHROUGH */
 	default:
 		bank_free(&g->gov_spr);
 		g->gov_stage = GOV_DONE;
 		game_goto(g, &screen_town);
-		break;
+		return;
+	case GOV_VILLAIN_NEWS:
+		g->gov_stage = GOV_VILLAIN_SEEN;
+		return;
 	}
+}
+
+static void
+governor_ask_choose(struct game *g, int i)
+{
+	if (i == 0) {
+		sim_mission_accept(&g->sim);
+		g->gov_stage = GOV_TASK;
+	} else
+		governor_next(g);
 }
 
 static void
@@ -4767,6 +4961,10 @@ governor_event(struct game *g, const struct ui_event *ev)
 		return;
 	if (g->gov_stage == GOV_OFFER) {
 		menu_event(g, ev, 2, NULL, governor_offer_choose, NULL);
+		return;
+	}
+	if (g->gov_stage == GOV_ASK) {
+		menu_event(g, ev, 2, NULL, governor_ask_choose, NULL);
 		return;
 	}
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
@@ -4833,7 +5031,7 @@ governor_draw(struct game *g)
 {
 	const struct sim_town *t = here(g);
 	int nat = t != NULL ? t->nation & 3 : 0;
-	char text[1024], num[32];
+	char text[1024], num[32], num2[80];
 	long price;
 	enum governor_offer o;
 
@@ -4857,6 +5055,41 @@ governor_draw(struct game *g)
 			    NULL);
 		}
 		break;
+	case GOV_REPORT:
+		if (g->gov_report == 2) {
+			captain_name(g, g->sim.mission.pirate, num2,
+			    sizeof(num2));
+			fill(text, sizeof(text), game_str(g, S_PIRATE_BROUGHT),
+			    num2, NULL);
+		} else
+			snprintf(text, sizeof(text), "%s", game_str(g,
+			    g->gov_report > 0 ? S_MISSION_THANKS :
+			    S_MISSION_FAILED));
+		break;
+	case GOV_ASK:
+		draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W,
+		    game_str(g, S_MISSION_ASK), 1);
+		return;
+	case GOV_TASK:
+		if (g->sim.mission.type == MISSION_PIRATE) {
+			captain_name(g, g->sim.mission.pirate, num2,
+			    sizeof(num2));
+			fill(text, sizeof(text), game_str(g, S_MISSION_TASK +
+			    MISSION_PIRATE), num2,
+			    g->sim.towns[g->sim.mission.dest].name);
+		} else
+			fill(text, sizeof(text), game_str(g, S_MISSION_TASK +
+			    g->sim.mission.type),
+			    g->sim.towns[g->sim.mission.dest].name, NULL);
+		break;
+	case GOV_VILLAIN_NEWS:
+	case GOV_VILLAIN_SEEN:
+		villain_text(g, g->gov_villain, g->gov_stage ==
+		    GOV_VILLAIN_NEWS ? S_VILLAIN_NEWS : S_VILLAIN_SEEN, text,
+		    sizeof(text));
+		draw(g, FONT_BODY, 340, 150, 280, text, 0);
+		continue_prompt(g);
+		return;
 	case GOV_OFFER:
 		o = sim_governor_offer(&g->sim, &price);
 		snprintf(num, sizeof(num), "%ld", price);
@@ -5397,9 +5630,14 @@ disgrace_enter(struct game *g)
 static void
 disgrace_event(struct game *g, const struct ui_event *ev)
 {
+	const struct screen *back = g->disgrace_back != NULL ?
+	    g->disgrace_back : &screen_sail;
+
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
-	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, &screen_sail);
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		g->disgrace_back = NULL;
+		game_goto(g, back);
+	}
 }
 
 static void
@@ -5468,7 +5706,10 @@ const struct screen screen_assault = {
  * the fleet at once (an engine choice: the original offers them on the
  * board).
  */
-enum { SACK_MERCY, SACK_HIDDEN, SACK_INSTALL };
+enum { SACK_MERCY, SACK_HIDDEN, SACK_INSTALL, SACK_SON, SACK_VILLAIN };
+#define S_SON_FREED		208
+
+static void	sack_after(struct game *);
 
 static void
 sack_picture(struct game *g)
@@ -5489,6 +5730,8 @@ static void
 sack_enter(struct game *g)
 {
 	sack_picture(g);
+	if (g->sack_stage == SACK_VILLAIN)	/* back from the villain */
+		sack_after(g);
 }
 
 static void
@@ -5518,9 +5761,29 @@ sack_event(struct game *g, const struct ui_event *ev)
 	}
 	if (!go)
 		return;
-	if (g->sack_stage == SACK_MERCY && g->sack.hidden >= 0)
+	/* The order of VA 0x22764: the son freed, the hidden gold, a
+	 * villain hiding there, then the governor or the loot. */
+	if (g->sack_stage == SACK_MERCY && g->sack.son_freed)
+		g->sack_stage = SACK_SON;
+	else if ((g->sack_stage == SACK_MERCY || g->sack_stage == SACK_SON) &&
+	    g->sack.hidden >= 0)
 		g->sack_stage = SACK_HIDDEN;
-	else if (g->sack.conquest) {
+	else
+		sack_after(g);
+}
+
+static void
+sack_after(struct game *g)
+{
+	int v = sim_villain_at(&g->sim, g->assault_town);
+
+	if (g->sack_stage != SACK_VILLAIN && v >= 0) {
+		g->sack_stage = SACK_VILLAIN;
+		g->villain = v;
+		g->villain_stage = 0;
+		g->villain_back = &screen_sack;
+		game_goto(g, &screen_villain);
+	} else if (g->sack.conquest) {
 		g->sack_stage = SACK_INSTALL;
 		sack_picture(g);
 	} else
@@ -5541,6 +5804,12 @@ sack_draw(struct game *g)
 		fill(text, sizeof(text), game_str(g, S_GOLD_HIDDEN),
 		    game_word(g, W_HIDDEN, (size_t)g->sack.hidden), NULL);
 		break;
+	case SACK_SON:
+		fill(text, sizeof(text), game_str(g, S_SON_FREED),
+		    g->sim.towns[g->sim.mission.giver].name, NULL);
+		break;
+	case SACK_VILLAIN:
+		return;
 	default:
 		draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_INSTALL), 1);
 		return;
@@ -6528,4 +6797,93 @@ dig_draw(struct game *g)
 
 const struct screen screen_dig = {
 	"dig", dig_enter, dig_event, NULL, dig_draw,
+};
+
+/*
+ * A villain met in his town (VA 0x18913), on evilone.pcx at (340, 150)
+ * up to x 620: "You spot the evil %s %s sneaking out a back entrance"
+ * (CSTR 131), the duel in the alley, and when he is beaten "I will tell
+ * you what I know" (CSTR 132) and a piece of the relative's map.  Then
+ * back where the player was.
+ */
+#define S_VILLAIN_MET		131
+#define S_VILLAIN_BEATEN	132
+
+static void
+villain_enter(struct game *g)
+{
+	game_background(g, "pic/evilone");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+villain_event(struct game *g, const struct ui_event *ev)
+{
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (g->villain_stage == 0) {
+		g->sw_villain = 1;
+		game_goto(g, &screen_sword);
+	} else
+		tmap_show(g, MAP_RELATIVE, g->villain_back);
+}
+
+static void
+villain_draw(struct game *g)
+{
+	char text[640];
+
+	villain_text(g, g->villain, g->villain_stage == 0 ? S_VILLAIN_MET :
+	    S_VILLAIN_BEATEN, text, sizeof(text));
+	draw(g, FONT_BODY, 340, 150, 280, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_villain = {
+	"villain", villain_enter, villain_event, NULL, villain_draw,
+};
+
+/*
+ * The mission's contact (VA 0x1f8f7): "The cousin of the governor of %s
+ * accepts the letter..." (CSTR 204 + type) at (200, 200) up to x 620.
+ * The original clears the screen first (VA 0x262d3, not traced); the
+ * engine writes on the parchment page.
+ */
+#define S_MISSION_DONE		204	/* + type: 205-208 */
+
+static void
+contact_enter(struct game *g)
+{
+	game_background(g, "pic/textback");
+	game_portrait(g, NULL);
+}
+
+static void
+contact_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, g->villain_back);
+}
+
+static void
+contact_draw(struct game *g)
+{
+	const struct sim_mission *m = &g->sim.mission;
+	int type = m->type < 0 ? -m->type : m->type;
+	char text[640], pirate[80];
+
+	captain_name(g, m->pirate, pirate, sizeof(pirate));
+	fill(text, sizeof(text), game_str(g, S_MISSION_DONE + type),
+	    (size_t)m->giver < g->sim.ntowns ? g->sim.towns[m->giver].name :
+	    "", pirate);
+	draw(g, FONT_BODY, 200, 200, 420, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_contact = {
+	"contact", contact_enter, contact_event, NULL, contact_draw,
 };

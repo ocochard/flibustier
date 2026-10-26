@@ -255,7 +255,9 @@ Status (2026-10-26): first slice.
 - **Land battle:** attacking on foot.
 - **Treasure maps:** pieces, the map page, digging; the relative's
   quest waits for the mystery man.
-- **Next:** dividing parties, the crew's mood, prison.
+- **Mystery man:** the relatives' villains and the governors' missions.
+- **Next:** dividing parties, the crew's mood, prison, prisoners and
+  ransoms.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

@@ -221,6 +221,13 @@ struct game {
 	int			 gov_stage;	/* greeting, promotion, land, offer,
 						 * short of gold */
 	int			 gov_rank, gov_acres;
+	int			 gov_resume;	/* back from the villain's duel */
+	int			 gov_report;	/* the mission's end, as reported */
+	int			 gov_villain;	/* the villain named, or -1 */
+	/* The villain met (VA 0x18913): his page, the duel, then back. */
+	int			 villain, villain_stage, sw_villain;
+	const struct screen	*villain_back;
+	const struct screen	*disgrace_back;
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

@@ -780,6 +780,9 @@ sim_battle_finish(struct sim *s, int keep)
 		/* A capture offends the ship's nation and pleases its
 		 * enemies (VA 0xdb7b); pirates do not count. */
 		sim_attack_nation(s, s->encounter.nation, -1);
+		/* The pirate a governor wanted (VA 0xdb7b). */
+		if (s->encounter.named)
+			sim_mission_done(s);
 	}
 	else if (o == BAT_REPELLED || o == BAT_DEFEATED)
 		sim_reputation(s, -2);

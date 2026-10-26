@@ -2460,6 +2460,133 @@ test_treasure(void)
 	}
 }
 
+/* The relatives' villains: named after a promotion, fought in their
+ * town, beaten for a piece of the relative's map. */
+static void
+test_villains(void)
+{
+	struct sim s;
+	int k, v;
+
+	sea_game(&s, 300, 300, 0);
+	s.player.difficulty = 1;
+	v = sim_villain_appear(&s);
+	CHECK(v == 0 && s.villains[0].active &&
+	    s.towns[s.villains[0].town].nation == NATION_SPAIN);
+	CHECK(s.villains[0].surname < 16 && s.villains[0].rank < 8 &&
+	    s.villains[0].nation < 4);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_VILLAIN &&
+	    news_abs(&s, s.nnews - 1)->a == 0);
+	for (k = 1; k < SIM_VILLAINS; k++)
+		CHECK(sim_villain_appear(&s) == k);
+	CHECK(sim_villain_appear(&s) == -1);	/* four at most */
+	/* Met in his town: the mystery man is in the tavern. */
+	s.player_town = s.villains[2].town;
+	CHECK(sim_villain_at(&s, s.player_town) >= 0);
+	v = sim_villain_at(&s, s.player_town);
+	s.tavern_spots = TAVERN_MYSTERY;
+	sim_tavern_open(&s);
+	CHECK(s.tavern_spots & TAVERN_MYSTERY);
+	/* Beaten in the duel: a piece of the relative's map. */
+	sim_villain_duel(&s, v, 1);
+	CHECK(s.sword.active && s.sword.kind == SWORD_DUEL &&
+	    s.sword.nation == -2 && s.villain_duel == v);
+	s.sword.result = SWORD_WON;
+	CHECK(sim_villain_duel_end(&s) == 1 && !s.villains[v].active &&
+	    s.villain_duel == -1 && quarters(s.maps[MAP_RELATIVE].pieces) == 1);
+	/* A loss disgraces; the villain lives on elsewhere. */
+	v = 0;
+	sim_villain_duel(&s, v, 1);
+	s.sword.result = SWORD_LOST;
+	CHECK(sim_villain_duel_end(&s) == 0 && s.villains[v].active &&
+	    s.reputation == -1);
+	/* Nowhere to hide: no mystery man. */
+	for (k = 0; k < SIM_VILLAINS; k++)
+		s.villains[k].active = 0;
+	s.tavern_spots = TAVERN_MYSTERY;
+	sim_tavern_open(&s);
+	CHECK(!(s.tavern_spots & TAVERN_MYSTERY));
+	/* No more villains once the relatives are all found. */
+	s.relative = 4;
+	CHECK(sim_villain_appear(&s) == -1);
+}
+
+/* Governors' missions: offered, done, reported. */
+static void
+test_missions(void)
+{
+	struct sim s;
+	struct sack sack;
+	int k, type = 0, dest, st;
+
+	sea_game(&s, 300, 300, 0);
+	s.player_town = 0;			/* Alpha, Spanish */
+	s.towns[0].standing = 0;
+	s.standing[NATION_SPAIN] = 0;
+	/* Standing 0 earns no mission. */
+	for (k = 0; k < 50; k++)
+		CHECK(sim_mission_draw(&s) == 0);
+	s.standing[NATION_SPAIN] = 16;
+	for (k = 0; k < 200 && type != MISSION_LETTER; k++)
+		type = sim_mission_draw(&s);
+	CHECK(type == MISSION_LETTER && s.mission_offer.dest != 0 &&
+	    s.mission_offer.giver == 0 &&
+	    s.relations[NATION_SPAIN][s.towns[s.mission_offer.dest].nation]
+	    >= 0);
+	dest = s.mission_offer.dest;
+	sim_mission_accept(&s);
+	CHECK(s.mission.type == MISSION_LETTER && s.mission.dest == dest &&
+	    news_abs(&s, s.nnews - 1)->code == NEWS_LETTER);
+	/* No second offer while one runs; the contact waits at dest. */
+	CHECK(sim_mission_draw(&s) == 0);
+	CHECK(sim_mission_contact(&s, dest) && !sim_mission_contact(&s, 0));
+	s.player_town = dest;
+	s.tavern_spots = TAVERN_MYSTERY;
+	sim_tavern_open(&s);
+	CHECK(s.tavern_spots & TAVERN_MYSTERY);
+	sim_mission_done(&s);
+	CHECK(s.mission.type == -MISSION_LETTER &&
+	    news_abs(&s, s.nnews - 1)->code == NEWS_DELIVERED_LETTER);
+	/* Back at the giver: +1 standing, his town's word 9 less 1. */
+	CHECK(sim_mission_report(&s) == 0);	/* not the giver's town */
+	s.player_town = 0;
+	st = s.standing[NATION_SPAIN];
+	CHECK(sim_mission_report(&s) == 1 && s.mission.type == 0 &&
+	    s.standing[NATION_SPAIN] == st + 1 &&
+	    (int16_t)s.towns[0].standing == -1);
+	/* Back without doing it: a failure. */
+	s.mission.type = MISSION_PAPERS;
+	s.mission.giver = 0;
+	s.mission.nation = NATION_SPAIN;
+	st = s.standing[NATION_SPAIN];
+	CHECK(sim_mission_report(&s) == -1 &&
+	    s.standing[NATION_SPAIN] == st - 1 &&
+	    (int16_t)s.towns[0].standing == -2 &&
+	    news_abs(&s, s.nnews - 1)->code == NEWS_DISPLEASED);
+	/* The son is freed in the sack of his prison town. */
+	s.mission.type = MISSION_SON;
+	s.mission.dest = 2;
+	sim_sack(&s, 2, &sack);
+	CHECK(sack.son_freed && s.mission.type == -MISSION_SON &&
+	    (news_abs(&s, s.nnews - 1)->code == NEWS_SON_FREED ||
+	    news_abs(&s, s.nnews - 2)->code == NEWS_SON_FREED));
+	/* The pirate hunted, taken at sea. */
+	s.mission.type = MISSION_PIRATE;
+	s.mission.dest = 3;
+	s.mission.pirate = 0x8000 | 5 << 3;
+	memset(&s.battle, 0, sizeof(s.battle));
+	s.battle.active = 1;
+	s.battle.outcome = BAT_SURRENDER;
+	s.battle.you.crew = 20;
+	s.encounter.nation = NATION_PIRATE;
+	s.encounter.named = 1;
+	CHECK(sim_battle_finish(&s, 0) == BAT_SURRENDER &&
+	    s.mission.type == -MISSION_PIRATE);
+	s.player_town = 0;
+	s.mission.giver = 0;
+	CHECK(sim_mission_report(&s) == 2);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -2497,7 +2624,10 @@ test_old_state(void)
 	sim_to_json(&s, &st);
 	for (i = 0; i < sizeof(later) / sizeof(later[0]); i++)
 		strip_key(st.s, later[i]);
-	CHECK((v = strstr(st.s, "\"version\":19")) != NULL);
+	/* The current version has two digits, as 14 and 99. */
+	CHECK((v = strstr(st.s, "\"version\":")) != NULL &&
+	    v[10] >= '1' && v[10] <= '9' && v[11] >= '0' && v[11] <= '9' &&
+	    v[12] == ',');
 	if (v != NULL)
 		memcpy(v, "\"version\":14", 12);
 	j = json_parse(st.s, err, sizeof(err));
@@ -2553,6 +2683,8 @@ main(void)
 	test_land_battle();
 	test_old_state();
 	test_treasure();
+	test_villains();
+	test_missions();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);
