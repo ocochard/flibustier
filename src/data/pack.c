@@ -292,6 +292,8 @@ dir_load(struct pack *pk, const char *id, struct blob *out)
 		if (read_file(path, &out->data, &out->len) != 0)
 			return (-1);
 		set_ext(out, pk->entries[i].file);
+		snprintf(out->file, sizeof(out->file), "%s",
+		    pk->entries[i].file);
 		return (0);
 	}
 	return (-1);
@@ -558,11 +560,45 @@ packs_load_ext(struct packs *packs, const char *id, const char *ext,
 		if (rc == 0) {
 			out->pack = pk->name;
 			out->art_height = pk->art_height;
+			out->pack_index = (int)i;
 			return (0);
 		}
 	}
 	seterr(packs, "asset \"%s\" not found in any pack", id);
 	return (-1);
+}
+
+int
+packs_load_beside(struct packs *packs, const struct blob *from,
+    const char *rel, struct blob *out)
+{
+	struct pack *pk;
+	char path[MAX_PATH];
+	const char *slash;
+	int dir;
+
+	memset(out, 0, sizeof(*out));
+	if (from->pack_index < 0 || (size_t)from->pack_index >= packs->count ||
+	    (pk = packs->pack[from->pack_index])->kind != PACK_DIR ||
+	    from->file[0] == '\0' || !valid_file(rel)) {
+		seterr(packs, "\"%s\": not a file of a directory pack", rel);
+		return (-1);
+	}
+	slash = strrchr(from->file, '/');
+	dir = slash != NULL ? (int)(slash - from->file) : 0;
+	if ((size_t)snprintf(path, sizeof(path), "%s/%.*s%s%s", pk->root, dir,
+	    from->file, dir > 0 ? "/" : "", rel) >= sizeof(path) ||
+	    read_file(path, &out->data, &out->len) != 0) {
+		seterr(packs, "%s: cannot read %s", pk->root, rel);
+		return (-1);
+	}
+	set_ext(out, rel);
+	snprintf(out->file, sizeof(out->file), "%.*s%s%s", dir, from->file,
+	    dir > 0 ? "/" : "", rel);
+	out->pack = pk->name;
+	out->art_height = pk->art_height;
+	out->pack_index = from->pack_index;
+	return (0);
 }
 
 struct idlist {

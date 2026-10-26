@@ -27,6 +27,11 @@ struct frame {
 	unsigned	 key;		/* per-frame header word */
 	uint8_t		*pixels;	/* w * h indices */
 	uint8_t		*mask;		/* w * h, 1 = opaque; NULL = opaque */
+	/* Replacement art (sprite sheets): true colours with alpha at
+	 * their own resolution, covering the w x h box; or NULL. */
+	uint8_t		*rgba;		/* rgba_w * rgba_h * 4 */
+	int		 rgba_w;
+	int		 rgba_h;
 };
 
 struct sprite_bank {

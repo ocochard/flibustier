@@ -15,6 +15,7 @@
 #include "assets/img.h"
 #include "assets/scenario.h"
 #include "assets/pic.h"
+#include "assets/sheet.h"
 #include "sim/hof.h"
 #include "sim/save.h"
 #include "screen.h"
@@ -2611,17 +2612,12 @@ ship_sprite(const struct sim_fleet *f)
 static void
 sail_enter(struct game *g)
 {
-	struct blob b;
-
 	image_free(&g->bg);
 	game_portrait(g, NULL);
 	memcpy(g->fb.pal, g->world->palette, sizeof(g->fb.pal));
 	sea_init(&g->sea, g->fb.pal);
 	bank_free(&g->ship);
-	if (packs_load(g->packs, ship_sprite(&g->sim.fleet), &b) == 0) {
-		bank_decode_runs(b.data, b.len, &g->ship);
-		blob_free(&b);
-	}
+	bank_load(g->packs, ship_sprite(&g->sim.fleet), BANK_RUNS, &g->ship);
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 	follow_ship(g, 1);
@@ -3046,16 +3042,8 @@ static const char *damage_picture[9] = {
 static void
 load_bank(struct game *g, const char *id, int raw, struct sprite_bank *b)
 {
-	struct blob bl;
-
 	bank_free(b);
-	if (packs_load(g->packs, id, &bl) != 0)
-		return;
-	if (raw)
-		bank_decode_raw(bl.data, bl.len, b);
-	else
-		bank_decode_runs(bl.data, bl.len, b);
-	blob_free(&bl);
+	bank_load(g->packs, id, raw ? BANK_RAW : BANK_RUNS, b);
 }
 
 static void
@@ -3523,13 +3511,9 @@ static const char *sw_weapon_layers[2][SWORD_WEAPONS] = {
 static void
 load_group(struct game *g, const char *id, struct sprite_group *out)
 {
-	struct blob b;
-
 	group_free(out);
-	if (id == NULL || packs_load(g->packs, id, &b) != 0)
-		return;
-	group_decode(b.data, b.len, out);
-	blob_free(&b);
+	if (id != NULL)
+		group_load(g->packs, id, out);
 }
 
 /* The story's fight (VA 0x14630): 200 men of factor 32 against 20 of

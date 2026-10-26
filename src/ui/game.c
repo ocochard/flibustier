@@ -10,6 +10,7 @@
 
 #include "assets/pic.h"
 #include "assets/scenario.h"
+#include "assets/sheet.h"
 #include "assets/towns.h"
 #include "assets/world.h"
 #include "game.h"
@@ -114,14 +115,10 @@ load_cursor(struct game *g)
 static void
 load_misc(struct game *g)
 {
-	struct blob b;
 	const char *id = strcmp(g->lang, "fre") == 0 ? "ui/miscf" :
 	    strcmp(g->lang, "ger") == 0 ? "ui/miscg" : "ui/misc";
 
-	if (packs_load(g->packs, id, &b) != 0)
-		return;
-	bank_decode_runs(b.data, b.len, &g->misc);
-	blob_free(&b);
+	bank_load(g->packs, id, BANK_RUNS, &g->misc);
 }
 
 int
@@ -265,17 +262,10 @@ game_background(struct game *g, const char *pic)
 int
 game_portrait(struct game *g, const char *spr)
 {
-	struct blob b;
-	int rc;
-
 	bank_free(&g->portrait);
 	if (spr == NULL)
 		return (0);
-	if (packs_load(g->packs, spr, &b) != 0)
-		return (-1);
-	rc = bank_decode_runs(b.data, b.len, &g->portrait);
-	blob_free(&b);
-	return (rc);
+	return (bank_load(g->packs, spr, BANK_RUNS, &g->portrait));
 }
 
 void

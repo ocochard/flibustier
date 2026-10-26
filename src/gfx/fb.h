@@ -82,7 +82,11 @@ void	fb_image(struct fb *fb, const struct image *img, int x, int y,
 void	fb_image_part(struct fb *fb, const struct image *img, int sx, int sy,
 	    int w, int h, int dx, int dy, int key);
 
-/* Draw a sprite frame at (x, y); transparent pixels are skipped. */
+/*
+ * Draw a sprite frame at (x, y); transparent pixels are skipped.  True
+ * colours, when the frame has them, are blended onto the canvas by their
+ * alpha; its indices still go to the 640x480 screen.
+ */
 void	fb_frame(struct fb *fb, const struct frame *f, int x, int y);
 
 /* The same, clipped to the rectangle (x0, y0)-(x1, y1), inclusive. */

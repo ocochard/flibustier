@@ -87,9 +87,10 @@ The engine runs from asset packs:
    - Effects that depend on the palette, such as sea animation, are
      expressed as an engine effect (palette cycle or animated texture), so
      a new pack can supply its own version.
-   - Still original resolution: sprites, fonts and tiles. They need
-     replacement formats (RGBA sprite sheets, scalable fonts) drawn at
-     canvas resolution.
+   - Sprites have a replacement format, sprite sheets, drawn at canvas
+     resolution with alpha (`asset-packs.md`).
+   - Still original resolution: fonts, tiles and `img/`. They need
+     replacement formats (scalable fonts, tile sheets).
 4. **Separate simulation from presentation.** Game rules live in a module
    with no raylib dependency (pure C99, deterministic, seeded RNG), so they
    can be unit tested and compared against traces of the original.
@@ -123,7 +124,7 @@ Each phase ends with something visible and a test.
 ### Phase 1: data access and asset viewer
 
 Status (2026-10-26): done, apart from native-format loaders for packs.
-PNG pictures load (`pic/`); OGG and PNG sprites do not yet.
+PNG pictures (`pic/`) and sprite sheets load; OGG does not yet.
 
 
 - `src/data/`: the pack system (manifest parser, priority stack, logical

@@ -29,31 +29,37 @@ image_drop_rgba(struct image *img)
 	img->rgba_w = img->rgba_h = 0;
 }
 
-/* A 6x6x6 colour cube, then a ramp of 40 greys. */
 void
-image_fixed_palette(struct image *img)
+palette_fixed(uint8_t *pal)
 {
 	int i, v;
 
 	for (i = 0; i < CUBE * CUBE * CUBE; i++) {
-		img->palette[3 * i] = (uint8_t)(i / (CUBE * CUBE) * 51);
-		img->palette[3 * i + 1] = (uint8_t)(i / CUBE % CUBE * 51);
-		img->palette[3 * i + 2] = (uint8_t)(i % CUBE * 51);
+		pal[3 * i] = (uint8_t)(i / (CUBE * CUBE) * 51);
+		pal[3 * i + 1] = (uint8_t)(i / CUBE % CUBE * 51);
+		pal[3 * i + 2] = (uint8_t)(i % CUBE * 51);
 	}
 	for (; i < 256; i++) {
 		v = (i - CUBE * CUBE * CUBE + 1) * 255 / 41;
-		memset(&img->palette[3 * i], v, 3);
+		memset(&pal[3 * i], v, 3);
 	}
+}
+
+void
+image_fixed_palette(struct image *img)
+{
+	palette_fixed(img->palette);
 	img->has_palette = 1;
 }
 
+/* The entry of "pal" from "first" on nearest to (r, g, b). */
 static uint8_t
-nearest(const uint8_t *pal, int r, int g, int b)
+nearest(const uint8_t *pal, int first, int r, int g, int b)
 {
-	int i, best = 0, dr, dg, db;
+	int i, best = first, dr, dg, db;
 	long d, bestd = -1;
 
-	for (i = 0; i < 256; i++) {
+	for (i = first; i < 256; i++) {
 		dr = pal[3 * i] - r;
 		dg = pal[3 * i + 1] - g;
 		db = pal[3 * i + 2] - b;
@@ -87,51 +93,67 @@ level(unsigned bucket)
 }
 
 int
-image_quantize(struct image *img)
+rgba_reduce(const uint8_t *rgba, int aw, int ah, int w, int h,
+    const uint8_t *pal, uint8_t *px, uint8_t *mask)
 {
 	uint16_t *cache;
 	const uint8_t *p;
-	unsigned sum[3], key, n, shift = 8 - CACHE_BITS;
-	int x, y, ax, ay, ax0, ax1, ay0, ay1, k;
-	uint8_t *px;
+	unsigned sum[4], key, n, shift = 8 - CACHE_BITS;
+	int x, y, ax, ay, ax0, ax1, ay0, ay1, k, first = mask != NULL;
+	size_t i;
 
-	if (img->rgba == NULL || img->w < 1 || img->h < 1)
+	if ((cache = malloc(sizeof(*cache) << (3 * CACHE_BITS))) == NULL)
 		return (-1);
-	if ((px = malloc((size_t)img->w * img->h)) == NULL)
-		return (-1);
-	if ((cache = malloc(sizeof(*cache) << (3 * CACHE_BITS))) == NULL) {
-		free(px);
-		return (-1);
-	}
 	memset(cache, 0xFF, sizeof(*cache) << (3 * CACHE_BITS));
-	for (y = 0; y < img->h; y++)
-		for (x = 0; x < img->w; x++) {
-			span_of(x, img->w, img->rgba_w, &ax0, &ax1);
-			span_of(y, img->h, img->rgba_h, &ay0, &ay1);
-			sum[0] = sum[1] = sum[2] = 0;
+	for (y = 0; y < h; y++)
+		for (x = 0; x < w; x++) {
+			i = (size_t)y * w + x;
+			span_of(x, w, aw, &ax0, &ax1);
+			span_of(y, h, ah, &ay0, &ay1);
+			sum[0] = sum[1] = sum[2] = sum[3] = 0;
 			for (ay = ay0; ay < ay1; ay++)
 				for (ax = ax0; ax < ax1; ax++) {
-					p = img->rgba + 4 * ((size_t)ay *
-					    img->rgba_w + ax);
-					for (k = 0; k < 3; k++)
+					p = rgba + 4 * ((size_t)ay * aw + ax);
+					for (k = 0; k < 4; k++)
 						sum[k] += p[k];
 				}
 			n = (unsigned)((ax1 - ax0) * (ay1 - ay0));
-			for (k = 0; k < 3; k++)
+			for (k = 0; k < 4; k++)
 				sum[k] /= n;
+			if (mask != NULL && !(mask[i] = sum[3] >= 128)) {
+				px[i] = 0;
+				continue;
+			}
 			key = (sum[0] >> shift) << (2 * CACHE_BITS) |
 			    (sum[1] >> shift) << CACHE_BITS | sum[2] >> shift;
 			/* The bucket's own colour, spread over 0..255, so the
 			 * result does not depend on which colour filled it
 			 * first and black and white stay exact. */
 			if (cache[key] == CACHE_NONE)
-				cache[key] = nearest(img->palette,
+				cache[key] = nearest(pal, first,
 				    level(sum[0] >> shift),
 				    level(sum[1] >> shift),
 				    level(sum[2] >> shift));
-			px[(size_t)y * img->w + x] = (uint8_t)cache[key];
+			px[i] = (uint8_t)cache[key];
 		}
 	free(cache);
+	return (0);
+}
+
+int
+image_quantize(struct image *img)
+{
+	uint8_t *px;
+
+	if (img->rgba == NULL || img->w < 1 || img->h < 1)
+		return (-1);
+	if ((px = malloc((size_t)img->w * img->h)) == NULL)
+		return (-1);
+	if (rgba_reduce(img->rgba, img->rgba_w, img->rgba_h, img->w, img->h,
+	    img->palette, px, NULL) != 0) {
+		free(px);
+		return (-1);
+	}
 	free(img->pixels);
 	img->pixels = px;
 	return (0);

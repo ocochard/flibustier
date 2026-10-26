@@ -12,6 +12,7 @@
 #include "assets/font.h"
 #include "assets/img.h"
 #include "assets/pic.h"
+#include "assets/sheet.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
@@ -423,10 +424,29 @@ group_frame(const struct view *v, size_t frame)
 static int
 render_frame(struct view *v, const struct frame *f)
 {
-	if (alloc_out(v, f->w, f->h) != 0)
+	const uint8_t *a;
+	uint8_t *d;
+	size_t i;
+	int k;
+
+	if (f->rgba == NULL) {
+		if (alloc_out(v, f->w, f->h) != 0)
+			return (-1);
+		checker(&v->out);
+		blit(&v->out, 0, 0, f->w, f->h, f->pixels, f->mask, v->pal);
+		return (0);
+	}
+	/* Sheet frames at their full resolution, over the checkerboard. */
+	if (alloc_out(v, f->rgba_w, f->rgba_h) != 0)
 		return (-1);
 	checker(&v->out);
-	blit(&v->out, 0, 0, f->w, f->h, f->pixels, f->mask, v->pal);
+	for (i = 0; i < (size_t)f->rgba_w * f->rgba_h; i++) {
+		a = f->rgba + 4 * i;
+		d = v->out.px + 3 * i;
+		for (k = 0; k < 3; k++)
+			d[k] = (uint8_t)((a[k] * a[3] + d[k] * (255 - a[3]) +
+			    127) / 255);
+	}
 	return (0);
 }
 
@@ -510,17 +530,17 @@ open_decoded(struct view *v, const struct blob *b, char *err, size_t errlen)
 		v->nframes = 1;
 	} else if (starts(id, "spr/") || starts(id, "ui/")) {
 		v->kind = K_BANK;
-		rc = bank_decode_runs(b->data, b->len, &v->bank);
+		rc = bank_from_blob(v->packs, id, b, BANK_RUNS, &v->bank);
 		guess_palette(v);
 		v->nframes = v->bank.count;
 	} else if (starts(id, "cur/") || starts(id, "tiles15/")) {
 		v->kind = K_BANK;
-		rc = bank_decode_raw(b->data, b->len, &v->bank);
+		rc = bank_from_blob(v->packs, id, b, BANK_RAW, &v->bank);
 		guess_palette(v);
 		v->nframes = v->bank.count;
 	} else if (starts(id, "grp/")) {
 		v->kind = K_GROUP;
-		rc = group_decode(b->data, b->len, &v->group);
+		rc = group_from_blob(v->packs, id, b, &v->group);
 		guess_palette(v);
 		for (i = 0; i < v->group.count; i++)
 			v->nframes += v->group.banks[i].count;

@@ -31,6 +31,7 @@ frame_free(struct frame *f)
 {
 	free(f->pixels);
 	free(f->mask);
+	free(f->rgba);
 }
 
 void

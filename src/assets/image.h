@@ -27,8 +27,22 @@ struct image {
 
 void	image_free(struct image *img);
 
-/* Fill "palette" with a fixed 256-colour palette for true-colour art. */
+/*
+ * A fixed 256-colour palette for true-colour art without original data:
+ * a 6x6x6 colour cube from entry 0 (black), then 40 greys.
+ */
+void	palette_fixed(uint8_t *pal);
 void	image_fixed_palette(struct image *img);
+
+/*
+ * Reduce aw x ah true colours to w x h palette indices "px": each is the
+ * colour of "pal" nearest to the average of the art pixels it covers.
+ * With "mask", a pixel is opaque (1) when that average alpha is at least
+ * half, and opaque pixels never get index 0, which raw sprite frames use
+ * for transparency.  Returns 0, or -1 without memory.
+ */
+int	rgba_reduce(const uint8_t *rgba, int aw, int ah, int w, int h,
+	    const uint8_t *pal, uint8_t *px, uint8_t *mask);
 
 /*
  * Derive the indexed pixels of a true-colour image: each pixel is the

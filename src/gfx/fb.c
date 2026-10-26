@@ -151,7 +151,7 @@ image_rgba(struct fb *fb, const struct image *img, int x, int y)
 
 	ox0 = cx0 < 0 ? 0 : cx0;
 	ox1 = cx1 > fb->out_w ? fb->out_w : cx1;
-	if (ox1 <= ox0)
+	if (ox1 <= ox0 || cy1 <= cy0)
 		return;
 	for (oy = cy0 < 0 ? 0 : cy0; oy < cy1 && oy < fb->out_h; oy++) {
 		ay = (int)((long)(oy - cy0) * img->rgba_h / (cy1 - cy0));
@@ -231,6 +231,56 @@ fb_image_part(struct fb *fb, const struct image *img, int sx, int sy, int w,
 	}
 }
 
+/*
+ * Blend the true colours of frame "f" at (x, y) over the canvas, inside
+ * the canvas rectangle [cx0, cx1) x [cy0, cy1).
+ */
+static void
+frame_rgba(struct fb *fb, const struct frame *f, int x, int y, int cx0,
+    int cy0, int cx1, int cy1)
+{
+	int bx0 = canvas_at(x, fb->out_w, FB_W);
+	int bx1 = canvas_at(x + f->w, fb->out_w, FB_W);
+	int by0 = canvas_at(y, fb->out_h, FB_H);
+	int by1 = canvas_at(y + f->h, fb->out_h, FB_H);
+	int ox, oy, ax, ay, k;
+	const uint8_t *a, *under;
+	uint8_t *d;
+	size_t o;
+
+	if (bx1 <= bx0 || by1 <= by0)
+		return;
+	if (bx0 > cx0)
+		cx0 = bx0;
+	if (bx1 < cx1)
+		cx1 = bx1;
+	if (by0 > cy0)
+		cy0 = by0;
+	if (by1 < cy1)
+		cy1 = by1;
+	for (oy = cy0; oy < cy1; oy++) {
+		ay = (int)((long)(oy - by0) * f->rgba_h / (by1 - by0));
+		for (ox = cx0; ox < cx1; ox++) {
+			ax = (int)((long)(ox - bx0) * f->rgba_w / (bx1 - bx0));
+			a = f->rgba + ((size_t)ay * f->rgba_w + ax) * 4;
+			if (a[3] == 0)
+				continue;
+			o = (size_t)oy * fb->out_w + ox;
+			d = fb->rgb + o * 3;
+			if (a[3] == 255)
+				memcpy(d, a, 3);
+			else {
+				/* Over what is there now, palette included. */
+				under = fb->tc[o] ? d : fb->pal + 3 * fb->idx[o];
+				for (k = 0; k < 3; k++)
+					d[k] = (uint8_t)((a[k] * a[3] + under[k] *
+					    (255 - a[3]) + 127) / 255);
+			}
+			fb->tc[o] = 1;
+		}
+	}
+}
+
 void
 fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
     int y0, int x1, int y1)
@@ -246,6 +296,8 @@ fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
 		x1 = FB_W - 1;
 	if (y1 > FB_H - 1)
 		y1 = FB_H - 1;
+	if (x1 < x0 || y1 < y0)
+		return;
 	for (fy = 0; fy < f->h; fy++) {
 		py = y + fy;
 		if (py < y0 || py > y1)
@@ -256,9 +308,16 @@ fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
 			if (px < x0 || px > x1 ||
 			    (f->mask != NULL && !f->mask[i]))
 				continue;
-			fb_put(fb, (size_t)py * FB_W + px, f->pixels[i]);
+			if (f->rgba != NULL)
+				fb->px[(size_t)py * FB_W + px] = f->pixels[i];
+			else
+				fb_put(fb, (size_t)py * FB_W + px,
+				    f->pixels[i]);
 		}
 	}
+	if (f->rgba != NULL)
+		frame_rgba(fb, f, x, y, fb->x0[x0], fb->y0[y0], fb->x0[x1 + 1],
+		    fb->y0[y1 + 1]);
 }
 
 void

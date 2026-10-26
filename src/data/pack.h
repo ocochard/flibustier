@@ -31,6 +31,8 @@ struct blob {
 	char		 ext[8];	/* lowercase source extension: "pcx" */
 	const char	*pack;		/* name of the pack that provided it */
 	int		 art_height;	/* screen height its art is drawn for */
+	int		 pack_index;	/* for packs_load_beside() */
+	char		 file[256];	/* path in a directory pack, or "" */
 };
 
 struct packs	*packs_new(void);
@@ -52,6 +54,14 @@ void		 blob_free(struct blob *blob);
  */
 int		 packs_load_ext(struct packs *packs, const char *id,
 		    const char *ext, struct blob *out);
+
+/*
+ * Load file "rel", relative to the directory of "from"'s file, from the
+ * same directory pack: for example the image of a sprite sheet.  "rel"
+ * may not climb out of the pack.
+ */
+int		 packs_load_beside(struct packs *packs, const struct blob *from,
+		    const char *rel, struct blob *out);
 
 /*
  * List every ID provided by at least one pack, sorted and unique.  On

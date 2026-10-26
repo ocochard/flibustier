@@ -8,6 +8,8 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include <sys/stat.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +24,7 @@
 #include "assets/pic.h"
 #include "assets/png.h"
 #include "assets/rsd.h"
+#include "assets/sheet.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
@@ -689,6 +692,176 @@ test_towns(void)
 	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == -1);
 }
 
+/* 4x2 RGBA: a 2x2 white block, a column of half-transparent red, then a
+ * clear one. */
+static const uint8_t png_4x2a[] = {
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x02,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x7f, 0xa8, 0x7d, 0x63, 0x00, 0x00, 0x00,
+	0x13, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0xf8, 0x0f, 0x03, 0x0c,
+	0x0c, 0x0d, 0x0c, 0x20, 0x80, 0x2e, 0x00, 0x00, 0x7d, 0x40, 0x12, 0xef,
+	0x8a, 0xc8, 0xf4, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
+	0xae, 0x42, 0x60, 0x82,
+};
+
+/* Raw bank: one 2x2 frame, key 0xFE. */
+static size_t
+make_raw_bank(uint8_t *buf)
+{
+	memset(buf, 0, 16);
+	put16(buf, 2);
+	put16(buf + 2, 2);
+	put16(buf + 4, 2);
+	put16(buf + 6, 0xFE);
+	memcpy(buf + 8, "\1\2\3\4", 4);
+	return (16);
+}
+
+/* Write "text" as the sheet "name" of pack "dir" and try to load it. */
+static int
+try_sheet(const char *dir, const char *text)
+{
+	struct packs *packs = packs_new();
+	struct sprite_bank bank;
+	int rc;
+
+	if (write_text(dir, "sprites/flag.sheet", text) != 0 ||
+	    packs_add_dir(packs, dir) != 0) {
+		packs_free(packs);
+		return (-2);
+	}
+	rc = bank_load(packs, "spr/flag", BANK_RUNS, &bank);
+	bank_free(&bank);
+	packs_free(packs);
+	return (rc);
+}
+
+/*
+ * Sprite sheets: frames cut from a PNG, sized by the pack's art height,
+ * indices from the original bank when there, else from the art.
+ */
+static void
+test_sheets(void)
+{
+	static const char *const low_files[] = { "pack.ini", "boat.cur", NULL };
+	static const char *const high_files[] = { "pack.ini", "boat.sheet",
+	    "atlas.png", "fight.sheet", "sprites/flag.sheet",
+	    "sprites/flag.png", NULL };
+	static const char ini[] = "[pack]\nart_height = 960\n[assets]\n"
+	    "cur/boat = boat.sheet\nspr/flag = sprites/flag.sheet\n"
+	    "grp/fight = fight.sheet\n";
+	static const char flag[] = "[sheet]\nimage = flag.png\n\n[frames]\n"
+	    "# frame = x y w h\n1 = 0 0 2 2\n0 = 0 0 4 2\n";
+	static struct fb fb;
+	char low[] = "/tmp/stmalo-test-XXXXXX";
+	char high[] = "/tmp/stmalo-test-XXXXXX";
+	char path[1024];
+	uint8_t raw[16], *rgb;
+	struct packs *packs;
+	struct sprite_bank bank;
+	struct sprite_group grp;
+	const struct frame *f;
+	const uint8_t *p;
+
+	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	snprintf(path, sizeof(path), "%s/sprites", high);
+	CHECK(mkdir(path, 0755) == 0);
+	CHECK(write_text(low, "pack.ini", "[assets]\ncur/boat = boat.cur\n")
+	    == 0);
+	CHECK(write_bytes(low, "boat.cur", raw, make_raw_bank(raw)) == 0);
+	CHECK(write_text(high, "pack.ini", ini) == 0);
+	CHECK(write_bytes(high, "atlas.png", png_6x4, sizeof(png_6x4)) == 0);
+	CHECK(write_text(high, "boat.sheet", "[sheet]\nimage = atlas.png\n"
+	    "[frames]\n0 = 0 0 4 4\n") == 0);
+	CHECK(write_text(high, "fight.sheet", "[sheet]\nimage = atlas.png\n"
+	    "[frames]\n0.0 = 0 0 2 2\n1.0 = 2 0 2 2\n1.1 = 0 0 4 2\n") == 0);
+	CHECK(write_bytes(high, "sprites/flag.png", png_4x2a,
+	    sizeof(png_4x2a)) == 0);
+	CHECK(write_text(high, "sprites/flag.sheet", flag) == 0);
+
+	/* Over the original: its indices and key, the sheet's colours. */
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, low) == 0);
+	CHECK(packs_add_dir(packs, high) == 0);
+	CHECK(bank_load(packs, "cur/boat", BANK_RAW, &bank) == 0);
+	CHECK(bank.count == 1);
+	if (bank.count == 1) {
+		f = &bank.frames[0];
+		CHECK(f->w == 2 && f->h == 2 && f->key == 0xFE);
+		CHECK(memcmp(f->pixels, "\1\2\3\4", 4) == 0);
+		CHECK(f->rgba != NULL && f->rgba_w == 4 && f->rgba_h == 4);
+	}
+	bank_free(&bank);
+
+	/* Alone, from a subdirectory: alpha gives the mask. */
+	CHECK(bank_load(packs, "spr/flag", BANK_RUNS, &bank) == 0);
+	CHECK(bank.count == 2);
+	if (bank.count == 2) {
+		f = &bank.frames[0];
+		CHECK(f->w == 2 && f->h == 1);
+		CHECK(f->mask != NULL && f->mask[0] == 1 && f->mask[1] == 0);
+		CHECK(f->pixels[0] == 215 && f->pixels[1] == 0);
+		CHECK(bank.frames[1].w == 1 && bank.frames[1].h == 1);
+	}
+
+	/* Drawn at 2x: opaque art copied, half alpha blended, clear kept. */
+	if (bank.count == 2 && fb_init(&fb, 960) == 0 &&
+	    (rgb = malloc((size_t)1280 * 960 * 3)) != NULL) {
+		palette_fixed(fb.pal);
+		fb_clear(&fb, 9);
+		fb_frame(&fb, &bank.frames[0], 1, 1);
+		CHECK(fb.px[FB_W + 1] == 215 && fb.px[FB_W + 2] == 9);
+		fb_to_rgb(&fb, 256, rgb);
+		p = at(rgb, 1280, 2, 2);
+		CHECK(p[0] == 255 && p[1] == 255 && p[2] == 255);
+		p = at(rgb, 1280, 4, 3);
+		CHECK(p[0] == 128 && p[1] == 25 && p[2] == 76);
+		p = at(rgb, 1280, 5, 2);
+		CHECK(p[0] == 0 && p[1] == 51 && p[2] == 153);
+		/* Clipped to 640x480 column 1: canvas columns 2 and 3. */
+		fb_clear(&fb, 9);
+		fb_frame_clip(&fb, &bank.frames[0], 0, 0, 1, 0, 1, 0);
+		fb_to_rgb(&fb, 256, rgb);
+		CHECK(at(rgb, 1280, 1, 0)[1] == 51 && at(rgb, 1280, 2, 0)[1] ==
+		    25 && at(rgb, 1280, 3, 0)[1] == 51);
+		free(rgb);
+	}
+	fb_free(&fb);
+	bank_free(&bank);
+
+	/* Groups: "bank.frame". */
+	CHECK(group_load(packs, "grp/fight", &grp) == 0);
+	CHECK(grp.count == 2 && grp.banks[0].count == 1 &&
+	    grp.banks[1].count == 2);
+	if (grp.count == 2 && grp.banks[1].count == 2)
+		CHECK(grp.banks[1].frames[1].w == 2);
+	group_free(&grp);
+	packs_free(packs);
+
+	/* Gaps, rectangles past the image, bad lines, no image. */
+	CHECK(try_sheet(high, flag) == 0);
+	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
+	    "0 = 0 0 1 1\n2 = 0 0 1 1\n") == -1);
+	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
+	    "0 = 0 0 5 2\n") == -1);
+	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
+	    "0 = 0 0 2\n") == -1);
+	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
+	    "0 = 0 0 0 2\n") == -1);
+	CHECK(try_sheet(high, "[sheet]\nimage = ../flag.png\n[frames]\n"
+	    "0 = 0 0 1 1\n") == -1);
+	CHECK(try_sheet(high, "[frames]\n0 = 0 0 1 1\n") == -1);
+
+	remove_files(low, low_files);
+	snprintf(path, sizeof(path), "%s/sprites", high);
+	remove_files(high, high_files);
+	rmdir(path);
+	rmdir(high);
+}
+
 int
 main(void)
 {
@@ -705,6 +878,7 @@ main(void)
 	test_png();
 	test_pic();
 	test_fb();
+	test_sheets();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

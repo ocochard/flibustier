@@ -87,3 +87,36 @@ Loaded by `pic_load()` (`src/assets/pic.c`):
     in original resolution.
   - The treasure map is composed on indices, so it drops the true
     colours of `pic/wood`.
+
+## Replacement sprites: sprite sheets
+
+Any bank ID (`spr/`, `ui/`, `cur/`, `tiles15/`, `grp/`) may map to a
+`.sheet` file, loaded by `bank_load()` and `group_load()`
+(`src/assets/sheet.c`):
+
+```ini
+# sprites/tavern.sheet
+[sheet]
+image = tavern.png
+
+[frames]
+# frame = x y w h, in art pixels of the image
+0 = 0 0 300 200
+1 = 300 0 120 80
+```
+
+- `image` is relative to the sheet's directory, in the same pack, and
+  may not contain `..`.
+- Frames are numbered from 0 with no gaps, in any order. Fencing groups
+  (`grp/`) number them `bank.frame`, for example `3.0`.
+- A frame covers its art size times `480 / art_height` in 640x480
+  pixels, rounded, so game code places it as the original frame.
+- Frames are drawn on the canvas by their alpha.
+- Palette indices and a mask are derived for code that reads them:
+  - the original frame's, when it is installed with the same size;
+  - otherwise the art reduced to the fixed palette, opaque where alpha is
+    at least half, never index 0 when opaque (raw frames use 0 for
+    transparency).
+- Limits: the title is composed on indices (intro), and so are sprites
+  drawn into the treasure map, so those show at original resolution.
+  Fonts, tiles (`tiles/`) and `img/` have no replacement format yet.
