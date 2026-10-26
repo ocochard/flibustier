@@ -49,7 +49,7 @@ with a message. Numbers are integers only.
 | `set` | `town` (name or index), `field`, `value` | none |
 | `set` | `relation` ([a, b], nation indices), `value` (-1, 0, 1) | none |
 | `set` | `field`: `player_town` (-1 or town index), `value` | none |
-| `set` | `field`: `diplomacy_range`, `value` | none |
+| `set` | `field`: `diplomacy_range`, `value` (0: the era's) | none |
 | `set` | `field`: `encounters`, `value` (0 or 1) | none |
 | `quit` | none | none, then the program exits |
 
@@ -62,7 +62,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 27,
+  "version": 28,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -97,7 +97,7 @@ with a message. Numbers are integers only.
             "foe": {"...": "same fields"}},
   "practice": 0,
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
-  "diplomacy_range": 100,
+  "diplomacy_range": 0,
   "player_town": -1, "visit_town": -1, "visit_flags": 0,
   "wright_gold": -1, "wright_cannon": 0, "merchant_gold": -1,
   "reputation": 0, "tavern_spots": 1023, "recruits": 0,
@@ -181,8 +181,9 @@ with a message. Numbers are integers only.
     for war, peace and alliance; for a capture, `a` is the nation and `b`
     the town.
   - Readable fields are added for convenience: `town`, `nation`, `text`.
-- `diplomacy_range` replaces an original value not traced yet (see the
-  open questions in [game-rules](game-rules.md)).
+- `diplomacy_range`: 0 uses the era's range (see "Diplomacy" in
+  [game-rules](game-rules.md)); another value overrides it, for tests.
+  States before version 28 stored 100 for it, read back as 0.
 
 ## Saved games
 

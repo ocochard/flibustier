@@ -75,8 +75,10 @@ Each town, independently, grows with probability 1/4. When it does:
 
 ### Diplomacy (VA `0xc938`)
 
-1. Draw `r = rand(range)`, where `range` is a game variable not traced
-   yet. Nothing happens unless `r < 28`.
+1. Draw `r = rand(range)`, `range` the era block's byte `0xF8` (VA
+   `0x4707e`, copied with the block by VA `0x1361c`): 175 in 1560 and
+   1600, 140 in 1620, 120 in 1640, 105 in 1660, 145 in 1680. Nothing
+   happens unless `r < 28`.
 2. Nations `a = r & 3` and `b = (r >> 2) & 3`. Nothing happens when they
    are the same.
 3. The step is +1 when bit 4 of `r` is set, -1 otherwise.
@@ -1552,8 +1554,9 @@ same town only bits 1 and 2 are kept.
 
 - **Refusals, before anything else:**
   - "We do not trade with pirates!" (CSTR 256) in a Spanish town when
-    `rank with Spain x 25 + high byte of the diplomacy range` (VA
-    `0x45e7f`, `0x4707f`) is below the town's wealth (word 8). The same
+    `rank with Spain x 25 + the era's tolerance` (VA `0x45e7f`, and
+    `0x4707f`, the era block's byte `0xF9`: 150 in 1560 and 1600, 135,
+    110, 115, 145) is below the town's wealth (word 8). The same
     test guards the merchant (VA `0x21424`).
   - "You have nothing of worth" (CSTR 278) when the arrival mode (VA
     `0x47aca`) is 3, probably a party on foot.
@@ -2075,8 +2078,6 @@ retiring), or in prison (a famous expedition, or health 3). The cabin's
 
 ## Open questions
 
-- The diplomacy `range` variable (VA `0x4707e`). It is probably set
-  from the difficulty level.
 - Treasure fleet targeting and movement (VA `0xcba7`, `0xcde9`).
 - What the world update's housekeeping does.
 - When the player counts as being in a town, for the exclusions above.

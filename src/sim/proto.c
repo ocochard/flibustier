@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	27
+#define STATE_VERSION	28
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -1021,6 +1021,10 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.month = (int)json_get_int(j, "month", -1);
 	tmp.day = (int32_t)json_get_int(j, "day", -1);
 	tmp.diplomacy_range = (int)json_get_int(j, "diplomacy_range", 0);
+	/* Before version 28 the untraced range was stored as 100: now the
+	 * era's. */
+	if (version < 28 && tmp.diplomacy_range == SIM_DIPLOMACY_RANGE)
+		tmp.diplomacy_range = 0;
 	tmp.player_town = (int)json_get_int(j, "player_town", -2);
 	tmp.visit_town = (int)json_get_int(j, "visit_town", -1);
 	tmp.visit_flags = (int)json_get_int(j, "visit_flags", 0);
@@ -1236,7 +1240,7 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		    "gold_at_open", 0);
 	}
 	if (tmp.day < 0 || tmp.day_of_year < 0 || tmp.day_of_year >= 360 ||
-	    tmp.month < 0 || tmp.month > 12 || tmp.diplomacy_range <= 0) {
+	    tmp.month < 0 || tmp.month > 12 || tmp.diplomacy_range < 0) {
 		snprintf(err, errlen, "bad calendar or diplomacy_range");
 		return (-1);
 	}
@@ -1528,8 +1532,8 @@ cmd_set(struct session *ss, const struct json *cmd, struct jbuf *out)
 	} else if (field != NULL && strcmp(field, "encounters") == 0) {
 		s->encounters = v != 0;
 	} else if (field != NULL && strcmp(field, "diplomacy_range") == 0) {
-		if (v < 1 || v > 0xFFFF) {
-			reply_error(out, "diplomacy_range is 1..65535");
+		if (v < 0 || v > 0xFFFF) {
+			reply_error(out, "diplomacy_range is 0..65535");
 			return;
 		}
 		s->diplomacy_range = (int)v;

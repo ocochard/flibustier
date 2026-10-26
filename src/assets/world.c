@@ -24,6 +24,7 @@ const char *const battle_set_names[BATTLE_SETS] = {
 #define ERA_BLOCK_LEN	0x200
 #define ENCOUNTER_OFF	0x100	/* in the era block */
 #define BATTLE_AI_OFF	0x80
+#define ERA_RANGES_OFF	0xF8	/* diplomacy range, shipwright tolerance */
 
 int
 world_terrain(const struct world *w, int x, int y)
@@ -447,6 +448,11 @@ world_load(struct world *w, struct packs *packs,
 	    sizeof(w->battle_ai))) == NULL)
 		goto bad;
 	memcpy(w->battle_ai, p, sizeof(w->battle_ai));
+	if ((p = exe_at(layout, exe, len, layout->era_block_va +
+	    (uint32_t)block * ERA_BLOCK_LEN + ERA_RANGES_OFF, 2)) == NULL)
+		goto bad;
+	w->diplomacy_range = p[0];
+	w->wright_tolerance = p[1];
 	if (read_words(layout, exe, len, layout->half_w_va, w->half_w,
 	    BATTLE_TYPES) != 0 || read_words(layout, exe, len,
 	    layout->half_h_va, w->half_h, BATTLE_TYPES) != 0 ||

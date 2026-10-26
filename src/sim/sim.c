@@ -192,7 +192,6 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	rng_seed(&s->rng, seed, 0x5354414c4f554fULL);
 	s->era_year = era->year;
 	s->year = era->year;
-	s->diplomacy_range = SIM_DIPLOMACY_RANGE;
 	s->villain_duel = -1;
 	s->ransom_slot = -1;
 	s->player_town = SIM_NO_TOWN;
@@ -344,7 +343,10 @@ diplomacy(struct sim *s)
 {
 	int r, a, b, step, rel;
 
-	r = rng_below(&s->rng, s->diplomacy_range);
+	/* The era's range (VA 0x4707e), unless overridden. */
+	r = rng_below(&s->rng, s->diplomacy_range > 0 ? s->diplomacy_range :
+	    s->world != NULL && s->world->diplomacy_range > 0 ?
+	    s->world->diplomacy_range : SIM_DIPLOMACY_RANGE);
 	if (r >= DIPLOMACY_EVENTS)
 		return;
 	a = r & 3;

@@ -496,7 +496,7 @@ struct sim {
 	struct sim_news	news[SIM_NEWS_MAX];
 };
 
-/* Placeholder until the original's value is traced. */
+/* The diplomacy range without a world (the era's otherwise). */
 #define SIM_DIPLOMACY_RANGE	100
 
 /* A town field an older state lacks, until sim_restore_towns. */

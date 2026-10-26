@@ -120,6 +120,11 @@ struct world {
 	/* The treasure galleon met off the treasure fleet's town (the
 	 * record after them, VA 0x47112). */
 	uint8_t		treasure_ship[ENCOUNTER_LEN];
+	/* Era block bytes 0xF8, 0xF9 (VA 0x4707e, 0x4707f): a diplomatic
+	 * event comes when rand(range) < 28; a Spanish shipwright serves
+	 * up to "rank x 25 + tolerance" in town wealth. */
+	uint8_t		diplomacy_range;
+	uint8_t		wright_tolerance;
 	/* Sea battles: the enemy's decision per strength comparison, and
 	 * hit boxes (half sizes per ship type; widening per difficulty). */
 	uint8_t		battle_ai[BATTLE_AI_CASES];

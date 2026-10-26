@@ -35,11 +35,11 @@ sim_shipwright_refuses(const struct sim *s)
 	if (s->player_town < 0 || (size_t)s->player_town >= s->ntowns)
 		return (1);
 	t = &s->towns[s->player_town];
-	/* Spanish towns, unless the Spanish rank and the high byte of
-	 * the diplomacy range reach the town's wealth. */
+	/* Spanish towns, unless the Spanish rank and the era's tolerance
+	 * reach the town's wealth (VA 0x21918). */
 	return (t->nation == NATION_SPAIN &&
-	    s->rank[NATION_SPAIN] * 25 + ((s->diplomacy_range >> 8) & 0xFF) <
-	    t->wealth);
+	    s->rank[NATION_SPAIN] * 25 + (s->world != NULL ?
+	    s->world->wright_tolerance : 0) < t->wealth);
 }
 
 /* The shipwright's gold, set once per stay: seasonal, by wealth and
