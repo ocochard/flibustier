@@ -652,11 +652,27 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   assault follows. Lost: "Your men are scattered and exhausted. The
   attack on %s has failed." (CSTR 191, log 23), then prison for a lone
   captain.
-- **Not done:** the original also checks, after losses, that the crew
-  can still sail the fleet (VA `0x1f65f`).
+- **Then** the crew check (see "Manning the fleet").
 - **The cabin:** Save game only in town, Search only on foot outside a
   town (the spots' flags are set from the arrival mode, VA `0xa060`).
   Dividing and joining parties are not done yet.
+
+### Manning the fleet (VA `0x1f65f`)
+
+Run at each start of sailing (VA `0x28789`), after leaving a town (VA
+`0x17efb`) and after a lost land battle:
+- While the crew is below 8 men a ship: with several ships, "Your crew
+  is too small to man your ships! Which will you abandon?" (CSTR 112),
+  chosen on the fleet panel; the ship is left with her cargo kept (VA
+  `0x1f2a1` with keep). With one: on `plunder.pcx` at (100, 40) up to x
+  620, "You do not have enough crewmen to man your last ship, so
+  regretfully you abandon it." (CSTR 127), then the last ship's loss:
+  marooned, or imprisoned in the town when reached by sea.
+- Then, while the hold overflows (`capacity x 10 - guns / 2 - food -
+  goods - sugar < 0`), the trade board in its overboard mode (VA
+  `0x2264f` mode 1) with "You have more cargo than will fit in your
+  hold! You must throw some overboard!" (CSTR 113): goods sold for
+  nothing, nothing to take, no leaving until it fits.
 
 ### Leaving a town (VA `0x19b9e`)
 

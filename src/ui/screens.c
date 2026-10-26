@@ -75,6 +75,7 @@
 #define S_STRUCK		170
 #define S_YOU_ESCAPED		197
 #define S_COMMAND		286
+#define S_TOO_FEW		112	/* "Your crew is too small..." */
 #define W_THE_SHIP		77	/* 4: "the ship" */
 #define W_PLUNDERED		10	/* 6: " gold pieces plundered!" */
 #define PLUNDERED_WORD		6
@@ -2634,6 +2635,23 @@ ship_sprite(const struct sim_fleet *f)
 static void
 sail_enter(struct game *g)
 {
+	/* Can the crew sail the fleet (VA 0x1f65f, at each start)? */
+	switch (sim_crew_check(&g->sim)) {
+	case CHECK_ABANDON:
+		g->panel_abandon = 1;
+		game_goto(g, &screen_fleet_panel);
+		return;
+	case CHECK_LAST:
+		game_goto(g, &screen_lastship);
+		return;
+	case CHECK_HOLD:
+		g->looting = 1;
+		g->jettison = 1;
+		game_goto(g, &screen_merchant);
+		return;
+	default:
+		break;
+	}
 	image_free(&g->bg);
 	game_portrait(g, NULL);
 	memcpy(g->fb.pal, g->world->palette, sizeof(g->fb.pal));
@@ -4601,8 +4619,9 @@ merchant_enter(struct game *g)
 	int lang = strcmp(g->lang, "fre") == 0 ? 1 :
 	    strcmp(g->lang, "ger") == 0 ? 2 : 0, i;
 
-	game_background(g, g->looting ? (g->sim.towns[g->assault_town].flags &
-	    TOWN_INLAND ? "pic/arr_land" : "pic/arr_sea") : "pic/merchant");
+	game_background(g, g->jettison ? "pic/plunder" : g->looting ?
+	    (g->sim.towns[g->assault_town].flags & TOWN_INLAND ?
+	    "pic/arr_land" : "pic/arr_sea") : "pic/merchant");
 	game_portrait(g, NULL);
 	g->ink[0] = 240;
 	g->ink[1] = 220;
@@ -4611,7 +4630,15 @@ merchant_enter(struct game *g)
 		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
 	g->selected = 0;
 	g->shop_buying = 1;
-	if (g->looting) {	/* the loot, for nothing (VA 0x2264f) */
+	if (g->jettison) {
+		/* "You have more cargo than will fit in your hold! You
+		 * must throw some overboard!" (CSTR 113, VA 0x1f65f), then
+		 * the board, nothing to take. */
+		static const int none[3] = { 0, 0, 0 };
+
+		sim_plunder_open(&g->sim, none);
+		g->shop_stage = 3;
+	} else if (g->looting) {	/* the loot, for nothing (VA 0x2264f) */
 		sim_plunder_open(&g->sim, g->sack.goods);
 		g->shop_stage = 1;
 	} else if (sim_merchant_refuses(&g->sim))
@@ -4625,11 +4652,17 @@ merchant_enter(struct game *g)
 static void
 merchant_leave(struct game *g)
 {
+	if (g->jettison && sim_hold_space(&g->sim) < 0)
+		return;			/* not until the cargo fits */
 	if (g->looting) {
+		int thrown = g->jettison;
+
 		g->looting = 0;
+		g->jettison = 0;
 		sim_plunder_close(&g->sim);
-		/* The townsfolk's news of villains (VA 0x18b3f). */
-		if (!vnews_offer(g, 0, g->assault_town, &screen_sail))
+		/* After a sack, the townsfolk's news of villains (VA
+		 * 0x18b3f). */
+		if (thrown || !vnews_offer(g, 0, g->assault_town, &screen_sail))
 			game_goto(g, &screen_sail);
 		return;
 	}
@@ -4739,8 +4772,8 @@ merchant_draw(struct game *g)
 		if (g->bg.pixels != NULL)
 			memcpy(g->ink, g->bg.palette, 3);
 		draw(g, FONT_BODY, 160, 40, 320, game_str(g,
-		    g->shop_stage == 2 ? S_NO_PIRATES :
-		    sim_merchant_greeting(&g->sim)), 0);
+		    g->shop_stage == 3 ? 113 : g->shop_stage == 2 ?
+		    S_NO_PIRATES : sim_merchant_greeting(&g->sim)), 0);
 		memcpy(g->ink, ink, 3);
 		continue_prompt(g);
 		return;
@@ -6818,6 +6851,14 @@ panel_act(struct game *g, int i)
 		for (k = 0; k < PANEL_SHIPS; k++)
 			if (g->panel_marked & (1u << k))
 				break;
+		if (g->panel_abandon) {
+			/* The ship left behind, her cargo kept (VA
+			 * 0x1f65f); the check runs again at sea. */
+			g->panel_abandon = 0;
+			sim_abandon_ship(&g->sim, k);
+			game_goto(g, &screen_sail);
+			return;
+		}
 		sim_battle_command(&g->sim, k);
 		g->btl_chosen = 1;
 		game_goto(g, &screen_battle);
@@ -6884,7 +6925,7 @@ panel_draw(struct game *g)
 	memcpy(g->ink, plain, 3);
 	if (g->panel_view)
 		return;		/* no prompt, a blank button (CSTN 87.0) */
-	word = game_str(g, S_COMMAND);
+	word = game_str(g, g->panel_abandon ? S_TOO_FEW : S_COMMAND);
 	w = text_width(&g->font[FONT_BODY], word);
 	draw(g, FONT_BODY, 5 + (415 - (w < 415 ? w : 415)) / 2, 400, 415,
 	    word, 0);
@@ -8252,4 +8293,40 @@ ending_draw(struct game *g)
 
 const struct screen screen_ending = {
 	"ending", ending_enter, ending_event, NULL, ending_draw,
+};
+
+/*
+ * The last ship abandoned (VA 0x1f65f): on plunder.pcx at (100, 40) up
+ * to x 620, "You do not have enough crewmen to man your last ship, so
+ * regretfully you abandon it." (CSTR 127); then marooned, or imprisoned
+ * in the town.
+ */
+static void
+lastship_enter(struct game *g)
+{
+	game_background(g, "pic/plunder");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+lastship_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		sim_abandon_last(&g->sim);
+		game_goto(g, &screen_prison);
+	}
+}
+
+static void
+lastship_draw(struct game *g)
+{
+	draw(g, FONT_BODY, 100, 40, 520, game_str(g, 127), 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_lastship = {
+	"last ship", lastship_enter, lastship_event, NULL, lastship_draw,
 };

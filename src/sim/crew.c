@@ -96,3 +96,33 @@ sim_career_end(const struct sim *s, struct career_end *out)
 	out->mood = (k < 0 ? 0 : k > 5 ? 5 : k) + 1;
 	out->age = years + 25;
 }
+
+int
+sim_crew_check(const struct sim *s)
+{
+	const struct sim_fleet *f = &s->fleet;
+
+	if (f->nships > 0 && f->crew < f->nships * 8)
+		return (f->nships == 1 ? CHECK_LAST : CHECK_ABANDON);
+	if (sim_hold_space(s) < 0)
+		return (CHECK_HOLD);
+	return (CHECK_OK);
+}
+
+void
+sim_abandon_ship(struct sim *s, int ship)
+{
+	if (s->fleet.nships > 1)
+		sim_drop_ship(s, ship, 1);
+}
+
+void
+sim_abandon_last(struct sim *s)
+{
+	/* In a town reached by sea the fort's path (VA 0x1f2a1 with
+	 * from_fort), elsewhere marooned. */
+	if (s->player_town >= 0 && !s->fleet.ashore)
+		sim_imprison(s, JAIL_FORT, s->player_town);
+	else
+		sim_imprison(s, JAIL_MAROONED, -1);
+}

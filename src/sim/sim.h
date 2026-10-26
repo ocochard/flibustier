@@ -704,6 +704,19 @@ enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
 void	sim_imprison(struct sim *s, int cause, int town);
 
 /*
+ * Can the crew sail the fleet (VA 0x1f65f)?  Each ship needs 8 men:
+ * CHECK_ABANDON asks which ship to leave (CSTR 112), CHECK_LAST loses
+ * the only one (CSTR 127; marooned, or in a town reached by sea,
+ * imprisoned there); then CHECK_HOLD, the hold overflowing, asks to
+ * throw cargo overboard (CSTR 113).  sim_abandon_ship leaves a ship
+ * and keeps its cargo; sim_abandon_last loses the last one.
+ */
+enum crew_check { CHECK_OK, CHECK_ABANDON, CHECK_LAST, CHECK_HOLD };
+int	sim_crew_check(const struct sim *s);
+void	sim_abandon_ship(struct sim *s, int ship);
+void	sim_abandon_last(struct sim *s);
+
+/*
  * The end of a career (VA 0x45d0, 0x5039, 0x4a1a).  The points are
  * fortune / 10 + land x 50 + the ranks' sum x 500 + reputation x 200 +
  * (married + relatives found - injuries) x 1000; the score is

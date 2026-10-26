@@ -283,6 +283,8 @@ Status (2026-10-26): first slice.
 - **The merchant's daughter:** the debt, the wedding, the family.
 - **Villains' moves:** the monthly moves, the trail, the news of them.
 - **Retirement:** the original's score, rating, summary and verdict.
+- **Manning the fleet:** abandoning ships, the last ship, cargo
+  overboard.
 - **Next:** see the open items in game-rules.md.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),

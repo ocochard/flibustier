@@ -1782,6 +1782,21 @@ cmd_crew(struct session *ss, const struct json *cmd, struct jbuf *out)
 	} else if (action != NULL && strcmp(action, "heard") == 0 &&
 	    s->crew_event != CREW_MUTINY)
 		s->crew_event = CREW_NONE;
+	else if (action != NULL && strcmp(action, "check") == 0) {
+		/* Can the crew sail the fleet (VA 0x1f65f)? */
+		static const char *checks[] = { "ok", "abandon", "last",
+		    "hold" };
+
+		jb_raw(out, "{\"ok\":true,\"check\":");
+		jb_str(out, checks[sim_crew_check(s)]);
+		jb_raw(out, "}");
+		return;
+	} else if (action != NULL && strcmp(action, "abandon") == 0 &&
+	    sim_crew_check(s) == CHECK_ABANDON)
+		sim_abandon_ship(s, (int)json_get_int(cmd, "ship", 0));
+	else if (action != NULL && strcmp(action, "abandon_last") == 0 &&
+	    sim_crew_check(s) == CHECK_LAST)
+		sim_abandon_last(s);
 	else if (action != NULL) {
 		reply_error(out, "crew: \"heard\" a warning; \"duel\" then "
 		    "\"end\" a mutiny");

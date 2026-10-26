@@ -1614,6 +1614,44 @@ test_crew(void)
 	g->sim.sword.result = SWORD_WON;
 	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_sail &&
 	    g->sim.reputation == rep - 4 && g->sim.crew_event == CREW_NONE);
+	/* Too few men for two ships: one is left behind, chosen on the
+	 * fleet panel. */
+	g->sim.fleet.nships = 2;
+	g->sim.fleet.ships[1] = 2;
+	g->sim.fleet.damage[1] = 0;
+	g->sim.fleet.capacity += 6;
+	g->sim.fleet.crew = 10;
+	game_goto(g, &screen_sail);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_fleet_panel && g->panel_abandon);
+	CHECK(game_script(g, "click:240,120 click:540,450 wait:40") == 0 &&
+	    g->sim.fleet.nships == 1 && !g->panel_abandon &&
+	    g->screen == &screen_sail);
+	/* An overflowing hold: cargo goes overboard before sailing on. */
+	g->sim.fleet.goods = sim_hold_space(&g->sim) + g->sim.fleet.goods + 5;
+	game_goto(g, &screen_sail);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_merchant && g->jettison &&
+	    g->shop_stage == 3);
+	CHECK(game_script(g, "enter") == 0 && g->shop_stage == 1);
+	CHECK(game_script(g, "click:320,450") == 0 &&
+	    g->screen == &screen_merchant);	/* not until it fits */
+	CHECK(game_script(g, "click:455,175") == 0 && g->selected == 1);
+	CHECK(game_script(g, "click:40,30 click:40,30 click:40,30 "
+	    "click:40,30 click:40,30") == 0 && sim_hold_space(&g->sim) >= 0);
+	CHECK(game_script(g, "click:320,450 wait:40") == 0 &&
+	    g->screen == &screen_sail && !g->jettison);
+	/* Seven men for the last ship: abandoned, marooned. */
+	g->sim.fleet.crew = 7;
+	g->sim.player.expedition = -1;
+	g->sim.start_year = g->sim.year;
+	g->sim.injuries = 0;
+	game_goto(g, &screen_sail);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_lastship);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_prison &&
+	    g->sim.jail.cause == JAIL_MAROONED);
 	game_free(g);
 }
 

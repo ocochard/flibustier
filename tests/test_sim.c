@@ -3107,6 +3107,42 @@ test_career_end(void)
 	CHECK(e.mood == 2);
 }
 
+/* Can the crew sail the fleet? */
+static void
+test_crew_check(void)
+{
+	struct sim s;
+
+	sea_game(&s, 300, 300, 0);
+	s.player.expedition = -1;
+	s.start_year = s.year;
+	s.fleet.nships = 3;
+	s.fleet.ships[0] = 4;
+	s.fleet.ships[1] = 2;
+	s.fleet.ships[2] = 0;
+	s.fleet.capacity = 20;
+	s.fleet.guns = s.fleet.food = s.fleet.goods = s.fleet.sugar = 0;
+	s.fleet.crew = 24;
+	CHECK(sim_crew_check(&s) == CHECK_OK);
+	s.fleet.crew = 23;		/* 8 men a ship */
+	CHECK(sim_crew_check(&s) == CHECK_ABANDON);
+	s.fleet.goods = 50;
+	sim_abandon_ship(&s, 1);	/* her cargo stays aboard */
+	CHECK(s.fleet.nships == 2 && s.fleet.goods == 50 &&
+	    sim_crew_check(&s) == CHECK_OK);
+	/* The hold too small now: throw some overboard. */
+	s.fleet.goods = s.fleet.capacity * 10 + 1;
+	CHECK(sim_crew_check(&s) == CHECK_HOLD);
+	s.fleet.goods = 0;
+	/* Seven men for one ship: it is lost, the captain marooned. */
+	s.fleet.nships = 1;
+	s.fleet.crew = 7;
+	CHECK(sim_crew_check(&s) == CHECK_LAST);
+	s.player_town = -1;
+	sim_abandon_last(&s);
+	CHECK(s.jail.fresh && s.jail.cause == JAIL_MAROONED);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3213,6 +3249,7 @@ main(void)
 	test_merchant_daughter();
 	test_villain_moves();
 	test_career_end();
+	test_crew_check();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);
