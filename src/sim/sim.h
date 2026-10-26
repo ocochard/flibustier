@@ -142,8 +142,74 @@ enum battle_outcome {
 	BAT_SUNSET,		/* the time limit */
 	BAT_SURRENDER,		/* the enemy struck her colours */
 	BAT_PLAYER_SUNK,
-	BAT_ENEMY_SUNK
+	BAT_ENEMY_SUNK,
+	BAT_REPELLED,		/* boarding: the player was driven back */
+	BAT_DEFEATED		/* boarding: the player's men gave up */
 };
+
+/* Sword fights: who fights, and how it ended. */
+enum sword_kind {
+	SWORD_CREW = 0,		/* boarding or storming */
+	SWORD_DUEL = 1,
+	SWORD_PRACTICE = -2
+};
+
+enum sword_result {
+	SWORD_NONE = 0,
+	SWORD_WON = 1,
+	SWORD_REPELLED = 2,	/* the player was driven off his edge */
+	SWORD_LOST = 3
+};
+
+/* Moves (rows of the game's tables). */
+#define SWM_GUARD	0	/* 0-2: guard middle, low, high */
+#define SWM_BACK	3	/* 3-5: the same, stepping back */
+#define SWM_SLASH	6	/* 6-8: slash middle, low, high */
+#define SWM_LUNGE	9	/* 9-11: lunge middle, low, high */
+#define SWM_ADVANCE	12
+#define SWM_RETREAT	13
+#define SWM_FALL	14
+
+struct sword_side {
+	int		x;		/* on the fighting line, pixels */
+	int		move, frame;	/* move -1: none yet */
+	int		men;
+	int		bar;		/* strength bar share */
+	int		weapon;		/* 0 rapier, 1 longsword, 2 cutlass */
+	int		guard;		/* lines the current frame covers */
+	int		wounds[3];	/* hits taken: high, middle, low */
+};
+
+struct sim_sword {
+	int		active;
+	int		kind;		/* enum sword_kind */
+	int		level;		/* 0..4 */
+	int		title, nation;	/* the opponent's, CSTN 74 and 71 */
+	uint32_t	counter;	/* fight ticks, from 1 */
+	int		result;		/* enum sword_result */
+	int		beaten;		/* 1 the opponent, 3 the player */
+	int		input;		/* the player's pending move, 0-11 */
+	int		script, step;	/* the opponent's plan */
+	int		you_hits, foe_hits;	/* since the plan changed */
+	int		men_start;	/* the player's men at the start */
+	struct sword_side you, foe;
+};
+
+/* What a caller sets up for a fight. */
+struct sword_setup {
+	int		kind;		/* enum sword_kind */
+	int		you_men, you_factor;
+	int		foe_men, foe_factor;
+	int		title, nation, extra;
+	int		weapon;		/* the player's choice */
+};
+
+/* Events of one sword fight tick, as bits. */
+#define SEV_HIT_FOE	0x01
+#define SEV_HIT_YOU	0x02
+#define SEV_CLASH	0x04
+#define SEV_FOE_MEN	0x08	/* the opponent's crew lost men */
+#define SEV_YOU_MEN	0x10
 
 /* Events of one battle tick, as bits. */
 #define BEV_FIRED	0x01	/* the player fired */
@@ -210,6 +276,8 @@ struct sim {
 	int		heat_town;	/* nearest town it counts for */
 	struct sim_encounter encounter;
 	struct sim_battle battle;
+	struct sim_sword sword;
+	int		practice;	/* fencing practice, 0..30 */
 	const struct world *world;	/* not saved; NULL: no sailing */
 	int		era_year;	/* era of the towns, 1560..1680 */
 	int		year;		/* calendar year */
@@ -263,10 +331,26 @@ void	sim_battle_start(struct sim *s);
  */
 int	sim_battle_tick(struct sim *s, int turn, int fire, int sails);
 
+/* Start a sword fight; the opponent's weapon and plan are rolled. */
+void	sim_sword_start(struct sim *s, const struct sword_setup *setup);
+
+/*
+ * The player's next move (0-11, SWM_*), kept until a move takes it.
+ * Guards and attacks take it once; steps back repeat until replaced.
+ */
+void	sim_sword_input(struct sim *s, int move);
+
+/* One fight tick.  Returns SEV_* bits; sim.sword.result ends it. */
+int	sim_sword_tick(struct sim *s);
+
+/* Board the enemy after BAT_BOARDING, with the player's weapon. */
+void	sim_board(struct sim *s, int weapon);
+
 /*
  * Apply a finished battle to the fleet and close it.  "keep" decides
- * whether a surrendered ship joins the fleet.  Boarding is decided by
- * crews until sword fights exist.  Returns the outcome.
+ * whether a surrendered ship joins the fleet.  A boarding needs its sword
+ * fight first (sim_board); until it is over, nothing is applied and
+ * BAT_NONE is returned.  Returns the outcome.
  */
 enum battle_outcome sim_battle_finish(struct sim *s, int keep);
 

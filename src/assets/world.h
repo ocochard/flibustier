@@ -25,6 +25,37 @@
 #define BATTLE_AI_CASES		27
 #define BATTLE_TYPES		10	/* 9 ship types and the fort */
 #define BATTLE_LEVELS		5
+#define SWORD_MOVES		16
+#define SWORD_FRAMES		6	/* table stride per move */
+#define SWORD_WEAPONS		3	/* rapier, longsword, cutlass */
+#define SWORD_FLAGS		6
+#define SWORD_SCRIPTS		8
+#define SWORD_STEPS		8
+#define SWORD_BANKS		3
+
+/* Sword fight tables (see "Sword fights" in game-rules.md). */
+struct sword_tables {
+	int16_t		flag_y[SWORD_FLAGS];	/* flag height by bar / 8 */
+	int16_t		frames[SWORD_MOVES];	/* frames per move */
+	uint8_t		reach_level[BATTLE_LEVELS];
+	uint8_t		reach_weapon[SWORD_WEAPONS];
+	uint8_t		foe_reach[SWORD_WEAPONS];
+	int16_t		delay[4];		/* timer units per tick */
+	int16_t		player_edge, foe_edge;
+	uint8_t		hit[BATTLE_LEVELS];	/* hit thresholds */
+	uint8_t		foe_hit[BATTLE_LEVELS];
+	uint8_t		far_move[12];		/* input remap at a distance */
+	uint8_t		once[SWORD_MOVES];	/* input taken once */
+	uint8_t		guard[SWORD_MOVES * SWORD_FRAMES];
+	uint8_t		strike[SWORD_MOVES * SWORD_FRAMES];
+	uint8_t		step_in[SWORD_MOVES * SWORD_FRAMES];
+	uint8_t		step_back[SWORD_MOVES * SWORD_FRAMES];
+	uint8_t		far_ai[8];		/* the opponent's far moves */
+	uint8_t		caution[BATTLE_LEVELS];
+	uint8_t		area[SWORD_MOVES];	/* body area a strike hits */
+	uint8_t		scripts[SWORD_BANKS][SWORD_SCRIPTS][SWORD_STEPS];
+	uint8_t		line[SWORD_MOVES];	/* the line of a move */
+};
 
 /* Terrain classes of map pixel colours. */
 enum terrain {
@@ -56,6 +87,7 @@ struct world {
 	int16_t		half_w[BATTLE_TYPES];
 	int16_t		half_h[BATTLE_TYPES];
 	int16_t		hit_steps[BATTLE_LEVELS];
+	struct sword_tables sword;
 };
 
 /* Returns 0, or -1 with a message in "err". */

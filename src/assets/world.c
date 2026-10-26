@@ -97,6 +97,70 @@ read_words(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	return (0);
 }
 
+static int
+read_bytes(const struct exe_layout *layout, const uint8_t *exe, size_t len,
+    uint32_t va, uint8_t *out, size_t n)
+{
+	const uint8_t *p;
+
+	if ((p = exe_at(layout, exe, len, va, n)) == NULL)
+		return (-1);
+	memcpy(out, p, n);
+	return (0);
+}
+
+/* The sword fight tables: offsets in the block at sword_va. */
+static int
+sword_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
+    struct sword_tables *t)
+{
+	const uint32_t b = layout->sword_va;
+	int16_t edges[2];
+
+	if (read_words(layout, exe, len, layout->sword_moves_va, t->flag_y,
+	    SWORD_FLAGS) != 0 ||
+	    read_words(layout, exe, len, layout->sword_moves_va + 0x0c,
+	    t->frames, SWORD_MOVES) != 0 ||
+	    read_bytes(layout, exe, len, b, t->reach_level,
+	    sizeof(t->reach_level)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x05, t->reach_weapon,
+	    sizeof(t->reach_weapon)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x09, t->foe_reach,
+	    sizeof(t->foe_reach)) != 0 ||
+	    read_words(layout, exe, len, b + 0x0c, t->delay, 4) != 0 ||
+	    read_words(layout, exe, len, b + 0x24, edges, 2) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x2c, t->hit,
+	    sizeof(t->hit)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x31, t->foe_hit,
+	    sizeof(t->foe_hit)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x42, t->far_move,
+	    sizeof(t->far_move)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x52, t->once,
+	    sizeof(t->once)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x62, t->guard,
+	    sizeof(t->guard)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0xc2, t->strike,
+	    sizeof(t->strike)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x122, t->step_in,
+	    sizeof(t->step_in)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x182, t->step_back,
+	    sizeof(t->step_back)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x2a2, t->far_ai,
+	    sizeof(t->far_ai)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x2ba, t->caution,
+	    sizeof(t->caution)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x2bf, t->area,
+	    sizeof(t->area)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x2cf, &t->scripts[0][0][0],
+	    sizeof(t->scripts)) != 0 ||
+	    read_bytes(layout, exe, len, b + 0x38f, t->line,
+	    sizeof(t->line)) != 0)
+		return (-1);
+	t->player_edge = edges[0];
+	t->foe_edge = edges[1];
+	return (0);
+}
+
 int
 world_load(struct world *w, struct packs *packs,
     const struct exe_layout *layout, const uint8_t *exe, size_t len,
@@ -141,7 +205,7 @@ world_load(struct world *w, struct packs *packs,
 	    BATTLE_TYPES) != 0 || read_words(layout, exe, len,
 	    layout->half_h_va, w->half_h, BATTLE_TYPES) != 0 ||
 	    read_words(layout, exe, len, layout->hit_steps_va, w->hit_steps,
-	    BATTLE_LEVELS) != 0)
+	    BATTLE_LEVELS) != 0 || sword_load(layout, exe, len, &w->sword) != 0)
 		goto bad;
 	return (0);
 bad:

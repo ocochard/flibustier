@@ -346,6 +346,87 @@ test_battle_screen(void)
 	game_free(g);
 }
 
+/* Press up to three keys in order, release them; the pending move. */
+static int
+sword_keys(struct game *g, int k1, int k2, int k3)
+{
+	const int keys[3] = { k1, k2, k3 };
+	struct ui_event ev;
+	int i, got;
+
+	memset(&ev, 0, sizeof(ev));
+	g->sim.sword.input = -1;
+	for (i = 0; i < 3 && keys[i] != 0; i++) {
+		ev.type = EV_KEY;
+		ev.key = keys[i];
+		game_event(g, &ev);
+	}
+	got = g->sim.sword.input;
+	for (i = 0; i < 3 && keys[i] != 0; i++) {
+		ev.type = EV_KEYUP;
+		ev.key = keys[i];
+		game_event(g, &ev);
+	}
+	CHECK(g->sw_held == 0);
+	return (got);
+}
+
+/* Boarding: the picture, the weapon, the keys, the fight to its end. */
+static void
+test_sword_screen(void)
+{
+	struct game *g;
+	int i;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Lo enter enter enter enter enter hold:right:16");
+	if (g == NULL)
+		return;
+	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
+		CHECK(game_script(g, "wait:32") == 0);
+	CHECK(game_script(g, "enter enter") == 0);
+	if (g->sim.encounter.stage == ENC_COLOURS)
+		CHECK(game_script(g, "enter") == 0);
+	CHECK(g->screen == &screen_battle);
+	/* Bring the ships together: boarding. */
+	g->sim.battle.foe.x = g->sim.battle.you.x;
+	g->sim.battle.foe.y = g->sim.battle.you.y;
+	CHECK(game_script(g, "wait:30") == 0);
+	CHECK(g->screen == &screen_sword && g->sw_stage == 0);
+	CHECK(game_script(g, "enter") == 0);
+	CHECK(g->sw_stage == 1 && g->selected == 2);	/* cutlass first */
+	CHECK(game_script(g, "up up enter") == 0);	/* the rapier */
+	CHECK(g->sw_stage == 2 && g->sim.sword.active &&
+	    g->sim.sword.you.weapon == 0);
+	CHECK(g->sw_parts[0][0].count == 16 && g->sw_parts[1][1].count == 16);
+	/* Keys: toward the opponent lunges, with Shift slashes; up and
+	 * down pick the line; away steps back. */
+	CHECK(sword_keys(g, UI_KEY_LEFT, 0, 0) == SWM_LUNGE);
+	CHECK(sword_keys(g, UI_KEY_UP, UI_KEY_LEFT, 0) == SWM_LUNGE + 2);
+	CHECK(sword_keys(g, UI_KEY_SHIFT, UI_KEY_LEFT, 0) == SWM_SLASH);
+	CHECK(sword_keys(g, UI_KEY_SHIFT, UI_KEY_DOWN, UI_KEY_LEFT) ==
+	    SWM_SLASH + 1);
+	CHECK(sword_keys(g, UI_KEY_RIGHT, 0, 0) == SWM_BACK);
+	CHECK(sword_keys(g, UI_KEY_UP, 0, 0) == SWM_GUARD + 2);
+	/* Fight until it is decided. */
+	for (i = 0; i < 600 && g->sim.sword.result == SWORD_NONE; i++)
+		CHECK(game_script(g, i % 2 ? "up left wait:10" :
+		    "down left wait:10") == 0);
+	CHECK(g->sim.sword.result != SWORD_NONE);
+	CHECK(game_script(g, "wait:30") == 0);
+	if (g->sim.sword.result == SWORD_WON) {
+		CHECK(g->screen == &screen_battle && g->btl_stage == 2);
+		CHECK(game_script(g, "enter wait:30") == 0);	/* keep her */
+		CHECK(g->sim.fleet.nships == 2);
+	} else {
+		CHECK(g->screen == &screen_sword && g->sw_stage == 3);
+		CHECK(game_script(g, "enter wait:30") == 0);
+	}
+	CHECK(g->screen == &screen_sail && !g->sim.battle.active &&
+	    !g->sim.sword.active);
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -368,6 +449,7 @@ main(void)
 	test_sailing();
 	test_encounter_screens();
 	test_battle_screen();
+	test_sword_screen();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

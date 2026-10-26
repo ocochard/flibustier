@@ -37,7 +37,8 @@ enum ui_key {
 	UI_KEY_RIGHT,
 	UI_KEY_ENTER,
 	UI_KEY_ESCAPE,
-	UI_KEY_BACKSPACE
+	UI_KEY_BACKSPACE,
+	UI_KEY_SHIFT		/* either shift key */
 };
 
 enum ui_event_type {
@@ -112,6 +113,14 @@ struct game {
 	int			 btl_fire, btl_sails;	/* pending inputs */
 	int			 btl_stage;	/* 0 fight, 1 outcome, 2 prize */
 	int			 btl_final;	/* outcome after sim_battle_finish */
+	struct sprite_group	 sw_parts[2][6];	/* [you, foe] fighter layers */
+	struct sprite_bank	 sw_misc;	/* flags */
+	struct image		 sw_weapons;	/* weapon choice picture */
+	int			 sw_stage;	/* 0 intro, 1 weapon, 2 fight,
+						 * 3 outcome */
+	int			 sw_held;	/* arrow and shift keys held */
+	int			 sw_flag_y[2];	/* drawn flag heights */
+	int			 sw_wait;	/* game ticks to the next fight tick */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

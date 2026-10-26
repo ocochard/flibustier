@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	5
+#define STATE_VERSION	6
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -136,7 +136,134 @@ news_json(const struct sim *s, const struct sim_news *n, struct jbuf *b)
 static const char *stage_names[] = { "none", "sighted", "identified",
     "colours" };
 static const char *outcome_names[] = { "none", "boarding", "escaped",
-    "sunset", "surrender", "player_sunk", "enemy_sunk" };
+    "sunset", "surrender", "player_sunk", "enemy_sunk", "repelled",
+    "defeated" };
+#define NOUTCOMES	(sizeof(outcome_names) / sizeof(outcome_names[0]))
+static const char *sword_results[] = { "none", "won", "repelled", "lost" };
+
+static void
+sword_side_json(const struct sword_side *f, struct jbuf *out)
+{
+	jb_raw(out, "{\"x\":");
+	jb_int(out, f->x);
+	jb_raw(out, ",\"move\":");
+	jb_int(out, f->move);
+	jb_raw(out, ",\"frame\":");
+	jb_int(out, f->frame);
+	jb_raw(out, ",\"men\":");
+	jb_int(out, f->men);
+	jb_raw(out, ",\"bar\":");
+	jb_int(out, f->bar);
+	jb_raw(out, ",\"weapon\":");
+	jb_int(out, f->weapon);
+	jb_raw(out, ",\"guard\":");
+	jb_int(out, f->guard);
+	jb_raw(out, ",\"wounds\":[");
+	jb_int(out, f->wounds[0]);
+	jb_raw(out, ",");
+	jb_int(out, f->wounds[1]);
+	jb_raw(out, ",");
+	jb_int(out, f->wounds[2]);
+	jb_raw(out, "]}");
+}
+
+static int
+sword_side_from_json(struct sword_side *f, const struct json *j)
+{
+	const struct json *w = json_get(j, "wounds");
+	size_t i;
+
+	memset(f, 0, sizeof(*f));
+	if (j == NULL || w == NULL || w->type != JSON_ARRAY || w->count != 3)
+		return (-1);
+	f->x = (int)json_get_int(j, "x", 0);
+	f->move = (int)json_get_int(j, "move", 0);
+	f->frame = (int)json_get_int(j, "frame", 0);
+	f->men = (int)json_get_int(j, "men", 0);
+	f->bar = (int)json_get_int(j, "bar", 0);
+	f->weapon = (int)json_get_int(j, "weapon", 0);
+	f->guard = (int)json_get_int(j, "guard", 0);
+	for (i = 0; i < 3; i++) {
+		if (w->items[i]->type != JSON_INT)
+			return (-1);
+		f->wounds[i] = (int)w->items[i]->num;
+	}
+	return (f->move < -1 || f->move >= SWORD_MOVES || f->frame < 0 ||
+	    f->frame > 15 || f->weapon < 0 || f->weapon >= SWORD_WEAPONS ?
+	    -1 : 0);
+}
+
+static void
+sword_json(const struct sim_sword *sw, struct jbuf *out)
+{
+	jb_raw(out, "{\"active\":");
+	jb_int(out, sw->active);
+	jb_raw(out, ",\"kind\":");
+	jb_int(out, sw->kind);
+	jb_raw(out, ",\"level\":");
+	jb_int(out, sw->level);
+	jb_raw(out, ",\"title\":");
+	jb_int(out, sw->title);
+	jb_raw(out, ",\"nation\":");
+	jb_int(out, sw->nation);
+	jb_raw(out, ",\"counter\":");
+	jb_int(out, sw->counter);
+	jb_raw(out, ",\"result\":");
+	jb_str(out, sword_results[sw->result & 3]);
+	jb_raw(out, ",\"beaten\":");
+	jb_int(out, sw->beaten);
+	jb_raw(out, ",\"input\":");
+	jb_int(out, sw->input);
+	jb_raw(out, ",\"script\":");
+	jb_int(out, sw->script);
+	jb_raw(out, ",\"step\":");
+	jb_int(out, sw->step);
+	jb_raw(out, ",\"you_hits\":");
+	jb_int(out, sw->you_hits);
+	jb_raw(out, ",\"foe_hits\":");
+	jb_int(out, sw->foe_hits);
+	jb_raw(out, ",\"men_start\":");
+	jb_int(out, sw->men_start);
+	jb_raw(out, ",\"you\":");
+	sword_side_json(&sw->you, out);
+	jb_raw(out, ",\"foe\":");
+	sword_side_json(&sw->foe, out);
+	jb_raw(out, "}");
+}
+
+static int
+sword_from_json(struct sim_sword *sw, const struct json *j)
+{
+	const char *r = json_get_str(j, "result");
+	int i;
+
+	memset(sw, 0, sizeof(*sw));
+	if (j == NULL || r == NULL)
+		return (-1);
+	sw->active = json_get_int(j, "active", 0) != 0;
+	sw->kind = (int)json_get_int(j, "kind", 0);
+	sw->level = (int)json_get_int(j, "level", 0);
+	sw->title = (int)json_get_int(j, "title", 0);
+	sw->nation = (int)json_get_int(j, "nation", 0);
+	sw->counter = (uint32_t)json_get_int(j, "counter", 0);
+	for (i = 0; i < 4; i++)
+		if (strcmp(r, sword_results[i]) == 0)
+			sw->result = i;
+	sw->beaten = (int)json_get_int(j, "beaten", 0);
+	sw->input = (int)json_get_int(j, "input", 0);
+	sw->script = (int)json_get_int(j, "script", 0);
+	sw->step = (int)json_get_int(j, "step", 0);
+	sw->you_hits = (int)json_get_int(j, "you_hits", 0);
+	sw->foe_hits = (int)json_get_int(j, "foe_hits", 0);
+	sw->men_start = (int)json_get_int(j, "men_start", 0);
+	if (sword_side_from_json(&sw->you, json_get(j, "you")) != 0 ||
+	    sword_side_from_json(&sw->foe, json_get(j, "foe")) != 0)
+		return (-1);
+	return (sw->level < 0 || sw->level >= BATTLE_LEVELS ||
+	    sw->input < 0 || sw->input >= SWM_ADVANCE || sw->script < 0 ||
+	    sw->script >= SWORD_SCRIPTS || sw->step < 0 ||
+	    sw->step >= SWORD_STEPS ? -1 : 0);
+}
 
 /* Battle fields, by name, as offsets in struct battle_ship. */
 #define BFIELD(f)	{ #f, offsetof(struct battle_ship, f) }
@@ -221,7 +348,7 @@ battle_json(const struct sim_battle *bt, struct jbuf *out)
 	jb_raw(out, ",\"decision\":");
 	jb_int(out, bt->decision);
 	jb_raw(out, ",\"outcome\":");
-	jb_str(out, outcome_names[bt->outcome % 7]);
+	jb_str(out, outcome_names[(size_t)bt->outcome % NOUTCOMES]);
 	jb_raw(out, ",\"crew_ashore\":");
 	jb_int(out, bt->crew_ashore);
 	jb_raw(out, ",\"guns_ashore\":");
@@ -247,7 +374,7 @@ battle_from_json(struct sim_battle *bt, const struct json *j)
 	bt->wind = (uint8_t)json_get_int(j, "wind", 0);
 	bt->wind_strength = (int)json_get_int(j, "wind_strength", 0);
 	bt->decision = (int)json_get_int(j, "decision", 0);
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < (int)NOUTCOMES; i++)
 		if (strcmp(o, outcome_names[i]) == 0)
 			bt->outcome = i;
 	bt->crew_ashore = (int)json_get_int(j, "crew_ashore", 0);
@@ -381,6 +508,10 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	encounter_json(&s->encounter, b);
 	jb_raw(b, ",\"battle\":");
 	battle_json(&s->battle, b);
+	jb_raw(b, ",\"sword\":");
+	sword_json(&s->sword, b);
+	jb_raw(b, ",\"practice\":");
+	jb_int(b, s->practice);
 	jb_raw(b, ",\"era\":");
 	jb_int(b, s->era_year);
 	jb_raw(b, ",\"year\":");
@@ -592,6 +723,11 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		snprintf(err, errlen, "bad battle");
 		return (-1);
 	}
+	if (sword_from_json(&tmp.sword, json_get(j, "sword")) != 0) {
+		snprintf(err, errlen, "bad sword fight");
+		return (-1);
+	}
+	tmp.practice = (int)json_get_int(j, "practice", 0);
 	tmp.era_year = (int)json_get_int(j, "era", 0);
 	tmp.year = (int)json_get_int(j, "year", 0);
 	tmp.day_of_year = (int)json_get_int(j, "day_of_year", -1);
@@ -1018,6 +1154,11 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 		reply_error(out, "no finished battle");
 		return;
 	}
+	if (ss->sim.battle.outcome == BAT_BOARDING &&
+	    ss->sim.sword.result == SWORD_NONE) {
+		reply_error(out, "board and fight first");
+		return;
+	}
 	o = sim_battle_finish(&ss->sim, json_get_int(cmd, "keep", 0) != 0);
 	jb_raw(out, "{\"ok\":true,\"outcome\":");
 	jb_str(out, outcome_names[o]);
@@ -1027,6 +1168,55 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, ss->sim.fleet.crew);
 	jb_raw(out, ",\"gold\":");
 	jb_int(out, ss->sim.fleet.gold);
+	jb_raw(out, "}");
+}
+
+static void
+cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	int64_t weapon = json_get_int(cmd, "weapon", 2);
+
+	if (!ss->sim.battle.active || ss->sim.battle.outcome != BAT_BOARDING ||
+	    ss->sim.sword.active) {
+		reply_error(out, "no boarding");
+		return;
+	}
+	if (weapon < 0 || weapon >= SWORD_WEAPONS) {
+		reply_error(out, "board needs \"weapon\" (0 rapier, "
+		    "1 longsword, 2 cutlass)");
+		return;
+	}
+	sim_board(&ss->sim, (int)weapon);
+	jb_raw(out, "{\"ok\":true,\"sword\":");
+	sword_json(&ss->sim.sword, out);
+	jb_raw(out, "}");
+}
+
+/* Fight up to "ticks" ticks; "input" (0-11), when given, is set first. */
+static void
+cmd_sword(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	int64_t ticks = json_get_int(cmd, "ticks", 1);
+	int64_t input = json_get_int(cmd, "input", -1);
+	int ev = 0, i;
+
+	if (!ss->sim.sword.active || ss->sim.world == NULL) {
+		reply_error(out, "no sword fight");
+		return;
+	}
+	if (ticks < 1 || ticks > 10000 || input < -1 || input >= SWM_ADVANCE) {
+		reply_error(out, "sword needs \"ticks\" (1..10000) and "
+		    "\"input\" (0..11)");
+		return;
+	}
+	if (input >= 0)
+		sim_sword_input(&ss->sim, (int)input);
+	for (i = 0; i < ticks && ss->sim.sword.result == SWORD_NONE; i++)
+		ev |= sim_sword_tick(&ss->sim);
+	jb_raw(out, "{\"ok\":true,\"events\":");
+	jb_int(out, ev);
+	jb_raw(out, ",\"sword\":");
+	sword_json(&ss->sim.sword, out);
 	jb_raw(out, "}");
 }
 
@@ -1077,6 +1267,10 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_battle(ss, cmd, out);
 	else if (strcmp(name, "finish") == 0)
 		cmd_finish(ss, cmd, out);
+	else if (strcmp(name, "board") == 0)
+		cmd_board(ss, cmd, out);
+	else if (strcmp(name, "sword") == 0)
+		cmd_sword(ss, cmd, out);
 	else
 		reply_error(out, "unknown command");
 	json_free(cmd);

@@ -241,10 +241,14 @@ Status (2026-10-26): sea battles done.
 - **Stand-ins:** boarding is decided by crews, and prizes pay a fixed
   sum, until sword fights and cargo exist.
 
-Sword fights traced (2026-10-26): the shared routine for boarding,
-duels and practice, with its moves, reach, hit rolls, strength bar,
-crew melee and the opponent's scripts (see game-rules). Not yet
-implemented.
+Sword fights done (2026-10-26):
+- **Traced:** the shared routine for boarding, duels and practice:
+  moves, reach, hit rolls, the strength bar, the crew melee and the
+  opponent's scripts (see game-rules).
+- **Implemented:** boarding in the simulation (`board` and `sword`
+  commands) and on screen: the boarding picture, the weapon choice, and
+  the fight on the ship's deck with the fighters, flags and wounds.
+- **Not yet:** duels, practice, prison after a lost boarding.
 
 - Sea battle: BATTLE.IMB tiles, the `*BTL.CUR` ships, broadsides, damage.
 - Boarding, leading into sword fighting: GRP composition and the 16 moves.

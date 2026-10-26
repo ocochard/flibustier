@@ -26,6 +26,8 @@ with a message. Numbers are integers only.
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
+| `board` | `weapon` (0 rapier, 1 longsword, 2 cutlass; default 2), after a `boarding` outcome | `sword` |
+| `sword` | `ticks` (1..10000; default 1), `input` (0..11, optional: the move to take next) | `events` (bits, below), `sword` |
 | `set` | `town` (name or index), `field`, `value` | none |
 | `set` | `relation` ([a, b], nation indices), `value` (-1, 0, 1) | none |
 | `set` | `field`: `player_town` (-1 or town index), `value` | none |
@@ -42,7 +44,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 5,
+  "version": 6,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -64,6 +66,15 @@ with a message. Numbers are integers only.
                      "sail_timer": 0, "reload": 0, "turn_rate": 3,
                      "role": 0, "shot": [0, 0, 0, 0]},
              "foe": {"...": "same fields"}},
+  "sword": {"active": 0, "kind": 0, "level": 0, "title": 4,
+            "nation": 1, "counter": 1, "result": "none", "beaten": 0,
+            "input": 0, "script": 3, "step": 0, "you_hits": 0,
+            "foe_hits": 0, "men_start": 40,
+            "you": {"x": 340, "move": -1, "frame": 0, "men": 40,
+                    "bar": 22, "weapon": 2, "guard": 0,
+                    "wounds": [0, 0, 0]},
+            "foe": {"...": "same fields"}},
+  "practice": 0,
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
   "player_town": -1,
@@ -105,8 +116,19 @@ with a message. Numbers are integers only.
     player's sails changed, 64 the wind changed.
   - Positions are in 1/256 pixels on a 480 x 480 field. `shot` is
     `[ticks left, x, y, heading]`; 0 ticks means no shot in flight.
-  - `finish` returns `surrender` for a won boarding and `player_sunk`
-    for a lost one (crews decide until sword fights exist).
+  - A `boarding` outcome needs a sword fight: `board` starts it and
+    `sword` fights it. `finish` then returns `surrender` for a win
+    (the prize may be kept), `repelled` when the player was driven
+    back, or `defeated` when the enemy takes the flagship.
+  - Sword `input` moves: 0-2 guard middle, low, high; 3-5 the same
+    while stepping back; 6-8 slash and 9-11 lunge, middle, low, high.
+    Guards and attacks are taken once; steps back repeat until another
+    input replaces them.
+  - Sword `events` bits: 1 the player hit, 2 the opponent hit, 4 a
+    clash, 8 the opponent's crew lost men, 16 the player's did.
+  - The fight's `result` is `won`, `repelled` or `lost`. `bar` is each
+    side's share of the strength bar (47 in all); `wounds` count hits
+    taken high, middle and low.
   - `fleet.damage` is the hull damage per ship; `fleet.gunnery` is the
     unidentified player value that sets the reload time.
 - `rng` holds the generator's two 64-bit words. Loading a state

@@ -431,14 +431,22 @@ sim_battle_finish(struct sim *s, int keep)
 
 	if (!bt->active)
 		return (BAT_NONE);
-	/* Boarding: crews decide until sword fights exist. */
-	if (o == BAT_BOARDING)
-		o = bt->you.crew >= bt->foe.crew ? BAT_SURRENDER :
-		    BAT_PLAYER_SUNK;
+	/* Boarding: the sword fight decides, and its losses count. */
+	if (o == BAT_BOARDING) {
+		const struct sim_sword *sw = &s->sword;
+
+		if (!sw->active || sw->result == SWORD_NONE)
+			return (BAT_NONE);
+		o = sw->result == SWORD_WON ? BAT_SURRENDER :
+		    sw->result == SWORD_REPELLED ? BAT_REPELLED : BAT_DEFEATED;
+		bt->you.crew = sw->you.men;
+		s->sword.active = 0;
+	}
 	f->crew = bt->you.crew + bt->crew_ashore;
 	f->guns = bt->you.guns + bt->guns_ashore;
 	f->damage[0] = (uint8_t)clampi(bt->you.damage, 0, 63);
 	switch (o) {
+	case BAT_DEFEATED:	/* the enemy takes the flagship */
 	case BAT_PLAYER_SUNK:
 		f->crew = bt->crew_ashore;
 		f->guns = bt->guns_ashore;

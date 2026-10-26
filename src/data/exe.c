@@ -33,6 +33,8 @@ static const struct exe_layout layouts[] = {
 		0x325ae,
 		0x32b0c,
 		0x32b20,
+		0x338a0,
+		0x389b8,
 	},
 };
 

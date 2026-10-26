@@ -421,6 +421,62 @@ test_hof(void)
 }
 
 /*
+ * Synthetic sword fight tables, simple enough to reason about: every
+ * move has 6 frames (the fall 10); guards hold one line each; slashes
+ * strike on frame 3, lunges on frame 2; the opponent always hits and
+ * the player always does (thresholds 0), and a cautious opponent (15)
+ * only stands on guard 1.  Tests adjust them as needed.
+ */
+static void
+make_sword(struct sword_tables *t)
+{
+	int m, f;
+
+	memset(t, 0, sizeof(*t));
+	for (m = 0; m < SWORD_MOVES; m++)
+		t->frames[m] = 6;
+	t->frames[SWM_FALL] = 10;
+	for (m = 0; m < BATTLE_LEVELS; m++) {
+		t->reach_level[m] = 10;
+		t->caution[m] = 15;
+	}
+	t->reach_weapon[0] = 40;
+	t->reach_weapon[1] = 30;
+	t->reach_weapon[2] = 20;
+	t->foe_reach[0] = t->foe_reach[1] = t->foe_reach[2] = 30;
+	t->player_edge = 450;
+	t->foe_edge = 50;
+	for (m = 0; m < 12; m++) {
+		static const uint8_t lines[3] = { 2, 1, 4 };
+
+		t->far_move[m] = m < 3 ? m : m < 6 ? SWM_RETREAT : SWM_ADVANCE;
+		t->once[m] = m < 3 || m >= 6;
+		t->line[m] = (uint8_t)(m % 3);
+		t->area[m] = m >= 6 ? (uint8_t)(m % 3 == 2 ? 1 : m % 3 + 2) :
+		    0;
+		for (f = 0; f < SWORD_FRAMES; f++)
+			if (m < 6)
+				t->guard[m * 6 + f] = lines[m % 3];
+		if (m >= 6 && m < 9) {
+			t->strike[m * 6 + 3] = lines[m % 3];
+			t->step_in[m * 6 + 5] = 4;
+		} else if (m >= 9) {
+			t->strike[m * 6 + 2] = lines[m % 3];
+			t->step_in[m * 6 + 3] = 4;
+		}
+		if (m >= 3 && m < 6)
+			t->step_back[m * 6] = 14;
+	}
+	t->step_in[SWM_ADVANCE * 6 + 5] = 14;
+	t->step_back[SWM_RETREAT * 6] = 14;
+	for (f = 0; f < SWORD_FRAMES; f++)
+		t->guard[SWM_FALL * 6 + f] = 7;
+	memset(t->foe_hit, 255, sizeof(t->foe_hit));	/* rarely */
+	memset(t->far_ai, SWM_GUARD, sizeof(t->far_ai));
+	memset(t->scripts, 0x90, sizeof(t->scripts));	/* parry */
+}
+
+/*
  * A synthetic world: all sea, except a land block of cells around
  * (110..129, 40..49).  Triangle "sine" and a flat speed table, enough to
  * check the rules' mechanics.
@@ -469,6 +525,7 @@ make_world(struct world *w)
 	w->hit_steps[0] = 3;
 	w->hit_steps[1] = 2;
 	w->hit_steps[2] = w->hit_steps[3] = w->hit_steps[4] = 1;
+	make_sword(&w->sword);
 }
 
 static int
@@ -831,24 +888,42 @@ test_battles(void)
 		sim_battle_tick(&s, 0, 0, 0);
 	CHECK(bt->outcome == BAT_ESCAPED);
 
-	/* Boarding: the ships touch; the larger crew wins (an engine
-	 * choice until sword fights), and the prize may join the fleet. */
+	/* Boarding: the ships touch; the sword fight decides.  Nothing is
+	 * applied before it is fought. */
 	battle_game(&s);
 	bt->foe.x = bt->you.x;
 	bt->foe.y = bt->you.y;
 	sim_battle_tick(&s, 0, 0, 0);
 	CHECK(bt->outcome == BAT_BOARDING);
-	bt->you.crew = 100;
+	CHECK(sim_battle_finish(&s, 1) == BAT_NONE && bt->active);
+	sim_board(&s, 2);
+	CHECK(s.sword.active && s.sword.kind == SWORD_CREW);
+	CHECK(s.sword.you.men == 40 && s.sword.foe.men == 80);
+	CHECK(s.sword.you.bar == 31 * (40 * 7) / (40 * 7 + 80 * 4) + 8);
+	CHECK(sim_battle_finish(&s, 1) == BAT_NONE);	/* still fighting */
+	s.sword.result = SWORD_WON;
+	s.sword.you.men = 30;			/* 10 fell */
 	gold = s.fleet.gold;
 	CHECK(sim_battle_finish(&s, 1) == BAT_SURRENDER);
 	CHECK(s.fleet.nships == 2 && s.fleet.ships[1] == 4);
-	CHECK(s.fleet.gold == gold + 300);
+	CHECK(s.fleet.gold == gold + 300 && s.fleet.crew == 30);
+	CHECK(!s.sword.active && !bt->active);
+	/* Driven back: no prize, the losses stay. */
 	battle_game(&s);
-	bt->foe.x = bt->you.x;
-	bt->foe.y = bt->you.y;
-	sim_battle_tick(&s, 0, 0, 0);
-	CHECK(sim_battle_finish(&s, 1) == BAT_PLAYER_SUNK);
-	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0);	/* marooned */
+	bt->outcome = BAT_BOARDING;
+	sim_board(&s, 0);
+	s.sword.result = SWORD_REPELLED;
+	s.sword.you.men = 25;
+	CHECK(sim_battle_finish(&s, 1) == BAT_REPELLED);
+	CHECK(s.fleet.nships == 1 && s.fleet.crew == 25);
+	/* Lost: the flagship goes, as if sunk; the last one leaves the
+	 * player marooned with a pinnace. */
+	battle_game(&s);
+	bt->outcome = BAT_BOARDING;
+	sim_board(&s, 0);
+	s.sword.result = SWORD_LOST;
+	CHECK(sim_battle_finish(&s, 1) == BAT_DEFEATED);
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0);
 
 	/* Surrender: an outmatched enemy alongside strikes her colours at
 	 * the next decision. */
@@ -972,6 +1047,292 @@ test_battle_protocol(void)
 	jb_free(&r2);
 }
 
+/* A crew fight at "dist" pixels: 40 men (factor 7) against 80 (4). */
+static void
+sword_game(struct sim *s, int dist)
+{
+	struct sword_setup in;
+
+	sea_game(s, 300, 300, 0);
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_CREW;
+	in.you_men = 40;
+	in.you_factor = 7;
+	in.foe_men = 80;
+	in.foe_factor = 4;
+	in.title = 4;
+	in.nation = 1;
+	in.weapon = 2;			/* cutlass */
+	sim_sword_start(s, &in);
+	s->sword.foe.x = s->sword.you.x - dist;
+}
+
+/* Sword fights: setup, moves, hits, the bar, the melee and the end. */
+static void
+test_sword(void)
+{
+	struct sim s, s2;
+	struct sim_sword *sw = &s.sword;
+	int i, ev, x;
+
+	make_world(&test_world);
+
+	/* Setup: the bar from men x factor, start positions, level. */
+	sword_game(&s, 120);
+	CHECK(sw->active && sw->result == SWORD_NONE);
+	CHECK(sw->you.bar == 31 * 280 / 600 + 8 && sw->foe.bar == 47 - 22);
+	CHECK(sw->you.x == 340 && sw->foe.x == 220);
+	CHECK(sw->foe.weapon == 1 || sw->foe.weapon == 2);
+	CHECK(sw->you.move == -1 && sw->level == 0);
+	{
+		struct sword_setup in;
+
+		memset(&in, 0, sizeof(in));
+		in.you_men = in.foe_men = in.you_factor = in.foe_factor = 1;
+		s.player.difficulty = 2;
+		s.player.ability = ABILITY_FENCING;
+		sim_sword_start(&s, &in);
+		CHECK(sw->level == 1);
+		in.extra = 9;
+		sim_sword_start(&s, &in);
+		CHECK(sw->level == 4);		/* clamped */
+		CHECK(sw->foe.weapon == 1 || sw->foe.weapon == 2);
+		in.kind = SWORD_DUEL;
+		sim_sword_start(&s, &in);
+		CHECK(sw->foe.weapon == 0 && sw->you.x == 320 &&
+		    sw->foe.x == 240);
+	}
+
+	/* The opponent starts on the middle guard.  A high slash hits on
+	 * frame 3: the cutlass moves the bar 5 x 2 steps, pushes back 4, and
+	 * wounds the head. */
+	sword_game(&s, 25);
+	sim_sword_input(&s, SWM_SLASH + 2);
+	x = sw->foe.x;
+	for (i = 0, ev = 0; i < 4; i++)
+		ev |= sim_sword_tick(&s);
+	CHECK((ev & SEV_HIT_FOE) && sw->you.move == SWM_SLASH + 2);
+	CHECK(sw->you.bar == 32 && sw->foe.bar == 15);
+	CHECK(sw->foe.x == x - 4 && sw->foe.wounds[0] == 1);
+	CHECK(sw->input == SWM_GUARD);		/* taken once */
+	/* The middle line is guarded: a clash, no hit. */
+	sword_game(&s, 25);
+	sim_sword_input(&s, SWM_SLASH);
+	for (i = 0, ev = 0; i < 4; i++)
+		ev |= sim_sword_tick(&s);
+	CHECK((ev & SEV_CLASH) && !(ev & SEV_HIT_FOE));
+	/* Out of reach (10 + 20): a miss. */
+	sword_game(&s, 31);
+	sim_sword_input(&s, SWM_SLASH + 2);
+	for (i = 0, ev = 0; i < 4; i++)
+		ev |= sim_sword_tick(&s);
+	CHECK(!(ev & SEV_HIT_FOE) && sw->foe.bar == 25);
+	/* A lunge strikes on frame 2 and moves the bar one step a pass. */
+	sword_game(&s, 25);
+	sim_sword_input(&s, SWM_LUNGE + 1);
+	sim_sword_tick(&s);
+	sim_sword_tick(&s);
+	CHECK(sim_sword_tick(&s) & SEV_HIT_FOE);	/* frame 2: tick 3 */
+	CHECK(sw->foe.bar == 20 && sw->foe.wounds[2] == 1);
+
+	/* At a distance an attack becomes an advance of 14. */
+	sword_game(&s, 100);
+	sim_sword_input(&s, SWM_SLASH);
+	x = sw->you.x;
+	for (i = 0; i < 6; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->you.move == SWM_ADVANCE && sw->you.x == x - 14);
+	/* The limit is 59: an attack there stays an attack. */
+	sword_game(&s, 59);
+	sim_sword_input(&s, SWM_SLASH);
+	sim_sword_tick(&s);
+	CHECK(sw->you.move == SWM_SLASH);
+	sword_game(&s, 60);
+	sim_sword_input(&s, SWM_SLASH);
+	sim_sword_tick(&s);
+	CHECK(sw->you.move == SWM_ADVANCE);
+	/* A lopsided bar: 31 x 100 / 101 + 8. */
+	{
+		struct sword_setup in;
+
+		memset(&in, 0, sizeof(in));
+		in.you_men = 100;
+		in.foe_men = in.you_factor = in.foe_factor = 1;
+		sim_sword_start(&s, &in);
+		CHECK(sw->you.bar == 38 && sw->foe.bar == 9);
+	}
+	/* Up close, a cautious opponent stands on guard 1. */
+	sword_game(&s, 15);
+	for (i = 0; i < 6; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->foe.move == SWM_GUARD + 1);
+	/* Stepping back repeats while the input stays. */
+	sword_game(&s, 100);
+	sim_sword_input(&s, SWM_BACK);
+	x = sw->you.x;
+	for (i = 0; i < 12; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->you.x == x + 28 && sw->input == SWM_BACK);
+
+	/* The hit that empties the opponent's bar fells him; he lies
+	 * after frame 8 and the player wins. */
+	sword_game(&s, 25);
+	sw->foe.bar = 3;
+	sim_sword_input(&s, SWM_SLASH + 2);
+	for (i = 0; i < 4; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->beaten == 1 && sw->foe.move == SWM_FALL);
+	for (i = 0; i < 20 && sw->result == SWORD_NONE; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->result == SWORD_WON && sw->foe.frame == 9);
+
+	/* Edges: the opponent driven to x 50 loses; the player at 450 is
+	 * driven back. */
+	sword_game(&s, 100);
+	sw->foe.x = 64;			/* backs off 14 on tick 6: 50 */
+	sw->you.x = 164;
+	memset(test_world.sword.far_ai, SWM_RETREAT, 8);
+	for (i = 0; i < 6; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->foe.x == 50 && sw->result == SWORD_WON);
+	memset(test_world.sword.far_ai, SWM_GUARD, 8);
+	sword_game(&s, 100);
+	sw->you.x = 436;		/* steps back 14 on tick 1: 450 */
+	sw->foe.x = 300;
+	sim_sword_input(&s, SWM_BACK);
+	sim_sword_tick(&s);
+	CHECK(sw->you.x == 450 && sw->result == SWORD_REPELLED);
+
+	/* The crew melee runs on the 15th tick (counter 16): someone loses
+	 * ((40 + 80) >> 6) + 1 = 2 men and the bar moves one step. */
+	sword_game(&s, 100);
+	for (i = 0, ev = 0; i < 14; i++)
+		ev |= sim_sword_tick(&s);
+	CHECK(!(ev & (SEV_FOE_MEN | SEV_YOU_MEN)));
+	ev = sim_sword_tick(&s);
+	CHECK((ev & SEV_FOE_MEN) ? sw->foe.men == 78 && sw->you.bar == 23 :
+	    (ev & SEV_YOU_MEN) && sw->you.men == 38 && sw->you.bar == 21);
+	/* None in duels. */
+	sword_game(&s, 100);
+	sw->kind = SWORD_DUEL;
+	for (i = 0, ev = 0; i < 40; i++)
+		ev |= sim_sword_tick(&s);
+	CHECK(!(ev & (SEV_FOE_MEN | SEV_YOU_MEN)));
+
+	/* The opponent's script: up close and not cautious, 0x90 parries
+	 * the player's line (here low, after a low slash). */
+	memset(test_world.sword.caution, 0, sizeof(test_world.sword.caution));
+	sword_game(&s, 15);
+	sim_sword_input(&s, SWM_SLASH + 1);
+	for (i = 0; i < 6; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->foe.move == SWM_GUARD + 1);
+	/* 0x92 slashes in one of the other lines: the player now stands
+	 * on guard 0 (middle), so low or high. */
+	memset(test_world.sword.scripts, 0x92, sizeof(test_world.sword.scripts));
+	for (i = 0; i < 6; i++)
+		sim_sword_tick(&s);
+	CHECK(sw->you.move == SWM_GUARD);
+	CHECK(sw->foe.move == SWM_SLASH + 1 || sw->foe.move == SWM_SLASH + 2);
+	{
+		int seen[3] = { 0, 0, 0 };
+
+		for (x = 0; x < 40; x++) {
+			sword_game(&s, 15);
+			s.rng.state += (uint64_t)x * 7919;
+			for (i = 0; i < 12; i++)
+				sim_sword_tick(&s);
+			if (sw->foe.move >= SWM_SLASH &&
+			    sw->foe.move < SWM_SLASH + 3)
+				seen[sw->foe.move - SWM_SLASH]++;
+		}
+		CHECK(seen[0] == 0 && seen[1] > 0 && seen[2] > 0);
+	}
+	memset(test_world.sword.scripts, 0x90, sizeof(test_world.sword.scripts));
+	memset(test_world.sword.caution, 15, sizeof(test_world.sword.caution));
+
+	/* Deterministic. */
+	sword_game(&s, 40);
+	sword_game(&s2, 40);
+	for (i = 0; i < 300; i++) {
+		if (i % 7 == 0) {
+			sim_sword_input(&s, i % 12);
+			sim_sword_input(&s2, i % 12);
+		}
+		sim_sword_tick(&s);
+		sim_sword_tick(&s2);
+	}
+	CHECK(memcmp(&s.sword, &s2.sword, sizeof(s.sword)) == 0);
+}
+
+/* Boarding through the protocol, and a snapshot taken mid-fight. */
+static void
+test_sword_protocol(void)
+{
+	struct session s1, s2;
+	struct jbuf st = { 0 }, cmd = { 0 }, out = { 0 }, r1 = { 0 },
+	    r2 = { 0 };
+
+	memset(&s1, 0, sizeof(s1));
+	s1.load = loader;
+	s1.load_world = world_cb;
+	proto_handle(&s1, "{\"cmd\":\"new_game\",\"era\":1660}", &out);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"board\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "no boarding") != NULL);
+	jb_free(&out);
+	s1.sim.encounter.type = 4;
+	s1.sim.encounter.guns = 8;
+	s1.sim.encounter.crew = 20;
+	s1.sim.encounter.role = 4;
+	sim_battle_start(&s1.sim);
+	s1.sim.battle.outcome = BAT_BOARDING;
+	proto_handle(&s1, "{\"cmd\":\"finish\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "board and fight") != NULL);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"board\",\"weapon\":3}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"board\",\"weapon\":0}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"sword\":{\"active\":1") !=
+	    NULL);
+	jb_free(&out);
+	proto_handle(&s1, "{\"cmd\":\"sword\",\"ticks\":30,\"input\":6}",
+	    &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"events\":") != NULL);
+	jb_free(&out);
+
+	sim_to_json(&s1.sim, &st);
+	jb_raw(&cmd, "{\"cmd\":\"load\",\"state\":");
+	jb_raw(&cmd, st.s);
+	jb_raw(&cmd, "}");
+	memset(&s2, 0, sizeof(s2));
+	s2.load = loader;
+	s2.load_world = world_cb;
+	proto_handle(&s2, cmd.s, &out);
+	CHECK(out.s != NULL && strcmp(out.s, "{\"ok\":true}") == 0);
+	jb_free(&out);
+	CHECK(memcmp(&s1.sim.sword, &s2.sim.sword,
+	    sizeof(s1.sim.sword)) == 0);
+	proto_handle(&s1, "{\"cmd\":\"sword\",\"ticks\":3000,\"input\":9}",
+	    &r1);
+	proto_handle(&s2, "{\"cmd\":\"sword\",\"ticks\":3000,\"input\":9}",
+	    &r2);
+	CHECK(r1.s != NULL && r2.s != NULL && strcmp(r1.s, r2.s) == 0);
+	if (s1.sim.sword.result != SWORD_NONE) {
+		proto_handle(&s1, "{\"cmd\":\"finish\",\"keep\":1}", &out);
+		CHECK(out.s != NULL && strstr(out.s, "\"outcome\":") != NULL);
+		CHECK(!s1.sim.battle.active && !s1.sim.sword.active);
+		jb_free(&out);
+	}
+	session_free(&s1);
+	session_free(&s2);
+	jb_free(&st);
+	jb_free(&cmd);
+	jb_free(&r1);
+	jb_free(&r2);
+}
+
 int
 main(void)
 {
@@ -986,6 +1347,8 @@ main(void)
 	test_encounters();
 	test_battles();
 	test_battle_protocol();
+	test_sword();
+	test_sword_protocol();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

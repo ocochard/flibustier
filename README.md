@@ -59,8 +59,10 @@ So far this runs the start of the game: the intro, the welcome menu, and
 the choices that create a new career or a famous expedition, then
 sailing the Caribbean: steer with the arrow keys, sail into a town's
 harbour, meet ships at sea and fight them (Left/Right steer,
-Enter fires, Up/Down set full or battle sails), and Escape opens the
-menu (save game, exit game). "Exit game" offers the Hall of Fame. Saves (one
+Enter fires, Up/Down set full or battle sails), board them and fight
+their captain (Left attacks with a lunge, Shift+Left with a slash,
+Up/Down pick the line, Right steps back), and Escape opens the menu
+(save game, exit game). "Exit game" offers the Hall of Fame. Saves (one
 JSON file per slot) and the Hall of Fame (a tab-separated text file) go
 to `~/.local/share/stmalo/saves`, or wherever `--saves DIR` says.
 `--script "enter down enter ..." out.png` plays the same screens without

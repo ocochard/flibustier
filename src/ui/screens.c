@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "assets/img.h"
 #include "sim/hof.h"
 #include "sim/save.h"
 #include "screen.h"
@@ -53,8 +54,15 @@
 #define W_COLOURS		106	/* "Spanish"... "pirate" */
 #define W_SHIP_TYPE		8	/* "Pinnace".. "Fort" */
 #define W_DAMAGE		14	/* damage levels */
+#define W_NEWS			18	/* 2 "Ship's News", 3 "(no entries)" */
+#define NEWS_TITLE		2
+#define NEWS_NONE		3
+#define NEWS_SHOWN		6	/* the latest items a hail shows */
 #define S_PRIZE			164	/* "we've captured %sa %s ton %s..." */
 #define S_YOU_SUNK		167
+#define S_ASHORE		161	/* the last ship lost: washed ashore */
+#define S_PICKED_UP		162	/* "...back as %s captain" */
+#define W_CAPTAIN		73	/* "an apprentice"..., by difficulty */
 #define S_FOE_SUNK		168
 #define S_SUNSET		169
 #define S_STRUCK		170
@@ -646,15 +654,16 @@ const struct screen screen_summary = {
  * game's printf-style strings expect.
  */
 static void
-fill(char *out, size_t len, const char *fmt, const char *a, const char *b)
+fill_args(char *out, size_t len, const char *fmt, const char *const *arg,
+    int nargs)
 {
-	const char *arg[2] = { a, b };
 	size_t n = 0;
 	int k = 0;
 
 	while (*fmt != '\0' && n + 1 < len) {
 		if (fmt[0] == '%' && fmt[1] == 's') {
-			const char *v = k < 2 && arg[k] != NULL ? arg[k] : "";
+			const char *v = k < nargs && arg[k] != NULL ? arg[k] :
+			    "";
 
 			k++;
 			while (*v != '\0' && n + 1 < len)
@@ -664,6 +673,14 @@ fill(char *out, size_t len, const char *fmt, const char *a, const char *b)
 			out[n++] = *fmt++;
 	}
 	out[n] = '\0';
+}
+
+static void
+fill(char *out, size_t len, const char *fmt, const char *a, const char *b)
+{
+	const char *arg[2] = { a, b };
+
+	fill_args(out, len, fmt, arg, 2);
 }
 
 static const char *
@@ -1219,6 +1236,12 @@ encounter_choose(struct game *g, int i)
 		game_goto(g, &screen_battle);
 		return;
 	}
+	if (r == RES_NEWS) {
+		game_background(g, "pic/shipnews");
+		g->ink[0] = 240;	/* light, on the dark blue page */
+		g->ink[1] = 220;
+		g->ink[2] = 170;
+	}
 	g->enc_result = (int)r;	/* show the outcome until a key */
 }
 
@@ -1282,11 +1305,32 @@ encounter_draw(struct game *g)
 	char text[512], waters[160];
 	const struct sim_news *n;
 	size_t i, kept;
-	int y;
+	int y, w;
 
 	if (g->enc_result < 0)
 		encounter_picture(g);
 
+	if (g->enc_result == RES_NEWS) {
+		/* The ship's news (VA 0x1e78d): the title and the latest
+		 * items left of the picture, or "(no entries)". */
+		w = text_width(&g->font[FONT_TITLE],
+		    game_word(g, W_NEWS, NEWS_TITLE));
+		draw(g, FONT_TITLE, 160 - w / 2, 40, 300,
+		    game_word(g, W_NEWS, NEWS_TITLE), 0);
+		kept = sim_news_kept(&g->sim);
+		y = 100;
+		if (kept == 0)
+			draw(g, FONT_BODY, 20, y, 290,
+			    game_word(g, W_NEWS, NEWS_NONE), 0);
+		for (i = kept; i > 0 && i + NEWS_SHOWN > kept && y < 420;
+		    i--) {
+			n = sim_news_at(&g->sim, i - 1);
+			news_text(g, n, text, sizeof(text));
+			y += draw(g, FONT_BODY, 20, y, 290, text, 0) + 8;
+		}
+		draw(g, FONT_BODY, 20, 440, 290, game_str(g, S_CONTINUE), 0);
+		return;
+	}
 	if (g->enc_result >= 0) {
 		text_band(g, 300, 150);
 		y = 310;
@@ -1298,14 +1342,6 @@ encounter_draw(struct game *g)
 		case RES_UNANSWERED:
 			y += draw(g, FONT_BODY, 80, y, 480,
 			    game_str(g, S_UNANSWERED), 0);
-			break;
-		case RES_NEWS:
-			kept = sim_news_kept(&g->sim);
-			for (i = kept > 4 ? kept - 4 : 0; i < kept; i++) {
-				n = sim_news_at(&g->sim, i);
-				news_text(g, n, text, sizeof(text));
-				y += draw(g, FONT_BODY, 80, y, 480, text, 0);
-			}
 			break;
 		}
 
@@ -1400,6 +1436,11 @@ battle_enter(struct game *g)
 	}
 	g->btl_fire = g->btl_sails = 0;
 	g->btl_stage = g->sim.battle.outcome == BAT_NONE ? 0 : 1;
+	if (g->sim.battle.outcome == BAT_BOARDING &&
+	    g->sim.sword.result == SWORD_WON) {
+		g->btl_stage = 2;	/* back from the fight: the prize */
+		g->selected = 0;
+	}
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 }
@@ -1431,9 +1472,7 @@ battle_event(struct game *g, const struct ui_event *ev)
 		if (!((ev->type == EV_KEY && ev->key == UI_KEY_ENTER) ||
 		    ev->type == EV_CLICK))
 			return;
-		/* Boarding is decided by crews until sword fights exist. */
-		if (outcome == BAT_SURRENDER || (outcome == BAT_BOARDING &&
-		    g->sim.battle.you.crew >= g->sim.battle.foe.crew)) {
+		if (outcome == BAT_SURRENDER) {
 			g->btl_stage = 2;
 			g->selected = 0;
 		} else
@@ -1464,7 +1503,11 @@ battle_tick(struct game *g)
 	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
 	g->btl_fire = 0;
 	g->btl_sails = 0;
-	if (g->sim.battle.outcome != BAT_NONE) {
+	if (g->sim.battle.outcome == BAT_BOARDING) {
+		g->turn = 0;
+		g->btl_stage = 1;
+		game_goto(g, &screen_sword);
+	} else if (g->sim.battle.outcome != BAT_NONE) {
 		g->btl_stage = 1;
 		g->turn = 0;
 	}
@@ -1562,27 +1605,51 @@ battle_draw(struct game *g)
 
 	if (g->btl_stage == 0)
 		return;
-	text_band(g, 300, 150);
+	text_band(g, 160, 290);	/* room for the longest outcome */
 	if (g->btl_stage == 2) {
-		snprintf(tons, sizeof(tons), "%d", g->sim.encounter.cargo);
-		snprintf(guns, sizeof(guns), "%d", bt->foe.guns);
-		/* "%sa %s ton %s with %s guns... space for %s tons" */
+		/* "%sa %s ton %s with %s guns... space for %s tons" (VA
+		 * 0xdb7b): 20 tons per class step, guns rounded up to even,
+		 * and the fleet's room (no cargo is carried yet). */
 		{
-			const char *fmt = game_str(g, S_PRIZE);
-			char a[600];
+			const char *arg[5];
+			char space[16];
+			int i, room = 0;
 
-			fill(a, sizeof(a), fmt, "", tons);
-			fill(text, sizeof(text), a, game_word(g, W_SHIP_TYPE,
-			    (size_t)(bt->foe.type % 10)), guns);
-			fill(a, sizeof(a), text, "?", NULL);
-			snprintf(text, sizeof(text), "%s", a);
+			for (i = 0; i < g->sim.fleet.nships; i++)
+				room += ((g->sim.fleet.ships[i] & 0xF) * 2 + 2) *
+				    10;
+			snprintf(tons, sizeof(tons), "%d",
+			    (bt->foe.type & 0xF) * 20 + 20);
+			snprintf(guns, sizeof(guns), "%d",
+			    (bt->foe.guns + 1) & ~1);
+			snprintf(space, sizeof(space), "%d", room);
+			arg[0] = "";
+			arg[1] = tons;
+			arg[2] = game_word(g, W_SHIP_TYPE,
+			    (size_t)(bt->foe.type % 10));
+			arg[3] = guns;
+			arg[4] = space;
+			fill_args(text, sizeof(text), game_str(g, S_PRIZE), arg,
+			    5);
 		}
-		draw(g, FONT_BODY, 80, 310, 400, text, 1);
+		draw(g, FONT_BODY, 80, 170, 400, text, 1);
 		return;
 	}
 	switch (bt->outcome) {
 	case BAT_PLAYER_SUNK:
 		snprintf(text, sizeof(text), "%s", game_str(g, S_YOU_SUNK));
+		if (g->sim.fleet.nships == 1) {
+			/* The last ship (VA 0x1f2a1): washed ashore, then
+			 * picked up by former crew members. */
+			char more[400];
+
+			fill(more, sizeof(more), game_str(g, S_PICKED_UP),
+			    game_word(g, W_CAPTAIN,
+			    (size_t)g->sim.player.difficulty), NULL);
+			snprintf(text, sizeof(text), "%s\r%s\r%s",
+			    game_str(g, S_YOU_SUNK), game_str(g, S_ASHORE),
+			    more);
+		}
 		break;
 	case BAT_ENEMY_SUNK:
 		snprintf(text, sizeof(text), "%s", game_str(g, S_FOE_SUNK));
@@ -1593,20 +1660,341 @@ battle_draw(struct game *g)
 	case BAT_SURRENDER:
 		snprintf(text, sizeof(text), "%s", game_str(g, S_STRUCK));
 		break;
-	case BAT_BOARDING:
-		fill(text, sizeof(text), game_str(g, S_BOARDING),
-		    game_word(g, W_SAILING, SAILING_CAPTAIN), NULL);
-		strncat(text, "\r(Sword fights are not implemented yet: the "
-		    "larger crew wins.)", sizeof(text) - strlen(text) - 1);
-		break;
 	default:	/* out of range: the battle simply ends */
 		text[0] = '\0';
 		break;
 	}
-	draw(g, FONT_BODY, 80, 310, 400, text, 0);
+	draw(g, FONT_BODY, 80, 170, 400, text, 0);
 	draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
 }
 
 const struct screen screen_battle = {
 	"battle", battle_enter, battle_event, battle_tick, battle_draw,
+};
+
+/*
+ * Sword fight (boarding): the boarding picture, the weapon choice, then
+ * the fight on the ship's deck.  The arrows move the fighter on a 3 x 3
+ * pad, the opponent to the left: toward him attacks (a lunge, or a slash
+ * with Shift), away steps back, up and down pick the line.  Clicking the
+ * pad on the deck does the same.
+ */
+#define S_CHOOSE_WEAPON		85
+#define W_WEAPON		70	/* Rapier, Longsword, Cutlass */
+#define W_TITLE			74	/* Guard... Captain, First Mate */
+#define SW_Y			140	/* fighters' line on the screen */
+#define SW_FALL_DROP		24
+#define SW_PAD_X		283	/* the arrow pad on pic/shipdeck */
+#define SW_PAD_Y		291
+#define SW_PAD_CELL		24
+#define SW_YOU_FLAG_X		584
+#define SW_FOE_FLAG_X		10
+#define H_LEFT			1
+#define H_RIGHT			2
+#define H_UP			4
+#define H_DOWN			8
+#define H_SHIFT			16
+
+static const char *sw_layers[2][6] = {
+	{ "grp/mybody", NULL, "grp/myhead", "grp/mychest", "grp/mylegs",
+	    NULL },
+	{ "grp/hebody", NULL, "grp/hehead", "grp/hechest", "grp/helegs",
+	    "grp/hehead1" },
+};
+static const char *sw_weapon_layers[2][SWORD_WEAPONS] = {
+	{ "grp/myrapier", "grp/mysword", "grp/mycutlas" },
+	{ "grp/herapier", "grp/hesword", "grp/hecutlas" },
+};
+
+static void
+load_group(struct game *g, const char *id, struct sprite_group *out)
+{
+	struct blob b;
+
+	group_free(out);
+	if (id == NULL || packs_load(g->packs, id, &b) != 0)
+		return;
+	group_decode(b.data, b.len, out);
+	blob_free(&b);
+}
+
+static void
+sword_enter(struct game *g)
+{
+	struct blob b;
+
+	g->sw_stage = 0;
+	g->sw_held = 0;
+	g->selected = SWORD_WEAPONS - 1;	/* the cutlass */
+	game_background(g, "pic/boarding");
+	g->ink[0] = g->ink[1] = g->ink[2] = 240;
+	image_free(&g->sw_weapons);
+	if (packs_load(g->packs, "img/wpnsel", &b) == 0) {
+		img_decode(b.data, b.len, &g->sw_weapons);
+		blob_free(&b);
+	}
+	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);
+}
+
+/* The fight's assets, once both weapons are known. */
+static void
+sword_load(struct game *g)
+{
+	int side, i;
+
+	for (side = 0; side < 2; side++)
+		for (i = 0; i < 6; i++)
+			load_group(g, i == 1 ? sw_weapon_layers[side][side == 0 ?
+			    g->sim.sword.you.weapon : g->sim.sword.foe.weapon] :
+			    sw_layers[side][i], &g->sw_parts[side][i]);
+	g->sw_flag_y[0] = g->sw_flag_y[1] = 0;
+	g->sw_wait = 1;
+}
+
+/* The move the held keys ask for. */
+static int
+sword_code(int held)
+{
+	int line = held & H_UP ? 2 : held & H_DOWN ? 1 : 0;
+
+	if (held & H_LEFT)
+		return ((held & H_SHIFT ? SWM_SLASH : SWM_LUNGE) + line);
+	if (held & H_RIGHT)
+		return (SWM_BACK + line);
+	return (SWM_GUARD + line);
+}
+
+static int
+key_bit(int key)
+{
+	switch (key) {
+	case UI_KEY_LEFT:
+		return (H_LEFT);
+	case UI_KEY_RIGHT:
+		return (H_RIGHT);
+	case UI_KEY_UP:
+		return (H_UP);
+	case UI_KEY_DOWN:
+		return (H_DOWN);
+	case UI_KEY_SHIFT:
+		return (H_SHIFT);
+	default:
+		return (0);
+	}
+}
+
+static void
+sword_outcome_done(struct game *g)
+{
+	if (g->sim.sword.result == SWORD_WON)
+		game_goto(g, &screen_battle);	/* the prize */
+	else
+		battle_finish(g, 0);
+}
+
+static void
+sword_event(struct game *g, const struct ui_event *ev)
+{
+	int enter = (ev->type == EV_KEY && ev->key == UI_KEY_ENTER) ||
+	    ev->type == EV_CLICK;
+	int bit, cx, cy;
+
+	switch (g->sw_stage) {
+	case 0:
+		if (enter) {
+			game_background(g, "pic/shipdeck");
+			g->ink[0] = g->ink[1] = g->ink[2] = 240;
+			g->sw_stage = 1;
+		}
+		return;
+	case 1:
+		if (ev->type == EV_KEY && (ev->key == UI_KEY_UP ||
+		    ev->key == UI_KEY_LEFT))
+			g->selected = (g->selected + SWORD_WEAPONS - 1) %
+			    SWORD_WEAPONS;
+		else if (ev->type == EV_KEY && (ev->key == UI_KEY_DOWN ||
+		    ev->key == UI_KEY_RIGHT))
+			g->selected = (g->selected + 1) % SWORD_WEAPONS;
+		else if (enter) {
+			sim_board(&g->sim, g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		}
+		return;
+	case 2:
+		if (ev->type == EV_KEY && (bit = key_bit(ev->key)) != 0) {
+			g->sw_held |= bit;
+			if (bit != H_SHIFT)
+				sim_sword_input(&g->sim, sword_code(g->sw_held));
+		} else if (ev->type == EV_KEYUP)
+			g->sw_held &= ~key_bit(ev->key);
+		else if (ev->type == EV_CLICK) {
+			cx = (ev->x - SW_PAD_X) / SW_PAD_CELL;
+			cy = (ev->y - SW_PAD_Y) / SW_PAD_CELL;
+			if (ev->x >= SW_PAD_X && ev->y >= SW_PAD_Y && cx < 3 &&
+			    cy < 3)
+				sim_sword_input(&g->sim, sword_code(
+				    (cx == 0 ? H_LEFT : cx == 2 ? H_RIGHT : 0) |
+				    (cy == 0 ? H_UP : cy == 2 ? H_DOWN : 0)));
+		}
+		return;
+	default:
+		if (enter)
+			sword_outcome_done(g);
+		return;
+	}
+}
+
+static void
+sword_tick(struct game *g)
+{
+	const struct sword_tables *t;
+
+	if (g->fading != 0 || g->sw_stage != 2 || g->world == NULL)
+		return;
+	if (--g->sw_wait > 0)
+		return;
+	/* A fight tick lasts 9-12 timer units; the engine takes them as
+	 * 1/120 s (the original's timer is not identified). */
+	t = &g->world->sword;
+	g->sw_wait = t->delay[g->sim.sword.level & 3] / 2;
+	if (g->sw_wait < 1)
+		g->sw_wait = 1;
+	sim_sword_tick(&g->sim);
+	if (g->sim.sword.result != SWORD_NONE) {
+		if (g->sim.sword.result == SWORD_WON)
+			sword_outcome_done(g);
+		else
+			g->sw_stage = 3;
+	}
+}
+
+static void
+sword_fighter(struct game *g, int side, const struct sword_side *f,
+    int boarding)
+{
+	static const int order[2][6] = {
+		{ 0, 1, 2, 3, 4, -1 },	/* body, weapon, wounds */
+		{ 0, 5, 1, 2, 3, 4 },	/* body, head, weapon, wounds */
+	};
+	const struct sword_tables *t = &g->world->sword;
+	int move = f->move < 0 ? 0 : f->move & (SWORD_MOVES - 1);
+	int frame = f->frame, y = SW_Y, i, layer;
+	const struct sprite_group *grp;
+
+	if (frame >= t->frames[move])
+		frame = t->frames[move] - 1;
+	if (move == SWM_FALL && frame > 2)
+		y -= SW_FALL_DROP;
+	for (i = 0; i < 6; i++) {
+		layer = order[side][i];
+		if (layer < 0 || (layer == 5 && !boarding) ||
+		    (layer >= 2 && layer <= 4 && f->wounds[layer - 2] == 0))
+			continue;
+		grp = &g->sw_parts[side][layer];
+		if ((size_t)move < grp->count &&
+		    (size_t)frame < grp->banks[move].count)
+			fb_frame(&g->fb, &grp->banks[move].frames[frame], f->x,
+			    y);
+	}
+}
+
+static void
+sword_flag(struct game *g, int side, int x, int frame, int bar)
+{
+	const struct sword_tables *t = &g->world->sword;
+	int target = t->flag_y[bar / 8 < 0 ? 0 : bar / 8 > 5 ? 5 : bar / 8];
+	int *y = &g->sw_flag_y[side];
+
+	if (*y == 0)
+		*y = target;
+	else if (*y < target)
+		*y += 2;
+	else if (*y > target)
+		*y -= 2;
+	if ((size_t)frame < g->sw_misc.count)
+		fb_frame(&g->fb, &g->sw_misc.frames[frame], x, *y);
+}
+
+static void
+sword_draw(struct game *g)
+{
+	const struct sim_sword *sw = &g->sim.sword;
+	char text[600], label[96];
+	int w, nation;
+
+	switch (g->sw_stage) {
+	case 0:
+		text_band(g, 330, 120);
+		fill(text, sizeof(text), game_str(g, S_BOARDING),
+		    game_word(g, W_SAILING, SAILING_CAPTAIN), NULL);
+		draw(g, FONT_BODY, 80, 340, 480, text, 0);
+		draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+		return;
+	case 1:
+		/* The picture, the prompt in its lower panel and the chosen
+		 * weapon's name by its blade (VA 0x16e56, 0x16dda). */
+		fb_image(&g->fb, &g->sw_weapons, 369, 56, 0);
+		draw(g, FONT_BODY, 392, 354, 160,
+		    game_str(g, S_CHOOSE_WEAPON), 0);
+		{
+			static const int name_x[SWORD_WEAPONS] = { 426, 506,
+			    464 };
+
+			draw(g, FONT_BODY, name_x[g->selected], 178, 120,
+			    game_word(g, W_WEAPON, (size_t)g->selected), 0);
+		}
+		return;
+	default:
+		break;
+	}
+	if (g->world == NULL)
+		return;
+	sword_fighter(g, 0, &sw->you, sw->kind == SWORD_CREW);
+	sword_fighter(g, 1, &sw->foe, sw->kind == SWORD_CREW);
+	nation = sw->nation < 0 || sw->nation > 4 ? 4 : sw->nation;
+	sword_flag(g, 0, SW_YOU_FLAG_X, 6 + (int)(g->ticks & 7), sw->you.bar);
+	sword_flag(g, 1, SW_FOE_FLAG_X, 14 + 8 * nation + (int)(g->ticks & 7),
+	    sw->foe.bar);
+
+	snprintf(label, sizeof(label), "%s %s",
+	    game_word(g, W_NATION, (size_t)(sw->nation < 0 ? 5 : sw->nation)),
+	    game_word(g, W_TITLE, (size_t)sw->title));
+	w = text_width(&g->font[FONT_BODY], label);
+	draw(g, FONT_BODY, 160 - w / 2, 336, 300, label, 0);
+	w = text_width(&g->font[FONT_BODY], g->sim.player.name);
+	draw(g, FONT_BODY, 480 - w / 2, 336, 300, g->sim.player.name, 0);
+	snprintf(text, sizeof(text), "%s%d",
+	    game_word(g, W_SAILING, SAILING_MEN), sw->foe.men);
+	draw(g, FONT_BODY, 100, 380, 140, text, 0);
+	snprintf(text, sizeof(text), "%s%d",
+	    game_word(g, W_SAILING, SAILING_MEN), sw->you.men);
+	draw(g, FONT_BODY, 420, 380, 140, text, 0);
+
+	if (g->sw_stage != 3)
+		return;
+	text_band(g, 160, 290);
+	if (sw->result == SWORD_LOST) {
+		snprintf(text, sizeof(text), "%s", "(Your men are beaten. "
+		    "Prison is not implemented yet: the enemy takes your "
+		    "ship.)");
+		if (g->sim.fleet.nships == 1) {
+			char more[400], all[600];
+
+			fill(more, sizeof(more), game_str(g, S_PICKED_UP),
+			    game_word(g, W_CAPTAIN,
+			    (size_t)g->sim.player.difficulty), NULL);
+			snprintf(all, sizeof(all), "%s\r%s\r%s", text,
+			    game_str(g, S_ASHORE), more);
+			snprintf(text, sizeof(text), "%s", all);
+		}
+	} else
+		snprintf(text, sizeof(text), "%s", "(Your boarding party is "
+		    "driven back to your ship.)");
+	draw(g, FONT_BODY, 80, 170, 400, text, 0);
+	draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
+}
+
+const struct screen screen_sword = {
+	"sword", sword_enter, sword_event, sword_tick, sword_draw,
 };

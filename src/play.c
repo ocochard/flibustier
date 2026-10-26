@@ -26,6 +26,7 @@ static const struct {
 	{ KEY_LEFT, UI_KEY_LEFT }, { KEY_RIGHT, UI_KEY_RIGHT },
 	{ KEY_ENTER, UI_KEY_ENTER }, { KEY_KP_ENTER, UI_KEY_ENTER },
 	{ KEY_ESCAPE, UI_KEY_ESCAPE }, { KEY_BACKSPACE, UI_KEY_BACKSPACE },
+	{ KEY_LEFT_SHIFT, UI_KEY_SHIFT }, { KEY_RIGHT_SHIFT, UI_KEY_SHIFT },
 };
 
 /* The save directory, or "" (saving disabled) with a warning. */

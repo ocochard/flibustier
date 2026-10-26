@@ -303,11 +303,12 @@ Where the original's behaviour is not traced yet, the engine does this:
 
 - **Picking the ship:** it is picked when the sail is sighted, not after
   the first answer. The draws are the same; only their order differs.
-- **Hailing:** the player gets the latest news from the log; the
-  original's rumours (VA `0x1e78d`) are not traced.
+- **Hailing** (traced, VA `0x1e78d` mode 2): the "Ship's News" page
+  (`pic/shipnews`, CSTN 18.2) lists the 6 latest public news items
+  (types 10-19) dated up to today, or "(no entries)" (CSTN 18.3). The
+  game also records the date of the hail.
 - **Hostile pirates:** they use the "He's chasing us" dialog (CSTR 311).
   The original's named pirates (CSTR 121) need the pirate name lists.
-- **Battles:** they end the encounter until sea battles exist (phase 6).
 - **Pictures:**
   - Ship portraits (`S_*.PCX`) hold 5 round views; the engine shows the
     first.
@@ -440,13 +441,21 @@ byte), return to the fleet.
 
 ### Engine choices until more is traced
 
-- **Boarding:** the larger crew wins, standing in for the sword fight
-  (traced below, not implemented yet). A win counts as a surrender.
+- **Boarding:** the sword fight decides it (see below). A win counts as
+  a surrender.
+- **Lost boarding:** the enemy takes the flagship, as if it sank;
+  prison (VA `0x16647`) is not modelled.
+- **Prize text (VA `0xdb7b`):** the prize is `class x 20 + 20` tons, its
+  guns are rounded up to even, and the hold space is
+  `sum(2 x class + 2) x 10` over the fleet, minus cargo (none yet).
 - **Prize:** a captured ship pays the encounter record's byte 6 x 10
   gold, standing in for cargo and treasure. Kept, she joins the fleet
   with her guns.
-- **Marooned:** with no ship left, the player gets a pinnace and at
-  least 8 men.
+- **Marooned:** with no ship left, the game shows CSTR 161 and 162
+  (VA `0x1f2a1`). The player then continues with a pinnace and at least
+  8 men. The original keeps the last ship's entry and runs routines not
+  traced yet: VA `0x1be71` looks for land around the fleet, VA `0x1f803`
+  resets the crew, and a value used as the difficulty drops by one.
 - **Not done yet:** choosing the flagship among several ships, and the
   loss of a slow ship on escape (CSTR 172).
 - The engine keeps hull damage beside each ship rather than packed in
@@ -590,12 +599,25 @@ move) and `0x38a1a` to `0x38b99`.
 
 - **Bar steps:** a step toward the player raises `B` and lowers `O`,
   only while `O > 0`. When `O` falls below 1, or the opponent is down to
-  1 man, the opponent is beaten: his next hit taken makes him fall. The
+  1 man, the opponent is beaten. A hit that leaves him beaten fells him
+  at once (move 14); one beaten by the melee falls at the next hit. The
   same holds the other way for the player.
 - **Speed:** a tick lasts 12, 11, 10 or 9 timer units by `level & 3`
   (VA `0x389c4`).
 - **Debug flag:** a byte at VA `0x33ee9`, 0 in the shipped game, would
   make the player invulnerable. No code sets it.
+
+### Engine choices for sword fights
+
+- **Pace:** a fight tick lasts `delay / 120` seconds. The original's
+  timer is read through a pointer set at run time and its unit is not
+  identified.
+- **Lunges:** whether a strike moves the bar by 1 or 2 steps follows the
+  striking move. The original follows the latest input, which differs
+  only when a new key arrives in the middle of a move.
+- **Men:** the panels show the men as numbers. The original draws them
+  as figures for 500, 50 and 1 men (VA `0x169b7`).
+- **Duels and practice** use the same rules but have no caller yet.
 
 ### The opponent's choices (VA `0x280ef`, when a move ends)
 

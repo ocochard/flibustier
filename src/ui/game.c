@@ -116,7 +116,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 void
 game_free(struct game *g)
 {
-	int i;
+	int i, j;
 
 	strtab_free(&g->cstr);
 	strgroups_free(&g->cstn);
@@ -133,6 +133,11 @@ game_free(struct game *g)
 	bank_free(&g->btl_damage[0]);
 	bank_free(&g->btl_damage[1]);
 	tileset_free(&g->btl_tiles);
+	for (i = 0; i < 2; i++)
+		for (j = 0; j < 6; j++)
+			group_free(&g->sw_parts[i][j]);
+	bank_free(&g->sw_misc);
+	image_free(&g->sw_weapons);
 	free(g->world);
 	free(g->exe);
 }
