@@ -2177,6 +2177,109 @@ follow_ship(struct game *g, int force)
 	}
 }
 
+/*
+ * Clouds over the sea (VA 0x24523, 0x231b8, 0x297c4): (|month - 5| + 1)
+ * / 2 of them, none in June, three in winter, each a random cloud.cur
+ * frame (0, 1, 2 or 0 again).  Every sailing pass cloud i drifts with
+ * the wind by (4i + 6) x 2, in eighths; once out of -100..640 across or
+ * -40..480 down from the view, it comes back at the right edge at a
+ * random height.  Each is drawn with its shadow 30 pixels left and down,
+ * which darkens what it covers through the table at VA 0x3400c.
+ */
+#define CLOUD_SHADOW		30
+
+static int
+cloud_random(struct game *g, int n)
+{
+	g->cloud_rand = g->cloud_rand * 1103515245u + 12345u;
+	return ((int)((g->cloud_rand >> 16) % (uint32_t)n));
+}
+
+static void
+clouds_start(struct game *g)
+{
+	static const int frames[4] = { 0, 1, 2, 0 };
+	int i;
+
+	load_bank(g, "cur/cloud", 1, &g->cloud_spr);
+	if (g->cloud_rand == 0)
+		g->cloud_rand = (uint32_t)g->sim.day * 2654435761u + 1;
+	for (i = 0; i < 3; i++) {
+		g->clouds[i].frame = frames[cloud_random(g, 4)];
+		g->clouds[i].x = g->clouds[i].y = 0;	/* off the view */
+	}
+}
+
+static int
+clouds_count(const struct game *g)
+{
+	int m = g->sim.day_of_year / 30 - 5;
+
+	return (((m < 0 ? -m : m) + 1) / 2);
+}
+
+static int
+cloud_sine(const struct game *g, int h, int v)
+{
+	int s = g->world->sine[h & 0x7F] * v >> 8;
+
+	return ((h & 0x80) ? -s : s);
+}
+
+static void
+clouds_move(struct game *g)
+{
+	int i, n = clouds_count(g), sx, sy, w = g->sim.wind;
+
+	for (i = 0; i < n && i < 3; i++) {
+		g->clouds[i].x += cloud_sine(g, w, (4 * i + 6) * 2) >> 3;
+		g->clouds[i].y -= cloud_sine(g, w + 0x40, (4 * i + 6) * 2) >> 3;
+		sx = g->clouds[i].x - g->view_x;
+		sy = g->clouds[i].y - g->view_y;
+		if (sx < -100 || sx > FB_W || sy < -40 || sy > FB_H) {
+			g->clouds[i].x = g->view_x + FB_W;
+			g->clouds[i].y = g->view_y + cloud_random(g, 440);
+		}
+	}
+}
+
+static void
+clouds_draw(struct game *g)
+{
+	const uint8_t *shade = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->shade_va, 256);
+	const struct frame *f;
+	int i, n = clouds_count(g), x, y, sx, sy, px, py;
+
+	for (i = 0; i < n && i < 3; i++) {
+		if ((size_t)g->clouds[i].frame >= g->cloud_spr.count)
+			continue;
+		f = &g->cloud_spr.frames[g->clouds[i].frame];
+		sx = g->clouds[i].x - g->view_x;
+		sy = g->clouds[i].y - g->view_y;
+		if (shade != NULL)
+			for (y = 0; y < f->h; y++)
+				for (x = 0; x < f->w; x++) {
+					px = sx - CLOUD_SHADOW + x;
+					py = sy + CLOUD_SHADOW + y;
+					if (f->pixels[y * f->w + x] != 0 &&
+					    px >= 0 && px < FB_W && py >= 0 &&
+					    py < FB_H)
+						g->fb.px[py * FB_W + px] =
+						    shade[g->fb.px[py * FB_W + px]];
+				}
+		for (y = 0; y < f->h; y++)
+			for (x = 0; x < f->w; x++) {
+				px = sx + x;
+				py = sy + y;
+				if (f->pixels[y * f->w + x] != 0 && px >= 0 &&
+				    px < FB_W && py >= 0 && py < FB_H)
+					g->fb.px[py * FB_W + px] =
+					    f->pixels[y * f->w + x];
+			}
+	}
+}
+
 /* Sailing sprites by ship size, as the game picks them. */
 static const char *
 ship_sprite(const struct sim_fleet *f)
@@ -2206,6 +2309,7 @@ sail_enter(struct game *g)
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 	follow_ship(g, 1);
+	clouds_start(g);
 }
 
 static void
@@ -2243,6 +2347,7 @@ sail_tick(struct game *g)
 		return;
 	g->sail_wait = 0;
 	g->sail_passes++;
+	clouds_move(g);
 	switch (sim_sail(&g->sim, g->turn, 1, &town)) {
 	case SAIL_TOWN:
 		g->sail_fast = 0;		/* VA 0x284b6 */
@@ -2287,6 +2392,7 @@ sail_draw(struct game *g)
 		fb_frame(&g->fb, fr, f->x - g->view_x - fr->w / 2,
 		    f->y - g->view_y - fr->h / 2);
 	}
+	clouds_draw(g);
 	date_text(g, buf, sizeof(buf));
 	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
 	    game_word(g, W_COMPASS, (size_t)(g->sim.wind >> 4)), NULL);
@@ -3008,7 +3114,8 @@ sword_enter(struct game *g)
 
 	g->sw_stage = 0;
 	g->sw_held = 0;
-	g->selected = SWORD_WEAPONS - 1;	/* the cutlass */
+	g->selected = SWORD_WEAPONS - 1;	/* the cutlass, named */
+	g->sw_named = 1;
 	game_background(g, "pic/boarding");
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 	image_free(&g->sw_weapons);
@@ -3046,6 +3153,26 @@ sword_load(struct game *g)
 			    sw_layers[side][i], &g->sw_parts[side][i]);
 	g->sw_flag_y[0] = g->sw_flag_y[1] = 0;
 	g->sw_wait = 1;
+}
+
+/* The blade under (x, y) on the weapon choice (VA 0x33628), or -1. */
+static int
+weapon_hit(const struct game *g, int x, int y)
+{
+	const uint8_t *p;
+	int i, k, r[4];
+
+	for (i = 0; i < SWORD_WEAPONS; i++) {
+		p = exe_at(g->layout, g->exe, g->exe_len,
+		    g->layout->weapon_spots_va + (uint32_t)i * 10, 8);
+		if (p == NULL)
+			continue;
+		for (k = 0; k < 4; k++)
+			r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
+			return (i);
+	}
+	return (-1);
 }
 
 /* The move the held keys ask for. */
@@ -3133,23 +3260,49 @@ sword_event(struct game *g, const struct ui_event *ev)
 		}
 		return;
 	case 1:
-		if (ev->type == EV_KEY && (ev->key == UI_KEY_UP ||
-		    ev->key == UI_KEY_LEFT))
-			g->selected = (g->selected + SWORD_WEAPONS - 1) %
-			    SWORD_WEAPONS;
-		else if (ev->type == EV_KEY && (ev->key == UI_KEY_DOWN ||
-		    ev->key == UI_KEY_RIGHT))
-			g->selected = (g->selected + 1) % SWORD_WEAPONS;
-		else if (enter && g->sw_practice) {
+		/* The blades left to right are the rapier, the cutlass and
+		 * the longsword: the keys step along them without wrapping;
+		 * pointing at a blade names it, clicking it takes it; Enter
+		 * or Escape take the one named last (VA 0x16f03). */
+		bit = ev->type == EV_MOVE || ev->type == EV_CLICK ?
+		    weapon_hit(g, ev->x, ev->y) : -1;
+		if (ev->type == EV_MOVE) {
+			if (bit >= 0)
+				g->selected = bit;
+			g->sw_named = bit >= 0;
+			return;
+		}
+		if (ev->type == EV_KEY && (ev->key == UI_KEY_LEFT ||
+		    ev->key == UI_KEY_UP)) {
+			g->selected = g->selected == 1 ? 2 : g->selected == 2 ?
+			    0 : g->selected;
+			g->sw_named = 1;
+			return;
+		}
+		if (ev->type == EV_KEY && (ev->key == UI_KEY_RIGHT ||
+		    ev->key == UI_KEY_DOWN)) {
+			g->selected = g->selected == 0 ? 2 : g->selected == 2 ?
+			    1 : g->selected;
+			g->sw_named = 1;
+			return;
+		}
+		if (ev->type == EV_CLICK) {
+			if (bit < 0)
+				return;
+			g->selected = bit;
+		} else if (!(ev->type == EV_KEY && (ev->key == UI_KEY_ENTER ||
+		    ev->key == UI_KEY_ESCAPE)))
+			return;
+		if (g->sw_practice) {
 			sim_practice_start(&g->sim, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
-		} else if (enter && g->sw_guard) {
+		} else if (g->sw_guard) {
 			sim_guard_duel(&g->sim, g->sim.fleet.leaving,
 			    g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
-		} else if (enter) {
+		} else {
 			sim_board(&g->sim, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
@@ -3277,12 +3430,17 @@ sword_draw(struct game *g)
 		fb_image(&g->fb, &g->sw_weapons, 369, 56, 0);
 		draw(g, FONT_BODY, 392, 354, 160,
 		    game_str(g, S_CHOOSE_WEAPON), 0);
-		{
+		if (g->bg.pixels != NULL)	/* ink entry 1 */
+			memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		if (g->sw_named) {	/* PIRATE1, centred on its blade */
 			static const int name_x[SWORD_WEAPONS] = { 426, 506,
 			    464 };
+			const char *name = game_word(g, W_WEAPON,
+			    (size_t)g->selected);
 
-			draw(g, FONT_BODY, name_x[g->selected], 178, 120,
-			    game_word(g, W_WEAPON, (size_t)g->selected), 0);
+			w = text_width(&g->font[FONT_TITLE], name);
+			draw(g, FONT_TITLE, name_x[g->selected] - w / 2, 178,
+			    FB_W, name, 0);
 		}
 		return;
 	default:

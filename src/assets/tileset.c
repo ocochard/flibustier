@@ -9,7 +9,7 @@
 
 #include "tileset.h"
 
-#define PALETTE_OFF	0x0C
+#define PALETTE_OFF	0x09	/* matches the pictures' palettes: sbat.pcx */
 #define TILES_OFF	0x318
 #define RECORD_HDR	10	/* u16 size, w, h, w - 1, h - 1 */
 #define RECORD_PAD	2

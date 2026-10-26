@@ -171,10 +171,17 @@ struct game {
 	int			 sw_guard;	/* the sword fight is the guard's duel */
 	int			 sail_fast;	/* T: a sailing pass every frame */
 	int			 sw_practice;	/* the sword fight is practice */
+	int			 sw_named;	/* the chosen weapon's name shows */
 	int			 cabin_spot;	/* pointed at, or -1 */
 	int			 cabin_key;	/* selected with the keys */
 	const struct screen	*cave_back;	/* where the cave returns */
 	struct sprite_bank	 cabin_spr;
+	struct sprite_bank	 cloud_spr;	/* cloud.cur */
+	struct {
+		int		 x, y;		/* world pixels */
+		int		 frame;
+	}			 clouds[3];
+	uint32_t		 cloud_rand;	/* the engine's own, not the sim's */
 	unsigned		 sail_wait;	/* frames to the next pass */
 	unsigned		 sail_passes;	/* passes of the sailing loop */
 	struct plunder		 plunder;

@@ -59,6 +59,7 @@ struct sim_town {
 					 * that screen */
 	uint16_t	ship_x, ship_y;	/* fields 19, 20: the attacker's */
 	uint16_t	ship_heading;	/* field 21 */
+	uint16_t	sea_heading;	/* field 28: leaving, x 32 */
 	uint16_t	sea_x, sea_y;	/* fields 26, 27: water outside the
 					 * harbour, 0 for inland towns */
 };

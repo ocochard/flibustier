@@ -123,11 +123,13 @@ Each era patches the 1560 map directly. Proof: when asked for
 
 ## *.IMB: tilesets (proven)
 
-- `0x00` header: `u16 3, u16 1, u16 0x172, u16 256 (tile count),
-  u32 0x56`. Open: the meaning of `0x172` and `0x56`.
-- `0x0C`: 768-byte VGA palette, 6 bits per channel. It is all zeros in the
-  16-colour variants.
-- `0x30C`: 12 zero bytes.
+- `0x00` header: `u16 3, u16 1, u16 0x172, u16 256 (tile count), u8
+  0x56`. Open: the meaning of `0x172` and `0x56`.
+- `0x09`: 768-byte VGA palette, 6 bits per channel. It is all zeros in the
+  16-colour variants. It matches `SBAT.PCX`'s palette (254 of 256
+  entries, within rounding). An earlier reading at `0x0C` shifted every
+  colour by one entry, which put white into the sea's shimmer range.
+- `0x309`: 15 zero bytes.
 - `0x318`: 256 tile records: `u16 w*h+6, u16 w, u16 h, u16 w-1, u16 h-1`,
   then `w*h` pixels and 2 trailing bytes.
 - Tile sizes: `MAP` and `TMAP` are 16x16 (sailing); `BATTLE` is 32x32

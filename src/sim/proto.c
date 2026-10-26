@@ -36,7 +36,7 @@ static const struct {
 	FIELD(soldiers), FIELD(citizens), FIELD(gold), FIELD(wealth),
 	FIELD(standing), FIELD(governor), FIELD(family), FIELD(id),
 	FIELD(sea_x), FIELD(sea_y), FIELD(fort_x), FIELD(fort_y),
-	FIELD(ship_x), FIELD(ship_y), FIELD(ship_heading),
+	FIELD(ship_x), FIELD(ship_y), FIELD(ship_heading), FIELD(sea_heading),
 };
 #define NFIELDS	(sizeof(town_fields) / sizeof(town_fields[0]))
 

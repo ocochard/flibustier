@@ -91,6 +91,23 @@ town_near(const struct sim *s, int reach)
 	return (best);
 }
 
+/*
+ * Out of a town onto its water (VA 0x19b9e): the cell of fields 26 and
+ * 27, heading field 28 x 32, which points away from the town.
+ */
+static void
+harbour_mouth(struct sim *s, int town)
+{
+	const struct sim_town *t = &s->towns[town];
+
+	if (t->sea_x == 0)
+		return;
+	s->fleet.x = t->sea_x * WORLD_TILE + 8;
+	s->fleet.y = t->sea_y * WORLD_TILE + 8;
+	s->fleet.heading = (uint8_t)((t->sea_heading & 7) * 32);
+	s->fleet.speed = 0;
+}
+
 void
 sim_new_game(struct sim *s, const struct era_towns *era,
     const struct scenario *scn, uint64_t seed)
@@ -154,14 +171,13 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->towns[i].ship_heading = t->raw[21];
 		s->towns[i].sea_x = t->raw[26];
 		s->towns[i].sea_y = t->raw[27];
+		s->towns[i].sea_heading = t->raw[28];
 	}
 	/* The start position is in a town; the voyage starts on the water
 	 * outside its harbour. */
 	s->fleet.leaving = town_near(s, ARRIVAL_CELLS + 3);
-	if (s->fleet.leaving >= 0 && s->towns[s->fleet.leaving].sea_x != 0) {
-		s->fleet.x = s->towns[s->fleet.leaving].sea_x * WORLD_TILE + 8;
-		s->fleet.y = s->towns[s->fleet.leaving].sea_y * WORLD_TILE + 8;
-	}
+	if (s->fleet.leaving >= 0)
+		harbour_mouth(s, s->fleet.leaving);
 }
 
 static void
@@ -739,5 +755,9 @@ sim_enter_town(struct sim *s, int town)
 void
 sim_leave_town(struct sim *s)
 {
+	if (s->player_town >= 0 && (size_t)s->player_town < s->ntowns) {
+		harbour_mouth(s, s->player_town);
+		s->fleet.leaving = s->player_town;
+	}
 	s->player_town = SIM_NO_TOWN;
 }

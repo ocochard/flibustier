@@ -206,12 +206,34 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
    Odd classes are water. Moving onto land ends the voyage step (VA
    `0x24808` handles it; landing parties are not specified yet).
 
+### Leaving a town (VA `0x19b9e`)
+
+The fleet is put on the water outside the town, at town fields 26 and
+27, with its bows away from the town: heading `field 28 x 32`. The same
+holds at the start of a career; the scenario's start cell itself is
+inside the town, on land.
+
+### Clouds (VA `0x24523`, `0x231b8`, `0x297c4`)
+
+- **How many:** `(|month - 5| + 1) / 2` (VA `0x28789`): none in June,
+  three in December and January.
+- **Look:** a random `cloud.cur` frame each, from (0, 1, 2, 0), chosen
+  at the start of a voyage.
+- **Motion:** every sailing pass, cloud i moves with the wind by
+  `sine x (4i + 6) x 2`, then an eighth: about 1, 2 and 3 pixels.
+- **Respawn:** a cloud more than 100 pixels left of the view, past its
+  right edge, 40 above it or below it comes back at the right edge
+  (view x + 640) at a random height 0..439. Clouds start off the view,
+  so they enter from the right.
+- **Drawing:** first the shadow, 30 pixels left and 30 down, which
+  replaces each covered pixel through the 256-byte table at VA
+  `0x3400c`; then the cloud.
+- **Engine choice:** the clouds are drawing only, not simulation state;
+  their positions use the engine's own random numbers.
+
 ### Engine choices (not traced)
 
 Where the original's behaviour is not traced yet, the engine does this:
-- **Leaving port:** a voyage starts on the water outside the start
-  town's harbour, at town fields f26 and f27. The scenario's start cell
-  itself is inside the town, on land.
 - **Arriving:** the fleet reaches a town within 1 cell, of the town or of
   that outer approach point. The town it is leaving only counts again
   once the fleet is more than 2 cells away.
@@ -614,6 +636,12 @@ back reduced.
   - The player chooses first on `img/wpnsel` (CSTR 85), with the
     cutlass preselected. Only a kind of -1, which no traced caller
     uses, skips the choice.
+  - The choice (VA `0x16e56`): the blades left to right are the rapier,
+    the cutlass and the longsword (rectangles at VA `0x33628`).
+    Pointing at a blade writes its name in PIRATE1, centred at x 426,
+    464 or 506 and y 178, in ink entry 1; pointing elsewhere clears it.
+    Clicking a blade takes it. Two keys step along the blades without
+    wrapping; Enter or Escape take the one named last.
   - The opponent fights with the rapier in duels and practice. In crew
     fights it picks the longsword or cutlass, `rand(2) + 1`.
 - **Strength bar:** `B = 31 x Pm x Pf / (Pm x Pf + Om x Of) + 8`, in

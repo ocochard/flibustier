@@ -236,10 +236,12 @@ test_saves(void)
 
 	/* Sail for a while, back to the menu, then save in slot 4. */
 	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
-	    "down enter right enter enter type:Kidd enter enter esc enter enter click:60,300 wait:100 esc "
-	    "click:560,170 down down down enter");	/* Save game */
+	    "down enter right enter enter type:Kidd enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
+	g->sim.encounters = 0;
+	CHECK(game_script(g, "wait:100 esc click:560,170 down down down "
+	    "enter") == 0);		/* Save game */
 	CHECK(g->started && g->sim.day >= 1 && g->sim.fleet.ticks >= 100);
 	CHECK(strncmp(g->msg, "Kidd, English Buccaneer, ", 25) == 0);
 	sim_to_json(&g->sim, &before);
@@ -325,8 +327,8 @@ test_sailing(void)
 	if (g == NULL)
 		return;
 	CHECK(g->started && g->world != NULL && g->sim.world == g->world);
-	/* The fleet starts outside the harbour, bows north toward the
-	 * island: half a turn to starboard, then out to sea, southward. */
+	/* The fleet starts outside the harbour, bows away from the town
+	 * (town field 28); half a turn to starboard, then on that way. */
 	CHECK(world_terrain(g->world, g->sim.fleet.x, g->sim.fleet.y) !=
 	    TERRAIN_LAND);
 	g->sim.encounters = 0;	/* encounters have their own test */
@@ -337,7 +339,9 @@ test_sailing(void)
 	y0 = g->sim.fleet.y;
 	CHECK(game_script(g, "wait:64") == 0);
 	CHECK(g->sim.fleet.ticks >= 64 && g->sim.day >= 1);
-	CHECK(g->sim.fleet.y > y0);
+	/* Southward headings (0x40..0xC0) sail down the map. */
+	CHECK(g->sim.fleet.heading > 0x40 && g->sim.fleet.heading < 0xC0 ?
+	    g->sim.fleet.y > y0 : g->sim.fleet.y < y0);
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */
 	game_free(g);
 }
@@ -350,7 +354,7 @@ test_encounter_screens(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter enter click:60,300 hold:right:16");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
 	/* Sail until a sail is sighted. */
@@ -384,7 +388,7 @@ test_battle_screen(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter enter click:60,300 hold:right:16");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
@@ -479,7 +483,7 @@ test_sword_screen(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter enter click:60,300 hold:right:16");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
@@ -908,8 +912,18 @@ test_cabin(void)
 	practice = g->sim.practice;
 	CHECK(game_script(g, "click:110,120 wait:40") == 0 &&
 	    g->screen == &screen_sword && g->sw_stage == 1);
-	CHECK(game_script(g, "enter") == 0 && g->sw_stage == 2 &&
-	    g->sim.sword.kind == SWORD_PRACTICE &&
+	/* The weapons left to right: rapier, cutlass, longsword; the keys
+	 * stop at the ends, a click off the blades does nothing. */
+	CHECK(g->selected == 2 && g->sw_named);
+	CHECK(game_script(g, "left left") == 0 && g->selected == 0);
+	CHECK(game_script(g, "right right right") == 0 && g->selected == 1);
+	CHECK(game_script(g, "move:600,20") == 0 && !g->sw_named);
+	CHECK(game_script(g, "click:600,20") == 0 && g->sw_stage == 1);
+	CHECK(game_script(g, "move:418,200") == 0 && g->selected == 0 &&
+	    g->sw_named);
+	CHECK(game_script(g, "click:418,200") == 0 && g->sw_stage == 2 &&
+	    g->sim.sword.you.weapon == 0);
+	CHECK(g->sim.sword.kind == SWORD_PRACTICE &&
 	    g->sim.sword.you.men == 200 && g->sim.sword.title == 5);
 	g->sim.sword.result = SWORD_LOST;
 	CHECK(game_script(g, "wait:40") == 0 &&

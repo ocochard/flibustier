@@ -1902,6 +1902,24 @@ test_command(void)
 	CHECK(s.fleet.ships[0] == 5);
 }
 
+/* Leaving a town: on its water, bows away from it (field 28). */
+static void
+test_leave_heading(void)
+{
+	struct sim s;
+
+	sea_game(&s, 300, 300, 0);
+	s.towns[1].sea_x = 120;
+	s.towns[1].sea_y = 60;
+	s.towns[1].sea_heading = 5;
+	s.fleet.heading = 0;
+	sim_enter_town(&s, 1);
+	sim_leave_town(&s);
+	CHECK(s.player_town == -1 && s.fleet.leaving == 1);
+	CHECK(s.fleet.x == 120 * 16 + 8 && s.fleet.y == 60 * 16 + 8 &&
+	    s.fleet.heading == 160 && s.fleet.speed == 0);
+}
+
 /* The arrival: the fort's welcome, a lost ship's cargo, sneaking in. */
 static void
 test_arrival(void)
@@ -2127,6 +2145,7 @@ main(void)
 	test_coast();
 	test_screens();
 	test_fort_battle();
+	test_leave_heading();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

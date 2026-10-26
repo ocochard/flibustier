@@ -308,7 +308,7 @@ test_tileset(void)
 	put16(buf, 3);
 	put16(buf + 2, 1);
 	put16(buf + 6, 2);		/* tile count */
-	buf[0x0C + 3] = 63;		/* colour 1 red = full */
+	buf[0x09 + 3] = 63;		/* colour 1 red = full */
 	for (off = 0x318, i = 0; i < 2; i++, off += 16) {
 		put16(buf + off, 4 + 6);
 		put16(buf + off + 2, 2);
