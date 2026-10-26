@@ -25,6 +25,7 @@ add_library(flibustier_core STATIC
 	src/assets/image.c
 	src/assets/img.c
 	src/assets/pcx.c
+	src/assets/digital.c
 	src/assets/pic.c
 	src/assets/png.c
 	src/assets/rsd.c

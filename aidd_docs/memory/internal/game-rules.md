@@ -2154,6 +2154,26 @@ retiring), or in prison (a famous expedition, or health 3). The cabin's
 8. "Do you wish to play another game?" (CSTR 80), "Thank you and
    goodbye." (CSTR 81): the engine returns to the welcome menu.
 
+## Sound effects (VA `0x7d82`)
+
+The digitised effects of `DIGITAL.PIR`, by where the game plays them;
+without that driver it plays FM sounds through the music driver instead
+(not reproduced):
+
+| Effect | When |
+|---|---|
+| 0 | after a named captain's hail (CSTR 121) is answered (VA `0xd1fc`) |
+| 1 | a broadside, the player's or the enemy's (sound request `0x1d`, VA `0x7db8`, `0x9551`) |
+| 2 | a land battle begins (end of VA `0x169b7`) |
+| 3 | the sword fight, with `0x44b88 == 1` (not identified) |
+| 4 | sailing into a harbour: the arrival on `arr_sea.pcx` (VA `0x18fa9`) |
+| 5 | a sail sighted, before the question (VA `0xd1fc`) |
+| 6 | the sword fight: blades meet (VA `0x2747c`) |
+| 7 | the sword fight: the player's blow lands |
+| 8 | the sword fight: the opponent's blow lands |
+
+The sword fight's effect replaces its FM sound for that pass.
+
 ## Open questions
 
 None for the world update: the treasure fleet and silver train (VA

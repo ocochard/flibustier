@@ -18,7 +18,8 @@ governors' missions and daughters, ransoms, prison, the crew's mood and
 food, reefs, and the world's monthly life (diplomacy, conquests, town
 events, the treasure fleet and the silver train).
 
-Not there yet: sound and music. The rules follow the original as traced
+Not there yet: music and the FM sound effects; the digitised effects
+(cannon, swords, harbour, sightings) play. The rules follow the original as traced
 so far; where a detail could not be traced,
 `aidd_docs/memory/internal/game-rules.md` says so. Please report anything that plays differently
 from the original.

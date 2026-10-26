@@ -383,6 +383,8 @@ test_encounter_screens(void)
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
 		CHECK(game_script(g, "wait:32") == 0);
 	CHECK(g->sim.encounter.stage == ENC_SIGHTED);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->sfx_last == SFX_SAIL_HO);	/* "Sail ho!" */
 	CHECK(game_script(g, "enter") == 0);	/* investigate */
 	CHECK(g->sim.encounter.stage == ENC_IDENTIFIED);
 	if (!g->sim.encounter.hostile) {
@@ -481,9 +483,11 @@ test_battle_screen(void)
 	CHECK(game_script(g, "wait:200") == 0);	/* full sails */
 	CHECK(g->sim.battle.you.full_sails || g->sim.battle.outcome != 0);
 	/* Steer toward her and fire until it is decided. */
+	g->sfx_last = -1;
 	for (i = 0; i < 300 && g->btl_stage == 0; i++)
 		CHECK(game_script(g, "enter wait:16") == 0);
 	CHECK(g->btl_stage == 1 && g->sim.battle.outcome != BAT_NONE);
+	CHECK(g->sfx_last >= 0);		/* broadsides, a boarding */
 	CHECK(game_script(g, "enter") == 0);
 	if (g->btl_stage == 2) {		/* a prize: keep her */
 		CHECK(game_script(g, "enter wait:40") == 0);
@@ -685,6 +689,7 @@ test_town(void)
 	CHECK(game_script(g, "wait:40") == 0);
 	/* The arrival menu; sailing into the home port. */
 	CHECK(g->screen == &screen_arrive && g->sim.player_town == -1);
+	CHECK(g->sfx_last == SFX_HARBOUR);	/* into the harbour */
 	CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->screen == &screen_town && g->sim.player_town >= 0);
 	t = &g->sim.towns[g->sim.player_town];

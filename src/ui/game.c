@@ -148,6 +148,13 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	g->exe_len = b.len;
 	load_cursor(g);
 	load_misc(g);
+	/* The effects are optional: without them the game is silent. */
+	if (packs_load(packs, "driver/digital", &b) == 0) {
+		if (digital_decode(b.data, b.len, &g->sfx) != 0)
+			digital_free(&g->sfx);
+		blob_free(&b);
+	}
+	g->sfx_last = -1;
 	g->career.expedition = -1;
 	g->hof_new = -1;
 	g->brightness = 0;
@@ -164,6 +171,7 @@ game_free(struct game *g)
 
 	strtab_free(&g->cstr);
 	strgroups_free(&g->cstn);
+	digital_free(&g->sfx);
 	for (i = 0; i < GAME_FONTS; i++)
 		font_free(&g->font[i]);
 	font_free(&g->caps);
@@ -435,4 +443,13 @@ game_start_career(struct game *g)
 	g->started = 1;
 	g->news_seen = g->sim.nnews;
 	return (game_attach_world(g));
+}
+
+void
+game_sfx(struct game *g, int n)
+{
+	if (n < 0 || n >= DIGITAL_EFFECTS || g->sfx.pcm[n] == NULL)
+		return;
+	g->sfx_pending |= 1u << n;
+	g->sfx_last = n;
 }

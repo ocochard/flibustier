@@ -14,6 +14,7 @@
 
 #include "data/exe.h"
 #include "data/pack.h"
+#include "assets/digital.h"
 #include "assets/font.h"
 #include "assets/img.h"
 #include "assets/pcx.h"
@@ -811,6 +812,25 @@ test_world_export(struct packs *orig)
 	remove(dir);
 }
 
+/* DIGITAL.PIR: nine effects, their lengths from the driver's tables. */
+static void
+test_digital(struct packs *packs)
+{
+	static const size_t len[DIGITAL_EFFECTS] = { 6852, 10716, 6276,
+	    7307, 7800, 8904, 3300, 4159, 2964 };
+	struct digital d;
+	struct blob b;
+	int i;
+
+	CHECK(packs_load(packs, "driver/digital", &b) == 0);
+	CHECK(digital_decode(b.data, b.len, &d) == 0);
+	for (i = 0; i < DIGITAL_EFFECTS; i++)
+		CHECK(d.len[i] == len[i] && d.pcm[i] != NULL);
+	digital_free(&d);
+	CHECK(digital_decode(b.data, 40, &d) == -1);	/* cut short */
+	blob_free(&b);
+}
+
 int
 main(void)
 {
@@ -839,6 +859,7 @@ main(void)
 	test_terrain(packs);
 	test_sheet_terrain(packs);
 	test_world_export(packs);
+	test_digital(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

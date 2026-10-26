@@ -2916,6 +2916,8 @@ encounter_enter(struct game *g)
 	game_portrait(g, NULL);
 	g->enc_result = -1;
 	encounter_background(g);
+	if (g->sim.encounter.stage == ENC_SIGHTED)
+		game_sfx(g, SFX_SAIL_HO);
 }
 
 static void
@@ -2928,6 +2930,10 @@ encounter_choose(struct game *g, int i)
 
 	action = g->sim.encounter.stage == ENC_COLOURS ? colours[i % 3] :
 	    sighted[i % 2];
+	/* After a named captain's hail is answered (VA 0xd1fc). */
+	if (g->sim.encounter.stage == ENC_COLOURS &&
+	    g->sim.encounter.hostile && g->sim.encounter.captain != 0)
+		game_sfx(g, SFX_HAIL);
 	r = sim_encounter_act(&g->sim, (enum encounter_action)action);
 	if (r == RES_CONTINUE) {
 		g->selected = 0;
@@ -3428,7 +3434,9 @@ battle_tick(struct game *g)
 	}
 	if (g->fading != 0 || g->btl_stage != 0)
 		return;
-	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
+	if (sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails) &
+	    (BEV_FIRED | BEV_FOE_FIRED))
+		game_sfx(g, SFX_BROADSIDE);	/* VA 0x7db8 */
 	g->btl_fire = 0;
 	g->btl_sails = 0;
 	if (g->sim.battle.outcome == BAT_BOARDING) {
@@ -3989,7 +3997,17 @@ sword_tick(struct game *g)
 	g->sw_wait = t->delay[g->sim.sword.level & 3];
 	if (g->sw_wait < 1)
 		g->sw_wait = 1;
-	sim_sword_tick(&g->sim);
+	{
+		/* The blow's effect (VA 0x2747c). */
+		int ev = sim_sword_tick(&g->sim);
+
+		if (ev & SEV_HIT_FOE)
+			game_sfx(g, SFX_HIT_FOE);
+		else if (ev & SEV_HIT_YOU)
+			game_sfx(g, SFX_HIT_YOU);
+		else if (ev & SEV_CLASH)
+			game_sfx(g, SFX_PARRY);
+	}
 	if (g->sim.sword.result != SWORD_NONE) {
 		sword_outcome_done(g);
 	}
@@ -6228,6 +6246,9 @@ arrive_enter(struct game *g)
 	g->msg[0] = '\0';
 	if (g->arrive_stage == ARRIVE_MENU && t != NULL)
 		sim_arrive(&g->sim, g->sim.fleet.leaving);
+	/* Into a harbour from the sea (VA 0x18fa9, arr_sea.pcx). */
+	if (g->arrive_stage == ARRIVE_MENU && t != NULL && !inland)
+		game_sfx(g, SFX_HARBOUR);
 }
 
 static void
@@ -6258,6 +6279,7 @@ arrive_choose(struct game *g, int i)
 			g->assault_town = town;
 			g->assault_aboard = 0;
 			sim_land_start(&g->sim, town);
+			game_sfx(g, SFX_LAND_BATTLE);	/* VA 0x169b7 */
 			game_goto(g, &screen_land);
 		} else {
 			g->assault_town = town;

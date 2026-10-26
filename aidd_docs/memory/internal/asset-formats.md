@@ -335,7 +335,11 @@ The first 512 bytes of the matching PCX, presumably a backup for the
   - `PGJUKE` lists 20 tunes (A-T).
 - `DIGITAL.PIR`: 9 effects in 8-bit unsigned PCM at about 7330 Hz
   (`mov cx,1CA2h`). Start table at image offset `0x9f`, end table at
-  `0xb1`.
+  `0xb1` (words, image offsets; the image follows the MZ header, its
+  size in paragraphs at file offset 8). Lengths in the GOG build: 6852,
+  10716, 6276, 7307, 7800, 8904, 3300, 4159, 2964 bytes. The game loads
+  it at start (VA `0x2a0f`) and plays effect n through VA `0x7d82`,
+  only when it loaded; see "Sound effects" in game-rules.md.
 
 ## Original save files (layout traced, fields mostly not decoded)
 

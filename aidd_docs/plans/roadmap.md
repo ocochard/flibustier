@@ -289,11 +289,12 @@ Status (2026-10-26): first slice.
   starvation.
 - **Reefs:** big ships lost on the shallows.
 - **Forced retirement:** age and wounds end a career at the bank.
+- **Sound effects:** the digitised effects at the original's moments.
+- **Next:** music (the AdLib driver's tunes and an OPL2 emulator).
 - **A capture's plunder:** gold, the loot board with cannon, the
   volunteers.
 - **Near a town:** the hunted pirate off his town; a battle's heat, a
   capture's toll on the town's wealth, and the crew's news of villains.
-- **Next:** see the open items in game-rules.md.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

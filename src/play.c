@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "raylib.h"
 
@@ -103,6 +104,52 @@ feed_input(struct game *g, Vector2 *last_mouse)
 	}
 }
 
+/*
+ * The digitised effects through raylib's audio device: loaded once,
+ * played when the game asks.  Without a device the game stays silent.
+ */
+static void
+sounds_load(const struct game *g, Sound sfx[DIGITAL_EFFECTS])
+{
+	Wave w;
+	int i;
+
+	memset(sfx, 0, sizeof(Sound) * DIGITAL_EFFECTS);
+	InitAudioDevice();
+	if (!IsAudioDeviceReady())
+		return;
+	for (i = 0; i < DIGITAL_EFFECTS; i++) {
+		if (g->sfx.pcm[i] == NULL)
+			continue;
+		w = (Wave){ (unsigned)g->sfx.len[i], DIGITAL_RATE, 8, 1,
+		    g->sfx.pcm[i] };
+		sfx[i] = LoadSoundFromWave(w);
+	}
+}
+
+static void
+sounds_play(struct game *g, Sound sfx[DIGITAL_EFFECTS])
+{
+	int i;
+
+	for (i = 0; i < DIGITAL_EFFECTS; i++)
+		if ((g->sfx_pending & (1u << i)) && sfx[i].frameCount > 0)
+			PlaySound(sfx[i]);
+	g->sfx_pending = 0;
+}
+
+static void
+sounds_unload(Sound sfx[DIGITAL_EFFECTS])
+{
+	int i;
+
+	for (i = 0; i < DIGITAL_EFFECTS; i++)
+		if (sfx[i].frameCount > 0)
+			UnloadSound(sfx[i]);
+	if (IsAudioDeviceReady())
+		CloseAudioDevice();
+}
+
 int
 play_run(struct packs *packs, const char *lang, const char *saves,
     const char *shot, int shot_frames, int crt_on)
@@ -115,6 +162,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	char dir[512];
 	int frames = 0, rc = 0, k, big_k, tw, th;
 	RenderTexture2D big;
+	Sound sfx[DIGITAL_EFFECTS];
 	struct crt crt = { 0 };
 	Rectangle box;
 
@@ -137,6 +185,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	SetExitKey(KEY_NULL);	/* Escape is a game key */
 	HideCursor();		/* the game draws its own sword pointer */
 	SetTargetFPS(60);
+	sounds_load(&g, sfx);
 	im = (Image){ rgb, tw, th, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
 	tex = LoadTextureFromImage(im);
 	SetTextureFilter(tex, TEXTURE_FILTER_POINT);
@@ -153,6 +202,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	while (!WindowShouldClose() && !g.quit) {
 		feed_input(&g, &last_mouse);
 		game_tick(&g);
+		sounds_play(&g, sfx);
 		game_draw(&g);
 		fb_to_rgb(&g.fb, g.brightness, rgb);
 		UpdateTexture(tex, rgb);
@@ -200,6 +250,7 @@ shown:
 		UnloadRenderTexture(big);
 	crt_unload(&crt);
 	UnloadTexture(tex);
+	sounds_unload(sfx);
 	CloseWindow();
 	free(rgb);
 	game_free(&g);

@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "assets/digital.h"
 #include "assets/font.h"
 #include "assets/text.h"
 #include "data/exe.h"
@@ -252,6 +253,11 @@ struct game {
 	/* After a sea battle, the steps still to show. */
 	int			 btl_news, btl_landed, btl_aboard, btl_hunted;
 	int			 btl_loot;	/* a capture's board to show */
+	/* The digitised effects, and those asked for since the front end
+	 * last played them (bit n: effect n); the last one, for tests. */
+	struct digital		 sfx;
+	unsigned		 sfx_pending;
+	int			 sfx_last;
 	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the
@@ -303,5 +309,21 @@ void	game_draw(struct game *g);	/* into g->fb */
 /* Strings, "" when missing. */
 const char	*game_str(const struct game *g, size_t i);
 const char	*game_word(const struct game *g, size_t group, size_t i);
+
+/* The digitised effects by where the original plays them (VA 0x7d82). */
+enum {
+	SFX_HAIL,		/* a named captain's "Arrgh!" (VA 0xd1fc) */
+	SFX_BROADSIDE,		/* either ship fires (VA 0x7db8) */
+	SFX_LAND_BATTLE,	/* a land battle begins (VA 0x169b7) */
+	SFX_DUEL_3,		/* the sword fight, not identified */
+	SFX_HARBOUR,		/* sailing into a harbour (VA 0x18fa9) */
+	SFX_SAIL_HO,		/* a sail sighted (VA 0xd1fc) */
+	SFX_PARRY,		/* blades meet (VA 0x2747c) */
+	SFX_HIT_FOE,		/* the player's blow lands */
+	SFX_HIT_YOU		/* the opponent's blow lands */
+};
+
+/* Ask for digitised effect n (SFX_*) to play. */
+void	game_sfx(struct game *g, int n);
 
 #endif
