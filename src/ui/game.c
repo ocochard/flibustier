@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "assets/pic.h"
+#include "assets/fonts.h"
 #include "assets/scenario.h"
 #include "assets/sheet.h"
 #include "assets/towns.h"
@@ -57,24 +58,15 @@ load_text(struct game *g)
 static int
 load_fonts(struct game *g)
 {
-	struct blob b;
 	char id[32];
-	int i, rc;
+	int i;
 
 	for (i = 0; i < GAME_FONTS; i++) {
 		snprintf(id, sizeof(id), "font/pirate%d", i + 1);
-		if (packs_load(g->packs, id, &b) != 0)
-			return (-1);
-		rc = font_decode(b.data, b.len, &g->font[i]);
-		blob_free(&b);
-		if (rc != 0)
+		if (font_load(g->packs, id, g->fb.out_h, &g->font[i]) != 0)
 			return (-1);
 	}
-	if (packs_load(g->packs, "font/caps", &b) != 0)
-		return (-1);
-	rc = caps_decode(b.data, b.len, &g->caps);
-	blob_free(&b);
-	return (rc);
+	return (font_load(g->packs, "font/caps", g->fb.out_h, &g->caps));
 }
 
 /*

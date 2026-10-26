@@ -45,4 +45,7 @@ char	*macroman_to_utf8(const uint8_t *s, size_t len);
  */
 int	utf8_next_macroman(const char **s);
 
+/* The Unicode code point of Mac Roman character "c" (0..255). */
+int	macroman_unicode(int c);
+
 #endif

@@ -24,10 +24,17 @@
 
 #define TEXT_MAX_OPTIONS	16
 
-/* Where pixels go: a palette index for the framebuffer, or a colour. */
+/*
+ * Where pixels go: a palette index for the framebuffer, or a colour.
+ * With "glyph", whole glyphs go there instead, the pen at x_sub /
+ * FONT_SUB and the line top at y, so replacement fonts can be drawn at
+ * their own resolution.
+ */
 struct text_target {
 	void	(*plot)(void *arg, int x, int y, uint32_t ink);
 	void	 *arg;
+	void	(*glyph)(void *arg, const struct font *f, size_t g, int x_sub,
+		    int y, uint32_t ink);
 };
 
 struct text_style {

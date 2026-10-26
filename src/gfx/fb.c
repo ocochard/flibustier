@@ -326,6 +326,56 @@ fb_frame(struct fb *fb, const struct frame *f, int x, int y)
 	fb_frame_clip(fb, f, x, y, 0, 0, FB_W - 1, FB_H - 1);
 }
 
+void
+fb_glyph(struct fb *fb, const struct font *f, size_t g, int x_sub, int y,
+    uint8_t ink)
+{
+	const struct hd_glyph *h;
+	const uint8_t *col = fb->pal + 3 * ink, *under;
+	int x, gx, gy, cx, cy, ox, oy, k, hd;
+	uint8_t a, *d;
+	size_t o;
+
+	if (g >= f->count)
+		return;
+	hd = f->hd != NULL && f->hd_height == fb->out_h;
+	/* The nearest pixel of the pen, as text layout rounds. */
+	x = canvas_at(x_sub + FONT_SUB / 2, 1, FONT_SUB) - f->origin_x;
+	for (gy = 0; gy < f->height; gy++)
+		for (gx = 0; gx < f->cell_w; gx++) {
+			if (!font_pixel(f, g, gx, gy) || x + gx < 0 ||
+			    x + gx >= FB_W || y + gy < 0 || y + gy >= FB_H)
+				continue;
+			o = (size_t)(y + gy) * FB_W + x + gx;
+			if (hd)
+				fb->px[o] = ink;
+			else
+				fb_put(fb, o, ink);
+		}
+	if (!hd || (h = &f->hd[g])->cov == NULL)
+		return;
+	cx = canvas_at(x_sub, fb->out_w, FB_W * FONT_SUB) + h->x;
+	cy = canvas_at(y, fb->out_h, FB_H) + h->y;
+	for (gy = 0; gy < h->h; gy++) {
+		oy = cy + gy;
+		if (oy < 0 || oy >= fb->out_h)
+			continue;
+		for (gx = 0; gx < h->w; gx++) {
+			ox = cx + gx;
+			if (ox < 0 || ox >= fb->out_w ||
+			    (a = h->cov[(size_t)gy * h->w + gx]) == 0)
+				continue;
+			o = (size_t)oy * fb->out_w + ox;
+			d = fb->rgb + o * 3;
+			under = fb->tc[o] ? d : fb->pal + 3 * fb->idx[o];
+			for (k = 0; k < 3; k++)
+				d[k] = (uint8_t)((col[k] * a + under[k] *
+				    (255 - a) + 127) / 255);
+			fb->tc[o] = 1;
+		}
+	}
+}
+
 uint8_t
 fb_nearest(const struct fb *fb, int r, int g, int b)
 {

@@ -149,6 +149,13 @@ plot(void *arg, int x, int y, uint32_t ink)
 }
 
 static void
+put_glyph(void *arg, const struct font *f, size_t g, int x_sub, int y,
+    uint32_t ink)
+{
+	fb_glyph(arg, f, g, x_sub, y, (uint8_t)ink);
+}
+
+static void
 style(const struct game *g, int font, int caps, struct text_style *st)
 {
 	st->font = &g->font[font];
@@ -164,7 +171,7 @@ static int
 draw(struct game *g, int font, int x, int y, int w, const char *text,
     int menu)
 {
-	struct text_target t = { plot, &g->fb };
+	struct text_target t = { plot, &g->fb, put_glyph };
 	struct text_style st;
 	struct text_layout lay;
 
@@ -679,7 +686,7 @@ welcome_draw(struct game *g)
 	 * options in PIRATE1 with full-width rows for the mouse. */
 	static const int line_y[WELCOME_HEADING + 4] = { 70, 120, 145, 170,
 	    195, 250, 300, 330, 360, 390 };
-	struct text_target t = { plot, &g->fb };
+	struct text_target t = { plot, &g->fb, put_glyph };
 	struct text_style st;
 	char opt[256], quit[96];
 	const char *text;
@@ -752,7 +759,7 @@ era_event(struct game *g, const struct ui_event *ev)
 static void
 era_draw(struct game *g)
 {
-	struct text_target t = { plot, &g->fb };
+	struct text_target t = { plot, &g->fb, put_glyph };
 	struct text_style st;
 	char opt[160];
 	const char *name;

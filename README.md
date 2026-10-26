@@ -32,8 +32,11 @@ Requirements:
 - A C99 compiler (clang or gcc)
 - CMake 3.16 or later
 - [raylib](https://github.com/raysan5/raylib) 5.5 or later (optional: if
-  not installed, CMake downloads and builds raylib 5.5). On FreeBSD:
-  `pkg install cmake raylib`
+  not installed, CMake downloads and builds raylib 5.5)
+- [FreeType](https://freetype.org/) 2 (optional: if not installed, CMake
+  downloads and builds FreeType 2.14.3)
+
+On FreeBSD: `pkg install cmake raylib freetype2`
 
 ```sh
 cmake -B build

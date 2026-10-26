@@ -119,4 +119,37 @@ image = tavern.png
     transparency).
 - Limits: the title is composed on indices (intro), and so are sprites
   drawn into the treasure map, so those show at original resolution.
-  Fonts, tiles (`tiles/`) and `img/` have no replacement format yet.
+  Tiles (`tiles/`) and `img/` have no replacement format yet.
+
+## Replacement fonts
+
+Any `font/` ID may map to a `.font` file, loaded by `font_load()`
+(`src/assets/fonts.c`) through FreeType:
+
+```ini
+# fonts/pirate1.font
+[font]
+file = PirataOne-Regular.ttf
+# line height in 640x480 pixels, as the original font's
+height = 25
+# optional: glyph size (default: height) and baseline below the line top
+# (default: the font's ascender), in 640x480 pixels
+size = 22.5
+baseline = 19
+```
+
+- `file` (TrueType or OpenType) is relative to the descriptor, in the
+  same pack.
+- Original line heights: `pirate1` 25, `pirate2` 15, `pirate3` 14,
+  `pirate4` 30, `caps` 34.
+- `font/caps` holds the drop capitals, looked up as A-Z then the
+  accented capitals (`caps_char()`); the other fonts hold characters
+  0x21-0xFF, mapped from Mac Roman to Unicode.
+- Text layout stays in 640x480 pixels but moves the pen in 1/16 pixel,
+  so the font's own spacing survives; the original fonts advance by
+  whole pixels as before.
+- Glyphs are rasterised once for the canvas and blended by coverage in
+  the text colour. The 640x480 screen gets 1-bit glyphs (coverage at
+  least half), so code reading it still works.
+- No kerning yet.
+

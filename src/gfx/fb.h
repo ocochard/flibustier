@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 
+#include "assets/font.h"
 #include "assets/image.h"
 #include "assets/sprite.h"
 
@@ -92,6 +93,15 @@ void	fb_frame(struct fb *fb, const struct frame *f, int x, int y);
 /* The same, clipped to the rectangle (x0, y0)-(x1, y1), inclusive. */
 void	fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y,
 	    int x0, int y0, int x1, int y1);
+
+/*
+ * Draw glyph "g" of "f" in palette colour "ink", the pen at x_sub /
+ * FONT_SUB and the line top at y.  The 640x480 screen gets the 1-bit
+ * glyph; a replacement font rasterised for this canvas is blended onto
+ * it by coverage.
+ */
+void	fb_glyph(struct fb *fb, const struct font *f, size_t g, int x_sub,
+	    int y, uint8_t ink);
 
 /* Palette index whose colour is closest to (r, g, b). */
 uint8_t	fb_nearest(const struct fb *fb, int r, int g, int b);

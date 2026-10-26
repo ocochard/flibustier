@@ -19,6 +19,7 @@
 #include "data/pack.h"
 #include "data/sha256.h"
 #include "assets/font.h"
+#include "assets/fonts.h"
 #include "assets/img.h"
 #include "assets/pcx.h"
 #include "assets/pic.h"
@@ -30,6 +31,7 @@
 #include "assets/tileset.h"
 #include "assets/towns.h"
 #include "gfx/fb.h"
+#include "gfx/text.h"
 
 static int failures;
 
@@ -573,6 +575,7 @@ test_font(void)
 	CHECK(font_decode(buf, sizeof(buf), &font) == 0);
 	CHECK(font.count == 143 && font.first == 0x21 && font.height == 1);
 	CHECK(font.glyphs[0].ink == 3 && font.glyphs[0].advance == 4);
+	CHECK(font.glyphs[0].advance_sub == 4 * FONT_SUB);
 	CHECK(font_pixel(&font, 0, 8, 0) == 1 && font_pixel(&font, 0, 7, 0) == 0);
 	CHECK(font_pixel(&font, 0, 99, 0) == 0);
 	font_free(&font);
@@ -862,6 +865,176 @@ test_sheets(void)
 	rmdir(high);
 }
 
+/* A TrueType font of the system for the font tests, or NULL. */
+static const char *
+test_font_file(void)
+{
+	static const char *const paths[] = {
+		"/usr/local/share/fonts/dejavu/DejaVuSans.ttf",
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+		"/usr/share/fonts/TTF/DejaVuSans.ttf",
+		"/usr/share/fonts/dejavu/DejaVuSans.ttf",
+		"/Library/Fonts/Arial Unicode.ttf",
+		"C:/Windows/Fonts/arial.ttf",
+	};
+	const char *env = getenv("STMALO_TEST_FONT");
+	size_t i;
+
+	if (env != NULL && access(env, R_OK) == 0)
+		return (env);
+	for (i = 0; i < sizeof(paths) / sizeof(paths[0]); i++)
+		if (access(paths[i], R_OK) == 0)
+			return (paths[i]);
+	return (NULL);
+}
+
+static int
+copy_file(const char *from, const char *dir, const char *name)
+{
+	FILE *in, *out;
+	char path[1024], buf[8192];
+	size_t n;
+	int rc = 0;
+
+	snprintf(path, sizeof(path), "%s/%s", dir, name);
+	if ((in = fopen(from, "rb")) == NULL)
+		return (-1);
+	if ((out = fopen(path, "wb")) == NULL) {
+		fclose(in);
+		return (-1);
+	}
+	while ((n = fread(buf, 1, sizeof(buf), in)) > 0)
+		if (fwrite(buf, 1, n, out) != n)
+			rc = -1;
+	fclose(in);
+	return (fclose(out) != 0 ? -1 : rc);
+}
+
+/* Load font/pirate1 from "dir" after writing "desc" as its descriptor. */
+static int
+try_font(const char *dir, const char *desc)
+{
+	struct packs *packs = packs_new();
+	struct font f;
+	int rc;
+
+	if (write_text(dir, "f.font", desc) != 0 ||
+	    packs_add_dir(packs, dir) != 0) {
+		packs_free(packs);
+		return (-2);
+	}
+	rc = font_load(packs, "font/pirate1", 960, &f);
+	font_free(&f);
+	packs_free(packs);
+	return (rc);
+}
+
+/*
+ * Replacement fonts: 640x480 metrics with fractional advances, 1-bit
+ * glyphs for the screen, coverage glyphs for the canvas.
+ */
+static void
+test_fonts(void)
+{
+	static const char *const files[] = { "pack.ini", "f.font", "f.ttf",
+	    "caps.font", NULL };
+	static const char good[] = "[font]\nfile = f.ttf\nheight = 25\n"
+	    "size = 22.5\nbaseline = 19\n";
+	static struct fb fb;
+	const char *ttf = test_font_file();
+	char dir[] = "/tmp/stmalo-test-XXXXXX";
+	struct packs *packs;
+	struct font f, caps;
+	const struct glyph *a;
+	uint8_t *rgb;
+	size_t i, n;
+	int x, y, inked;
+
+	if (ttf == NULL) {
+		printf("font tests skipped: no TrueType font found "
+		    "(set STMALO_TEST_FONT)\n");
+		return;
+	}
+	if (mkdtemp(dir) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	CHECK(copy_file(ttf, dir, "f.ttf") == 0);
+	CHECK(write_text(dir, "pack.ini", "[pack]\nart_height = 960\n"
+	    "[assets]\nfont/pirate1 = f.font\nfont/caps = caps.font\n") == 0);
+	CHECK(write_text(dir, "f.font", good) == 0);
+	CHECK(write_text(dir, "caps.font", "[font]\nfile = f.ttf\n"
+	    "height = 34\n") == 0);
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, dir) == 0);
+
+	CHECK(font_load(packs, "font/pirate1", 960, &f) == 0);
+	CHECK(f.height == 25 && f.first == 0x21 && f.count == 0xFF - 0x21 + 1);
+	CHECK(f.space_sub > 0 && f.hd != NULL && f.hd_height == 960);
+	if (f.count > 'A' - 0x21) {
+		a = &f.glyphs['A' - 0x21];
+		CHECK(a->advance_sub > 0 &&
+		    a->advance == (a->advance_sub + FONT_SUB / 2) / FONT_SUB);
+		CHECK(f.hd['A' - 0x21].cov != NULL);
+		/* "A" stands on the baseline, 19 pixels down. */
+		inked = 0;
+		for (y = 0; y < f.height; y++)
+			for (x = 0; x < f.cell_w; x++)
+				if (font_pixel(&f, 'A' - 0x21, x, y)) {
+					inked++;
+					CHECK(y < 19);
+				}
+		CHECK(inked > 20);
+		/* Widths keep fractions: ten letters are ten advances. */
+		CHECK(text_width(&f, "AAAAAAAAAA") ==
+		    (10 * a->advance_sub + FONT_SUB / 2) / FONT_SUB);
+	}
+
+	/* On a 2x canvas: ink on the screen and blended on the canvas. */
+	if (fb_init(&fb, 960) == 0 &&
+	    (rgb = malloc((size_t)1280 * 960 * 3)) != NULL) {
+		palette_fixed(fb.pal);
+		fb_clear(&fb, 215);		/* white */
+		fb_glyph(&fb, &f, 'I' - 0x21, 100 * FONT_SUB, 100, 0);
+		inked = 0;
+		for (i = 0; i < sizeof(fb.px); i++)
+			inked += fb.px[i] == 0;
+		CHECK(inked > 10);
+		fb_to_rgb(&fb, 256, rgb);
+		n = 0;
+		inked = 0;
+		for (i = 0; i < (size_t)1280 * 960; i++) {
+			if (rgb[3 * i] == 0)
+				inked++;
+			else if (rgb[3 * i] < 255)
+				n++;		/* antialiased edge */
+		}
+		CHECK(inked > 40 && n > 0);
+		free(rgb);
+	}
+	fb_free(&fb);
+	font_free(&f);
+
+	/* Drop capitals, in caps_char() order. */
+	CHECK(font_load(packs, "font/caps", 960, &caps) == 0);
+	CHECK(caps.count == CAPS_COUNT && caps.height == 34 &&
+	    caps.glyphs[0].ink > 0);
+	CHECK(caps_char(0) == 'A' && caps_index('a') == 0 &&
+	    caps_index(caps_char(30)) == 30 && caps_char(CAPS_COUNT) == -1);
+	font_free(&caps);
+	packs_free(packs);
+
+	CHECK(try_font(dir, good) == 0);
+	CHECK(try_font(dir, "[font]\nheight = 25\n") == -1);
+	CHECK(try_font(dir, "[font]\nfile = f.ttf\n") == -1);
+	CHECK(try_font(dir, "[font]\nfile = f.ttf\nheight = 2.5\n") == -1);
+	CHECK(try_font(dir, "[font]\nfile = f.ttf\nheight = 25\nsize = x\n")
+	    == -1);
+	CHECK(try_font(dir, "[font]\nfile = none.ttf\nheight = 25\n") == -1);
+	CHECK(try_font(dir, "[font]\nfile = pack.ini\nheight = 25\n") == -1);
+	remove_files(dir, files);
+}
+
 int
 main(void)
 {
@@ -879,6 +1052,7 @@ main(void)
 	test_pic();
 	test_fb();
 	test_sheets();
+	test_fonts();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

@@ -11,6 +11,7 @@
 #include "data/exe.h"
 #include "assets/font.h"
 #include "assets/img.h"
+#include "assets/fonts.h"
 #include "assets/pic.h"
 #include "assets/sheet.h"
 #include "assets/sprite.h"
@@ -208,14 +209,7 @@ blit(struct rgb *o, int dx, int dy, int w, int h, const uint8_t *px,
 static int
 load_font(struct packs *packs, const char *id, struct font *f)
 {
-	struct blob b;
-	int rc;
-
-	if (packs_load(packs, id, &b) != 0)
-		return (-1);
-	rc = font_decode(b.data, b.len, f);
-	blob_free(&b);
-	return (rc);
+	return (font_load(packs, id, VIEW_H, f));
 }
 
 /* Text through the shared renderer, plotting packed 0xRRGGBB colours. */
@@ -239,7 +233,7 @@ static int
 draw_text(struct rgb *o, const struct font *f, int x, int y, int maxw,
     const char *s, const uint8_t col[3])
 {
-	struct text_target t = { plot_rgb, o };
+	struct text_target t = { plot_rgb, o, NULL };
 	struct text_style st;
 	struct text_layout lay;
 
@@ -555,9 +549,7 @@ open_decoded(struct view *v, const struct blob *b, char *err, size_t errlen)
 		v->nframes = 1;
 	} else if (starts(id, "font/")) {
 		v->kind = K_FONT;
-		rc = strcmp(id, "font/caps") == 0 ?
-		    caps_decode(b->data, b->len, &v->font) :
-		    font_decode(b->data, b->len, &v->font);
+		rc = font_from_blob(v->packs, id, b, VIEW_H, &v->font);
 		v->nframes = 1;
 	} else if (starts(id, "text/") && strstr(id, "/cstr") != NULL) {
 		v->kind = K_CSTR;

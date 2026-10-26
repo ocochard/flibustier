@@ -33,6 +33,12 @@ le16(const uint8_t *p)
 void
 font_free(struct font *font)
 {
+	size_t i;
+
+	if (font->hd != NULL)
+		for (i = 0; i < font->count; i++)
+			free(font->hd[i].cov);
+	free(font->hd);
 	free(font->glyphs);
 	free(font->bitmap);
 	memset(font, 0, sizeof(*font));
@@ -46,6 +52,38 @@ font_pixel(const struct font *font, size_t i, int x, int y)
 		return (0);
 	return (font->bitmap[(i * font->height + (size_t)y) * font->cell_w +
 	    (size_t)x]);
+}
+
+/* Drop capitals: A-Z, then accented capitals in this order (inferred
+ * from the glyph shapes; the accents are not confirmed). */
+static const unsigned char caps_extra[] = {
+	0xCB /* À */, 0x80 /* Ä */, 0x82 /* Ç */, 0x83 /* É */,
+	0x84 /* Ñ */, 0x85 /* Ö */, 0x86 /* Ü */,
+};
+
+int
+caps_char(size_t i)
+{
+	if (i < 26)
+		return ('A' + (int)i);
+	if (i - 26 < sizeof(caps_extra))
+		return (caps_extra[i - 26]);
+	return (-1);
+}
+
+int
+caps_index(int c)
+{
+	size_t i;
+
+	if (c >= 'A' && c <= 'Z')
+		return (c - 'A');
+	if (c >= 'a' && c <= 'z')
+		return (c - 'a');
+	for (i = 0; i < sizeof(caps_extra); i++)
+		if (c == caps_extra[i])
+			return (26 + (int)i);
+	return (-1);
 }
 
 /* Unpack "count" entries of "esize" bytes starting at "p". */
@@ -71,6 +109,7 @@ unpack(struct font *out, const uint8_t *p, size_t count, size_t esize,
 		e = p + i * esize;
 		out->glyphs[i].ink = (int)le16(e);
 		out->glyphs[i].advance = (int)le16(e + 2);
+		out->glyphs[i].advance_sub = out->glyphs[i].advance * FONT_SUB;
 		for (r = 0; r < rows; r++) {
 			row = e + 4 + (size_t)r * rowbytes;
 			dst = out->bitmap + (i * rows + (size_t)r) *

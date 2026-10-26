@@ -63,6 +63,12 @@ macroman_to_utf8(const uint8_t *s, size_t len)
 }
 
 int
+macroman_unicode(int c)
+{
+	return (c < 0x80 ? c : macroman[(c - 0x80) & 0x7F]);
+}
+
+int
 utf8_next_macroman(const char **s)
 {
 	const unsigned char *p = (const unsigned char *)*s;

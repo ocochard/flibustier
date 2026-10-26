@@ -21,6 +21,7 @@ add_library(stmalo_core STATIC
 	src/data/pack.c
 	src/data/sha256.c
 	src/assets/font.c
+	src/assets/fonts.c
 	src/assets/image.c
 	src/assets/img.c
 	src/assets/pcx.c
@@ -59,6 +60,31 @@ target_include_directories(stmalo_core PUBLIC src)
 target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
 # The vendored stb_image is not ours to keep warning-free.
 set_source_files_properties(src/assets/png.c PROPERTIES COMPILE_OPTIONS -w)
+
+# FreeType draws the open pack's fonts: hardened for untrusted font files,
+# which packs from third parties are.  Use a system FreeType when
+# available, otherwise fetch a pinned release.
+find_package(Freetype QUIET)
+if(FREETYPE_FOUND)
+	target_link_libraries(stmalo_core PRIVATE Freetype::Freetype)
+else()
+	message(STATUS "System FreeType not found, fetching FreeType 2.14.3")
+	include(FetchContent)
+	set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+	set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+	set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+	set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+	set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+	FetchContent_Declare(freetype
+		GIT_REPOSITORY https://github.com/freetype/freetype.git
+		GIT_TAG VER-2-14-3
+		GIT_SHALLOW TRUE)
+	FetchContent_MakeAvailable(freetype)
+	target_link_libraries(stmalo_core PRIVATE freetype)
+endif()
+if(UNIX)
+	target_link_libraries(stmalo_core PRIVATE m)
+endif()
 
 # Use a system raylib 5.5 or later when available (CMake config or
 # pkg-config), otherwise fetch a pinned release.
