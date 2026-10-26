@@ -1902,6 +1902,51 @@ test_command(void)
 	CHECK(s.fleet.ships[0] == 5);
 }
 
+/* A landing party: ashore, walking, stopped by water, back aboard. */
+static void
+test_landing(void)
+{
+	struct sim s;
+	int town, i;
+	enum sail_stop r = SAIL_TICKS;
+	int32_t sx, sy;
+
+	sea_game(&s, 120, 52, 0x00);		/* south of the island */
+	for (i = 0; i < 400 && r != SAIL_LAND; i++)
+		r = sim_sail(&s, 0, 1, &town);
+	CHECK(r == SAIL_LAND && s.fleet.land_y / 16 == 49);
+	/* No: the ship turns about. */
+	sim_turn_back(&s);
+	CHECK(s.fleet.heading == 0x80 && !s.fleet.ashore);
+	s.fleet.heading = 0;
+	for (i = 0, r = SAIL_TICKS; i < 400 && r != SAIL_LAND; i++)
+		r = sim_sail(&s, 0, 1, &town);
+	CHECK(r == SAIL_LAND);
+	sx = s.fleet.x;
+	sy = s.fleet.y;
+	sim_go_ashore(&s);
+	CHECK(s.fleet.ashore && s.fleet.ship_x == sx && s.fleet.ship_y == sy &&
+	    s.fleet.x == s.fleet.land_x && s.fleet.y == s.fleet.land_y);
+	/* North, half a pixel a tick, into the island. */
+	CHECK(sim_march(&s, 0, -1, 40, &town) == SAIL_TICKS &&
+	    s.fleet.y == s.fleet.land_y - 20 && s.fleet.ashore);
+	/* East along the island, then south: water far from the landing
+	 * point stops the party. */
+	CHECK(sim_march(&s, 1, 0, 120, &town) == SAIL_TICKS);
+	CHECK(sim_march(&s, 0, 1, 200, &town) == SAIL_TICKS &&
+	    s.fleet.ashore && s.fleet.y / 16 == 49);
+	/* Back west and south to the landing point: aboard, bows south. */
+	CHECK(sim_march(&s, -1, 0, 120, &town) == SAIL_TICKS);
+	CHECK(sim_march(&s, 0, 1, 200, &town) == SAIL_BOARDED &&
+	    !s.fleet.ashore && s.fleet.x == sx && s.fleet.y == sy &&
+	    s.fleet.heading == 128);
+	/* Time passes on foot too. */
+	sim_go_ashore(&s);
+	i = s.day;
+	sim_march(&s, 0, 0, 64, &town);
+	CHECK(s.day == i + 1);
+}
+
 /* The tavern's people: the traveller, the map seller, the barmaid. */
 static void
 test_tavern_people(void)
@@ -2270,6 +2315,7 @@ main(void)
 	test_leave_heading();
 	test_assault();
 	test_tavern_people();
+	test_landing();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

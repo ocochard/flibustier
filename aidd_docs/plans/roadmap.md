@@ -250,8 +250,10 @@ Status (2026-10-26): first slice.
 - **Fort battle:** attacking a fortified town from the sea.
 - **Assault and sack:** storming a town, the plunder, installing a
   governor, prison after a defeat.
-- **Next:** the land march (arriving on foot), the crew's mood, and
-  what prison costs.
+- **Landing parties:** going ashore, walking, inland towns, back aboard.
+- **Tavern:** the traveller, the map seller and the barmaid.
+- **Next:** the land battle (attacking on foot), dividing parties, the
+  crew's mood, prison, treasure maps.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

@@ -203,8 +203,37 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
    - 1: shallows (16 colours);
    - 2: land (200 colours).
 
-   Odd classes are water. Moving onto land ends the voyage step (VA
-   `0x24808` handles it; landing parties are not specified yet).
+   Odd classes are water; land is where a landing party walks.
+
+### Landing parties (VA `0x231b8`, `0x315d`, `0x24808`)
+
+- **Going ashore:** when the ship's next step is on land, the player is
+  asked (a box at (268, 218)-(370, 248), answered Y or N; the original's
+  wording was not found, the engine writes "Ashore? Y/N"). No puts the
+  ship back where it was and turns it half round. Yes leaves the ship
+  where it stood and puts the party on that land.
+- **On foot:** the party walks with the input, eight directions (bits 1
+  west, 2 east, 4 north, 8 south), half a pixel a pass on each axis
+  moved. Time and the wind go on; there are no encounters.
+- **Sprite:** `sailmisc.spr`, four frames a direction from the table at
+  VA `0x36850` (north and standing 0, north-east 4, east 8, south-east
+  12, south 16, south-west 20, west 24, north-west 28), stepping every
+  four passes. The ship stays drawn where it waits.
+- **Back to the water:** within 11 pixels of where the party landed it
+  boards again, the ship heading the party's way (table at VA
+  `0x367ac`); anywhere else the water stops it.
+- **Towns on foot:** reached as by sea, including inland towns. The
+  arrival offers "March into town" (CSTN 29.5) on `arr_land.pcx`; the
+  fort may fire but sinks no ship. In town the ship is not in port: no
+  harbour picture, no shipwright. Leaving puts the party on the town's
+  own cell (VA `0x19bd0`).
+- **Attacking on foot:** the original fights a land battle first (VA
+  `0x5a80`) when the crew is at most `soldiers x 15`, the town has
+  forts and more than 9 soldiers; not done yet, the engine goes
+  straight to the assault.
+- **The cabin:** Save game only in town, Search only on foot outside a
+  town (the spots' flags are set from the arrival mode, VA `0xa060`).
+  Dividing and joining parties are not done yet.
 
 ### Leaving a town (VA `0x19b9e`)
 

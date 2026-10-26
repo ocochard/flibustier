@@ -1800,9 +1800,15 @@ cabin_open(const struct game *g, int i)
 {
 	int r[5];
 
-	if (cabin_rect(g, i, r) != 0 || !r[4])
+	if (cabin_rect(g, i, r) != 0)
 		return (0);
-	return (i != CABIN_SAVE || g->save_dir[0] != '\0');
+	/* Saving only in town, searching only ashore (VA 0xa060: the
+	 * table's flags are set from the arrival mode). */
+	if (i == CABIN_SAVE)
+		return (g->sim.player_town >= 0 && g->save_dir[0] != '\0');
+	if (i == CABIN_SEARCH)
+		return (g->sim.fleet.ashore && g->sim.player_town < 0);
+	return (r[4] != 0);
 }
 
 static int
@@ -2204,6 +2210,8 @@ clouds_start(struct game *g)
 	int i;
 
 	load_bank(g, "cur/cloud", 1, &g->cloud_spr);
+	load_bank(g, "spr/sailmisc", 0, &g->party_spr);
+	g->march_held = 0;
 	if (g->cloud_rand == 0)
 		g->cloud_rand = (uint32_t)g->sim.day * 2654435761u + 1;
 	for (i = 0; i < 3; i++) {
@@ -2317,6 +2325,42 @@ sail_enter(struct game *g)
 static void
 sail_event(struct game *g, const struct ui_event *ev)
 {
+	static const struct {
+		int	key, bits;
+	} walk[] = {
+		{ UI_KEY_LEFT, 1 }, { UI_KEY_RIGHT, 2 }, { UI_KEY_UP, 4 },
+		{ UI_KEY_DOWN, 8 }, { UI_KEY_UP_LEFT, 5 }, { UI_KEY_UP_RIGHT, 6 },
+		{ UI_KEY_DOWN_LEFT, 9 }, { UI_KEY_DOWN_RIGHT, 10 },
+	};
+	size_t i;
+
+	/* "Go ashore?" (VA 0x315d): Y or N; Enter and Escape as well. */
+	if (g->ashore_prompt) {
+		if ((ev->type == EV_CHAR && (ev->ch == 'y' || ev->ch == 'Y')) ||
+		    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)) {
+			g->ashore_prompt = 0;
+			g->turn = 0;
+			sim_go_ashore(&g->sim);
+		} else if ((ev->type == EV_CHAR && (ev->ch == 'n' ||
+		    ev->ch == 'N')) || (ev->type == EV_KEY &&
+		    ev->key == UI_KEY_ESCAPE)) {
+			g->ashore_prompt = 0;
+			sim_turn_back(&g->sim);
+		}
+		return;
+	}
+	/* On foot, the arrows walk while held (VA 0x1b210). */
+	if (g->sim.fleet.ashore && (ev->type == EV_KEY ||
+	    ev->type == EV_KEYUP)) {
+		for (i = 0; i < sizeof(walk) / sizeof(walk[0]); i++)
+			if (walk[i].key == ev->key) {
+				if (ev->type == EV_KEY)
+					g->march_held |= walk[i].bits;
+				else
+					g->march_held &= ~walk[i].bits;
+				return;
+			}
+	}
 	if (ev->type == EV_KEY && ev->key == UI_KEY_LEFT)
 		g->turn = -1;
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_RIGHT)
@@ -2348,9 +2392,14 @@ sail_tick(struct game *g)
 	if (!g->sail_fast && ++g->sail_wait < SAIL_FRAMES)
 		return;
 	g->sail_wait = 0;
+	if (g->ashore_prompt)
+		return;
 	g->sail_passes++;
 	clouds_move(g);
-	switch (sim_sail(&g->sim, g->turn, 1, &town)) {
+	switch (g->sim.fleet.ashore ? sim_march(&g->sim, g->march_held & 1 ?
+	    -1 : g->march_held & 2 ? 1 : 0, g->march_held & 4 ? -1 :
+	    g->march_held & 8 ? 1 : 0, 1, &town) :
+	    sim_sail(&g->sim, g->turn, 1, &town)) {
 	case SAIL_TOWN:
 		g->sail_fast = 0;		/* VA 0x284b6 */
 		g->arrive_stage = 0;
@@ -2361,6 +2410,12 @@ sail_tick(struct game *g)
 		game_goto(g, &screen_encounter);
 		break;
 	case SAIL_LAND:
+		g->ashore_prompt = 1;
+		g->turn = 0;
+		break;
+	case SAIL_BOARDED:
+		g->march_held = 0;
+		break;
 	case SAIL_TICKS:
 		break;
 	}
@@ -2391,10 +2446,32 @@ sail_draw(struct game *g)
 		}
 	if (g->ship.count == 16) {
 		fr = &g->ship.frames[f->heading >> 4];
-		fb_frame(&g->fb, fr, f->x - g->view_x - fr->w / 2,
-		    f->y - g->view_y - fr->h / 2);
+		fb_frame(&g->fb, fr, (f->ashore ? f->ship_x : f->x) -
+		    g->view_x - fr->w / 2, (f->ashore ? f->ship_y : f->y) -
+		    g->view_y - fr->h / 2);
+	}
+	if (f->ashore) {
+		/* The party: sailmisc.spr, four frames a direction (VA
+		 * 0x36850), stepping every four passes. */
+		static const int first[16] = { 0, 24, 8, 0, 0, 28, 4, 0, 16,
+		    20, 12, 0, 0, 0, 0, 0 };
+		int k = first[g->march_held & 15] +
+		    (int)((g->sail_passes >> 2) & 3);
+
+		if ((size_t)k < g->party_spr.count) {
+			fr = &g->party_spr.frames[k];
+			fb_frame(&g->fb, fr, f->x - g->view_x - fr->w / 2,
+			    f->y - g->view_y - fr->h / 2);
+		}
 	}
 	clouds_draw(g);
+	if (g->ashore_prompt) {
+		/* The box of VA 0x32184; the original's wording is not
+		 * found, an engine text stands in. */
+		fb_rect(&g->fb, 268, 218, 103, 31, fb_nearest(&g->fb, 20, 15,
+		    10));
+		draw(g, FONT_SMALL, 276, 226, 92, "Ashore? Y/N", 0);
+	}
 	date_text(g, buf, sizeof(buf));
 	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
 	    game_word(g, W_COMPASS, (size_t)(g->sim.wind >> 4)), NULL);
@@ -3470,9 +3547,11 @@ sword_draw(struct game *g)
 	sword_fighter(g, 0, &sw->you);
 	sword_fighter(g, 1, &sw->foe);
 	nation = sw->nation < 0 || sw->nation > 4 ? 4 : sw->nation;
-	sword_flag(g, 0, SW_YOU_FLAG_X, 6 + (int)(g->ticks & 7), sw->you.bar);
-	sword_flag(g, 1, SW_FOE_FLAG_X, 14 + 8 * nation + (int)(g->ticks & 7),
-	    sw->foe.bar);
+	/* The flags wave a frame per fight tick, not per screen frame. */
+	sword_flag(g, 0, SW_YOU_FLAG_X, 6 + (int)(sw->counter & 7),
+	    sw->you.bar);
+	sword_flag(g, 1, SW_FOE_FLAG_X, 14 + 8 * nation + (int)(sw->counter &
+	    7), sw->foe.bar);
 
 	/* The nation leads the title only in crew fights against a known
 	 * nation (VA 0x16205). */
@@ -3581,6 +3660,8 @@ town_open(const struct game *g, int i)
 		    !(g->sim.visit_flags & VISIT_GOVERNOR));
 	case SPOT_BANK:
 		return (!(g->sim.visit_flags & VISIT_SNEAKED));
+	case SPOT_SHIPWRIGHT:		/* the ship must be in port */
+		return (!g->sim.fleet.ashore);
 	default:
 		return (1);
 	}
@@ -3711,7 +3792,7 @@ town_draw(struct game *g)
 
 	/* The harbour and the shipwright's shed when the ship is in port,
 	 * the closed gate when the governor will not receive. */
-	if (g->town_spr.count > 0)
+	if (g->town_spr.count > 0 && !g->sim.fleet.ashore)
 		fb_frame(&g->fb, &g->town_spr.frames[0], 0, 258);
 	if (g->town_spr.count > 1 && !town_open(g, SPOT_GOVERNOR))
 		fb_frame(&g->fb, &g->town_spr.frames[1], 582, 216);
@@ -5071,7 +5152,8 @@ static void
 arrive_enter(struct game *g)
 {
 	const struct sim_town *t = arrive_town(g);
-	int inland = t != NULL && (t->flags & TOWN_INLAND);
+	int inland = t != NULL && ((t->flags & TOWN_INLAND) ||
+	    g->sim.fleet.ashore);
 
 	game_background(g, g->arrive_stage == ARRIVE_GUARD ? "pic/landpir" :
 	    inland ? "pic/arr_land" : "pic/arr_sea");
@@ -5206,7 +5288,7 @@ arrive_draw(struct game *g)
 	fill_args(text, sizeof(text), game_str(g, S_ARRIVED), arg, 5);
 	draw(g, FONT_BODY, ARR_TEXT_X, 40, 290, text, 0);
 	snprintf(label, sizeof(label), "%s", game_word(g, W_ARRIVAL,
-	    ARR_SAIL_IN));
+	    ARR_SAIL_IN + (g->sim.fleet.ashore ? 1 : 0)));
 	fill(text, sizeof(text), game_str(g, S_ARRIVE_MENU), label, NULL);
 	draw(g, FONT_BODY, ARR_TEXT_X, 260, 290, text, 1);
 	if (g->msg[0] != '\0')

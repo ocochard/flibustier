@@ -557,9 +557,11 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 			shift_wind(s);
 		if (f->ticks % TICKS_PER_DAY == 0)
 			sim_advance(s, 1);
-		/* Ships never sail onto land. */
+		/* Ships never sail onto land; the player may go ashore. */
 		if (world_terrain(s->world, nx, ny) == TERRAIN_LAND) {
 			f->speed = 0;
+			f->land_x = nx;
+			f->land_y = ny;
 			return (SAIL_LAND);
 		}
 		f->x = nx;
@@ -576,6 +578,97 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		    sighting(s)) {
 			f->speed = 0;
 			return (SAIL_ENCOUNTER);
+		}
+	}
+	return (SAIL_TICKS);
+}
+
+#define BOARD_REACH	11	/* pixels from the landing point */
+
+void
+sim_go_ashore(struct sim *s)
+{
+	struct sim_fleet *f = &s->fleet;
+
+	if (f->ashore || s->world == NULL ||
+	    world_terrain(s->world, f->land_x, f->land_y) != TERRAIN_LAND)
+		return;
+	f->ashore = 1;
+	f->ship_x = f->x;
+	f->ship_y = f->y;
+	f->x = f->land_x;
+	f->y = f->land_y;
+	f->fx = f->fy = 4;
+	f->speed = 0;
+}
+
+void
+sim_turn_back(struct sim *s)
+{
+	s->fleet.heading = (uint8_t)(s->fleet.heading + 0x80);
+}
+
+/* The ship's heading on boarding, by the party's direction (VA 0x367ac;
+ * bits 1 west, 2 east, 4 north, 8 south). */
+static uint8_t
+boarding_heading(int dx, int dy)
+{
+	static const uint8_t h[16] = { 0, 192, 64, 0, 0, 224, 32, 0, 128,
+	    160, 96, 0, 0, 0, 0, 0 };
+
+	return (h[(dx < 0 ? 1 : dx > 0 ? 2 : 0) |
+	    (dy < 0 ? 4 : dy > 0 ? 8 : 0)]);
+}
+
+enum sail_stop
+sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
+{
+	struct sim_fleet *f = &s->fleet;
+	int32_t x8, y8, nx, ny;
+	int t;
+
+	*town = -1;
+	if (s->world == NULL || !f->ashore)
+		return (SAIL_TICKS);
+	dx = dx < 0 ? -1 : dx > 0 ? 1 : 0;
+	dy = dy < 0 ? -1 : dy > 0 ? 1 : 0;
+	while (ticks-- > 0) {
+		f->ticks++;
+		if (f->ticks % WIND_TICKS == 0)
+			shift_wind(s);
+		if (f->ticks % TICKS_PER_DAY == 0)
+			sim_advance(s, 1);
+		if (dx == 0 && dy == 0)
+			continue;
+		x8 = f->x * 8 + f->fx + dx * 4;
+		y8 = f->y * 8 + f->fy + dy * 4;
+		nx = x8 >> 3;
+		ny = y8 >> 3;
+		if (nx > EDGE_MAX_X || nx < EDGE_MIN || ny > EDGE_MAX_Y ||
+		    ny < EDGE_MIN)
+			continue;
+		if (world_terrain(s->world, nx, ny) != TERRAIN_LAND) {
+			/* Water: aboard again near the landing point. */
+			if (abs(nx - f->land_x) < BOARD_REACH &&
+			    abs(ny - f->land_y) < BOARD_REACH) {
+				f->ashore = 0;
+				f->x = f->ship_x;
+				f->y = f->ship_y;
+				f->fx = f->fy = 4;
+				f->heading = boarding_heading(dx, dy);
+				f->speed = 0;
+				return (SAIL_BOARDED);
+			}
+			continue;
+		}
+		f->x = nx;
+		f->y = ny;
+		f->fx = (uint8_t)(x8 & 7);
+		f->fy = (uint8_t)(y8 & 7);
+		if ((t = town_at(s)) >= 0) {
+			*town = t;
+			f->leaving = t;
+			return (SAIL_TOWN);
 		}
 	}
 	return (SAIL_TICKS);
@@ -759,7 +852,12 @@ void
 sim_leave_town(struct sim *s)
 {
 	if (s->player_town >= 0 && (size_t)s->player_town < s->ntowns) {
-		harbour_mouth(s, s->player_town);
+		if (s->fleet.ashore) {
+			/* On foot: out on the town's own cell (VA 0x19bd0). */
+			s->fleet.x = s->towns[s->player_town].x * WORLD_TILE + 8;
+			s->fleet.y = s->towns[s->player_town].y * WORLD_TILE + 8;
+		} else
+			harbour_mouth(s, s->player_town);
 		s->fleet.leaving = s->player_town;
 	}
 	s->player_town = SIM_NO_TOWN;

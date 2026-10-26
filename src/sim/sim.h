@@ -113,6 +113,12 @@ struct sim_fleet {
 	uint32_t	ticks;		/* sailing ticks, 64 per day */
 	int		leaving;	/* town just left, or -1 */
 	int		map_pieces;	/* treasure map pieces bought */
+	/* A landing party (VA 0x231b8): on foot at x, y while the ship
+	 * waits at ship_x, ship_y; land_x, land_y where it went ashore
+	 * (or, at sea, the land the ship last ran into). */
+	int		ashore;
+	int32_t		ship_x, ship_y;
+	int32_t		land_x, land_y;
 };
 
 /* Why sim_sail() stopped. */
@@ -120,7 +126,8 @@ enum sail_stop {
 	SAIL_TICKS,	/* all requested ticks done */
 	SAIL_LAND,	/* the next move would run aground on land */
 	SAIL_TOWN,	/* arrived at a town: sim_sail()'s "town" says which */
-	SAIL_ENCOUNTER	/* a sail is sighted: see sim.encounter */
+	SAIL_ENCOUNTER,	/* a sail is sighted: see sim.encounter */
+	SAIL_BOARDED	/* the landing party is back aboard */
 };
 
 #define NATION_PIRATE	4	/* in encounter records */
@@ -376,6 +383,18 @@ enum encounter_result sim_encounter_act(struct sim *s,
 #define VISIT_GOVERNOR	0x01	/* seen the governor this stay */
 #define VISIT_KEPT	0x02	/* kept on a return; not identified */
 #define VISIT_SNEAKED	0x08	/* came in by stealth: no bank */
+
+/*
+ * Landing parties.  After SAIL_LAND the player is asked to go ashore
+ * (VA 0x315d): yes puts the party on the land the ship ran into, the
+ * ship waiting where it stood; no turns the ship about.  On foot the
+ * party walks dx, dy (-1..1) half a pixel a tick; on water within 11
+ * pixels of where it landed it boards again, elsewhere it is stopped.
+ * Returns SAIL_TICKS, SAIL_TOWN (*town) or SAIL_BOARDED.
+ */
+void		sim_go_ashore(struct sim *s);
+void		sim_turn_back(struct sim *s);
+enum sail_stop	sim_march(struct sim *s, int dx, int dy, int ticks, int *town);
 
 /* Enter a town (arriving or returning to it), and leave it. */
 void	sim_enter_town(struct sim *s, int town);

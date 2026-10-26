@@ -183,6 +183,9 @@ struct game {
 	int			 talk_town;
 	int			 tavern_spot;	/* pointed at, or -1 */
 	int			 btl_chosen;	/* the ship to command is chosen */
+	int			 ashore_prompt;	/* "go ashore?" waits for Y or N */
+	int			 march_held;	/* bits 1 W, 2 E, 4 N, 8 S */
+	struct sprite_bank	 party_spr;	/* sailmisc.spr */
 	int			 panel_cursor;	/* the fleet panel: 0-7 a ship, 8 done */
 	unsigned		 panel_marked;	/* ships selected, bit by bit */
 	struct sprite_bank	 panel_spr[8];

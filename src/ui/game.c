@@ -199,6 +199,7 @@ game_free(struct game *g)
 	bank_free(&g->misc);
 	bank_free(&g->cabin_spr);
 	bank_free(&g->cloud_spr);
+	bank_free(&g->party_spr);
 	for (i = 0; i < 8; i++)
 		bank_free(&g->panel_spr[i]);
 	for (i = 0; i < 8; i++)

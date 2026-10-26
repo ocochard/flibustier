@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	16
+#define STATE_VERSION	17
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -540,6 +540,16 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.leaving);
 	jb_raw(b, ",\"map_pieces\":");
 	jb_int(b, s->fleet.map_pieces);
+	jb_raw(b, ",\"ashore\":");
+	jb_int(b, s->fleet.ashore);
+	jb_raw(b, ",\"ship_x\":");
+	jb_int(b, s->fleet.ship_x);
+	jb_raw(b, ",\"ship_y\":");
+	jb_int(b, s->fleet.ship_y);
+	jb_raw(b, ",\"land_x\":");
+	jb_int(b, s->fleet.land_x);
+	jb_raw(b, ",\"land_y\":");
+	jb_int(b, s->fleet.land_y);
 	jb_raw(b, "},\"wind\":");
 	jb_int(b, s->wind);
 	jb_raw(b, ",\"encounters\":");
@@ -768,6 +778,11 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	f->ticks = (uint32_t)json_get_int(j, "ticks", 0);
 	f->leaving = (int)json_get_int(j, "leaving", -1);
 	f->map_pieces = (int)json_get_int(j, "map_pieces", 0);
+	f->ashore = json_get_int(j, "ashore", 0) != 0;
+	f->ship_x = (int32_t)json_get_int(j, "ship_x", 0);
+	f->ship_y = (int32_t)json_get_int(j, "ship_y", 0);
+	f->land_x = (int32_t)json_get_int(j, "land_x", 0);
+	f->land_y = (int32_t)json_get_int(j, "land_y", 0);
 	if (f->crew < 0 || f->guns < 0 || f->gold < 0 || f->x < 0 ||
 	    f->x >= WORLD_PX_W || f->y < 0 || f->y >= WORLD_PX_H ||
 	    f->fx > 7 || f->fy > 7 || f->speed < 0 || f->speed > 12) {
@@ -1187,7 +1202,7 @@ static void
 cmd_sail(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	static const char *stops[] = { "ticks", "land", "town",
-	    "encounter" };
+	    "encounter", "boarded" };
 	int64_t ticks = json_get_int(cmd, "ticks", 64);
 	int64_t turn = json_get_int(cmd, "turn", 0);
 	const struct sim_fleet *f = &ss->sim.fleet;
@@ -1623,6 +1638,51 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* After "land": "ashore" 1 goes ashore, 0 turns the ship about. */
+static void
+cmd_shore(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	if (json_get_int(cmd, "ashore", 1))
+		sim_go_ashore(&ss->sim);
+	else
+		sim_turn_back(&ss->sim);
+	jb_raw(out, "{\"ok\":true,\"ashore\":");
+	jb_int(out, ss->sim.fleet.ashore);
+	jb_raw(out, "}");
+}
+
+/* On foot: "dx", "dy" (-1..1) for "ticks". */
+static void
+cmd_march(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *stops[] = { "ticks", "land", "town",
+	    "encounter", "boarded" };
+	int64_t ticks = json_get_int(cmd, "ticks", 64);
+	enum sail_stop stop;
+	int town;
+
+	if (!ss->sim.fleet.ashore || ticks < 1 || ticks > 64 * 365) {
+		reply_error(out, "march needs a party ashore and \"ticks\" "
+		    "(1..23360)");
+		return;
+	}
+	stop = sim_march(&ss->sim, (int)json_get_int(cmd, "dx", 0),
+	    (int)json_get_int(cmd, "dy", 0), (int)ticks, &town);
+	jb_raw(out, "{\"ok\":true,\"stop\":");
+	jb_str(out, stops[stop]);
+	if (stop == SAIL_TOWN) {
+		jb_raw(out, ",\"town\":");
+		jb_str(out, ss->sim.towns[town].name);
+	}
+	jb_raw(out, ",\"x\":");
+	jb_int(out, ss->sim.fleet.x);
+	jb_raw(out, ",\"y\":");
+	jb_int(out, ss->sim.fleet.y);
+	jb_raw(out, ",\"day\":");
+	jb_int(out, ss->sim.day);
+	jb_raw(out, "}");
+}
+
 /*
  * Storming the town the fleet has reached: "start" (weapon, aboard),
  * then sword ticks, "end", then "sack", and "governor" (nation) when the
@@ -1831,6 +1891,10 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_tavern(ss, cmd, out);
 	else if (strcmp(name, "governor") == 0)
 		cmd_governor(ss, cmd, out);
+	else if (strcmp(name, "shore") == 0)
+		cmd_shore(ss, cmd, out);
+	else if (strcmp(name, "march") == 0)
+		cmd_march(ss, cmd, out);
 	else if (strcmp(name, "assault") == 0)
 		cmd_assault(ss, cmd, out);
 	else if (strcmp(name, "bank") == 0)

@@ -637,7 +637,7 @@ sim_sail_in(struct sim *s, int town)
 		sim_enter_town(s, town);
 		return (ARRIVE_ENTER);
 	}
-	if (x > -1.0)
+	if (x > -1.0 || s->fleet.ashore)	/* a ship only by sea */
 		return (ARRIVE_FIRED);
 	sim_drop_ship(s, rng_below(&s->rng, s->fleet.nships), 0);
 	return (ARRIVE_SUNK);

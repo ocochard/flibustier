@@ -234,15 +234,18 @@ test_saves(void)
 	struct jbuf before = { 0 }, after = { 0 };
 	char path[600], desc[128], err[256];
 
-	/* Sail for a while, back to the menu, then save in slot 4. */
+	/* At sea the cabin cannot save; back in town, in slot 4. */
 	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
 	    "down enter right enter enter type:Kidd enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	CHECK(game_script(g, "wait:100 esc click:560,170 down down down "
-	    "enter") == 0);		/* Save game */
+	CHECK(game_script(g, "wait:100 esc wait:40 click:560,170") == 0 &&
+	    g->screen == &screen_cabin);	/* Save game is off at sea */
 	CHECK(g->started && g->sim.day >= 1 && g->sim.fleet.ticks >= 100);
+	g->sim.player_town = g->sim.fleet.leaving >= 0 ?
+	    g->sim.fleet.leaving : 0;		/* as if back in town */
+	CHECK(game_script(g, "click:560,170 down down down enter") == 0);
 	CHECK(strncmp(g->msg, "Kidd, English Buccaneer, ", 25) == 0);
 	sim_to_json(&g->sim, &before);
 	game_free(g);
@@ -882,6 +885,68 @@ test_story(void)
 	game_free(g);
 }
 
+/* Ashore: the question, Y, walking, the shipwright closed in town. */
+static void
+test_landing(void)
+{
+	struct game *g;
+	int x, y, found = 0, i;
+	size_t k;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter "
+	    "click:60,300 wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	/* A shore facing north, far from the towns: sea at (x, y), land
+	 * just above. */
+	for (y = 2000; y < 6000 && !found; y += 16)
+		for (x = 2000; x < 9000 && !found; x += 16) {
+			if (world_terrain(g->world, x, y) != TERRAIN_SEA ||
+			    world_terrain(g->world, x, y - 16) !=
+			    TERRAIN_LAND)
+				continue;
+			found = 1;
+			for (k = 0; k < g->sim.ntowns; k++)
+				if (abs(g->sim.towns[k].x * 16 - x) < 100 &&
+				    abs(g->sim.towns[k].y * 16 - y) < 100)
+					found = 0;
+			if (found) {
+				g->sim.fleet.x = x;
+				g->sim.fleet.y = y;
+			}
+		}
+	CHECK(found);
+	g->sim.fleet.heading = 0;
+	g->sim.fleet.leaving = -1;
+	for (i = 0; i < 40 && !g->ashore_prompt; i++)
+		CHECK(game_script(g, "wait:4") == 0);
+	CHECK(g->ashore_prompt && g->screen == &screen_sail);
+	CHECK(game_script(g, "type:y") == 0 && !g->ashore_prompt &&
+	    g->sim.fleet.ashore);
+	y = g->sim.fleet.y;
+	CHECK(game_script(g, "hold:up:20") == 0 && g->sim.fleet.y < y);
+	/* The cabin: no saving outside a town; search on foot. */
+	CHECK(game_script(g, "esc wait:40") == 0 && g->screen == &screen_cabin);
+	CHECK(game_script(g, "click:560,170") == 0 &&
+	    g->screen == &screen_cabin);
+	/* A town reached on foot: marching in, no ship in port. */
+	g->sim.fleet.leaving = 1;
+	g->sim.towns[1].forts = 0;
+	g->arrive_stage = 0;
+	game_goto(g, &screen_arrive);
+	CHECK(game_script(g, "wait:40 enter wait:40") == 0 &&
+	    g->screen == &screen_town);
+	CHECK(game_script(g, "click:60,400 wait:40") == 0 &&
+	    g->screen == &screen_town);	/* the shipwright is closed */
+	/* Out on foot: on the town's own cell, still ashore. */
+	CHECK(game_script(g, "click:60,300 wait:40") == 0 &&
+	    g->screen == &screen_sail && g->sim.fleet.ashore &&
+	    g->sim.fleet.x == g->sim.towns[1].x * 16 + 8);
+	game_free(g);
+}
+
 /* The tavern's people: names when pointed at, the traveller's news,
  * the map seller, the barmaid. */
 static void
@@ -1231,6 +1296,7 @@ main(void)
 	test_cabin();
 	test_assault();
 	test_tavern_people();
+	test_landing();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {
