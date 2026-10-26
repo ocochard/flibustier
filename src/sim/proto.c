@@ -1680,6 +1680,23 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, ss->sim.fleet.crew);
 	jb_raw(out, ",\"gold\":");
 	jb_int(out, ss->sim.fleet.gold);
+	if (ss->sim.battle.news_town >= 0) {
+		/* The captured crew knows of villains there (VA 0xdb7b). */
+		int list[4], n = sim_villain_news(&ss->sim,
+		    ss->sim.battle.news_town, list), k;
+
+		if (n > 0) {
+			jb_raw(out, ",\"villain_news\":{\"town\":");
+			jb_int(out, ss->sim.battle.news_town);
+			jb_raw(out, ",\"villains\":[");
+			for (k = 0; k < n; k++) {
+				if (k > 0)
+					jb_raw(out, ",");
+				jb_int(out, list[k]);
+			}
+			jb_raw(out, "]}");
+		}
+	}
 	jb_raw(out, "}");
 }
 

@@ -285,6 +285,8 @@ Status (2026-10-26): first slice.
 - **Retirement:** the original's score, rating, summary and verdict.
 - **Manning the fleet:** abandoning ships, the last ship, cargo
   overboard; a prize replacing a ship when eight sail.
+- **Near a town:** the hunted pirate off his town; a battle's heat, a
+  capture's toll on the town's wealth, and the crew's news of villains.
 - **Next:** see the open items in game-rules.md.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),

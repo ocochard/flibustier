@@ -24,6 +24,12 @@ int	sim_div16(int a, int b);
  */
 int	sim_bearing(int dx, int dy);
 
+/*
+ * The nearest town by |dx| + |dy| in cells, and that distance, at least
+ * 1 (VA 0x4c0a0); -1 without towns.
+ */
+int	sim_nearest_town(const struct sim *s, int *dist);
+
 /* Move the reputation, a signed byte. */
 static inline void
 sim_reputation(struct sim *s, int d)

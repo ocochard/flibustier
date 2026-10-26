@@ -761,6 +761,29 @@ sim_prize_place(struct sim *s, int slot, int type, int damage)
 	s->prize_pending = 0;
 }
 
+/*
+ * The nearest town feels a sea battle (VA 0x4c0a0, the distance in
+ * cells): within 12, the heat rises by 24 - 2 x the distance (VA
+ * 0xe245); a capture within class + 5 cells takes 10 from its wealth
+ * and its crew may tell of the villains there (VA 0xdb7b).
+ */
+static void
+near_town(struct sim *s, enum battle_outcome o)
+{
+	int dist, town = sim_nearest_town(s, &dist);
+	struct sim_town *t;
+
+	if (town < 0 || s->battle.fort)
+		return;
+	t = &s->towns[town];
+	if (dist < 12)
+		s->heat += 24 - 2 * dist;
+	if (o != BAT_SURRENDER || dist >= (s->battle.foe.type & 0xF) + 5)
+		return;
+	t->wealth = t->wealth < 11 ? 0 : t->wealth - 10;
+	s->battle.news_town = town;
+}
+
 enum battle_outcome
 sim_battle_finish(struct sim *s, int keep)
 {
@@ -771,6 +794,7 @@ sim_battle_finish(struct sim *s, int keep)
 
 	if (!bt->active)
 		return (BAT_NONE);
+	bt->news_town = -1;
 	/* Boarding: the sword fight decides, and its losses count. */
 	if (o == BAT_BOARDING) {
 		const struct sim_sword *sw = &s->sword;
@@ -817,6 +841,7 @@ sim_battle_finish(struct sim *s, int keep)
 	}
 	else if (o == BAT_REPELLED || o == BAT_DEFEATED)
 		sim_reputation(s, -2);
+	near_town(s, o);
 	bt->active = 0;
 	/* Beaten aboard: prison in the ship (VA 0x16647); the last ship
 	 * sunk: marooned (VA 0x1f2a1). */

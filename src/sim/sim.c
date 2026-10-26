@@ -928,9 +928,8 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 	return (SAIL_TICKS);
 }
 
-/* Nearest town by |dx| + |dy| in cells, and that distance (at least 1). */
-static int
-nearest_town(const struct sim *s, int *dist)
+int
+sim_nearest_town(const struct sim *s, int *dist)
 {
 	int cx = s->fleet.x / WORLD_TILE, cy = s->fleet.y / WORLD_TILE;
 	int best = -1, d;
@@ -957,7 +956,8 @@ pick_ship(struct sim *s, int town, int dist)
 	const uint8_t *rec;
 	int nation = s->towns[town].nation & 3, k = 0, range, r;
 
-	range = s->fleet.crew / 50 + s->heat / 6 - s->towns[town].standing;
+	range = s->fleet.crew / 50 + s->heat / 6 -
+	    (int16_t)s->towns[town].standing;
 	if (range >= 1) {
 		k = rng_below(&s->rng, range) / 3;
 		if (k > ENCOUNTER_SHIPS - 1)
@@ -1023,7 +1023,7 @@ sighting(struct sim *s)
 {
 	int dist, town, r, chance;
 
-	if ((town = nearest_town(s, &dist)) < 0)
+	if ((town = sim_nearest_town(s, &dist)) < 0)
 		return (0);
 	if (town != s->heat_town) {
 		s->heat = 0;
@@ -1060,6 +1060,13 @@ end_encounter(struct sim *s, enum encounter_result r)
 static enum encounter_result
 to_battle(struct sim *s, enum encounter_result r)
 {
+	int dist, town = sim_nearest_town(s, &dist);
+
+	/* Fighting within 7 cells of a town lowers its field 9 (VA
+	 * 0xd1fc). */
+	if (town >= 0 && dist < 7)
+		s->towns[town].standing =
+		    (uint16_t)((int16_t)s->towns[town].standing - 1);
 	sim_battle_start(s);
 	return (end_encounter(s, r));
 }

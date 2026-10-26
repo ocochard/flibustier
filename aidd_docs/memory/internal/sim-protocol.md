@@ -25,7 +25,7 @@ with a message. Numbers are integers only.
 | `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land`, `town`, `encounter` or `crew`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
-| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
+| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold`; after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
 | `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |

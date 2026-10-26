@@ -310,6 +310,9 @@ struct sim_battle {
 	int		decision;	/* the enemy's: 0 close, 1 broadside,
 					 * 2 flee */
 	int		outcome;	/* enum battle_outcome */
+	int		news_town;	/* after a capture near a town, its
+					 * crew tells of villains there; or
+					 * -1 */
 	int		crew_ashore;	/* crew and guns left with the fleet */
 	int		guns_ashore;
 	int		fort;		/* against a town's fort */

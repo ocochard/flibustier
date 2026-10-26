@@ -863,7 +863,18 @@ test_tavern(void)
 	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 0);
 	CHECK(game_script(g, "down enter wait:40") == 0 &&
 	    g->screen == &screen_tavern);
+	/* A crew captured near the town tells the same, on crew.pcx,
+	 * then the steps after the battle go on to the sea. */
+	g->btl_news = g->sim.player_town;
+	g->btl_landed = g->btl_hunted = 0;
+	game_goto(g, &screen_battle_end);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_vnews && g->vnews_source == 3);
+	CHECK(game_script(g, "down enter wait:80") == 0 &&
+	    g->screen == &screen_sail);
 	g->sim.villains[2].active = 0;
+	game_goto(g, &screen_tavern);
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_tavern);
 	/* The keyboard skips the seamen now; the door leads out. */
 	g->tavern_key = 1;
 	CHECK(game_script(g, "right") == 0 && g->tavern_key == 3);

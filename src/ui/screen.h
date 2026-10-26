@@ -23,6 +23,7 @@ extern const struct screen screen_tmap;
 extern const struct screen screen_villain;
 extern const struct screen screen_crew;
 extern const struct screen screen_lastship;
+extern const struct screen screen_battle_end;
 extern const struct screen screen_ending;
 extern const struct screen screen_vnews;
 extern const struct screen screen_merdaugh;

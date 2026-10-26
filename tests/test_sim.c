@@ -3211,6 +3211,47 @@ test_hunted_pirate(void)
 	CHECK(met > 20 && named * 10 > met * 6);	/* about 4 in 5 */
 }
 
+/* A sea battle near a town: heat, and after a capture its wealth and
+ * the crew's news. */
+static void
+test_battle_near_town(void)
+{
+	struct sim s;
+	int dist, town, heat;
+
+	sea_game(&s, 120, 112, 0x00);	/* 2 cells from Beta */
+	town = sim_nearest_town(&s, &dist);
+	CHECK(town == 1 && dist == 2);
+	s.towns[town].wealth = 30;
+	s.heat = 0;
+	memset(&s.battle, 0, sizeof(s.battle));
+	s.battle.active = 1;
+	s.battle.outcome = BAT_SURRENDER;
+	s.battle.you.crew = 20;
+	s.battle.foe.type = 1;
+	s.encounter.nation = NATION_PIRATE;
+	CHECK(sim_battle_finish(&s, 0) == BAT_SURRENDER);
+	CHECK(s.heat == 24 - 2 * 2 && s.towns[town].wealth == 20 &&
+	    s.battle.news_town == town);
+	/* Escaped, not captured: only the heat. */
+	heat = s.heat;
+	s.battle.active = 1;
+	s.battle.outcome = BAT_ESCAPED;
+	CHECK(sim_battle_finish(&s, 0) == BAT_ESCAPED);
+	CHECK(s.heat == heat + 20 && s.towns[town].wealth == 20 &&
+	    s.battle.news_town == -1);
+	/* Far from towns, nothing. */
+	sea_game(&s, 300, 300, 0x00);
+	s.heat = 0;
+	memset(&s.battle, 0, sizeof(s.battle));
+	s.battle.active = 1;
+	s.battle.outcome = BAT_SURRENDER;
+	s.battle.you.crew = 20;
+	s.encounter.nation = NATION_PIRATE;
+	sim_battle_finish(&s, 0);
+	CHECK(s.heat == 0 && s.battle.news_town == -1);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3320,6 +3361,7 @@ main(void)
 	test_crew_check();
 	test_prize_place();
 	test_hunted_pirate();
+	test_battle_near_town();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

@@ -461,8 +461,8 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   sack (`town.pcx`, (20, 50) up to x 250), the bartender after his
   rumours (`bartenda.pcx`, (320, 150) up to 560), the traveller after
   his town's information (`infoman.pcx`, (20, 150) up to 280), and a
-  captured crew near a town (`crew.pcx`, (40, 350) up to 560; its
-  condition reads VA `0x4c0a0`, not identified: not done).
+  crew captured near a town (`crew.pcx`, (40, 350) up to 560; see
+  "Near a town").
 - **Named (VA `0x12178`):** at a promotion, unless the fourth slot is
   taken; the first free slot. His town is drawn `rand(towns)` again
   until a Spanish one; then surname `rand(16)`, rank `rand(8)`, nation
@@ -1115,6 +1115,14 @@ byte), return to the fleet.
   prison (see "Prison").
 - **The prize's picture:** `plunder.pcx`, the question at (40, 50) up to
   x 620 in ink entry 0.
+- **Near a town (VA `0x4c0a0`):** the distance `|dx| + |dy|` in cells
+  to the nearest town, at least 1, measured every 32 ticks at sea (VA
+  `0x28789`). A fight starting within 7 cells lowers that town's field 9
+  by 1 (VA `0xd1fc`); after any sea battle within 12 cells the heat
+  rises by `24 - 2 x distance` (VA `0xe245`); a capture within `class +
+  5` cells takes 10 from its wealth (to 0 below 11) and its crew tells
+  of the villains there (VA `0xdb7b`), after the prize's slot and
+  before the captain held.
 - **Kept (VA `0xdb7b`):** a new slot; with 8 ships already, "You lack
   enough officers to run your ships! Which will you abandon?" (CSTR
   130) on the fleet panel, and the prize takes the chosen ship's slot,

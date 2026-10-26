@@ -3181,13 +3181,13 @@ prize_show(struct game *g)
 static void
 battle_finish(struct game *g, int keep)
 {
-	int landed = g->sim.battle.fort &&
+	g->btl_landed = g->sim.battle.fort &&
 	    g->sim.battle.outcome == BAT_LANDED;
-	int aboard = g->sim.battle.crew_ashore;
-	int hunted = g->sim.mission.type == MISSION_PIRATE;
-
+	g->btl_aboard = g->sim.battle.crew_ashore;
+	g->btl_hunted = g->sim.mission.type == MISSION_PIRATE;
 	g->btl_chosen = 0;
 	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
+	g->btl_news = g->sim.battle.news_town;
 	if (g->sim.jail.fresh) {
 		/* Beaten aboard, or the last ship gone (VA 0x16647). */
 		game_goto(g, &screen_prison);
@@ -3199,6 +3199,23 @@ battle_finish(struct game *g, int keep)
 		game_goto(g, &screen_fleet_panel);
 		return;
 	}
+	game_goto(g, &screen_battle_end);
+}
+
+/*
+ * The steps after a sea battle, each coming back here: the captured
+ * crew's news of villains near a town (VA 0xdb7b), the captain held,
+ * the pirate a governor wanted, the assault after a landing.
+ */
+static void
+after_battle_enter(struct game *g)
+{
+	int town = g->btl_news, landed = g->btl_landed;
+
+	g->btl_news = -1;
+	g->btl_landed = 0;
+	if (town >= 0 && vnews_offer(g, 3, town, &screen_battle_end))
+		return;
 	if (g->sim.hostage != 0) {
 		/* The captured captain speaks first (VA 0xdb7b). */
 		g->hostage_said = -1;
@@ -3206,8 +3223,9 @@ battle_finish(struct game *g, int keep)
 		game_goto(g, &screen_hostage);
 		return;
 	}
-	if (hunted && g->sim.mission.type == -MISSION_PIRATE) {
+	if (g->btl_hunted && g->sim.mission.type == -MISSION_PIRATE) {
 		/* The pirate a governor wanted (CSTR 207, VA 0x1f8f7). */
+		g->btl_hunted = 0;
 		g->villain_back = &screen_sail;
 		game_goto(g, &screen_contact);
 		return;
@@ -3215,13 +3233,31 @@ battle_finish(struct game *g, int keep)
 	if (landed) {
 		/* The assault follows (VA 0x18c2c). */
 		g->assault_town = g->sim.encounter.town;
-		g->assault_aboard = aboard;
+		g->assault_aboard = g->btl_aboard;
 		sim_fort_battle_garrison(&g->sim, g->assault_town);
 		game_goto(g, &screen_assault);
 		return;
 	}
 	game_goto(g, &screen_sail);
 }
+
+static void
+after_battle_event(struct game *g, const struct ui_event *ev)
+{
+	(void)g;
+	(void)ev;
+}
+
+static void
+after_battle_draw(struct game *g)
+{
+	(void)g;
+}
+
+const struct screen screen_battle_end = {
+	"after the battle", after_battle_enter, after_battle_event, NULL,
+	after_battle_draw,
+};
 
 /* "Shall we keep her?": yes, send a prize crew; no, plunder and sink. */
 static void
@@ -6862,7 +6898,7 @@ panel_act(struct game *g, int i)
 			g->panel_replace = 0;
 			sim_prize_place(&g->sim, k, g->sim.prize_type,
 			    g->sim.prize_damage);
-			game_goto(g, &screen_sail);
+			game_goto(g, &screen_battle_end);
 			return;
 		}
 		if (g->panel_abandon) {
