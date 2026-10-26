@@ -231,6 +231,9 @@ struct game {
 	 * between visits), the list's first row, the player's mark. */
 	int			 cm_x[TOWN_MAX], cm_y[TOWN_MAX];
 	int			 cm_sel, cm_scroll, cm_px, cm_py;
+	/* The log book: its page (0 the menu) and the log's leaf. */
+	int			 log_page, log_leaf;
+	int			 panel_view;	/* the fleet panel only shows */
 	int			 deserted_town;	/* the town just left */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */

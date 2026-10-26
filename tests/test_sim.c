@@ -15,6 +15,7 @@
 #include "sim/proto.h"
 #include "sim/rng.h"
 #include "sim/sim.h"
+#include "sim/internal.h"
 
 static int failures;
 
@@ -2036,11 +2037,46 @@ test_landing(void)
 	CHECK(sim_march(&s, 0, 1, 200, &town) == SAIL_BOARDED &&
 	    !s.fleet.ashore && s.fleet.x == sx && s.fleet.y == sy &&
 	    s.fleet.heading == 128);
+	/* A reef just south of the ship: bows south would run onto it and
+	 * ask to disembark again, so the ship turns to open water. */
+	sim_go_ashore(&s);
+	{
+		int cx = sx / 16, cy = sy / 16 + 1, k;
+
+		test_world.map[cy * WORLD_CELLS_W + cx] = 1;
+		CHECK(sim_march(&s, 0, 1, 200, &town) == SAIL_BOARDED &&
+		    s.fleet.heading != 128);
+		for (k = 4; k <= 16; k += 4)
+			CHECK(world_terrain(&test_world, s.fleet.x +
+			    sim_sine_mul(&test_world, s.fleet.heading, k),
+			    s.fleet.y - sim_sine_mul(&test_world,
+			    s.fleet.heading + 0x40, k)) != TERRAIN_LAND);
+		test_world.map[cy * WORLD_CELLS_W + cx] = 0;
+	}
 	/* Time passes on foot too. */
 	sim_go_ashore(&s);
 	i = s.day;
 	sim_march(&s, 0, 0, 64, &town);
 	CHECK(s.day == i + 1);
+	/* A town the ship just left (a failed attack) can be walked into
+	 * by a party landing beside it. */
+	{
+		struct sim_town keep = s.towns[1];
+
+		s.fleet.ashore = 0;
+		s.fleet.x = sx;
+		s.fleet.y = sy;
+		s.fleet.land_x = sx;
+		s.fleet.land_y = sy - 16;
+		s.towns[1].x = (uint16_t)(sx / 16);
+		s.towns[1].y = (uint16_t)(sy / 16 - 3);	/* 2 from the landing */
+		s.fleet.leaving = 1;
+		sim_go_ashore(&s);
+		CHECK(s.fleet.leaving == -1);
+		CHECK(sim_march(&s, 0, -1, 200, &town) == SAIL_TOWN &&
+		    town == 1);
+		s.towns[1] = keep;
+	}
 }
 
 /* How many quarters of a treasure map are held. */

@@ -100,6 +100,9 @@
 #define FONT_BODY		1
 #define FONT_SMALL		2	/* PIRATE3, 14 px */
 #define FONT_PIRATE4		3
+#define W_RANK			78	/* Mr., Ensign, Captain... */
+#define W_MOOD			72	/* angry .. happy */
+#define W_UNKNOWN		92	/* 5: "?", 9: "NONE" */
 
 static void	villain_name(const struct game *, int, char *, size_t);
 static void	captain_name(const struct game *, int, char *, size_t);
@@ -1780,9 +1783,40 @@ date_text(const struct game *g, char *out, size_t len)
 }
 
 /*
- * Logbook (cabin spot 4): the latest news, oldest first, on shiplog.pcx.
- * The original's log layout is not traced; an engine page for now.
+ * The log book (cabin spot 4, VA 0xc46e), on shiplog.pcx in ink entry
+ * 0: the date (CSTR 93: month, year) centred at (320, 20), "LOG BOOK"
+ * (CSTN 95.6, PIRATE4) at (320, 50), and the menu (CSTR 312) at (250,
+ * 100) up to x 500.  Each page has its title (CSTN 95) centred at (320,
+ * 40) in PIRATE4 and waits for a click or a key:
+ * - Ship's Log (VA 0x1fc0f): every log entry (codes 1-36), 10 a leaf
+ *   at (140, 100) up to x 520 ("(no entries)", CSTN 18.3, when none);
+ *   the arrows of the picture (200, 420)-(240, 450) and (380, 420)-(420,
+ *   450) turn the leaves, the bookmark (0, 360)-(100, 479) leaves.
+ * - Party Status (VA 0xa2ca): CSTR 104 at (160, 100) up to x 560.
+ * - Personal Status (VA 0xa5a7): CSTR 105 at (140, 100) up to x 560.
+ * - Ship Status: the fleet panel, only to look (VA 0xffae mode 0).
+ * - Hostages (VA 0xa450): the prisoners and the pirate brought in, or
+ *   "NONE" (CSTN 92.9), at (240, 100) up to x 560.
  */
+#define S_LOG_DATE		93
+#define S_LOG_MENU		312
+#define S_PARTY			104
+#define S_PERSONAL		105
+#define S_STANDING_LINE		90
+#define S_MARRIED		91
+#define S_SINGLE		285
+#define W_LOG_TITLE		95
+#define LOG_TITLE_BOOK		6
+#define W_STANDING		21	/* Letter of Marque, (no title)... */
+#define W_HOSTAGE		22
+#define W_REPUTATION		34
+#define W_DIFFICULTY		35
+#define W_HEALTH		36
+#define W_HIDES			87	/* Hides, Tobacco, Sugar */
+#define LOG_LEAF		10
+enum { LOG_MENU, LOG_SHIPS, LOG_PARTY, LOG_PERSONAL, LOG_STATUS,
+    LOG_HOSTAGES, LOG_EXIT };
+
 static void
 logbook_enter(struct game *g)
 {
@@ -1790,39 +1824,199 @@ logbook_enter(struct game *g)
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
 		memcpy(g->ink, g->bg.palette, 3);
+	g->log_page = LOG_MENU;
+	g->selected = 0;
+}
+
+/* The log's entries a leaf at a time (VA 0x1fa07: codes 1-36). */
+static size_t
+log_entries(const struct game *g, const struct sim_news **out, size_t max)
+{
+	size_t kept = sim_news_kept(&g->sim), i, n = 0;
+	const struct sim_news *e;
+
+	for (i = 0; i < kept && n < max; i++) {
+		e = sim_news_at(&g->sim, i);
+		if (e->code > 0 && e->code < 37)
+			out[n++] = e;
+	}
+	return (n);
+}
+
+static void
+logbook_choose(struct game *g, int i)
+{
+	switch (i) {
+	case LOG_SHIPS - 1:
+	case LOG_PARTY - 1:
+	case LOG_PERSONAL - 1:
+	case LOG_HOSTAGES - 1:
+		g->log_page = i + 1;
+		g->log_leaf = 0;
+		break;
+	case LOG_STATUS - 1:
+		g->panel_view = 1;
+		game_goto(g, &screen_fleet_panel);
+		break;
+	default:
+		game_goto(g, &screen_cabin);
+		break;
+	}
 }
 
 static void
 logbook_event(struct game *g, const struct ui_event *ev)
 {
+	const struct sim_news *e[SIM_NEWS_MAX];
+	size_t n;
+	int x = ev->x, y = ev->y;
+
+	if (g->log_page == LOG_MENU) {
+		menu_event(g, ev, 6, NULL, logbook_choose, &screen_cabin);
+		return;
+	}
+	if (g->log_page == LOG_SHIPS) {
+		n = log_entries(g, e, SIM_NEWS_MAX);
+		if ((ev->type == EV_CLICK && x >= 200 && x <= 240 && y >= 420 &&
+		    y <= 450) || (ev->type == EV_KEY && ev->key == UI_KEY_LEFT)) {
+			if (g->log_leaf > 0)
+				g->log_leaf--;
+			return;
+		}
+		if ((ev->type == EV_CLICK && x >= 380 && x <= 420 && y >= 420 &&
+		    y <= 450) || (ev->type == EV_KEY && ev->key == UI_KEY_RIGHT)) {
+			if ((size_t)(g->log_leaf + 1) * LOG_LEAF < n)
+				g->log_leaf++;
+			return;
+		}
+		if (ev->type == EV_CLICK && !(x <= 100 && y >= 360))
+			return;		/* only the bookmark leaves */
+	}
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
-	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, &screen_cabin);
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		g->log_page = LOG_MENU;
+		g->selected = 0;
+	}
+}
+
+/* "   England Captain": a rank, or how the nation sees the player. */
+static void
+personal_standings(struct game *g, char *out, size_t len)
+{
+	const char *arg[2];
+	char line[96];
+	int k, n, st;
+
+	out[0] = '\0';
+	for (k = 1; k <= 4; k++) {
+		n = k & 3;			/* England, France, Holland, Spain */
+		st = g->sim.standing[n];
+		arg[0] = game_word(g, W_NATION, (size_t)n);
+		arg[1] = g->sim.rank[n] != 0 ? game_word(g, W_RANK,
+		    g->sim.rank[n]) : game_word(g, W_STANDING, st >= 2 ? 0 :
+		    st >= 0 ? 1 : st >= -3 ? 2 : 3);
+		fill_args(line, sizeof(line), game_str(g, S_STANDING_LINE),
+		    arg, 2);
+		strncat(out, line, len - strlen(out) - 1);
+	}
 }
 
 static void
 logbook_draw(struct game *g)
 {
-	const struct sim_news *n;
-	char buf[256], line[160];
-	size_t i, kept, first;
-	int y = 30;
+	const struct sim_fleet *f = &g->sim.fleet;
+	const struct sim_news *e[SIM_NEWS_MAX];
+	const char *arg[9];
+	char text[2048], line[200], a[9][96];
+	size_t n, i;
+	int k, lvl;
 
-	draw_centered(g, FONT_TITLE, y, g->sim.fleet.leaving >= 0 ?
-	    town_name(g, g->sim.fleet.leaving) : g->sim.player.name);
-	y += 32;
-	date_text(g, line, sizeof(line));
-	snprintf(buf, sizeof(buf), "%s, %s", g->sim.player.title, line);
-	draw_centered(g, FONT_BODY, y, buf);
-	y += 40;
-	kept = sim_news_kept(&g->sim);
-	first = kept > 14 ? kept - 14 : 0;
-	for (i = first; i < kept; i++) {
-		n = sim_news_at(&g->sim, i);
-		news_text(g, n, line, sizeof(line));
-		y += draw(g, FONT_BODY, 80, y, 480, line, 0);
+	if (g->log_page == LOG_MENU) {
+		date_text(g, line, sizeof(line));
+		draw_centered(g, FONT_BODY, 20, line);
+		draw_centered(g, FONT_PIRATE4, 50, game_word(g, W_LOG_TITLE,
+		    LOG_TITLE_BOOK));
+		draw(g, FONT_BODY, 250, 100, 250, game_str(g, S_LOG_MENU), 1);
+		return;
 	}
-	continue_prompt(g);
+	draw_centered(g, FONT_PIRATE4, 40, game_word(g, W_LOG_TITLE,
+	    (size_t)(g->log_page - 1)));
+	switch (g->log_page) {
+	case LOG_SHIPS:
+		n = log_entries(g, e, SIM_NEWS_MAX);
+		text[0] = '\0';
+		for (i = (size_t)g->log_leaf * LOG_LEAF; i < n &&
+		    i < (size_t)(g->log_leaf + 1) * LOG_LEAF; i++) {
+			news_text(g, e[i], line, sizeof(line));
+			strncat(text, line, sizeof(text) - strlen(text) - 2);
+			strcat(text, "\r");
+		}
+		if (n == 0)
+			snprintf(text, sizeof(text), "%s", game_word(g, 18, 3));
+		draw(g, FONT_BODY, 140, 100, 380, text, 0);
+		return;
+	case LOG_PARTY:
+		lvl = f->mood / 4 + 1;
+		snprintf(a[0], sizeof(a[0]), "%s", g->sim.player.name);
+		snprintf(a[1], sizeof(a[1]), "%d", f->crew);
+		snprintf(a[2], sizeof(a[2]), "%d", f->guns);
+		snprintf(a[3], sizeof(a[3]), "%ld", f->gold);
+		snprintf(a[4], sizeof(a[4]), "%d", f->crew > 0 ?
+		    f->food * 256 / f->crew : 0);
+		snprintf(a[5], sizeof(a[5]), "%s", game_word(g, W_MOOD,
+		    (size_t)(lvl < 0 ? 0 : lvl > 3 ? 3 : lvl)));
+		snprintf(a[6], sizeof(a[6]), "%d", f->goods);
+		k = g->world != NULL ? g->world->era : 0;
+		snprintf(a[7], sizeof(a[7]), "%s", game_str(g, W_HIDES +
+		    (k < 2 ? 0 : k < 4 ? 1 : 2)));
+		snprintf(a[8], sizeof(a[8]), "%d", f->sugar);
+		for (k = 0; k < 9; k++)
+			arg[k] = a[k];
+		fill_args(text, sizeof(text), game_str(g, S_PARTY), arg, 9);
+		draw(g, FONT_BODY, 160, 100, 400, text, 0);
+		return;
+	case LOG_PERSONAL:
+		personal_standings(g, text, sizeof(text));
+		lvl = g->sim.reputation / 4 + 1;
+		snprintf(a[0], sizeof(a[0]), "%s", game_str(g, S_SINGLE));
+		snprintf(a[1], sizeof(a[1]), "%d", g->sim.year -
+		    g->sim.start_year + 25);
+		snprintf(a[2], sizeof(a[2]), "%s", game_word(g, W_HEALTH,
+		    (size_t)sim_health(&g->sim)));
+		snprintf(a[3], sizeof(a[3]), "%ld", g->sim.fortune);
+		snprintf(a[4], sizeof(a[4]), "%d", g->sim.acres * 50);
+		snprintf(a[5], sizeof(a[5]), "%s", game_word(g, W_REPUTATION,
+		    (size_t)(lvl < 0 ? 0 : lvl > 5 ? 5 : lvl)));
+		snprintf(a[6], sizeof(a[6]), "%s", game_word(g, W_DIFFICULTY,
+		    (size_t)(g->sim.player.difficulty & 3)));
+		arg[0] = text;
+		for (k = 0; k < 7; k++)
+			arg[k + 1] = a[k];
+		{
+			char out[2048];
+
+			fill_args(out, sizeof(out), game_str(g, S_PERSONAL),
+			    arg, 8);
+			draw(g, FONT_BODY, 140, 100, 420, out, 0);
+		}
+		return;
+	case LOG_HOSTAGES:
+		/* No prisoners are kept yet; the pirate brought in shows. */
+		text[0] = '\0';
+		if (g->sim.mission.type == -MISSION_PIRATE) {
+			captain_name(g, g->sim.mission.pirate, line,
+			    sizeof(line));
+			arg[0] = line;
+			fill_args(text, sizeof(text), game_word(g, W_HOSTAGE, 2),
+			    arg, 1);
+		} else
+			snprintf(text, sizeof(text), "%s", game_word(g,
+			    W_UNKNOWN, 9));
+		draw(g, FONT_BODY, 240, 100, 320, text, 0);
+		return;
+	default:
+		return;
+	}
 }
 
 const struct screen screen_logbook = {
@@ -4468,7 +4662,6 @@ const struct screen screen_merchant = {
  */
 #define W_TAVERN_NAME		96
 #define W_REPUTATION		34	/* cowardly .. infamous */
-#define W_RANK			78	/* Mr., Ensign, Captain... */
 #define W_GOSSIP		33	/* "your promising plans"... */
 #define S_RECRUITS		151
 #define S_NO_RECRUITS		309
@@ -5148,7 +5341,6 @@ const struct screen screen_governor = {
 #define S_PORTIONS		156
 #define S_PLAN			157
 #define S_REFIT			158
-#define W_MOOD			72
 #define BANK_TEXT_X		40
 #define BANK_TEXT_Y		280
 #define BANK_TEXT_W		580
@@ -6236,6 +6428,20 @@ panel_enter(struct game *g)
 	g->panel_marked = 0;
 }
 
+/* Only looking (the log book's Ship Status): any click or key leaves. */
+static int
+panel_viewing(struct game *g, const struct ui_event *ev)
+{
+	if (!g->panel_view)
+		return (0);
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		g->panel_view = 0;
+		game_goto(g, &screen_logbook);
+	}
+	return (1);
+}
+
 static void
 panel_act(struct game *g, int i)
 {
@@ -6266,6 +6472,8 @@ panel_event(struct game *g, const struct ui_event *ev)
 	int n = g->sim.fleet.nships < PANEL_SHIPS ? g->sim.fleet.nships :
 	    PANEL_SHIPS;
 
+	if (panel_viewing(g, ev))
+		return;
 	if (ev->type == EV_CLICK) {
 		panel_act(g, panel_hit(g, ev->x, ev->y));
 		return;
@@ -6309,6 +6517,8 @@ panel_draw(struct game *g)
 		    panel_word(g, 0xac, i), FB_W, word, 0);
 	}
 	memcpy(g->ink, plain, 3);
+	if (g->panel_view)
+		return;		/* no prompt, a blank button (CSTN 87.0) */
 	word = game_str(g, S_COMMAND);
 	w = text_width(&g->font[FONT_BODY], word);
 	draw(g, FONT_BODY, 5 + (415 - (w < 415 ? w : 415)) / 2, 400, 415,
@@ -7046,7 +7256,6 @@ const struct screen screen_deserted = {
  * previous and next town (the original moves a bar over the rows).
  */
 #define W_TOWN_FIELD		94
-#define W_UNKNOWN		92
 #define CM_ROWS			20
 #define CM_BLINK		8	/* frames between the marks */
 

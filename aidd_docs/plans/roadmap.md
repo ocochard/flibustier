@@ -260,8 +260,8 @@ Status (2026-10-26): first slice.
   in the original.
 - **Prison:** the stay, health, marooning, the career's ends.
 - **Map of the Caribbean.**
-- **Next:** the log book's status pages (CSTR 312), prisoners and
-  ransoms.
+- **Log book:** its menu and status pages.
+- **Next:** prisoners and ransoms.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

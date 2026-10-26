@@ -695,12 +695,50 @@ sim_go_ashore(struct sim *s)
 	f->y = f->land_y;
 	f->fx = f->fy = 4;
 	f->speed = 0;
+	/* A party landing next to the town the ship just left (a failed
+	 * attack, say) may walk into it (an engine choice). */
+	f->leaving = -1;
 }
 
 void
 sim_turn_back(struct sim *s)
 {
 	s->fleet.heading = (uint8_t)(s->fleet.heading + 0x80);
+}
+
+/* Land within a ship's length ahead (16 pixels, checked every 4). */
+static int
+shore_ahead(const struct sim *s)
+{
+	const struct sim_fleet *f = &s->fleet;
+	int d;
+
+	for (d = 4; d <= 16; d += 4)
+		if (world_terrain(s->world, f->x + sim_sine_mul(s->world,
+		    f->heading, d), f->y - sim_sine_mul(s->world,
+		    f->heading + 0x40, d)) == TERRAIN_LAND)
+			return (1);
+	return (0);
+}
+
+/* The heading nearest "away from the landing point" with open water
+ * ahead, turning 16 at a time either side. */
+static void
+clear_heading(struct sim *s)
+{
+	struct sim_fleet *f = &s->fleet;
+	int away = (sim_bearing(f->x - f->land_x, f->y - f->land_y) + 8) &
+	    0xF0, k;
+
+	for (k = 0; k <= 128; k += 16) {
+		f->heading = (uint8_t)(away + k);
+		if (!shore_ahead(s))
+			return;
+		f->heading = (uint8_t)(away - k);
+		if (!shore_ahead(s))
+			return;
+	}
+	f->heading = (uint8_t)away;
 }
 
 /* The ship's heading on boarding, by the party's direction (VA 0x367ac;
@@ -752,6 +790,12 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 				f->fx = f->fy = 4;
 				f->heading = boarding_heading(dx, dy);
 				f->speed = 0;
+				/* The party's way can face the shore again,
+				 * and each step onto it would ask once more
+				 * whether to disembark: the engine then
+				 * heads away from where the party landed. */
+				if (shore_ahead(s))
+					clear_heading(s);
 				return (SAIL_BOARDED);
 			}
 			continue;

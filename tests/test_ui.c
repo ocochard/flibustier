@@ -1215,8 +1215,25 @@ test_cabin(void)
 	CHECK(game_script(g, "move:190,200") == 0 && g->cabin_spot == 3);
 	CHECK(game_script(g, "move:280,200") == 0 && g->cabin_spot == -1);
 	CHECK(game_script(g, "click:190,200 wait:40") == 0 &&
-	    g->screen == &screen_logbook);
-	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_logbook && g->log_page == 0);
+	/* The log book: the Ship's Log (leaves turned by the arrows, the
+	 * bookmark leaves), the status pages, Ship Status on the fleet
+	 * panel, Exit. */
+	CHECK(game_script(g, "enter") == 0 && g->log_page == 1);
+	CHECK(game_script(g, "click:300,200") == 0 && g->log_page == 1);
+	CHECK(game_script(g, "click:50,420") == 0 && g->log_page == 0);
+	CHECK(game_script(g, "down enter") == 0 && g->log_page == 2);
+	CHECK(game_script(g, "enter") == 0 && g->log_page == 0);
+	CHECK(game_script(g, "down down enter") == 0 && g->log_page == 3);
+	CHECK(game_script(g, "esc") == 0 && g->log_page == 0);
+	CHECK(game_script(g, "down down down enter wait:40") == 0 &&
+	    g->screen == &screen_fleet_panel && g->panel_view);
+	CHECK(game_script(g, "click:300,200 wait:40") == 0 &&
+	    g->screen == &screen_logbook && !g->panel_view);
+	CHECK(game_script(g, "down down down down enter") == 0 &&
+	    g->log_page == 5);
+	CHECK(game_script(g, "enter") == 0 && g->log_page == 0);
+	CHECK(game_script(g, "esc wait:40") == 0 &&
 	    g->screen == &screen_cabin);
 	/* The Map of the Caribbean: a town picked in the list, the list
 	 * scrolled, DONE. */

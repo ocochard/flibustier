@@ -240,8 +240,16 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   four passes. The ship stays drawn where it waits.
 - **Back to the water:** within 11 pixels of where the party landed it
   boards again, the ship heading the party's way (table at VA
-  `0x367ac`); anywhere else the water stops it.
-- **Towns on foot:** reached as by sea, including inland towns. The
+  `0x367ac`); anywhere else the water stops it. That way can face the
+  shore from where the ship waited, and every step onto land asks to
+  disembark again; the engine then turns the ship (an engine choice):
+  away from the landing point, else 16 at a time either side, to the
+  first heading with no land within 16 pixels ahead.
+- **Towns on foot:** reached as by sea, including inland towns. A town
+  the ship has just left (after a failed attack, or leaving port) is
+  ignored until the fleet is more than 2 cells from it; going ashore
+  clears that, so a party landing beside it can walk in (an engine
+  choice; leaving a town on foot keeps it). The
   arrival offers "March into town" (CSTN 29.5) on `arr_land.pcx`; the
   fort may fire but sinks no ship. In town the ship is not in port: no
   harbour picture, no shipwright. Leaving puts the party on the town's
@@ -1266,7 +1274,7 @@ same town only bits 1 and 2 are kept.
   | 1 | Continue travels | back to the town or the sea |
   | 2 | Treasure maps | the maps held, one after another; on while one is |
   | 3 | Treasure cave | the cave, back to the cabin |
-  | 4 | Logbook | the latest news on `shiplog.pcx` (layout not traced) |
+  | 4 | Logbook | the log book (below) |
   | 5 | Map of the Caribbean | below |
   | 6 | Search | digging, on foot only (see "Treasure maps") |
   | 7-8 | Divide party, Join party | always off, as in the original (below) |
@@ -1274,6 +1282,38 @@ same town only bits 1 and 2 are kept.
   | 10 | Exit game | the retirement question |
   | 11 | Practice fencing | below |
 
+- **The log book (VA `0xc46e`):** on `shiplog.pcx` (picture 0x14), in
+  ink entry 0: the date (CSTR 93, month and year) centred at (320, 20)
+  in PIRATE2, "LOG BOOK" (CSTN 95.6) at (320, 50) in PIRATE4, and the
+  menu "Ship's Log, Party Status, Personal Status, Ship Status, Hostage
+  Status, Exit" (CSTR 312) at (250, 100) up to x 500. Each page shows
+  its title (CSTN 95) centred at (320, 40) in PIRATE4, then waits:
+  - **Ship's Log (VA `0x1fc0f`):** the log's entries with codes 1-36
+    (VA `0x1fa07`), oldest first, 10 a leaf, each a dated line (VA
+    `0x1e144`), at (140, 100) up to x 520; "(no entries)" (CSTN 18.3)
+    when none. The picture's arrows (200, 420)-(240, 450) and (380,
+    420)-(420, 450) turn the leaves when there are more; the EXIT
+    bookmark (0, 360)-(100, 479) leaves (table at VA `0x34638`).
+  - **Party Status (VA `0xa2ca`):** CSTR 104 at (160, 100) up to x 560:
+    the leader, crew, cannon, gold, food in days (`(food x 256 +
+    fraction) / crew`), the crew's mood word (CSTN 72, `clamp(mood / 4 +
+    1, 0, 3)`), goods, and the third good under its era's name (CSTR
+    87 Hides before 1620, 88 Tobacco to 1640, 89 Sugar).
+  - **Personal Status (VA `0xa5a7`):** CSTR 105 at (140, 100) up to x
+    560: for England, France, Holland and Spain, "   %s %s" (CSTR 90)
+    with the nation and the rank, or without one CSTN 21 by standing (2
+    or more "Letter of Marque", 0-1 "(no title)", -1 to -3 "wary",
+    below "hostile"); "(married)" or "(single)" (CSTR 91, 285; flag VA
+    `0x45e86`, the daughter, not modelled); age `years + 25`; health
+    (CSTN 36); the fortune; acres (x 50); the reputation word (CSTN 34,
+    `clamp(reputation / 4 + 1, 0, 5)`) and the difficulty (CSTN 35).
+  - **Ship Status:** the fleet panel only to look (VA `0xffae` mode 0:
+    no prompt, a blank button).
+  - **Hostage Status (VA `0xa450`):** each of the 8 prisoners (VA
+    `0x4720a`) as "%s (hunter)" or "%s (pirate)" (CSTN 22.1, 22.2, by
+    bit 0x100), the pirate brought in for a mission (CSTN 22.2), or
+    "NONE" (CSTN 92.9), at (240, 100) up to x 560. Prisoners are not
+    modelled yet.
 - **Map of the Caribbean (VA `0xb464`):** on `citymap.pcx`:
   - A dot per town, `misc.crs` frame 1 at the town's fields 29, 30 (its
     map position, about its cell x 0.75) less 3.
