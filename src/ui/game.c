@@ -76,6 +76,39 @@ load_fonts(struct game *g)
 	return (rc);
 }
 
+/*
+ * The mouse pointer, a sword, is a raw picture in the executable: u16
+ * width and height, then the pixels, colour 0 transparent.  Its palette
+ * entries (0x1a-0x1f) are the same greys in the game's pictures.
+ */
+static void
+load_cursor(struct game *g)
+{
+	const uint8_t *p;
+	int w, h, i;
+
+	if ((p = exe_at(g->layout, g->exe, g->exe_len, g->layout->cursor_va,
+	    4)) == NULL)
+		return;
+	w = p[0] | p[1] << 8;
+	h = p[2] | p[3] << 8;
+	if (w <= 0 || h <= 0 || w > 64 || h > 64 ||
+	    (p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->cursor_va + 4, (size_t)(w * h))) == NULL)
+		return;
+	if ((g->cursor.pixels = malloc((size_t)(w * h))) == NULL ||
+	    (g->cursor.mask = malloc((size_t)(w * h))) == NULL) {
+		free(g->cursor.pixels);
+		g->cursor.pixels = NULL;
+		return;
+	}
+	memcpy(g->cursor.pixels, p, (size_t)(w * h));
+	for (i = 0; i < w * h; i++)
+		g->cursor.mask[i] = p[i] != 0;
+	g->cursor.w = w;
+	g->cursor.h = h;
+}
+
 int
 game_init(struct game *g, struct packs *packs, const char *lang,
     const char *save_dir)
@@ -104,6 +137,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	}
 	g->exe = b.data;	/* kept for the town and scenario tables */
 	g->exe_len = b.len;
+	load_cursor(g);
 	g->career.expedition = -1;
 	g->hof_new = -1;
 	g->brightness = 0;
@@ -133,6 +167,12 @@ game_free(struct game *g)
 	bank_free(&g->btl_damage[0]);
 	bank_free(&g->btl_damage[1]);
 	tileset_free(&g->btl_tiles);
+	free(g->cursor.pixels);
+	free(g->cursor.mask);
+	bank_free(&g->intro_spr[0]);
+	bank_free(&g->intro_spr[1]);
+	free(g->intro_title);
+	free(g->intro_shown);
 	for (i = 0; i < 2; i++)
 		for (j = 0; j < 6; j++)
 			group_free(&g->sw_parts[i][j]);
@@ -194,6 +234,11 @@ game_portrait(struct game *g, const char *spr)
 void
 game_event(struct game *g, const struct ui_event *ev)
 {
+	if (ev->type == EV_MOVE || ev->type == EV_CLICK) {
+		g->pointer_x = ev->x;
+		g->pointer_y = ev->y;
+		g->pointer_seen = 1;
+	}
 	if (g->fading == -1 || g->quit)
 		return;		/* input is ignored while leaving a screen */
 	g->screen->event(g, ev);
@@ -240,6 +285,11 @@ game_draw(struct game *g)
 	else
 		fb_clear(&g->fb, 0);
 	g->screen->draw(g);
+	/* The pointer, its tip at the top left, once the mouse is used;
+	 * not over the intro pictures. */
+	if (g->pointer_seen && g->cursor.pixels != NULL &&
+	    g->screen != &screen_intro)
+		fb_frame(&g->fb, &g->cursor, g->pointer_x, g->pointer_y);
 }
 
 int

@@ -308,7 +308,8 @@ Sword fights done (2026-10-26):
 
 - ~~Must saves be compatible with the original game?~~ No (maintainer,
   2026-10-26). Saves use a simple text format of their own.
-- Should the 16-colour art mode be supported? (Proposed: no.)
+- ~~Should the 16-colour art mode be supported?~~ No (maintainer,
+  2026-10-26). The engine uses only the 256-colour art and code paths.
 - Should the open pack live in this repository, or in a separate
   repository with its own licence (for example CC BY-SA for art and
   music)?

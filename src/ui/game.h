@@ -95,6 +95,9 @@ struct game {
 	uint8_t			 ink[3];	/* text colour */
 	uint8_t			 highlight[3];	/* selected option colour */
 	struct sprite_bank	 portrait;	/* current portrait, if any */
+	struct frame		 cursor;	/* the sword pointer */
+	int			 pointer_x, pointer_y;
+	int			 pointer_seen;	/* a pointer event arrived */
 	int			 quit;
 
 	struct career		 career;
@@ -121,6 +124,18 @@ struct game {
 	int			 sw_held;	/* arrow and shift keys held */
 	int			 sw_flag_y[2];	/* drawn flag heights */
 	int			 sw_wait;	/* game ticks to the next fight tick */
+	int			 intro_step;	/* 0 logo .. 4 title */
+	int			 intro_hold;	/* ticks shown at full brightness */
+	int			 intro_next;	/* advance on the next enter */
+	struct sprite_bank	 intro_spr[2];
+	uint8_t			*intro_title;	/* title layer, w x h, 0 clear */
+	uint8_t			*intro_shown;	/* dissolve cells revealed */
+	uint32_t		 intro_iter;	/* title screen loop passes */
+	uint32_t		 intro_cell;	/* dissolve generator state */
+	uint32_t		 intro_left;	/* dissolve cells to visit */
+	int			 intro_timer[4];	/* palette cycle counters */
+	int			 intro_cycles;	/* steps of the 0xd3 cycle */
+	int			 intro_pause;
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

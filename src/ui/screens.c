@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "assets/img.h"
@@ -79,7 +80,6 @@
 #define TRAVEL_EXIT		9
 
 #define WELCOME_HEADING		6
-#define INTRO_TICKS		150
 
 /* Text fonts by size: PIRATE1 is the largest (25 px). */
 #define FONT_TITLE		0
@@ -263,33 +263,236 @@ draw_portrait(struct game *g)
 	    (OVAL_Y0 + OVAL_Y1 - f->h) / 2, OVAL_X0, OVAL_Y0, OVAL_X1, OVAL_Y1);
 }
 
-/* Intro: the publisher's logo, until a key, a click or a few seconds. */
+/*
+ * Intro (VA 0x3325): the MicroProse logo; "and", "MPS Labs" and
+ * "Present" on black, each faded in and out; then the moonlit ship
+ * (moon03) with its palette cycling, where the "Pirates! Gold" title
+ * dissolves in on the right.  A key or a click skips to the menu.
+ */
+static void	load_bank(struct game *, const char *, int,
+		    struct sprite_bank *);
+
+#define INTRO_STEPS		5
+#define TITLE_X			272	/* the title's left edge */
+#define TITLE_W			368
+#define TITLE_H			274	/* two sprites: 135 + 134 rows */
+#define CELLS_W			184	/* the dissolve's 2 x 2 cells */
+#define CELLS_H			137
+#define CELL_SPACE		32768	/* power of two above 0x61c0 */
+#define TITLE_PASSES		45000	/* loop passes before the menu */
+#define TITLE_LEAD		2000	/* palette cycling before the title */
+#define PASSES_PER_TICK		167	/* engine choice: 0.1 ms a pass */
+
+static const struct {
+	const char	*pic;		/* NULL: black, the logo's palette */
+	const char	*spr;
+	int		 x, y;
+	int		 hold;		/* ticks at full brightness */
+} intro_steps[INTRO_STEPS] = {
+	{ "pic/micro", NULL, 0, 0, 120 },	/* 20 x 100 ms */
+	{ NULL, "spr/and", 229, 227, 60 },	/* 20 x 50 ms */
+	{ NULL, "spr/mpslabs", 195, 100, 120 },
+	{ NULL, "spr/present", 134, 231, 60 },
+	{ "pic/moon03", NULL, 0, 0, 0 },	/* ends by its loop */
+};
+
+/* Rotate palette entries [start, start + count) up by one. */
+static void
+cycle(struct game *g, int start, int count)
+{
+	uint8_t last[3];
+
+	memcpy(last, &g->fb.pal[(start + count - 1) * 3], 3);
+	memmove(&g->fb.pal[(start + 1) * 3], &g->fb.pal[start * 3],
+	    (size_t)(count - 1) * 3);
+	memcpy(&g->fb.pal[start * 3], last, 3);
+}
+
+/* Compose both title sprites into one layer. */
+static void
+intro_title_layer(struct game *g)
+{
+	int i, x, y, oy = 0;
+
+	free(g->intro_title);
+	free(g->intro_shown);
+	g->intro_title = calloc(TITLE_W * TITLE_H, 1);
+	g->intro_shown = calloc(CELLS_W * CELLS_H, 1);
+	if (g->intro_title == NULL || g->intro_shown == NULL)
+		return;
+	for (i = 0; i < 2; i++) {
+		const struct frame *f;
+
+		if (g->intro_spr[i].count == 0)
+			continue;
+		f = &g->intro_spr[i].frames[0];
+		for (y = 0; y < f->h && oy + y < TITLE_H; y++)
+			for (x = 0; x < f->w && x < TITLE_W; x++)
+				if (f->mask == NULL || f->mask[y * f->w + x])
+					g->intro_title[(oy + y) * TITLE_W + x] =
+					    f->pixels[y * f->w + x];
+		oy += f->h;
+	}
+}
 
 static void
 intro_enter(struct game *g)
 {
-	game_background(g, "pic/micro");
+	int step;
+
+	if (g->intro_next) {	/* changed only once the fade is over */
+		g->intro_step++;
+		g->intro_next = 0;
+	}
+	step = g->intro_step;
 	game_portrait(g, NULL);
+	g->intro_hold = 0;
+	bank_free(&g->intro_spr[0]);
+	bank_free(&g->intro_spr[1]);
+	if (intro_steps[step].pic != NULL)
+		game_background(g, intro_steps[step].pic);
+	else
+		image_free(&g->bg);	/* black, keeping the palette */
+	if (intro_steps[step].spr != NULL)
+		load_bank(g, intro_steps[step].spr, 0, &g->intro_spr[0]);
+	if (step == INTRO_STEPS - 1) {
+		load_bank(g, "spr/title", 0, &g->intro_spr[0]);
+		load_bank(g, "spr/title1", 0, &g->intro_spr[1]);
+		intro_title_layer(g);
+		g->intro_iter = 0;
+		g->intro_cell = 0;	/* the original starts at random */
+		g->intro_left = CELL_SPACE;
+		g->intro_timer[0] = g->intro_timer[3] = 300;
+		g->intro_timer[1] = 50;
+		g->intro_timer[2] = 100;
+		g->intro_cycles = 26;
+		g->intro_pause = 0;
+	}
+}
+
+static void
+intro_leave(struct game *g)
+{
+	free(g->intro_title);
+	free(g->intro_shown);
+	g->intro_title = g->intro_shown = NULL;
+	game_goto(g, &screen_welcome);
 }
 
 static void
 intro_event(struct game *g, const struct ui_event *ev)
 {
 	if (ev->type == EV_KEY || ev->type == EV_CLICK)
-		game_goto(g, &screen_welcome);
+		intro_leave(g);
+}
+
+/* One pass of the title screen's loop (VA 0x36e4, then 0x379f).
+ * Returns 1 when the screen is over. */
+static int
+title_pass(struct game *g)
+{
+	uint32_t row, col;
+
+	if (g->intro_iter < TITLE_LEAD) {
+		if (--g->intro_timer[0] < 0) {
+			cycle(g, 0xee, 0x11);
+			g->intro_timer[0] = 300;
+		}
+		if (--g->intro_timer[1] < 0) {
+			cycle(g, 100, 0x40);
+			g->intro_timer[1] = 50;
+		}
+		if (--g->intro_timer[2] < 0) {
+			cycle(g, 0xc2, 0xd);
+			g->intro_timer[2] = 100;
+		}
+		g->intro_iter++;
+		return (0);
+	}
+	if (g->intro_left != 0) {
+		/* Visit the cells in the order of x = 5x + 1, skipping
+		 * those below the title. */
+		for (;;) {
+			g->intro_cell = (g->intro_cell * 5 + 1) %
+			    CELL_SPACE;
+			row = g->intro_cell / CELLS_W;
+			if (row < CELLS_H)
+				break;
+			if (--g->intro_left == 0)
+				break;
+		}
+		if (g->intro_left != 0) {
+			col = g->intro_cell % CELLS_W;
+			if (g->intro_shown != NULL)
+				g->intro_shown[row * CELLS_W + col] = 1;
+			g->intro_left--;
+		}
+	} else if (g->intro_pause == 0) {
+		if (--g->intro_timer[3] < 0) {
+			cycle(g, 0xd3, 0x1a);
+			g->intro_timer[3] = 300;
+			if (--g->intro_cycles == 0) {
+				g->intro_cycles = 26;
+				g->intro_pause = 10000;
+			}
+		}
+	} else
+		g->intro_pause--;
+	if (--g->intro_timer[0] < 0) {
+		cycle(g, 0xee, 0x11);
+		g->intro_timer[0] = 300;
+	}
+	if (--g->intro_timer[1] < 0) {
+		cycle(g, 100, 0x40);
+		g->intro_timer[1] = 50;
+	}
+	if (--g->intro_timer[2] < 0) {
+		cycle(g, 0xc2, 0xd);
+		g->intro_timer[2] = 100;
+	}
+	g->intro_iter++;
+	return (g->intro_iter - TITLE_LEAD >= TITLE_PASSES &&
+	    g->intro_cycles == 26);
 }
 
 static void
 intro_tick(struct game *g)
 {
-	if (g->ticks == INTRO_TICKS)
-		game_goto(g, &screen_welcome);
+	int i;
+
+	if (g->fading != 0)
+		return;
+	if (g->intro_step == INTRO_STEPS - 1) {
+		for (i = 0; i < PASSES_PER_TICK; i++)
+			if (title_pass(g)) {
+				intro_leave(g);
+				return;
+			}
+		return;
+	}
+	if (++g->intro_hold >= intro_steps[g->intro_step].hold) {
+		g->intro_next = 1;
+		game_goto(g, &screen_intro);
+	}
 }
 
 static void
 intro_draw(struct game *g)
 {
-	(void)g;
+	int step = g->intro_step, x, y;
+	uint8_t c;
+
+	if (g->intro_spr[0].count > 0 && step < INTRO_STEPS - 1)
+		fb_frame(&g->fb, &g->intro_spr[0].frames[0],
+		    intro_steps[step].x, intro_steps[step].y);
+	if (step != INTRO_STEPS - 1 || g->intro_title == NULL ||
+	    g->intro_shown == NULL)
+		return;
+	for (y = 0; y < TITLE_H; y++)
+		for (x = 0; x < TITLE_W; x++)
+			if (g->intro_shown[(y / 2) * CELLS_W + x / 2] &&
+			    (c = g->intro_title[y * TITLE_W + x]) != 0)
+				g->fb.px[y * FB_W + TITLE_X + x] = c;
 }
 
 const struct screen screen_intro = {

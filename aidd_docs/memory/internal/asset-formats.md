@@ -22,6 +22,12 @@ kind on the GOG data by `tests/test_original.c`.
   (`PCX16/`, `SPR16/`, `TMAP16.IMB`, `16MAP*.IMB`). The 16-colour set is
   produced at install time by `CONV.BAT`/`PCXDITH.EXE`. Only target the
   256-colour set.
+- The mouse pointer is not a file. It is a raw picture inside the
+  executable at VA `0x37080`: `u16 w, u16 h` (24 x 27), then `w*h`
+  pixels, colour 0 transparent, with the tip at the top left. It uses
+  palette entries 0x1a-0x1f, the same greys in the game's pictures. The
+  16-colour mode has its own copy at VA `0x3730c`, which the engine
+  ignores.
 - The developer scripts `SPRS.DEF`, `SPRS.FL`, `SPRS.EX` and `CONV.*` map
   each sprite file to the PCX whose palette it uses (third column).
 

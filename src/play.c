@@ -119,6 +119,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
 	InitWindow(FB_W * WINDOW_SCALE, FB_H * WINDOW_SCALE, "stmalo");
 	SetExitKey(KEY_NULL);	/* Escape is a game key */
+	HideCursor();		/* the game draws its own sword pointer */
 	SetTargetFPS(60);
 	im = (Image){ rgb, FB_W, FB_H, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
 	tex = LoadTextureFromImage(im);

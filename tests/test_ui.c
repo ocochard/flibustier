@@ -427,6 +427,62 @@ test_sword_screen(void)
 	game_free(g);
 }
 
+/* The sword pointer: drawn where the mouse is, once it moved. */
+static void
+test_pointer(void)
+{
+	struct game *g;
+	int x, y, drawn = 0;
+
+	g = play("eng", "enter wait:60");
+	if (g == NULL)
+		return;
+	CHECK(g->cursor.w == 24 && g->cursor.h == 27);
+	CHECK(!g->pointer_seen);
+	CHECK(game_script(g, "move:300,250 wait:1") == 0);
+	CHECK(g->pointer_seen && g->pointer_x == 300 && g->pointer_y == 250);
+	game_draw(g);
+	for (y = 0; y < g->cursor.h; y++)
+		for (x = 0; x < g->cursor.w; x++)
+			if (g->cursor.mask[y * g->cursor.w + x])
+				drawn += g->fb.px[(250 + y) * FB_W + 300 + x] ==
+				    g->cursor.pixels[y * g->cursor.w + x];
+	CHECK(drawn > 50);
+	game_free(g);
+}
+
+/* The intro's five steps, then the menu; a key skips it. */
+static void
+test_intro(void)
+{
+	struct game *g;
+	int i, seen = 0, last = -1, dissolved = 0;
+
+	g = play("eng", "");
+	if (g == NULL)
+		return;
+	for (i = 0; i < 2000 && g->screen == &screen_intro; i++) {
+		if (g->intro_step != last) {
+			CHECK(g->intro_step == last + 1);
+			last = g->intro_step;
+			seen++;
+		}
+		if (g->intro_shown != NULL && g->intro_left == 0)
+			dissolved = 1;
+		CHECK(game_script(g, "wait:1") == 0);
+	}
+	CHECK(seen == 5 && dissolved);
+	CHECK(game_script(g, "wait:40") == 0);
+	CHECK(g->screen == &screen_welcome && g->intro_title == NULL);
+	game_free(g);
+
+	g = play("eng", "wait:200 enter wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_welcome);
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -450,6 +506,8 @@ main(void)
 	test_encounter_screens();
 	test_battle_screen();
 	test_sword_screen();
+	test_pointer();
+	test_intro();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

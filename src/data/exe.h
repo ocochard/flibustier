@@ -34,6 +34,7 @@ struct exe_layout {
 	uint32_t	 sword_moves_va;	/* sword fight: flag heights, then
 						 * frames per move */
 	uint32_t	 sword_va;		/* sword fight tables block */
+	uint32_t	 cursor_va;		/* mouse pointer: u16 w, h, pixels */
 };
 
 /* Returns the layout of a known build, or NULL. */

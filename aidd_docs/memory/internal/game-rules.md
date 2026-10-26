@@ -639,6 +639,33 @@ move) and `0x38a1a` to `0x38b99`.
   - at level 3, after any hit.
   - Levels 0 and 4 keep their script.
 
+## Intro (VA `0x3325`)
+
+1. `micro.pcx`: fade in, 2 s (20 x 100 ms), fade out.
+2. On black, keeping that palette, each sprite faded in and out at its
+   top-left position:
+   - `and.spr` at (229, 227), 1 s;
+   - `mpslabs.spr` at (195, 100), 2 s;
+   - `present.spr` at (134, 231), 1 s.
+3. `moon03.pcx`, faded in:
+   - **Palette cycling:** 2000 loop passes (VA `0x36e4`). Each step
+     rotates a range of palette entries up by one: 0xee-0xfe every 300
+     passes, 100-163 every 50, 0xc2-0xce every 100.
+   - **Title (VA `0x379f`):** `title.spr` and `title1.spr`, stacked at
+     x 272, dissolve in by 2 x 2 cells of a 184 x 137 grid. The cells
+     are visited in the order `x = (5x + 1) mod 32768` from a random
+     start; values past the grid are skipped. One cell is revealed per
+     pass, and the same cycling goes on.
+   - **Then:** 0xd3-0xec rotates every 300 passes, 26 times, then pauses
+     for 10000 passes.
+   - **End:** after 45000 passes, at the end of a 26-step cycle, the
+     picture fades out.
+4. A key at any wait ends the intro.
+
+The title screen's passes wait 1/10 of a 10 ms tick, which is 0. So
+their speed is the CPU's. The engine runs 167 passes per 1/60 s frame,
+about 0.1 ms each, and starts the dissolve at cell 0.
+
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 
 When a career ends:
