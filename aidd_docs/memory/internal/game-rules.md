@@ -930,6 +930,17 @@ The title screen's passes wait 1/10 of a 10 ms tick, which is 0. So
 their speed is the CPU's. The engine runs 167 passes per 1/60 s frame,
 about 0.1 ms each, and starts the dissolve at cell 0.
 
+## New career: the time period (VA `0x15a3c`)
+
+On `textback.pcx`:
+- the title (CSTR 64) is centred at y 20 in PIRATE2;
+- each period's name (CSTN 98) is centred in PIRATE1 at y 60, 130, 200,
+  270, 340 and 410;
+- its description (CSTR 261-266) sits under it in PIRATE3, across x
+  40-620, at y 83 + 70 per period;
+- each period is a full-width row 70 pixels high for the mouse (VA
+  `0x333d8`).
+
 ## New career: the identity screen (VA `0x1482e`)
 
 After the era (or a famous expedition), one picture, `idselect.pcx`,
@@ -967,6 +978,40 @@ the oval at (237, 66).
    Captain?" (CSTR 273), with "Yes" (CSTR 274) at (208, 368) and "Nay"
    (275) at (390, 368) (click areas at VA `0x33470`). "Nay" starts the
    identity over from the nationality, keeping the era.
+
+## New career: the story (VA `0x139e2`)
+
+- **Setup (VA `0x1451e`):** before the story, the game lowers every
+  nation's standing by 16, marks the towns whose information the player
+  knows (by difficulty) and picks the missing family member.
+- **Picture:** `frame.pcx` with the captain's portrait for the
+  difficulty at (236, 58). The text is at (40, 340), up to x 620.
+- **Scripts:** one byte script per career, at VA `0x35968`, separated by
+  -1, in the order of the start scenarios (era x 4 + nation, English,
+  French, Dutch, Spanish; then the expeditions).
+- **Bytes:**
+  - A CSTR number shows that text. Its `%s` are the treasure (CSTR 46,
+    or 45 the silver train), a town, the year and the player's name.
+  - -2 waits for a key and turns the page.
+  - ')' waits for a key.
+  - '*' prepares the fight, and 'a' fights it (VA `0x16205`).
+  - 6 asks a question; 0 ends.
+  - '2'-'7' show nothing.
+- **The copy-protection question:**
+  - ')' and '*' were the original's question.
+  - **Pass:** the standings get their 16 back, and the fight is 200 men
+    of factor 32 against 20 of 16.
+  - **Fail:** difficulty 4, no guns, 8 gold, and a hard fight, followed
+    by the script's other branch after its first 0.
+  - In this build the comparison overwrites the expected answer with
+    the given one (VA `0x14695`), so it always passes. The engine keeps
+    the pass branch, and since standings start at 0, it applies neither
+    the -16 nor the +16.
+- **Engine choices:**
+  - The career starts when the player confirms, before the story.
+  - The story's fight uses the boarding fight's screen, with no weapon
+    choice and nothing at stake.
+  - Escape skips the story.
 
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 

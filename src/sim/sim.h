@@ -156,7 +156,8 @@ enum battle_outcome {
 enum sword_kind {
 	SWORD_CREW = 0,		/* boarding or storming */
 	SWORD_DUEL = 1,
-	SWORD_PRACTICE = -2
+	SWORD_PRACTICE = -2,
+	SWORD_STORY = -1	/* the career story's: no choice, no stakes */
 };
 
 enum sword_result {

@@ -28,6 +28,9 @@ kind on the GOG data by `tests/test_original.c`.
   palette entries 0x1a-0x1f, the same greys in the game's pictures. The
   16-colour mode has its own copy at VA `0x3730c`, which the engine
   ignores.
+- Fonts are drawn one colour, pixel for pixel, as in the game (VA
+  `0x1900`, `0x19af`). The softer look under dosbox-staging comes from
+  its default CRT shader (`shader = crt-auto`), not from the game.
 - The developer scripts `SPRS.DEF`, `SPRS.FL`, `SPRS.EX` and `CONV.*` map
   each sprite file to the PCX whose palette it uses (third column).
 

@@ -235,6 +235,9 @@ menu_event(struct game *g, const struct ui_event *ev, int count,
  */
 static void	load_bank(struct game *, const char *, int,
 		    struct sprite_bank *);
+static void	fill_args(char *, size_t, const char *, const char *const *,
+		    int);
+static void	sword_load(struct game *);
 
 #define INTRO_STEPS		5
 #define TITLE_X			272	/* the title's left edge */
@@ -696,16 +699,42 @@ era_event(struct game *g, const struct ui_event *ev)
 	menu_event(g, ev, 6, NULL, era_choose, &screen_welcome);
 }
 
+/*
+ * The era screen (VA 0x15a3c): the title, then each period's name
+ * centred (PIRATE1) with its description under it in the small PIRATE3,
+ * every 70 pixels; each period is a full-width row for the mouse.
+ */
+#define ERA_NAME_Y		60
+#define ERA_DESC_Y		83
+#define ERA_STEP		70
+
 static void
 era_draw(struct game *g)
 {
-	char buf[512];
+	struct text_target t = { plot, &g->fb };
+	struct text_style st;
+	char opt[160];
+	const char *name;
+	int i, w;
 
-	draw_centered(g, FONT_TITLE, 40, game_str(g, S_SELECT_ERA));
-	options(g, W_ERA, 6, buf, sizeof(buf));
-	draw(g, FONT_BODY, 170, 100, 400, buf, 1);
-	draw(g, FONT_BODY, 80, 300, 480,
-	    game_str(g, S_ERA_TEXT + (size_t)g->selected), 0);
+	w = text_width(&g->font[FONT_BODY], game_str(g, S_SELECT_ERA));
+	draw(g, FONT_BODY, FB_W / 2 - w / 2, 20, FB_W,
+	    game_str(g, S_SELECT_ERA), 0);
+	for (i = 0; i < 6; i++) {
+		name = game_word(g, W_ERA, (size_t)i);
+		snprintf(opt, sizeof(opt), "~%s", name);
+		w = text_width(&g->font[FONT_TITLE], name);
+		style(g, FONT_TITLE, 1, &st);
+		text_draw(&t, &st, FB_W / 2 - w / 2, ERA_NAME_Y + i * ERA_STEP,
+		    FB_W, opt, g->selected == i ? 0 : -1, NULL);
+		draw(g, FONT_SMALL, 40, ERA_DESC_Y + i * ERA_STEP, 580,
+		    game_str(g, S_ERA_TEXT + (size_t)i), 0);
+		g->options.option[i].x = 0;
+		g->options.option[i].y = ERA_NAME_Y + i * ERA_STEP;
+		g->options.option[i].w = FB_W;
+		g->options.option[i].h = ERA_STEP;
+	}
+	g->options.noptions = 6;
 }
 
 const struct screen screen_era = {
@@ -1199,7 +1228,15 @@ static void
 confirm_choose(struct game *g, int i)
 {
 	if (i == 0) {
-		game_goto(g, &screen_summary);
+		/* The career starts now; its story comes first. */
+		if (game_start_career(g) != 0) {
+			snprintf(g->err, sizeof(g->err),
+			    "cannot start the career");
+			game_goto(g, &screen_summary);
+			return;
+		}
+		g->story_pos = 0;
+		game_goto(g, &screen_story);
 		return;
 	}
 	bank_free(&g->id_spr[4]);
@@ -1267,13 +1304,149 @@ const struct screen screen_confirm = {
 	"confirm", confirm_enter, confirm_event, NULL, confirm_draw,
 };
 
+/*
+ * The career's story (VA 0x139e2): on the frame picture with the
+ * captain's portrait, pages of text from a byte script in the
+ * executable, one script per career (era x 4 + flag slot):
+ *   a CSTR number shows that text (with the treasure, a town, the year
+ *   and the player's name); -2 waits for a key and turns the page;
+ *   ')' waits for a key; 'a' is a sword fight; 0 ends the story.
+ * '*' and ')' are the original's copy-protection question, which this
+ * build always passes; codes '2'-'7' show nothing.
+ */
+#define STORY_TEXT_Y		340
+#define STORY_END		0
+#define STORY_PAGE		(-2)
+#define STORY_WAIT		')'
+#define STORY_CHECK		'*'
+#define STORY_FIGHT		'a'
+#define STORY_ASK		6
+#define S_TREASURE_FLEET	46
+#define STORY_MAX		4096
+
+/* The script for this career: the "index"th, after -1 separators. */
+static const uint8_t *
+story_script(const struct game *g, size_t *len)
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->story_va, STORY_MAX);
+	int index, n = 0;
+	size_t i = 0, start;
+
+	if (p == NULL)
+		return (NULL);
+	index = g->career.expedition >= 0 ? SCENARIO_CAREERS +
+	    g->career.expedition : scenario_career(g->career.era,
+	    (enum scenario_nation)(g->career.nation == NATION_SPAIN ? 3 :
+	    g->career.nation - 1));
+	for (; i < STORY_MAX && n < index; i++)
+		if (p[i] == 0xFF)
+			n++;
+	start = i;
+	while (i < STORY_MAX && p[i] != 0xFF)
+		i++;
+	*len = i - start;
+	return (p + start);
+}
+
+/* Read on to the next stop: a page to wait on, a fight, or the end. */
+static void
+story_advance(struct game *g)
+{
+	const uint8_t *p;
+	size_t len;
+	int c;
+
+	if ((p = story_script(g, &len)) == NULL) {
+		game_goto(g, &screen_voyage);
+		return;
+	}
+	g->story_waiting = 0;
+	while (g->story_pos < len) {
+		c = (int8_t)p[g->story_pos++];
+		if (c == STORY_END || c == STORY_ASK)
+			break;
+		if (c == STORY_PAGE || c == STORY_WAIT) {
+			g->story_waiting = c == STORY_PAGE ? 1 : 2;
+			return;
+		}
+		if (c == STORY_FIGHT) {
+			g->sw_story = 1;
+			game_goto(g, &screen_sword);
+			return;
+		}
+		if (c == STORY_CHECK || (c >= '2' && c <= '7'))
+			continue;
+		g->story_text = c < 0 ? -c : c;
+	}
+	game_goto(g, &screen_voyage);
+}
+
+static void
+story_enter(struct game *g)
+{
+	game_background(g, "pic/frame");
+	game_portrait(g, NULL);
+	load_bank(g, captain_portrait[g->career.difficulty & 3], 0,
+	    &g->id_spr[2]);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	if (g->story_pos == 0)
+		g->story_text = -1;
+	story_advance(g);
+}
+
+static void
+story_event(struct game *g, const struct ui_event *ev)
+{
+	/* Escape skips the story: an engine convenience. */
+	if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE) {
+		game_goto(g, &screen_voyage);
+		return;
+	}
+	if (!g->story_waiting || !(ev->type == EV_CLICK ||
+	    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)))
+		return;
+	if (g->story_waiting == 1)
+		g->story_text = -1;		/* a new page */
+	story_advance(g);
+}
+
+static void
+story_draw(struct game *g)
+{
+	const char *arg[4];
+	char text[1024], year[16];
+	const struct sim_town *t;
+
+	id_frame(g, 2, 0, 236, 58);
+	if (g->story_text < 0)
+		return;
+	t = g->sim.ntowns > 0 ? &g->sim.towns[g->sim.fleet.leaving >= 0 ?
+	    g->sim.fleet.leaving : 0] : NULL;
+	snprintf(year, sizeof(year), "%d", g->sim.era_year);
+	arg[0] = game_str(g, S_TREASURE_FLEET);
+	arg[1] = t != NULL ? t->name : "";
+	arg[2] = year;
+	arg[3] = g->sim.player.name;
+	fill_args(text, sizeof(text), game_str(g, g->story_text), arg, 4);
+	draw(g, FONT_BODY, 40, STORY_TEXT_Y, 580, text, 0);
+	if (g->story_waiting)
+		draw(g, FONT_BODY, 40, 440, 580, game_str(g, S_CONTINUE), 0);
+}
+
+const struct screen screen_story = {
+	"story", story_enter, story_event, NULL, story_draw,
+};
+
 /* Summary: the career is created; the voyage itself is the next phase. */
 
 static void
 summary_enter(struct game *g)
 {
 	parchment_enter(g);
-	if (game_start_career(g) != 0)
+	if (!g->started && g->err[0] == '\0' && game_start_career(g) != 0)
 		snprintf(g->err, sizeof(g->err), "cannot start the career");
 }
 
@@ -2386,6 +2559,28 @@ load_group(struct game *g, const char *id, struct sprite_group *out)
 	blob_free(&b);
 }
 
+/* The story's fight (VA 0x14630): 200 men of factor 32 against 20 of
+ * 16, no weapon to choose and nothing at stake. */
+static void
+sword_story_start(struct game *g)
+{
+	struct sword_setup in;
+
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_STORY;
+	in.you_men = 200;
+	in.you_factor = 32;
+	in.foe_men = 20;
+	in.foe_factor = 16;
+	in.title = 3;
+	in.nation = 5;
+	sim_sword_start(&g->sim, &in);
+	game_background(g, "pic/shipdeck");
+	g->ink[0] = g->ink[1] = g->ink[2] = 240;
+	g->sw_stage = 2;
+	g->sw_held = 0;
+}
+
 static void
 sword_enter(struct game *g)
 {
@@ -2402,6 +2597,10 @@ sword_enter(struct game *g)
 		blob_free(&b);
 	}
 	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);
+	if (g->sw_story) {
+		sword_story_start(g);
+		sword_load(g);
+	}
 }
 
 /* The fight's assets, once both weapons are known. */
@@ -2454,6 +2653,12 @@ key_bit(int key)
 static void
 sword_outcome_done(struct game *g)
 {
+	if (g->sw_story) {
+		g->sw_story = 0;
+		g->sim.sword.active = 0;
+		game_goto(g, &screen_story);
+		return;
+	}
 	if (g->sim.sword.result == SWORD_WON)
 		game_goto(g, &screen_battle);	/* the prize */
 	else
@@ -2530,7 +2735,7 @@ sword_tick(struct game *g)
 		g->sw_wait = 1;
 	sim_sword_tick(&g->sim);
 	if (g->sim.sword.result != SWORD_NONE) {
-		if (g->sim.sword.result == SWORD_WON)
+		if (g->sim.sword.result == SWORD_WON || g->sw_story)
 			sword_outcome_done(g);
 		else
 			g->sw_stage = 3;
