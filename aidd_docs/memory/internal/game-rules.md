@@ -518,10 +518,11 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   the engine writes on `textback.pcx`.
   - Letter, papers: the mystery man in the destination's tavern.
   - The son: the sack of the destination (after "at your mercy").
-  - The pirate: off the destination (the encounter's nearest town), a
-    pirate ship is him (VA `0xd1fc`), cannot be avoided once seen, and
-    capturing it fulfils the mission (VA `0xdb7b`). The original also
-    gives him a level bonus and the CSTR 121 hail, not done.
+  - The pirate: off the destination (the encounter's nearest town), four
+    times in five the ship met is the mission nation's first pirate
+    record; a pirate ship there is him (VA `0xd1fc`), cannot be avoided
+    once seen, and capturing it fulfils the mission (VA `0xdb7b`). He
+    hails and fights as a named captain (see "Named captains").
 - Prison clears the mission (VA `0x1f803`).
 
 ### Treasure maps (VA `0x1f08a`, `0x29ece`, `0xa801`)
@@ -772,7 +773,9 @@ Where the original's behaviour is not traced yet, the engine does this:
      record after the 20 (era block offset `0x100 + 140`, VA `0x47112`),
      a Spanish galleon (type 7) with a rich cargo byte (240 in 1560 down
      to 100 in 1680).
-   - Missions and pirate bases have special cases, not specified yet.
+   - Before that: off the destination of a pirate hunt, when `rand(5)`
+     is not 0, the first pirate record (byte 1 = 4) of the mission
+     nation's five, if any. These are the only special cases.
 3. **Ship record:**
 
 | Byte | Content |

@@ -969,6 +969,21 @@ pick_ship(struct sim *s, int town, int dist)
 		nation = r % 4;
 	}
 	rec = s->world->encounter[nation][k];
+	/* Off the town a governor sent the player to hunt a pirate, four
+	 * times in five the first pirate of the mission nation's records
+	 * (VA 0xd1fc). */
+	if (s->mission.type == MISSION_PIRATE && town >= 0 &&
+	    town == s->mission.dest && rng_below(&s->rng, 5) != 0) {
+		int p;
+
+		for (p = 0; p < ENCOUNTER_SHIPS; p++)
+			if (s->world->encounter[s->mission.nation & 3][p][1] ==
+			    NATION_PIRATE) {
+				rec = s->world->encounter[s->mission.nation &
+				    3][p];
+				break;
+			}
+	}
 	/* Off the treasure fleet's town: its galleon, unless the region
 	 * is alerted (VA 0xd1fc). */
 	if (town >= 0 && town == s->fleet_town &&

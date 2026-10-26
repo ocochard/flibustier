@@ -3176,6 +3176,41 @@ test_prize_place(void)
 	    s.fleet.crew == 40);
 }
 
+/* Off the destination of a pirate hunt, the pirate comes four times in
+ * five. */
+static void
+test_hunted_pirate(void)
+{
+	struct sim s;
+	int town, i, k, n, met = 0, named = 0, nat = -1;
+
+	for (n = 0; n < 4 && nat < 0; n++)
+		for (k = 0; k < ENCOUNTER_SHIPS; k++)
+			if (test_world.encounter[n][k][1] == NATION_PIRATE) {
+				nat = n;
+				break;
+			}
+	CHECK(nat >= 0);
+	sea_game(&s, 120, 112, 0x00);	/* 2 cells from Beta */
+	s.encounters = 1;
+	s.mission.type = MISSION_PIRATE;
+	s.mission.dest = 1;
+	s.mission.nation = nat;
+	s.mission.pirate = 0x8000 | 2 << 3;
+	for (i = 0; i < 600; i++) {
+		s.encounter.stage = ENC_NONE;
+		s.heat = 0;
+		s.fleet.x = 120 * WORLD_TILE + 8;
+		s.fleet.y = 112 * WORLD_TILE + 8;
+		if (sim_sail(&s, 0, 32, &town) != SAIL_ENCOUNTER ||
+		    s.encounter.town != 1)
+			continue;
+		met++;
+		named += s.encounter.named;
+	}
+	CHECK(met > 20 && named * 10 > met * 6);	/* about 4 in 5 */
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3284,6 +3319,7 @@ main(void)
 	test_career_end();
 	test_crew_check();
 	test_prize_place();
+	test_hunted_pirate();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);
