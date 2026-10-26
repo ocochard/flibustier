@@ -76,6 +76,7 @@
 #define S_YOU_ESCAPED		197
 #define S_COMMAND		286
 #define S_TOO_FEW		112	/* "Your crew is too small..." */
+#define S_NO_OFFICERS		130	/* "You lack enough officers..." */
 #define W_THE_SHIP		77	/* 4: "the ship" */
 #define W_PLUNDERED		10	/* 6: " gold pieces plundered!" */
 #define PLUNDERED_WORD		6
@@ -3190,6 +3191,12 @@ battle_finish(struct game *g, int keep)
 	if (g->sim.jail.fresh) {
 		/* Beaten aboard, or the last ship gone (VA 0x16647). */
 		game_goto(g, &screen_prison);
+		return;
+	}
+	if (g->sim.prize_pending) {
+		/* Eight ships: which makes room for the prize (CSTR 130)? */
+		g->panel_replace = 1;
+		game_goto(g, &screen_fleet_panel);
 		return;
 	}
 	if (g->sim.hostage != 0) {
@@ -6851,6 +6858,13 @@ panel_act(struct game *g, int i)
 		for (k = 0; k < PANEL_SHIPS; k++)
 			if (g->panel_marked & (1u << k))
 				break;
+		if (g->panel_replace) {
+			g->panel_replace = 0;
+			sim_prize_place(&g->sim, k, g->sim.prize_type,
+			    g->sim.prize_damage);
+			game_goto(g, &screen_sail);
+			return;
+		}
 		if (g->panel_abandon) {
 			/* The ship left behind, her cargo kept (VA
 			 * 0x1f65f); the check runs again at sea. */
@@ -6925,7 +6939,8 @@ panel_draw(struct game *g)
 	memcpy(g->ink, plain, 3);
 	if (g->panel_view)
 		return;		/* no prompt, a blank button (CSTN 87.0) */
-	word = game_str(g, g->panel_abandon ? S_TOO_FEW : S_COMMAND);
+	word = game_str(g, g->panel_replace ? S_NO_OFFICERS :
+	    g->panel_abandon ? S_TOO_FEW : S_COMMAND);
 	w = text_width(&g->font[FONT_BODY], word);
 	draw(g, FONT_BODY, 5 + (415 - (w < 415 ? w : 415)) / 2, 400, 415,
 	    word, 0);

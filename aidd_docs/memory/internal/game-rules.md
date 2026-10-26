@@ -1108,11 +1108,15 @@ byte), return to the fleet.
 
 - **Boarding:** the sword fight decides it (see below). A win counts as
   a surrender.
-- **Lost boarding:** the enemy takes the flagship, as if it sank;
-  prison (VA `0x16647`) is not modelled.
+- **Lost boarding:** the enemy takes the flagship, as if it sank; then
+  prison (see "Prison").
 - **The prize's picture:** `plunder.pcx`, the question at (40, 50) up to
-  x 620 in ink entry 0. With 8 ships already, the fleet panel then asks
-  which one to replace (CSTR 130); not done yet.
+  x 620 in ink entry 0.
+- **Kept (VA `0xdb7b`):** a new slot; with 8 ships already, "You lack
+  enough officers to run your ships! Which will you abandon?" (CSTR
+  130) on the fleet panel, and the prize takes the chosen ship's slot,
+  her hold given up. The slot's ship is `class | damage`, the hold grows
+  by the prize's room, and the crew rises to at least `slot x 8`.
 - **Prize text (VA `0xdb7b`):** the prize is `class x 20 + 20` tons, its
   guns are rounded up to even, and the hold space is
   `sum(2 x class + 2) x 10` over the fleet, minus cargo (none yet).

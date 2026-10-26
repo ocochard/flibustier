@@ -36,6 +36,7 @@ with a message. Numbers are integers only.
 | `mission` | `action`: `accept` (the governor's offer) or `deliver` (to the contact in this town) | `type`, `dest` |
 | `captain` | `action`: `hostage` (`answer` 0 treasure fleet, 1 silver train, 2 hold him), `offer` (in town: a visit's 4 tries at a ransom) or `take` (the offer) | `ransom_slot`, `ransom_gold`, `prisoners`, `gold` |
 | `daughter` | in town at standing 2 or more: `action` `meet`, `talk`, `propose`, `duel` (`weapon`; then `sword` ticks) or `end` | `result`, `charm`, `niece`, `married` |
+| `prize` | after a `finish` with 8 ships and `keep`: `slot`, the ship the prize replaces | `fleet_ships`, `capacity` |
 | `search` | on foot: digs at the treasure maps' spots (3 days) | `found` (`[{map: pirate, relative or lost, gold, value}]`) |
 | `march` | on foot: `dx`, `dy` (-1..1), `ticks` (1..23360) | `stop` (`ticks`, `town`, `boarded`), `town`, `x`, `y`, `day` |
 | `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
@@ -61,7 +62,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 26,
+  "version": 27,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -226,6 +227,8 @@ A saved game is one file per slot, `save0.json` to `save9.json`
 - **Marriage:** `married` (0 single, 1 a merchant's daughter, 2 a
   governor's daughter, 3 his niece) and `romances`. Absent before
   version 25: single.
+- **A pending prize:** `prize_pending`, `prize_type`, `prize_damage`
+  (version 27).
 - **Older states:** states from version 14 on still load. The town
   fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
   `party_x`, `party_y`) then read as 65535 until the player's program

@@ -247,6 +247,7 @@ struct game {
 	int			 end_page, end_forced, end_phrase;
 	int			 quit_prompt;	/* the cabin's "Quit (Y/N)" */
 	int			 panel_abandon;	/* the panel picks a ship to leave */
+	int			 panel_replace;	/* ... to make room for a prize */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the
 	 * villains named, the answer shown, where it goes next. */

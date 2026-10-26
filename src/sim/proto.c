@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	26
+#define STATE_VERSION	27
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -725,6 +725,12 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->escaped);
 	jb_raw(b, ",\"surnames\":");
 	jb_int(b, s->surnames);
+	jb_raw(b, ",\"prize_pending\":");
+	jb_int(b, s->prize_pending);
+	jb_raw(b, ",\"prize_type\":");
+	jb_int(b, s->prize_type);
+	jb_raw(b, ",\"prize_damage\":");
+	jb_int(b, s->prize_damage);
 	jb_raw(b, ",\"married\":");
 	jb_int(b, s->married);
 	jb_raw(b, ",\"romances\":");
@@ -1074,6 +1080,10 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		int k;
 
 		tmp.married = (int)(json_get_int(j, "married", 0) & 3);
+		tmp.prize_pending = json_get_int(j, "prize_pending", 0) != 0;
+		tmp.prize_type = (int)(json_get_int(j, "prize_type", 0) & 0xF);
+		tmp.prize_damage = (int)(json_get_int(j, "prize_damage", 0) &
+		    63);
 		tmp.romances = (int)json_get_int(j, "romances", 0);
 		tmp.fleet_town = (int)json_get_int(j, "fleet_town", -1);
 		tmp.fleet_step = (int)json_get_int(j, "fleet_step", 16);
@@ -2221,6 +2231,25 @@ cmd_daughter(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* With eight ships, the kept prize replaces the ship at "slot". */
+static void
+cmd_prize(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	struct sim *s = &ss->sim;
+	int64_t slot = json_get_int(cmd, "slot", -1);
+
+	if (!s->prize_pending || slot < 0 || slot >= s->fleet.nships) {
+		reply_error(out, "prize needs a pending prize and \"slot\"");
+		return;
+	}
+	sim_prize_place(s, (int)slot, s->prize_type, s->prize_damage);
+	jb_raw(out, "{\"ok\":true,\"fleet_ships\":");
+	jb_int(out, s->fleet.nships);
+	jb_raw(out, ",\"capacity\":");
+	jb_int(out, s->fleet.capacity);
+	jb_raw(out, "}");
+}
+
 /* The mission: "accept" the governor's offer, "deliver" to the contact
  * in the tavern of the town the player is in. */
 static void
@@ -2605,6 +2634,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_captain(ss, cmd, out);
 	else if (strcmp(name, "daughter") == 0)
 		cmd_daughter(ss, cmd, out);
+	else if (strcmp(name, "prize") == 0)
+		cmd_prize(ss, cmd, out);
 	else if (strcmp(name, "march") == 0)
 		cmd_march(ss, cmd, out);
 	else if (strcmp(name, "assault") == 0)

@@ -434,6 +434,8 @@ struct sim {
 	int		escaped;
 	int		surnames;
 	int		ransom_slot;	/* the offer pending, or -1 */
+	/* A prize kept with eight ships: it waits for a ship to leave. */
+	int		prize_pending, prize_type, prize_damage;
 	/* The treasure fleet and the silver train (VA 0x45e71, 0x45e70):
 	 * the town each is in or -1 (away: Spain, Peru), its stop on its
 	 * route (VA 0x45e8d, 0x45e8e), and the routes. */
@@ -966,6 +968,12 @@ void	sim_board(struct sim *s, int weapon);
  * fight first (sim_board); until it is over, nothing is applied and
  * BAT_NONE is returned.  Returns the outcome.
  */
+/*
+ * The prize into the fleet's slot "slot" (VA 0xdb7b): a new slot, or
+ * with eight ships (prize_pending) the ship chosen to make room, her
+ * hold given up; the crew rises to 8 men for each ship before the slot.
+ */
+void	sim_prize_place(struct sim *s, int slot, int type, int damage);
 enum battle_outcome sim_battle_finish(struct sim *s, int keep);
 
 /* One world update; exposed for tests. */

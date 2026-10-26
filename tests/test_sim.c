@@ -3143,6 +3143,39 @@ test_crew_check(void)
 	CHECK(s.jail.fresh && s.jail.cause == JAIL_MAROONED);
 }
 
+/* A kept prize: a new slot, or with eight ships one replaced. */
+static void
+test_prize_place(void)
+{
+	struct sim s;
+	int k;
+
+	sea_game(&s, 300, 300, 0);
+	s.fleet.nships = 3;
+	for (k = 0; k < 3; k++) {
+		s.fleet.ships[k] = 1;
+		s.fleet.damage[k] = 0;
+	}
+	s.fleet.capacity = 3 * 4;
+	s.fleet.crew = 10;
+	s.fleet.nships = 4;			/* as capture() grows it */
+	sim_prize_place(&s, 3, 4, 8);
+	CHECK(s.fleet.ships[3] == 4 && s.fleet.damage[3] == 8 &&
+	    s.fleet.capacity == 12 + 10 && s.fleet.crew == 24);
+	/* Eight ships: the prize waits, then takes the chosen slot. */
+	s.fleet.nships = 8;
+	for (k = 4; k < 8; k++)
+		s.fleet.ships[k] = 0;
+	s.fleet.capacity = 3 * 4 + 10 + 4 * 2;
+	s.prize_pending = 1;
+	s.prize_type = 7;
+	s.prize_damage = 0;
+	sim_prize_place(&s, 5, s.prize_type, s.prize_damage);
+	CHECK(!s.prize_pending && s.fleet.nships == 8 &&
+	    s.fleet.ships[5] == 7 && s.fleet.capacity == 30 - 2 + 16 &&
+	    s.fleet.crew == 40);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3250,6 +3283,7 @@ main(void)
 	test_villain_moves();
 	test_career_end();
 	test_crew_check();
+	test_prize_place();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

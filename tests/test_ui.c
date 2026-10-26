@@ -1641,6 +1641,23 @@ test_crew(void)
 	    "click:40,30 click:40,30") == 0 && sim_hold_space(&g->sim) >= 0);
 	CHECK(game_script(g, "click:320,450 wait:40") == 0 &&
 	    g->screen == &screen_sail && !g->jettison);
+	/* A prize kept with eight ships: the panel picks the ship that
+	 * makes room. */
+	g->sim.fleet.nships = 8;
+	for (rep = 1; rep < 8; rep++) {
+		g->sim.fleet.ships[rep] = 0;
+		g->sim.fleet.damage[rep] = 0;
+	}
+	g->sim.fleet.crew = 100;
+	g->sim.prize_pending = 1;
+	g->sim.prize_type = 6;
+	g->sim.prize_damage = 0;
+	g->panel_replace = 1;
+	game_goto(g, &screen_fleet_panel);
+	CHECK(game_script(g, "wait:40 click:240,120 click:540,450 wait:40") ==
+	    0 && !g->sim.prize_pending && g->sim.fleet.ships[1] == 6 &&
+	    g->screen == &screen_sail);
+	g->sim.fleet.nships = 1;
 	/* Seven men for the last ship: abandoned, marooned. */
 	g->sim.fleet.crew = 7;
 	g->sim.player.expedition = -1;

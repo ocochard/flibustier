@@ -728,13 +728,37 @@ capture(struct sim *s, int keep)
 
 	/* Stand-in plunder until cargo and treasure are traced. */
 	f->gold += (long)s->encounter.gold * 10;
-	if (keep && f->nships < MAX_SHIPS) {
-		f->ships[f->nships] = (uint8_t)bt->foe.type;
-		f->capacity += sim_ship_room(bt->foe.type);
-		f->damage[f->nships] = (uint8_t)clampi(bt->foe.damage, 0, 63);
+	if (!keep)
+		return;
+	f->guns += bt->foe.guns;
+	if (f->nships < MAX_SHIPS) {
 		f->nships++;
-		f->guns += bt->foe.guns;
+		sim_prize_place(s, f->nships - 1, bt->foe.type,
+		    clampi(bt->foe.damage, 0, 63));
+		return;
 	}
+	/* Eight ships already: one makes room (CSTR 130, VA 0xdb7b). */
+	s->prize_pending = 1;
+	s->prize_type = bt->foe.type;
+	s->prize_damage = clampi(bt->foe.damage, 0, 63);
+}
+
+void
+sim_prize_place(struct sim *s, int slot, int type, int damage)
+{
+	struct sim_fleet *f = &s->fleet;
+
+	if (slot < 0 || slot >= f->nships)
+		return;
+	if (slot < f->nships - 1 || s->prize_pending)
+		f->capacity -= sim_ship_room(f->ships[slot]);
+	f->ships[slot] = (uint8_t)type;
+	f->damage[slot] = (uint8_t)damage;
+	f->capacity += sim_ship_room(type);
+	/* The prize crew: at least 8 men for each ship before her. */
+	if (f->crew < slot * 8)
+		f->crew = slot * 8;
+	s->prize_pending = 0;
 }
 
 enum battle_outcome
