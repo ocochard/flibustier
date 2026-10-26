@@ -9,7 +9,19 @@ life improvements the original never had.
 
 ## Status
 
-Early stage: no playable code yet.
+Ready to play, from the intro to retirement and the Hall of Fame: a new
+career or a famous expedition in any of the six eras, sailing the
+Caribbean, towns (governor, tavern, merchant, shipwright, bank), sea
+battles, boarding and duels, attacks on towns by sea and on foot, land
+battles and sacks, treasure maps, the lost family and the villains, the
+governors' missions and daughters, ransoms, prison, the crew's mood and
+food, reefs, and the world's monthly life (diplomacy, conquests, town
+events, the treasure fleet and the silver train).
+
+Not there yet: sound and music. The rules follow the original as traced
+so far; where a detail could not be traced,
+`aidd_docs/memory/internal/game-rules.md` says so. Please report anything that plays differently
+from the original.
 
 ## Game data
 
@@ -58,18 +70,24 @@ FLIBUSTIER_DATA=~/games/pirates_gold ctest --test-dir build
 ./build/flibustier --data ~/games/pirates_gold [--lang eng|fre|ger, or en|fr|de]
 ```
 
-So far this runs the start of the game: the intro, the welcome menu, and
-the choices that create a new career or a famous expedition, then
-sailing the Caribbean: steer with the arrow keys, sail into a town's
-harbour, meet ships at sea and fight them (Left/Right steer,
-Enter fires, Up/Down set full or battle sails), board them and fight
-their captain (Left attacks with a lunge, Shift+Left with a slash,
-Up/Down pick the line, Right steps back), and Escape opens the menu
-(save game, exit game). In sword fights the numeric keypad works too,
-its corners as diagonals. `--crt` (or F2 while playing) gives the
-window a CRT look, like dosbox-staging's default shader. "Exit game" offers the Hall of Fame. Saves (one
-JSON file per slot) and the Hall of Fame (a tab-separated text file) go
-to `~/.local/share/flibustier/saves`, or wherever `--saves DIR` says.
+The mouse works everywhere; the keys are the original's:
+
+- Sailing: Left/Right steer, T toggles the faster pace, Escape opens
+  the captain's cabin (log book, map, save, search, exit). On foot the
+  arrows walk.
+- Sea battles: Left/Right steer, Enter fires, Up/Down set full or
+  battle sails; sailing into the enemy boards her.
+- Sword fights: Left attacks with a lunge, Shift+Left with a slash,
+  Up/Down pick the line, Right steps back; the numeric keypad works too,
+  its corners as diagonals.
+- Menus and boards: the arrows and Enter, or click.
+
+`--crt` (or F2 while playing) gives the window a CRT look, like
+dosbox-staging's default shader. Careers end by retiring at the bank
+(after dividing the plunder) or in prison; the cabin's "Exit game" only
+quits. Saves (one JSON file per slot) and the Hall of Fame (a
+tab-separated text file) go to `~/.local/share/flibustier/saves`, or
+wherever `--saves DIR` says.
 `--script "enter down enter ..." out.png` plays the same screens without
 a window and saves the last one, for tests and bots.
 
