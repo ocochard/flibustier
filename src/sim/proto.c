@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	13
+#define STATE_VERSION	14
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -35,7 +35,8 @@ static const struct {
 	FIELD(flags), FIELD(x), FIELD(y), FIELD(nation), FIELD(forts),
 	FIELD(soldiers), FIELD(citizens), FIELD(gold), FIELD(wealth),
 	FIELD(standing), FIELD(governor), FIELD(family), FIELD(id),
-	FIELD(sea_x), FIELD(sea_y),
+	FIELD(sea_x), FIELD(sea_y), FIELD(fort_x), FIELD(fort_y),
+	FIELD(ship_x), FIELD(ship_y), FIELD(ship_heading),
 };
 #define NFIELDS	(sizeof(town_fields) / sizeof(town_fields[0]))
 
@@ -137,7 +138,7 @@ static const char *stage_names[] = { "none", "sighted", "identified",
     "colours" };
 static const char *outcome_names[] = { "none", "boarding", "escaped",
     "sunset", "surrender", "player_sunk", "enemy_sunk", "repelled",
-    "defeated", "beached" };
+    "defeated", "beached", "landed" };
 #define NOUTCOMES	(sizeof(outcome_names) / sizeof(outcome_names[0]))
 static const char *sword_results[] = { "none", "won", "repelled", "lost" };
 
@@ -353,10 +354,20 @@ battle_json(const struct sim_battle *bt, struct jbuf *out)
 	jb_int(out, bt->crew_ashore);
 	jb_raw(out, ",\"guns_ashore\":");
 	jb_int(out, bt->guns_ashore);
-	jb_raw(out, ",\"origin_x\":");
-	jb_int(out, bt->origin_x);
-	jb_raw(out, ",\"origin_y\":");
-	jb_int(out, bt->origin_y);
+	jb_raw(out, ",\"fort\":");
+	jb_int(out, bt->fort);
+	jb_raw(out, ",\"fort_damage\":");
+	jb_int(out, bt->fort_damage);
+	jb_raw(out, ",\"set\":");
+	jb_int(out, bt->set);
+	jb_raw(out, ",\"piece\":");
+	jb_int(out, bt->piece);
+	jb_raw(out, ",\"scroll_x\":");
+	jb_int(out, bt->scroll_x);
+	jb_raw(out, ",\"scroll_y\":");
+	jb_int(out, bt->scroll_y);
+	jb_raw(out, ",\"screen\":");
+	jb_int(out, bt->screen);
 	jb_raw(out, ",\"you_scrape\":");
 	jb_int(out, bt->you_scrape);
 	jb_raw(out, ",\"foe_scrape\":");
@@ -387,8 +398,15 @@ battle_from_json(struct sim_battle *bt, const struct json *j)
 			bt->outcome = i;
 	bt->crew_ashore = (int)json_get_int(j, "crew_ashore", 0);
 	bt->guns_ashore = (int)json_get_int(j, "guns_ashore", 0);
-	bt->origin_x = (int)json_get_int(j, "origin_x", 0);
-	bt->origin_y = (int)json_get_int(j, "origin_y", 0);
+	bt->fort = (int)json_get_int(j, "fort", 0);
+	bt->fort_damage = (int)json_get_int(j, "fort_damage", 0);
+	bt->set = (int)json_get_int(j, "set", 4);
+	bt->piece = (int)json_get_int(j, "piece", 0);
+	bt->scroll_x = (int)json_get_int(j, "scroll_x", 0);
+	bt->scroll_y = (int)json_get_int(j, "scroll_y", 0);
+	bt->screen = (int)json_get_int(j, "screen", 104);
+	if (bt->screen < 0 || bt->screen >= BATTLE_SCREENS)
+		bt->screen = 104;
 	bt->you_scrape = (int)json_get_int(j, "you_scrape", 0);
 	bt->foe_scrape = (int)json_get_int(j, "foe_scrape", 0);
 	if (battle_ship_from_json(&bt->you, json_get(j, "you")) != 0 ||

@@ -29,6 +29,36 @@ world_terrain(const struct world *w, int x, int y)
 	    (y % WORLD_TILE) * WORLD_TILE + x % WORLD_TILE]]);
 }
 
+/*
+ * SBTL.BMP: u16 offsets, one per screen, then at each a u16 15, 15, 2
+ * header and 225 battle tile numbers, row by row (VA 0x2a9e8).
+ */
+static int
+load_screens(struct world *w, struct packs *packs, char *err, size_t errlen)
+{
+	struct blob b;
+	size_t i, off, n = BATTLE_SCREEN * BATTLE_SCREEN;
+
+	if (packs_load(packs, "tiles15/sbtl", &b) != 0) {
+		snprintf(err, errlen, "cannot load tiles15/sbtl");
+		return (-1);
+	}
+	for (i = 0; i < BATTLE_SCREENS; i++) {
+		if (2 * i + 1 >= b.len)
+			break;
+		off = (size_t)(b.data[2 * i] | b.data[2 * i + 1] << 8);
+		if (off + 6 + n > b.len)
+			break;
+		memcpy(w->battle_screens[i], b.data + off + 6, n);
+	}
+	blob_free(&b);
+	if (i < BATTLE_SCREENS) {
+		snprintf(err, errlen, "bad tiles15/sbtl");
+		return (-1);
+	}
+	return (0);
+}
+
 static int
 load_map(struct world *w, struct packs *packs, int era, char *err,
     size_t errlen)
@@ -93,7 +123,7 @@ load_map(struct world *w, struct packs *packs, int era, char *err,
 	}
 	memcpy(w->battle_tiles, ts.pixels, sizeof(w->battle_tiles));
 	tileset_free(&ts);
-	return (0);
+	return (load_screens(w, packs, err, errlen));
 }
 
 static int
@@ -180,7 +210,7 @@ world_load(struct world *w, struct packs *packs,
     int era, char *err, size_t errlen)
 {
 	const uint8_t *p;
-	int block;
+	int block, i;
 
 	memset(w, 0, sizeof(*w));
 	if (era < 0 || era >= EXE_ERAS) {
@@ -193,6 +223,14 @@ world_load(struct world *w, struct packs *packs,
 	/* The game numbers eras from 1 and uses block max(era, 1), so 1560
 	 * and 1600 share a block (VA 0x1361c). */
 	block = era > 0 ? era : 1;
+	if ((p = exe_at(layout, exe, len, layout->battle_sets_va,
+	    2 * BATTLE_SETS * BATTLE_PIECES)) == NULL) {
+		snprintf(err, errlen, "no battle screen sets");
+		return (-1);
+	}
+	for (i = 0; i < BATTLE_SETS * BATTLE_PIECES; i++)
+		w->battle_sets[i / BATTLE_PIECES][i % BATTLE_PIECES] =
+		    (uint8_t)(p[2 * i] < BATTLE_SCREENS ? p[2 * i] : 0);
 	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
 	    NULL)
 		goto bad;

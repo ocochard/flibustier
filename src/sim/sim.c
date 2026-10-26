@@ -147,6 +147,11 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->towns[i].governor = t->raw[11];
 		s->towns[i].family = t->raw[12];
 		s->towns[i].id = (uint16_t)t->id;
+		s->towns[i].fort_x = t->raw[17];
+		s->towns[i].fort_y = t->raw[18];
+		s->towns[i].ship_x = t->raw[19];
+		s->towns[i].ship_y = t->raw[20];
+		s->towns[i].ship_heading = t->raw[21];
 		s->towns[i].sea_x = t->raw[26];
 		s->towns[i].sea_y = t->raw[27];
 	}

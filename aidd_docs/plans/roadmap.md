@@ -245,7 +245,11 @@ Status (2026-10-26): first slice.
 - **Arrival:** the menu, sailing in under the fort's guns, losing a
   ship with its cargo share, sneaking in and the guard's duel in the
   alley, and the disgrace.
-- **Next:** attacking a town (VA `0x18b3f`).
+- **Battle field:** the original's prebuilt screens chosen by the
+  nearest coast, scrolling, the shallows and beaching.
+- **Fort battle:** attacking a fortified town from the sea.
+- **Next:** the assault on the town (the sword fight with the garrison)
+  and the sack.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

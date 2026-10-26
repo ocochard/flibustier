@@ -25,7 +25,20 @@
 #define MAX_SHIPS	8
 #define FP		256	/* positions are in 1/256 pixels */
 #define FIELD		480	/* the battle field's side, in pixels */
-#define FIELD_CELLS	(FIELD / BATTLE_TILE)
+#define SET_OPEN	4	/* open sea: no coast near */
+#define PIECE_OPEN	4
+#define SET_FORT	5
+#define COAST_PROBE	19	/* pixels the coast is looked for */
+#define SCROLL_LO	40	/* the field scrolls beyond these */
+#define SCROLL_HI	400
+#define SCROLL_STEP	120
+#define FORT_LO		10	/* a fort battle ends beyond these */
+#define FORT_HI		430
+#define FORT_CLASS	8	/* the fort's class in the hit formula */
+#define FORT_TYPE	9	/* its type for labels ("Fort", CSTN 8.9) */
+#define CENTRE_X	40	/* a ship's centre from its position */
+#define CENTRE_Y	30
+#define FORT_BOX	32	/* its box, not quartered (VA 0xe3f0) */
 #define SCRAPE_TICKS	20	/* after the shallows hurt a ship */
 #define SCRAPE_DAMAGE	16
 
@@ -74,8 +87,95 @@ box(const struct sim *s, const struct battle_ship *b, struct sideinfo *bx)
 {
 	int t = b->type < BATTLE_TYPES ? b->type : BATTLE_TYPES - 1;
 
+	if (s->battle.fort && b == &s->battle.foe) {
+		bx->half_w = bx->half_h = FORT_BOX;
+		return;
+	}
 	bx->half_w = s->world->half_w[t];
 	bx->half_h = s->world->half_h[t];
+}
+
+/*
+ * The battle's screens (VA 0x2a658), from where the fleet is: open sea
+ * when it sits on the shallows; otherwise the coast found nearest, up
+ * to 19 pixels north, east, south or west (table at VA 0x413f8), gives
+ * the set, and open sea when there is none.  The set offers four
+ * screens along the coast, one picked at random, and open sea.
+ */
+static void
+choose_screens(struct sim *s)
+{
+	static const int dir[4][2] = { { 0, -1 }, { 1, 0 }, { 0, 1 },
+	    { -1, 0 } };
+	struct sim_battle *bt = &s->battle;
+	int x = s->fleet.x, y = s->fleet.y, step, d;
+
+	bt->piece = rng_below(&s->rng, 4);
+	bt->set = SET_OPEN;
+	if (world_terrain(s->world, x, y) != TERRAIN_SHALLOWS)
+		for (step = 1; step <= COAST_PROBE && bt->set == SET_OPEN;
+		    step++)
+			for (d = 0; d < 4; d++)
+				if (world_terrain(s->world, x + dir[d][0] *
+				    step, y + dir[d][1] * step) ==
+				    TERRAIN_LAND) {
+					bt->set = d;
+					break;
+				}
+	bt->scroll_x = bt->scroll_y = 0;
+	bt->screen = s->world->battle_sets[bt->set][bt->piece];
+}
+
+/*
+ * Scrolling (VA 0x95ac): the player beyond 40..400 on an axis (or else
+ * the enemy) shifts the field by 120 pixels.  Along a coast the screens
+ * follow on from the first one, four around; away from it, open sea.
+ */
+static int
+scroll(struct sim *s)
+{
+	struct sim_battle *bt = &s->battle;
+	int v[2][2], d[2], k, i;
+	int32_t *pos[2][4];
+
+	/* The limits apply to the ships' corners, as positioned. */
+	v[0][0] = px(bt->you.x) - CENTRE_X;
+	v[0][1] = px(bt->you.y) - CENTRE_Y;
+	v[1][0] = px(bt->foe.x) - CENTRE_X;
+	v[1][1] = px(bt->foe.y) - CENTRE_Y;
+	for (k = 0; k < 2; k++) {
+		d[k] = 0;
+		for (i = 0; i < 2 && d[k] == 0; i++)
+			d[k] = v[i][k] > SCROLL_HI ? 1 : v[i][k] < SCROLL_LO ?
+			    -1 : 0;
+	}
+	if (d[0] == 0 && d[1] == 0)
+		return (0);
+	pos[0][0] = &bt->you.x;
+	pos[0][1] = &bt->foe.x;
+	pos[0][2] = &bt->you.shot.x;
+	pos[0][3] = &bt->foe.shot.x;
+	pos[1][0] = &bt->you.y;
+	pos[1][1] = &bt->foe.y;
+	pos[1][2] = &bt->you.shot.y;
+	pos[1][3] = &bt->foe.shot.y;
+	for (k = 0; k < 2; k++) {
+		if (d[k] == 0)
+			continue;
+		for (i = 0; i < 4; i++)
+			*pos[k][i] -= d[k] * SCROLL_STEP * FP;
+		*(k == 0 ? &bt->scroll_x : &bt->scroll_y) += d[k];
+	}
+	if (bt->set == SET_OPEN)
+		k = PIECE_OPEN;
+	else if ((bt->set & 1) == 0)	/* a coast along x */
+		k = bt->scroll_y != 0 ? PIECE_OPEN :
+		    (bt->scroll_x + bt->piece) & 3;
+	else
+		k = bt->scroll_x != 0 ? PIECE_OPEN :
+		    (bt->scroll_y + bt->piece) & 3;
+	bt->screen = s->world->battle_sets[bt->set][k];
+	return (1);
 }
 
 /* The flagship fights; the other ships keep 8 men each. */
@@ -133,9 +233,7 @@ sim_battle_start(struct sim *s)
 	bt->active = 1;
 	bt->wind = s->wind;
 	bt->wind_strength = rng_below(&s->rng, 3);
-	/* The field: the map around the fleet, at twice its scale. */
-	bt->origin_x = s->fleet.x / WORLD_TILE - FIELD_CELLS / 2;
-	bt->origin_y = s->fleet.y / WORLD_TILE - FIELD_CELLS / 2;
+	choose_screens(s);
 
 	flagship(s);
 
@@ -148,13 +246,13 @@ sim_battle_start(struct sim *s)
 	off = rng_below(&s->rng, 16) + 32;
 	if (rng_below(&s->rng, 2))
 		off = -off;
-	bt->you.x = (FIELD_CENTRE + off) * FP;
-	bt->foe.x = (FIELD_CENTRE - off) * FP;
+	bt->you.x = (FIELD_CENTRE + off + CENTRE_X) * FP;
+	bt->foe.x = (FIELD_CENTRE - off + CENTRE_X) * FP;
 	off = rng_below(&s->rng, 16) + 32;
 	if (rng_below(&s->rng, 2))
 		off = -off;
-	bt->you.y = (FIELD_CENTRE + off) * FP;
-	bt->foe.y = (FIELD_CENTRE - off) * FP;
+	bt->you.y = (FIELD_CENTRE + off + CENTRE_Y) * FP;
+	bt->foe.y = (FIELD_CENTRE - off + CENTRE_Y) * FP;
 
 	/* The player faces the enemy's side; the enemy heads within 56
 	 * degrees (40 / 256 turn) of the player's heading. */
@@ -170,19 +268,59 @@ sim_battle_start(struct sim *s)
 	bt->decision = 1;
 }
 
+void
+sim_fort_battle_start(struct sim *s, int town)
+{
+	struct sim_battle *bt = &s->battle;
+	struct sim_encounter *e = &s->encounter;
+	const struct sim_town *t;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	t = &s->towns[town];
+	/* The fort as an encounter (VA 0x18b9c): half the garrison, 12
+	 * guns a fort. */
+	memset(e, 0, sizeof(*e));
+	e->type = FORT_TYPE;
+	e->nation = t->nation;
+	e->crew = (t->soldiers + 1) / 2;
+	e->guns = (t->forts & 7) * 12;
+	e->role = 0;
+	e->town = town;
+	memset(bt, 0, sizeof(*bt));
+	bt->active = 1;
+	bt->fort = 1;
+	bt->wind = s->wind;
+	bt->wind_strength = rng_below(&s->rng, 3);
+	bt->set = SET_FORT;
+	bt->screen = t->id < BATTLE_SCREENS ? t->id : 0;
+	flagship(s);
+	bt->foe.type = FORT_TYPE;
+	bt->foe.guns = e->guns;
+	bt->foe.crew = e->crew * 4;
+	bt->foe.role = 0;
+	/* On the town's screen (VA 0xd16c). */
+	bt->you.x = (t->ship_x * BATTLE_TILE + 16 + CENTRE_X) * FP;
+	bt->you.y = (t->ship_y * BATTLE_TILE + 16 + CENTRE_Y) * FP;
+	bt->you.heading = (uint8_t)t->ship_heading;
+	bt->foe.x = (t->fort_x * BATTLE_TILE + FORT_BOX / 2) * FP;
+	bt->foe.y = (t->fort_y * BATTLE_TILE + FORT_BOX / 2) * FP;
+	bt->foe.heading = (uint8_t)rng_below(&s->rng, 256);
+	bt->decision = 1;
+}
+
 /* Terrain under field pixel (x, y): the colour of the battle tile drawn
  * there; open sea off the field. */
 static int
 field_terrain(const struct sim *s, int x, int y)
 {
 	const struct sim_battle *bt = &s->battle;
-	int cx, cy, tile;
+	int tile;
 
 	if (x < 0 || y < 0 || x >= FIELD || y >= FIELD)
 		return (TERRAIN_SEA);
-	cx = clampi(bt->origin_x + x / BATTLE_TILE, 0, WORLD_CELLS_W - 1);
-	cy = clampi(bt->origin_y + y / BATTLE_TILE, 0, WORLD_CELLS_H - 1);
-	tile = s->world->map[cy * WORLD_CELLS_W + cx];
+	tile = s->world->battle_screens[bt->screen][(y / BATTLE_TILE) *
+	    BATTLE_SCREEN + x / BATTLE_TILE];
 	return (s->world->colour_class[s->world->battle_tiles[tile *
 	    BATTLE_TILE * BATTLE_TILE + (y % BATTLE_TILE) * BATTLE_TILE +
 	    x % BATTLE_TILE]]);
@@ -217,9 +355,13 @@ touching(const struct sim *s)
 
 	box(s, &bt->you, &by);
 	box(s, &bt->foe, &be);
-	return (abs(px(bt->foe.x) - px(bt->you.x)) <= (be.half_w >> 2) +
+	if (!bt->fort) {
+		be.half_w >>= 2;
+		be.half_h >>= 2;
+	}
+	return (abs(px(bt->foe.x) - px(bt->you.x)) <= be.half_w +
 	    (by.half_w >> 2) && abs(px(bt->foe.y) - px(bt->you.y)) <=
-	    (be.half_h >> 2) + (by.half_h >> 2));
+	    be.half_h + (by.half_h >> 2));
 }
 
 /* Speed a ship heads for (game-rules.md, "Each tick"). */
@@ -241,10 +383,17 @@ ship_speed(const struct sim *s, const struct battle_ship *b, int enemy)
 }
 
 static void
-move_ship(const struct sim *s, struct battle_ship *b)
+move_ship(const struct sim *s, struct battle_ship *b, int half)
 {
-	b->x += sim_sine_mul(s->world, b->heading, b->speed) * 4;
-	b->y -= sim_sine_mul(s->world, b->heading + 0x40, b->speed) * 4;
+	int dx = sim_sine_mul(s->world, b->heading, b->speed) * 4;
+	int dy = sim_sine_mul(s->world, b->heading + 0x40, b->speed) * 4;
+
+	if (half) {		/* the player before a fort (VA 0x7f6c) */
+		dx >>= 1;
+		dy >>= 1;
+	}
+	b->x += dx;
+	b->y -= dy;
 }
 
 /* Flight time to the other ship: d / 2 ticks, d at least 16. */
@@ -290,16 +439,20 @@ shot_hits(const struct sim *s, const struct battle_shot *sh,
 static void
 hit(struct sim *s, struct battle_ship *t, int g, int bonus)
 {
-	int c = t->type & 7, dmg;
+	int fort = s->battle.fort && t == &s->battle.foe;
+	int c = fort ? FORT_CLASS : t->type & 7, dmg;
 
 	dmg = sim_div16(g * 4, c + 2);
 	if (!t->full_sails)
 		dmg >>= 1;
 	if (dmg == 0)
 		dmg = 1;
-	if (bonus)
+	if (bonus && !fort)
 		dmg += dmg >> 1;
-	t->damage += dmg;
+	if (fort)		/* a fort is not sunk (VA 0x8630) */
+		s->battle.fort_damage += dmg;
+	else
+		t->damage += dmg;
 	t->crew -= ((rng_below(&s->rng, 64)) + 4 * sim_div16(t->crew * g,
 	    c + 3)) >> 6;
 	t->guns -= ((rng_below(&s->rng, 64)) + sim_div16(t->guns * 4 * g,
@@ -422,7 +575,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 		ev |= BEV_HIT_FOE;
 
 	y->speed = ship_speed(s, y, 0);
-	move_ship(s, y);
+	move_ship(s, y, bt->fort);
 	/* The player's ship on the shallows or on land (VA 0x81f0): land
 	 * beaches it, unless the enemy is alongside. */
 	switch (field_terrain(s, px(y->x), px(y->y))) {
@@ -431,12 +584,31 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 			ev |= BEV_AGROUND;
 		break;
 	case TERRAIN_LAND:
-		bt->outcome = touching(s) ? BAT_BOARDING : BAT_BEACHED;
+		bt->outcome = !touching(s) ? BAT_BEACHED : bt->fort ?
+		    BAT_LANDED : BAT_BOARDING;
 		return (ev);
 	default:
 		break;
 	}
 
+	/* A fort neither decides nor moves (VA 0x8914); before each shot
+	 * it turns its broadside to the player (VA 0x8eb5). */
+	if (bt->fort) {
+		if (e->reload > 0)
+			e->reload--;
+		if (e->shot.ticks == 0 && e->guns > 0 && e->reload == 0) {
+			e->heading = (uint8_t)(rng_below(&s->rng, 8) +
+			    bearing + 0x3C);
+			fire(bt, e, bearing, 1);
+			e->reload = abs(144 - 8 * e->role);
+			ev |= BEV_FOE_FIRED;
+		}
+		if (fly_shot(s, e, y, 0, 0)) {
+			ev |= BEV_HIT_YOU;
+			y->crew = clampi(y->crew, 1, 999);
+		}
+		goto wind;
+	}
 	/* The enemy: decisions, steering, firing, moving. */
 	if (bt->tick % AI_TICKS == 0)
 		decide(s, bearing);
@@ -458,12 +630,16 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 		y->crew = clampi(y->crew, 1, 999);
 	}
 	e->speed = ship_speed(s, e, 1);
-	move_ship(s, e);
+	move_ship(s, e, 0);
 	if (field_terrain(s, px(e->x), px(e->y)) == TERRAIN_SHALLOWS &&
 	    scrape(s, e, &bt->foe_scrape))
 		ev |= BEV_FOE_AGROUND;
 
+	if (scroll(s))
+		ev |= BEV_SCROLLED;
+
 	/* The wind may shift. */
+wind:
 	if (bt->tick % WIND_TICKS == 0) {
 		int w = (uint8_t)((rng_below(&s->rng, 3) - 1) * 16 + bt->wind);
 
@@ -478,7 +654,14 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	/* How it may end. */
 	if (sunk(y))
 		bt->outcome = BAT_PLAYER_SUNK;
-	else if (sunk(e))
+	else if (bt->fort) {
+		/* Out of the fort's reach (VA 0x88e0). */
+		int cx = px(y->x) - CENTRE_X, cy = px(y->y) - CENTRE_Y;
+
+		if (cx < FORT_LO || cx > FORT_HI || cy < FORT_LO ||
+		    cy > FORT_HI)
+			bt->outcome = BAT_ESCAPED;
+	} else if (sunk(e))
 		bt->outcome = BAT_ENEMY_SUNK;
 	else {
 		if (touching(s))

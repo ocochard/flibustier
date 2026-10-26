@@ -87,10 +87,15 @@ Each era patches the 1560 map directly. Proof: when asked for
   the background is 0.
 - Examples: `SHIPnA/B.CUR` hold 8 headings; `*BTL.CUR` hold damage stages.
 
-### LBTL.BMP, SBTL.BMP: battle tiles (proven, not Windows BMP)
+### LBTL.BMP, SBTL.BMP: battle screens (proven, not Windows BMP)
 
-Sprite bank of 15x15 frames: `u16 15, u16 15, u16 2`, then 225 pixels and
-5 padding bytes. LBTL holds 61 tiles (land battle), SBTL 108 (sea battle).
+- `u16 offset[n]` (n = `offset[0] / 2`), then at each offset a record:
+  `u16 15, u16 15, u16 2`, then 15 x 15 tile numbers, row by row, and
+  padding.
+- The numbers index the 32 x 32 tiles of `BATTLE.IMB` (VA `0x2a9e8`):
+  each record is a 480 x 480 battle screen.
+- SBTL holds 108 sea battle screens; open sea uses tiles 0-39. LBTL
+  holds 61, presumably for land battles.
 
 ## SPR/*.GRP: sword-fight body parts (proven)
 

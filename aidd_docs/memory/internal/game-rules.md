@@ -353,7 +353,8 @@ fight computes its level the same way with fencing.
   4, class = byte 0, role = byte 4.
 - **Turn rate, both ships:** `t = 3 - (class + 2) / 4`. Small ships turn
   and gain speed in wind differently from big ones.
-- **Positions:** the ships start mirrored about (240, 240): each axis
+- **Positions:** the ships' corners start mirrored about (240, 240) (their
+  centres 40 right and 30 down): each axis
   offset by `rand(16) + 32` pixels, sign random.
 - **Headings:** the player faces the enemy's side (east or west, 45°
   toward it when not level); the enemy heading is random within ±56° of
@@ -443,13 +444,31 @@ fight computes its level the same way with fencing.
 
    The enemy then turns toward the target by `t` every 8 ticks.
 
-### The coast
+### The battle field and the coast
 
-The battle field is the map around the fleet at twice its scale: each
-map cell is drawn as a 32 x 32 battle tile (`battle.imb`). The engine
-places the field's top left 7 cells up and left of the fleet's cell.
-The terrain under a ship is the class of the battle tile's colour there
-(table at VA `0x4113c`, the one sailing uses).
+- **Screens:** the field is one of 108 prebuilt screens of 15 x 15
+  battle tiles (`SBTL.BMP`, tiles from `battle.imb`), 480 x 480 pixels
+  (VA `0x2a9e8`).
+- **Which screen (VA `0x2a658`, at the encounter):** the set comes from
+  where the fleet is. On the shallows it is set 4 (open sea).
+  Otherwise the first land found 1 to 19 pixels away, looking north,
+  east, south and west in turn at each distance (table at VA
+  `0x413f8`), gives set 0, 1, 2 or 3; none gives set 4. A piece is
+  picked, `rand(4)`.
+- **Sets (table at VA `0x33fd0`, 5 screens each):** 0 coast to the
+  north (64-67), 1 east (88-91), 2 south (72-75), 3 west (80-83), 4
+  open sea (104-107); the fifth screen of each is open sea (104). Set
+  5 is the town's own screen for a fort battle.
+- **Positions:** a ship's position is the corner of its sprite; its
+  centre is 40 pixels right and 30 down. Ship battles start about
+  (240, 240).
+- **Scrolling (VA `0x95ac`):** when the player's corner (or else the
+  enemy's) leaves 40..400 on an axis, everything shifts 120 pixels
+  back. Along a coast (sets 0 and 2 along x, 1 and 3 along y) the
+  screen becomes piece `(scrolled + first piece) & 3`; scrolled off the
+  coast's axis, open sea. Set 4 stays open sea.
+- **Terrain:** the class of the battle tile's colour under a ship's
+  centre (table at VA `0x4113c`, the one sailing uses).
 - **The player's ship (VA `0x81f0`), after it moves:**
   - Shallows: once a cooldown has run out, a roll `rand(16) >= class`
     (table at VA `0x327ce`, 0..7) costs 16 damage and starts a 20-tick
@@ -462,9 +481,36 @@ The terrain under a ship is the class of the battle tile's colour there
   cooldown. Land does not stop it.
 - **Beached:** the enemy's portrait (VA `0xe9e6`) and CSTR 173 at (100,
   300) up to x 560. Nothing is lost.
-- **Not modelled yet:** the field scrolls when the player nears its
-  edge (VA `0x95ac`); the engine's field is fixed, and a ship off it is
-  on open sea.
+
+### The fort battle (VA `0x18b3f`, `FUN_e245(1, …)`)
+
+Attacking a town with forts from the sea starts with a battle against
+the fort.
+- **The fort as an encounter (VA `0x18b9c`):** type 8, the town's
+  nation, crew byte `(soldiers + 1) / 2`, guns `forts x 12`, role 0
+  (reload 144 ticks). A town holding the treasure fleet or the silver
+  train has 10 more soldiers (at most 255), not modelled yet.
+- **The field:** the town's own screen (town field 14). The fort's
+  sprite corner is at `field 17, 18 x 32` (a 32 x 32 box, centre +16);
+  the player's at `field 19, 20 x 32 + 16`, heading field 21 (VA
+  `0xd16c`). With several ships, the player picks one first.
+- **Differences from a ship battle:**
+  - The player's ship moves at half speed (VA `0x7f6c`).
+  - The fort neither decides nor moves (VA `0x8914`). Before each
+    shot it turns to `bearing + 0x3C + rand(8)`, so it fires whenever
+    reloaded.
+  - The player's hits count in a fort damage counter, with class 8
+    in the damage formula and no bonus. The panel shows `fortbtl.cur`
+    stage `damage / 20` (at most 3). The fort is never sunk.
+  - The fort is drawn in its screen, not as a sprite. The panel calls
+    it "Fort" (CSTN 8.9).
+  - Leaving 10..430 (the player's corner) ends the battle: "An
+    accurate salvo… drives you back" (CSTR 196). Sunset says CSTR 317.
+  - Running onto land with the boxes touching (the fort's box not
+    quartered) is the landing: the assault follows (outcome 5).
+- **Afterwards (VA `0x18c2c`):** only the landing goes on. The
+  garrison becomes `(soldiers + 1) / 2 + fort crew / 10`, and the men
+  who stayed with the fleet do not fight.
 
 ### End of battle
 

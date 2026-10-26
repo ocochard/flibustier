@@ -58,6 +58,10 @@ struct sword_tables {
 };
 
 #define BATTLE_TILE	32
+#define BATTLE_SCREENS	108	/* SBTL.BMP: 15 x 15 battle tiles each */
+#define BATTLE_SCREEN	15
+#define BATTLE_SETS	5	/* coast north, east, south, west; open */
+#define BATTLE_PIECES	5	/* four along the coast; open sea */
 
 /* Terrain classes of map pixel colours. */
 enum terrain {
@@ -79,6 +83,11 @@ struct world {
 	/* Sea battles draw each map cell as a 32 x 32 tile; the colour
 	 * under a ship gives its terrain (VA 0x8200). */
 	uint8_t		battle_tiles[256 * BATTLE_TILE * BATTLE_TILE];
+	/* The battle screens, and which ones each set offers (VA
+	 * 0x33fd0). */
+	uint8_t		battle_screens[BATTLE_SCREENS][BATTLE_SCREEN *
+			    BATTLE_SCREEN];
+	uint8_t		battle_sets[BATTLE_SETS][BATTLE_PIECES];
 	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];

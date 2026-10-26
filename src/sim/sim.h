@@ -54,7 +54,11 @@ struct sim_town {
 	uint16_t	governor;	/* field 11 */
 	uint16_t	family;		/* field 12: 0x40 married into the
 					 * merchant's family */
-	uint16_t	id;
+	uint16_t	id;		/* field 14: its battle screen */
+	uint16_t	fort_x, fort_y;	/* fields 17, 18: the fort's cell on
+					 * that screen */
+	uint16_t	ship_x, ship_y;	/* fields 19, 20: the attacker's */
+	uint16_t	ship_heading;	/* field 21 */
 	uint16_t	sea_x, sea_y;	/* fields 26, 27: water outside the
 					 * harbour, 0 for inland towns */
 };
@@ -150,7 +154,8 @@ enum battle_outcome {
 	BAT_ENEMY_SUNK,
 	BAT_REPELLED,		/* boarding: the player was driven back */
 	BAT_DEFEATED,		/* boarding: the player's men gave up */
-	BAT_BEACHED		/* the player ran onto land (CSTR 173) */
+	BAT_BEACHED,		/* the player ran onto land (CSTR 173) */
+	BAT_LANDED		/* landed by the fort: the assault */
 };
 
 /* Sword fights: who fights, and how it ended. */
@@ -228,6 +233,7 @@ struct sword_setup {
 #define BEV_WIND	0x40	/* the wind changed */
 #define BEV_AGROUND	0x80	/* the player's ship scraped the shallows */
 #define BEV_FOE_AGROUND	0x100
+#define BEV_SCROLLED	0x200	/* the field moved on */
 
 struct battle_shot {
 	int		ticks;		/* flight ticks left; 0: none */
@@ -260,8 +266,13 @@ struct sim_battle {
 	int		outcome;	/* enum battle_outcome */
 	int		crew_ashore;	/* crew and guns left with the fleet */
 	int		guns_ashore;
-	int		origin_x;	/* map cell at the field's top left */
-	int		origin_y;
+	int		fort;		/* against a town's fort */
+	int		fort_damage;	/* hits on the fort */
+	int		set;		/* battle screen set (VA 0x325ac) */
+	int		piece;		/* the set's screen first shown */
+	int		scroll_x;	/* screens scrolled (VA 0x325a0) */
+	int		scroll_y;
+	int		screen;		/* SBTL screen shown */
 	int		you_scrape;	/* ticks before the shallows can hurt */
 	int		foe_scrape;
 	struct battle_ship you, foe;
@@ -466,6 +477,9 @@ void	sim_new_expedition(struct sim *s, int advance);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);
+/* Attack the fort of the town the fleet has reached (VA 0x18b3f, from
+ * the sea): a battle on the town's own screen. */
+void	sim_fort_battle_start(struct sim *s, int town);
 /* With several ships, the one to command (VA 0xf246), before the first
  * tick: it swaps into the flagship's place. */
 void	sim_battle_command(struct sim *s, int ship);

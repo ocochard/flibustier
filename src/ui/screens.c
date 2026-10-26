@@ -70,6 +70,8 @@
 #define S_STRUCK		170
 #define S_YOU_ESCAPED		197
 #define S_COMMAND		286
+#define S_FORT_SUNSET		317
+#define S_FORT_DRIVES_OFF	196
 #define S_BEACHED		173
 #define BTL_COMMAND		4	/* battle stage: choosing the ship */
 #define S_FOE_ESCAPED		198
@@ -2558,7 +2560,8 @@ battle_sprites(struct game *g, int side, int type)
 
 	load_bank(g, a[size], 1, &g->btl_ship[side][0]);
 	load_bank(g, b[size], 1, &g->btl_ship[side][1]);
-	load_bank(g, damage_picture[type % 9], 1, &g->btl_damage[side]);
+	load_bank(g, side == 1 && g->sim.battle.fort ? "cur/fortbtl" :
+	    damage_picture[type % 9], 1, &g->btl_damage[side]);
 }
 
 static void
@@ -2681,7 +2684,11 @@ battle_end_text(struct game *g, char *text, size_t len)
 		snprintf(text, len, "%s", game_str(g, S_FOE_SUNK));
 		break;
 	case BAT_SUNSET:
-		snprintf(text, len, "%s", game_str(g, S_SUNSET));
+		snprintf(text, len, "%s", game_str(g, bt->fort ?
+		    S_FORT_SUNSET : S_SUNSET));
+		break;
+	case BAT_LANDED:
+		snprintf(text, len, "(The assault: not implemented yet.)");
 		break;
 	case BAT_SURRENDER:
 		snprintf(text, len, "%s", game_str(g, S_STRUCK));
@@ -2692,8 +2699,9 @@ battle_end_text(struct game *g, char *text, size_t len)
 	case BAT_ESCAPED:
 		/* Out of range (VA 0xe82a): the enemy pulled away when it
 		 * was fleeing (decision 2), otherwise the player did. */
-		snprintf(text, len, "%s", game_str(g,
-		    bt->decision == 2 ? S_FOE_ESCAPED : S_YOU_ESCAPED));
+		snprintf(text, len, "%s", game_str(g, bt->fort ?
+		    S_FORT_DRIVES_OFF : bt->decision == 2 ? S_FOE_ESCAPED :
+		    S_YOU_ESCAPED));
 		break;
 	default:
 		text[0] = '\0';
@@ -2819,30 +2827,28 @@ battle_draw(struct game *g)
 {
 	const struct sim_battle *bt = &g->sim.battle;
 	char text[600], from[64], tons[16], guns[16];
-	int cx0, cy0, cx, cy, lvl;
+	int cx, cy, lvl;
 
 	if (g->btl_stage == 1 && battle_end_picture(bt->outcome) != NULL) {
 		battle_end_draw(g);
 		return;
 	}
-	/* The sea around the fleet, at twice the sailing scale. */
-	cx0 = bt->origin_x;
-	cy0 = bt->origin_y;
+	/* The battle's screen: 15 x 15 battle tiles (VA 0x2a9e8). */
 	if (g->btl_tiles.tile_w == 32)
-		for (cy = 0; cy < AREA_CELLS; cy++)
-			for (cx = 0; cx < AREA_CELLS; cx++) {
+		for (cy = 0; cy < BATTLE_SCREEN; cy++)
+			for (cx = 0; cx < BATTLE_SCREEN; cx++) {
 				struct image t;
-				int mx = clampi(cx0 + cx, 0, WORLD_CELLS_W - 1);
-				int my = clampi(cy0 + cy, 0, WORLD_CELLS_H - 1);
 
 				t.w = t.h = 32;
 				t.pixels = g->btl_tiles.pixels + 32 * 32 *
-				    g->world->map[my * WORLD_CELLS_W + mx];
+				    g->world->battle_screens[bt->screen][cy *
+				    BATTLE_SCREEN + cx];
 				t.has_palette = 0;
 				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
 			}
 	battle_ship_draw(g, 0, &bt->you);
-	battle_ship_draw(g, 1, &bt->foe);
+	if (!bt->fort)		/* a fort is drawn in its screen (VA 0x8db6) */
+		battle_ship_draw(g, 1, &bt->foe);
 	if (bt->you.shot.ticks > 0)
 		fb_rect(&g->fb, bt->you.shot.x / 256 - 1, bt->you.shot.y / 256 -
 		    1, 3, 3, fb_nearest(&g->fb, 20, 20, 20));
@@ -2857,8 +2863,10 @@ battle_draw(struct game *g)
 	battle_side_text(g, 358, &bt->you, bt->you.sail_timer > 0 ?
 	    (bt->you.full_sails ? SAILING_LOWERING : SAILING_RAISING) :
 	    bt->you.reload > 0 ? SAILING_RELOADING : -1);
-	lvl = bt->foe.damage / 16 > 4 ? 4 : bt->foe.damage / 16;
-	if (g->btl_damage[1].count == 5)
+	/* A fort's damage shows in four stages of 20 (VA 0xebd7). */
+	lvl = bt->fort ? (bt->fort_damage / 20 > 3 ? 3 : bt->fort_damage /
+	    20) : bt->foe.damage / 16 > 4 ? 4 : bt->foe.damage / 16;
+	if ((size_t)lvl < g->btl_damage[1].count)
 		fb_frame(&g->fb, &g->btl_damage[1].frames[lvl], 489, 137);
 	lvl = bt->you.damage / 16 > 4 ? 4 : bt->you.damage / 16;
 	if (g->btl_damage[0].count == 5)
@@ -4875,8 +4883,14 @@ arrive_choose(struct game *g, int i)
 			g->arrive_stage = ARRIVE_ANSWER;
 		break;
 	case 1:
-		snprintf(g->msg, sizeof(g->msg),
-		    "(Attacking a town: not implemented yet.)");
+		/* From the sea, a fort first fights the fleet (VA 0x18b3f);
+		 * a town without forts goes straight to the assault. */
+		if (g->sim.towns[town].forts > 0) {
+			sim_fort_battle_start(&g->sim, town);
+			game_goto(g, &screen_battle);
+		} else
+			snprintf(g->msg, sizeof(g->msg),
+			    "(The assault: not implemented yet.)");
 		break;
 	case 2:
 		if (sim_sneak_in(&g->sim, town) == ARRIVE_ENTER)

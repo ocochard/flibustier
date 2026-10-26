@@ -504,8 +504,14 @@ make_world(struct world *w)
 	    BATTLE_TILE * BATTLE_TILE);
 	memset(w->battle_tiles + 2 * BATTLE_TILE * BATTLE_TILE, 98,
 	    BATTLE_TILE * BATTLE_TILE);
-	for (x = 110; x < 130; x++)
-		w->map[50 * WORLD_CELLS_W + x] = 2;
+	/* Battle screen 1: land on rows 0-4, shallows on row 5; its set
+	 * 0 (coast to the north) offers it. */
+	for (y = 0; y < BATTLE_SCREEN; y++)
+		for (x = 0; x < BATTLE_SCREEN; x++)
+			w->battle_screens[1][y * BATTLE_SCREEN + x] =
+			    y < 5 ? 1 : y == 5 ? 2 : 0;
+	for (x = 0; x < 4; x++)
+		w->battle_sets[0][x] = 1;
 	for (i = 0; i < 128; i++)
 		w->sine[i] = (uint8_t)(i < 64 ? i * 4 : i == 64 ? 255 :
 		    (128 - i) * 4);
@@ -1716,11 +1722,11 @@ test_coast(void)
 	struct sim s;
 	int i, hurt = 0;
 
-	/* The field's origin is 7 cells up and left of the fleet: land
-	 * covers field rows 0..159 here, shallows 160..191. */
-	sea_game(&s, 120, 52, 0);
+	/* Below the land block (cells y 40-49), the coast is to the north:
+	 * set 0, whose screen has land on rows 0..159, shallows below. */
+	sea_game(&s, 120, 50, 0);
 	sim_battle_start(&s);
-	CHECK(s.battle.origin_x == 113 && s.battle.origin_y == 45);
+	CHECK(s.battle.set == 0 && s.battle.screen == 1);
 	s.battle.foe.x = 420 * 256;		/* in range, not alongside */
 	s.battle.foe.y = 300 * 256;
 	/* A pinnace (class 0) in the shallows: hurt at once, then 20 ticks
@@ -1766,6 +1772,105 @@ test_coast(void)
 	s.battle.foe.y = 300 * 256;
 	sim_battle_tick(&s, 0, 0, 0);
 	CHECK(s.battle.outcome == BAT_NONE);
+}
+
+/* Battle screens: the set by the coast, scrolling along and off it. */
+static void
+test_screens(void)
+{
+	struct sim s;
+	int i;
+
+	/* Far from land: open sea, set 4. */
+	sea_game(&s, 300, 300, 0);
+	for (i = 0; i < 5; i++)
+		test_world.battle_sets[4][i] = (uint8_t)(100 + i);
+	sim_battle_start(&s);
+	CHECK(s.battle.set == 4 && s.battle.screen == 100 + s.battle.piece);
+	/* Along the north coast: the next piece when scrolling east, open
+	 * sea once scrolled south. */
+	sea_game(&s, 120, 50, 0);
+	for (i = 0; i < 5; i++)
+		test_world.battle_sets[0][i] = (uint8_t)(i < 4 ? 10 + i : 104);
+	sim_battle_start(&s);
+	CHECK(s.battle.set == 0);
+	s.battle.you.x = (420 + 40) * 256;	/* corner past 400 */
+	s.battle.you.y = (200 + 30) * 256;
+	s.battle.foe.x = (300 + 40) * 256;
+	s.battle.foe.y = (200 + 30) * 256;
+	s.battle.you.heading = 0x40;
+	CHECK(sim_battle_tick(&s, 0, 0, 0) & BEV_SCROLLED);
+	CHECK(s.battle.scroll_x == 1 && s.battle.scroll_y == 0);
+	CHECK(s.battle.screen == 10 + ((1 + s.battle.piece) & 3));
+	CHECK(s.battle.you.x / 256 < 420 + 40 - 100);
+	s.battle.you.y = (420 + 30) * 256;
+	s.battle.foe.y = s.battle.you.y - 60 * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.scroll_y == 1 && s.battle.screen == 104);
+	for (i = 0; i < 5; i++)
+		test_world.battle_sets[0][i] = test_world.battle_sets[4][i] = 0;
+	for (i = 0; i < 4; i++)
+		test_world.battle_sets[0][i] = 1;
+}
+
+/* The fort battle: the town's screen, a fort that stays and shoots,
+ * hits counted apart, the edge and the landing. */
+static void
+test_fort_battle(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	int i, fx, fy, shots = 0;
+
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->id = 1;			/* screen 1: land on rows 0-4 */
+	t->fort_x = 7;
+	t->fort_y = 3;
+	t->ship_x = 6;
+	t->ship_y = 10;
+	t->ship_heading = 0;
+	t->soldiers = 41;
+	t->forts = 2;
+	sim_fort_battle_start(&s, 1);
+	CHECK(s.battle.fort && s.battle.screen == 1 && s.battle.set == 5);
+	CHECK(s.battle.foe.guns == 24 && s.battle.foe.crew == 21 * 4);
+	CHECK(s.battle.you.x / 256 == 6 * 32 + 16 + 40 &&
+	    s.battle.you.y / 256 == 10 * 32 + 16 + 30);
+	CHECK(s.battle.foe.x / 256 == 7 * 32 + 16 &&
+	    s.battle.foe.y / 256 == 3 * 32 + 16);
+	fx = s.battle.foe.x;
+	fy = s.battle.foe.y;
+	for (i = 0; i < 400 && s.battle.outcome == BAT_NONE; i++) {
+		s.battle.you.x = (6 * 32 + 16 + 40) * 256;
+		s.battle.you.y = (10 * 32 + 16 + 30) * 256;
+		s.battle.you.damage = 0;
+		shots += (sim_battle_tick(&s, 0, 0, 0) & BEV_FOE_FIRED) != 0;
+	}
+	CHECK(s.battle.outcome == BAT_NONE && shots >= 2);
+	CHECK(s.battle.foe.x == fx && s.battle.foe.y == fy);
+	/* The player's shots count against the fort, which never sinks. */
+	s.battle.foe.damage = 0;
+	s.battle.you.shot.ticks = 1;
+	s.battle.you.shot.x = fx;
+	s.battle.you.shot.y = fy;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.fort_damage > 0 && s.battle.foe.damage == 0);
+	/* Past 430 on an axis: out of the fort's reach. */
+	s.battle.you.x = (440 + 40) * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.outcome == BAT_ESCAPED);
+	/* Onto the land by the fort: the landing; elsewhere, beached. */
+	s.battle.outcome = BAT_NONE;
+	s.battle.you.x = fx;
+	s.battle.you.y = fy + 20 * 256;		/* land row, next to it */
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.outcome == BAT_LANDED);
+	s.battle.outcome = BAT_NONE;
+	s.battle.you.x = 13 * 32 * 256;
+	s.battle.you.y = 2 * 32 * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.outcome == BAT_BEACHED);
 }
 
 /* Choosing the ship to command swaps it into the flagship's place. */
@@ -2020,6 +2125,8 @@ main(void)
 	test_arrival();
 	test_command();
 	test_coast();
+	test_screens();
+	test_fort_battle();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);
