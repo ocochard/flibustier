@@ -1096,7 +1096,8 @@ voyage_choose(struct game *g, int i)
 	switch (travel_items[i]) {
 	case TRAVEL_CONTINUE:
 		g->msg[0] = '\0';
-		game_goto(g, g->world != NULL ? &screen_sail : &screen_voyage);
+		game_goto(g, g->sim.player_town >= 0 ? &screen_town :
+		    g->world != NULL ? &screen_sail : &screen_voyage);
 		break;
 	case TRAVEL_SAVE:
 		g->saving = 1;
@@ -1458,7 +1459,8 @@ sail_tick(struct game *g)
 		return;		/* the ship waits for the screen */
 	switch (sim_sail(&g->sim, g->turn, 1, &town)) {
 	case SAIL_TOWN:
-		game_goto(g, &screen_voyage);
+		sim_enter_town(&g->sim, town);
+		game_goto(g, &screen_town);
 		break;
 	case SAIL_ENCOUNTER:
 		g->turn = 0;
@@ -2347,4 +2349,272 @@ sword_draw(struct game *g)
 
 const struct screen screen_sword = {
 	"sword", sword_enter, sword_event, sword_tick, sword_draw,
+};
+
+/*
+ * Town (VA 0x1869b): the town picture with its buildings.  Pointing at
+ * one shows its label on the scroll in place of the town's name; the
+ * arrows step through them; Enter (or Escape) or a click goes in, Space
+ * opens the captain's cabin.  The rectangles come from the executable.
+ */
+#define W_TOWN_SPOT		84	/* "Visit the Governor"... */
+#define TOWN_SPOTS		7	/* plus the cabin, from the keyboard */
+#define SPOT_GOVERNOR		0
+#define SPOT_MERCHANT		1
+#define SPOT_BANK		2
+#define SPOT_TAVERN		3
+#define SPOT_SHIPWRIGHT		4
+#define SPOT_INFO		5
+#define SPOT_LEAVE		6
+#define SPOT_CABIN		7
+#define TOWN_NAME_X		325
+#define TOWN_NAME_Y		38
+#define GOVERNOR_CITIZENS	6	/* fewer: no governor */
+
+static int
+town_rect(const struct game *g, int i, int r[4])
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->town_spots_va + (uint32_t)i * 10, 8);
+	int k;
+
+	if (p == NULL)
+		return (-1);
+	for (k = 0; k < 4; k++)
+		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+	return (0);
+}
+
+static const struct sim_town *
+here(const struct game *g)
+{
+	return (g->sim.player_town >= 0 ? &g->sim.towns[g->sim.player_town] :
+	    NULL);
+}
+
+/* Which buildings are open (VA 0x1869b, 0x18547). */
+static int
+town_open(const struct game *g, int i)
+{
+	const struct sim_town *t = here(g);
+
+	switch (i) {
+	case SPOT_GOVERNOR:
+		return (t != NULL && t->citizens >= GOVERNOR_CITIZENS &&
+		    !(g->sim.visit_flags & VISIT_GOVERNOR));
+	case SPOT_BANK:
+		return (!(g->sim.visit_flags & VISIT_SNEAKED));
+	default:
+		return (1);
+	}
+}
+
+static int
+town_hit(const struct game *g, int x, int y)
+{
+	int i, r[4];
+
+	for (i = 0; i < TOWN_SPOTS; i++)
+		if (town_open(g, i) && town_rect(g, i, r) == 0 &&
+		    x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
+			return (i);
+	return (-1);
+}
+
+static void
+town_enter(struct game *g)
+{
+	game_background(g, "pic/town");
+	game_portrait(g, NULL);
+	load_bank(g, "spr/town", 0, &g->town_spr);
+	g->town_spot = -1;
+	g->ink[0] = g->ink[1] = g->ink[2] = 0;
+	g->highlight[0] = g->highlight[1] = g->highlight[2] = 0;
+}
+
+static void
+town_choose(struct game *g, int i)
+{
+	g->msg[0] = '\0';
+	switch (i) {
+	case SPOT_INFO:
+		game_goto(g, &screen_cityinfo);
+		break;
+	case SPOT_LEAVE:
+		sim_leave_town(&g->sim);
+		bank_free(&g->town_spr);
+		game_goto(g, g->world != NULL ? &screen_sail : &screen_voyage);
+		break;
+	case SPOT_CABIN:
+		game_goto(g, &screen_voyage);
+		break;
+	default:
+		snprintf(g->msg, sizeof(g->msg), "(%s: not implemented yet.)",
+		    game_word(g, W_TOWN_SPOT, (size_t)i));
+		break;
+	}
+}
+
+/* Step the keyboard selection, skipping closed buildings (VA 0x19cdd). */
+static void
+town_step(struct game *g, int d)
+{
+	int n;
+
+	for (n = 0; n < TOWN_SPOTS; n++) {
+		g->town_key += d;
+		if (g->town_key < 0)
+			g->town_key = TOWN_SPOTS - 1;
+		else if (g->town_key >= TOWN_SPOTS)
+			g->town_key = 0;
+		if (town_open(g, g->town_key))
+			break;
+	}
+	g->town_spot = g->town_key;
+}
+
+static void
+town_event(struct game *g, const struct ui_event *ev)
+{
+	int i;
+
+	switch (ev->type) {
+	case EV_MOVE:
+		g->town_spot = town_hit(g, ev->x, ev->y);
+		if (g->town_spot >= 0)
+			g->town_key = g->town_spot;
+		break;
+	case EV_CLICK:
+		if ((i = town_hit(g, ev->x, ev->y)) >= 0)
+			town_choose(g, i);
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+			town_step(g, -1);
+		else if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+			town_step(g, 1);
+		else if ((ev->key == UI_KEY_ENTER ||
+		    ev->key == UI_KEY_ESCAPE) && g->town_key >= 0 &&
+		    town_open(g, g->town_key))
+			town_choose(g, g->town_key);
+		break;
+	case EV_CHAR:
+		if (ev->ch == ' ')
+			town_choose(g, SPOT_CABIN);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+town_draw(struct game *g)
+{
+	const struct sim_town *t = here(g);
+	const char *label;
+	int w;
+
+	/* The harbour and the shipwright's shed when the ship is in port,
+	 * the closed gate when the governor will not receive. */
+	if (g->town_spr.count > 0)
+		fb_frame(&g->fb, &g->town_spr.frames[0], 0, 258);
+	if (g->town_spr.count > 1 && !town_open(g, SPOT_GOVERNOR))
+		fb_frame(&g->fb, &g->town_spr.frames[1], 582, 216);
+	label = g->town_spot >= 0 ?
+	    game_word(g, W_TOWN_SPOT, (size_t)g->town_spot) :
+	    t != NULL ? t->name : "";
+	w = text_width(&g->font[FONT_TITLE], label);
+	draw(g, FONT_TITLE, TOWN_NAME_X - w / 2, TOWN_NAME_Y, FB_W, label, 0);
+	if (g->msg[0] != '\0') {
+		text_band(g, 440, 30);
+		g->ink[0] = g->ink[1] = g->ink[2] = 240;
+		draw_centered(g, FONT_BODY, 444, g->msg);
+		g->ink[0] = g->ink[1] = g->ink[2] = 0;
+	}
+}
+
+const struct screen screen_town = {
+	"town", town_enter, town_event, NULL, town_draw,
+};
+
+/*
+ * City information (VA 0x19c62, 0x196d0): the arrival picture, by sea
+ * or by land, and what the player knows of the town.
+ */
+#define W_CITY_INFO		23
+#define W_NUMBER		79	/* 0 "s", then "One".."Five" */
+#define W_WEALTH		9
+
+static void
+cityinfo_enter(struct game *g)
+{
+	const struct sim_town *t = here(g);
+
+	game_background(g, t != NULL && (t->flags & TOWN_INLAND) ?
+	    "pic/arr_land" : "pic/arr_sea");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;	/* light, on black */
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+}
+
+static void
+cityinfo_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_town);
+}
+
+/* The town's description as the game words it. */
+static void
+city_text(const struct game *g, const struct sim_town *t, char *out,
+    size_t len)
+{
+	const char *arg[7];
+	char forts[96], soldiers[16], citizens[16], gold[64], num[16];
+
+	if (!(t->flags & 0x80)) {
+		fill(out, len, game_word(g, W_CITY_INFO,
+		    t->flags & 0x20 ? 4 : 1), t->name, NULL);
+		return;
+	}
+	forts[0] = '\0';
+	if (t->forts > 0)
+		fill(forts, sizeof(forts), game_word(g, W_CITY_INFO, 2),
+		    game_word(g, W_NUMBER, (size_t)(t->forts > 5 ? 5 :
+		    t->forts)), t->forts == 1 ? "" : game_word(g, W_NUMBER, 0));
+	gold[0] = '\0';
+	if (t->gold > 0) {
+		snprintf(num, sizeof(num), "%d", t->gold);
+		fill(gold, sizeof(gold), game_word(g, W_CITY_INFO, 3), num,
+		    NULL);
+	}
+	snprintf(soldiers, sizeof(soldiers), "%d", t->soldiers * 10);
+	snprintf(citizens, sizeof(citizens), "%d", t->citizens * 100);
+	arg[0] = t->name;
+	arg[1] = game_word(g, W_NATION, (size_t)t->nation);
+	arg[2] = game_word(g, W_WEALTH, (size_t)((t->wealth / 64) & 3));
+	arg[3] = forts;
+	arg[4] = soldiers;
+	arg[5] = citizens;
+	arg[6] = gold;
+	fill_args(out, len, game_word(g, W_CITY_INFO, 0), arg, 7);
+}
+
+static void
+cityinfo_draw(struct game *g)
+{
+	const struct sim_town *t = here(g);
+	char text[512];
+
+	if (t == NULL)
+		return;
+	city_text(g, t, text, sizeof(text));
+	draw(g, FONT_BODY, 400, 150, 220, text, 0);
+	draw(g, FONT_BODY, 400, 420, 220, game_str(g, S_CONTINUE), 0);
+}
+
+const struct screen screen_cityinfo = {
+	"cityinfo", cityinfo_enter, cityinfo_event, NULL, cityinfo_draw,
 };

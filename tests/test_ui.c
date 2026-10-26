@@ -514,6 +514,56 @@ test_intro(void)
 	game_free(g);
 }
 
+/* A town: the buildings, their labels, City Information, leaving. */
+static void
+test_town(void)
+{
+	struct game *g;
+	const struct sim_town *t;
+	int i;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Lo enter enter enter enter enter wait:30");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_sail);
+	g->sim.encounters = 0;
+	t = &g->sim.towns[g->sim.fleet.leaving];
+	g->sim.fleet.x = t->sea_x * 16 + 8;	/* at its harbour mouth */
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;	/* the home port counts again */
+	CHECK(game_script(g, "wait:40") == 0);
+	CHECK(g->screen == &screen_town && g->sim.player_town >= 0);
+	t = &g->sim.towns[g->sim.player_town];
+	CHECK((t->flags & 0x80) && !(t->flags & 0x20));
+	/* Pointing at the bank labels it; off the buildings, the name. */
+	CHECK(game_script(g, "move:540,320 wait:1") == 0 &&
+	    g->town_spot == 2);
+	CHECK(game_script(g, "move:300,150 wait:1") == 0 &&
+	    g->town_spot == -1);
+	/* The keyboard skips a closed governor. */
+	g->sim.visit_flags |= VISIT_GOVERNOR;
+	g->town_key = 6;
+	CHECK(game_script(g, "right") == 0 && g->town_key == 1);
+	CHECK(game_script(g, "left") == 0 && g->town_key == 6);
+	g->sim.visit_flags = 0;
+	/* City Information, then back. */
+	CHECK(game_script(g, "click:300,40 wait:40") == 0);
+	CHECK(g->screen == &screen_cityinfo);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_town);
+	/* A building not done yet says so. */
+	CHECK(game_script(g, "click:400,320 wait:2") == 0 &&
+	    strstr(g->msg, "Merchant") != NULL);
+	/* Leave: back at sea, out of the town. */
+	CHECK(game_script(g, "click:60,300 wait:40") == 0);
+	CHECK(g->screen == &screen_sail && g->sim.player_town == -1);
+	for (i = 0; i < 20; i++)
+		CHECK(game_script(g, "wait:1") == 0);
+	CHECK(g->screen == &screen_sail);	/* not straight back in */
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -539,6 +589,7 @@ main(void)
 	test_sword_screen();
 	test_pointer();
 	test_intro();
+	test_town();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

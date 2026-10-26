@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	6
+#define STATE_VERSION	7
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -526,6 +526,10 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->diplomacy_range);
 	jb_raw(b, ",\"player_town\":");
 	jb_int(b, s->player_town);
+	jb_raw(b, ",\"visit_town\":");
+	jb_int(b, s->visit_town);
+	jb_raw(b, ",\"visit_flags\":");
+	jb_int(b, s->visit_flags);
 	jb_raw(b, ",\"relations\":[");
 	for (a = 0; a < 4; a++) {
 		jb_raw(b, a > 0 ? ",[" : "[");
@@ -735,6 +739,8 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.day = (int32_t)json_get_int(j, "day", -1);
 	tmp.diplomacy_range = (int)json_get_int(j, "diplomacy_range", 0);
 	tmp.player_town = (int)json_get_int(j, "player_town", -2);
+	tmp.visit_town = (int)json_get_int(j, "visit_town", -1);
+	tmp.visit_flags = (int)json_get_int(j, "visit_flags", 0);
 	if (tmp.day < 0 || tmp.day_of_year < 0 || tmp.day_of_year >= 360 ||
 	    tmp.month < 0 || tmp.month > 12 || tmp.diplomacy_range <= 0) {
 		snprintf(err, errlen, "bad calendar or diplomacy_range");
@@ -789,6 +795,10 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 			}
 			*town_field(&tmp.towns[i], f) = (uint16_t)fv;
 		}
+	}
+	if (tmp.visit_town < -1 || tmp.visit_town >= (int)tmp.ntowns) {
+		snprintf(err, errlen, "bad visit_town");
+		return (-1);
 	}
 	if (tmp.player_town < -1 || tmp.player_town >= (int)tmp.ntowns) {
 		snprintf(err, errlen, "bad player_town");
@@ -1171,6 +1181,37 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* "enter" the town the fleet just reached (sail stopped at it), or
+ * "leave" the town the player is in. */
+static void
+cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+
+	if (action != NULL && strcmp(action, "enter") == 0) {
+		if (s->fleet.leaving < 0 || s->player_town >= 0) {
+			reply_error(out, "no town reached");
+			return;
+		}
+		sim_enter_town(s, s->fleet.leaving);
+	} else if (action != NULL && strcmp(action, "leave") == 0) {
+		if (s->player_town < 0) {
+			reply_error(out, "not in a town");
+			return;
+		}
+		sim_leave_town(s);
+	} else {
+		reply_error(out, "town needs \"action\": enter or leave");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"player_town\":");
+	jb_int(out, s->player_town);
+	jb_raw(out, ",\"visit_flags\":");
+	jb_int(out, s->visit_flags);
+	jb_raw(out, "}");
+}
+
 static void
 cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1267,6 +1308,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_battle(ss, cmd, out);
 	else if (strcmp(name, "finish") == 0)
 		cmd_finish(ss, cmd, out);
+	else if (strcmp(name, "town") == 0)
+		cmd_town(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

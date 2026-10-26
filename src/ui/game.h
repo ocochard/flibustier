@@ -139,6 +139,9 @@ struct game {
 	struct image		 credits;	/* the credits' text picture */
 	int			 cred_block;	/* 0..5 */
 	int			 cred_ms;	/* time into the block */
+	struct sprite_bank	 town_spr;	/* harbour and closed gate */
+	int			 town_spot;	/* building under the cursor, -1 */
+	int			 town_key;	/* keyboard selection, -1 */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

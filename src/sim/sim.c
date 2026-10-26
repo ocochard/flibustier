@@ -16,8 +16,8 @@
 #define DIPLOMACY_EVENTS	28	/* draws below this change relations */
 #define EVENT_DRAW		64	/* town event draw; >= towns: none */
 #define GOVERNOR_FIXED		0x40	/* field 11: governor never replaced */
-#define FLAG_EVENT_NEW		0x80	/* moved to FLAG_EVENT_OLD by an event */
-#define FLAG_EVENT_OLD		0x20
+#define FLAG_KNOWN		0x80	/* the player has current information */
+#define FLAG_OBSOLETE		0x20	/* an event made it out of date */
 #define STANDING_FLOOR		(-3)	/* after an amnesty */
 #define TICKS_PER_DAY		64
 #define WIND_TICKS		128	/* the wind may shift this often */
@@ -104,6 +104,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->year = era->year;
 	s->diplomacy_range = SIM_DIPLOMACY_RANGE;
 	s->player_town = SIM_NO_TOWN;
+	s->visit_town = SIM_NO_TOWN;
 	s->player.expedition = -1;
 	snprintf(s->player.title, sizeof(s->player.title), "%s", scn->name);
 	memcpy(s->relations, scn->relations, sizeof(s->relations));
@@ -261,11 +262,11 @@ town_event(struct sim *s)
 		e = rng_below(&s->rng, EV_COUNT);
 	while (e == EV_GOVERNOR && it == s->player_town);
 	log_news(s, NEWS_INDIANS + e, it, 0);
-	if (t->flags & FLAG_EVENT_NEW)
-		t->flags |= FLAG_EVENT_OLD;
+	if (t->flags & FLAG_KNOWN)
+		t->flags |= FLAG_OBSOLETE;
 	else
-		t->flags &= (uint16_t)~FLAG_EVENT_OLD;
-	t->flags &= (uint16_t)~FLAG_EVENT_NEW;
+		t->flags &= (uint16_t)~FLAG_OBSOLETE;
+	t->flags &= (uint16_t)~FLAG_KNOWN;
 	switch (e) {
 	case EV_INDIANS:
 		t->soldiers >>= 1;
@@ -687,4 +688,32 @@ sim_encounter_act(struct sim *s, enum encounter_action action)
 	default:
 		return (RES_ESCAPED);
 	}
+}
+
+/*
+ * In town (VA 0x18fa9 and the ways in): the visit flags survive only a
+ * return to the same town, and then only bits 0 and 1; the town's
+ * information becomes current.
+ */
+void
+sim_enter_town(struct sim *s, int town)
+{
+	struct sim_town *t;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	if (town != s->visit_town)
+		s->visit_flags = 0;
+	else
+		s->visit_flags &= VISIT_GOVERNOR | VISIT_KEPT;
+	s->visit_town = town;
+	s->player_town = town;
+	t = &s->towns[town];
+	t->flags = (uint16_t)((t->flags | FLAG_KNOWN) & ~FLAG_OBSOLETE);
+}
+
+void
+sim_leave_town(struct sim *s)
+{
+	s->player_town = SIM_NO_TOWN;
 }

@@ -225,6 +225,14 @@ VA `0x4d292`), food, night, the overview map and landing parties.
 
 ### Phase 5: towns
 
+Status (2026-10-26): first slice.
+- **Done:** the town screen (buildings, labels, keyboard, which are
+  open), city information, leaving, and the captain's cabin (our travel
+  menu for now). In the simulation: entering and leaving a town, and the
+  visit flags.
+- **Next:** the buildings one by one (shipwright, merchant, tavern,
+  governor, bank), and the arrival choices (attack, sneak in).
+
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.
 - Town wealth, population and nation changes, and town attacks.

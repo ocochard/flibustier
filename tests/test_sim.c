@@ -1333,6 +1333,48 @@ test_sword_protocol(void)
 	jb_free(&r2);
 }
 
+/* Town visits: the visit flags and what the player knows. */
+static void
+test_towns(void)
+{
+	struct sim s;
+	struct session ss;
+	struct jbuf out = { 0 };
+
+	sea_game(&s, 300, 300, 0);
+	s.towns[1].flags = 0x20;		/* obsolete information */
+	sim_enter_town(&s, 1);
+	CHECK(s.player_town == 1 && s.visit_town == 1);
+	CHECK((s.towns[1].flags & 0x80) && !(s.towns[1].flags & 0x20));
+	s.visit_flags = VISIT_GOVERNOR | VISIT_KEPT | VISIT_SNEAKED;
+	sim_leave_town(&s);
+	CHECK(s.player_town == -1);
+	sim_enter_town(&s, 1);		/* the same town: bits 0-1 kept */
+	CHECK(s.visit_flags == (VISIT_GOVERNOR | VISIT_KEPT));
+	sim_leave_town(&s);
+	sim_enter_town(&s, 0);		/* another: all cleared */
+	CHECK(s.visit_flags == 0 && s.player_town == 0);
+	sim_enter_town(&s, 99);		/* no such town: ignored */
+	CHECK(s.player_town == 0);
+
+	memset(&ss, 0, sizeof(ss));
+	ss.load = loader;
+	ss.load_world = world_cb;
+	proto_handle(&ss, "{\"cmd\":\"new_game\",\"era\":1660}", &out);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"leave\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "not in a town") != NULL);
+	jb_free(&out);
+	ss.sim.fleet.leaving = 2;
+	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"enter\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"player_town\":2") != NULL);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"leave\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"player_town\":-1") != NULL);
+	jb_free(&out);
+	session_free(&ss);
+}
+
 int
 main(void)
 {
@@ -1349,6 +1391,7 @@ main(void)
 	test_battle_protocol();
 	test_sword();
 	test_sword_protocol();
+	test_towns();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

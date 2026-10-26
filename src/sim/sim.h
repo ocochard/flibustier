@@ -286,6 +286,8 @@ struct sim {
 	int32_t		day;		/* days since the start, for news */
 	int		diplomacy_range; /* unknown original value */
 	int		player_town;	/* town the player is in, or -1 */
+	int		visit_town;	/* town of the visit flags, or -1 */
+	int		visit_flags;	/* VISIT_* for the current visit */
 	int8_t		relations[4][4];
 	int8_t		standing[5];	/* player standing per nation, and
 					 * pirates (always -1 so far) */
@@ -320,6 +322,15 @@ enum sail_stop sim_sail(struct sim *s, int turn, int ticks, int *town);
  */
 enum encounter_result sim_encounter_act(struct sim *s,
 	    enum encounter_action action);
+
+/* Visit flags, per stay in a town (the game's VA 0x45f0a). */
+#define VISIT_GOVERNOR	0x01	/* seen the governor this stay */
+#define VISIT_KEPT	0x02	/* kept on a return; not identified */
+#define VISIT_SNEAKED	0x08	/* came in by stealth: no bank */
+
+/* Enter a town (arriving or returning to it), and leave it. */
+void	sim_enter_town(struct sim *s, int town);
+void	sim_leave_town(struct sim *s);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);

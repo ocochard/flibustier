@@ -639,6 +639,69 @@ move) and `0x38a1a` to `0x38b99`.
   - at level 3, after any hit.
   - Levels 0 and 4 keep their script.
 
+## Towns
+
+### Arrival (VA `0x18fa9`)
+
+CSTR 115 asks: sail into the harbour (with a roll first), attack the
+town (VA `0x18b3f`), sneak in (on a `rand(50)` roll a guard challenges:
+a duel), or leave. Sneaking in sets visit flags 2 and 8. Not traced in
+detail yet; the engine goes straight in.
+
+Every way in marks the town's information as current: flag 0x80 set,
+0x20 cleared. A random town event (see the world update) clears 0x80
+and, when it was set, sets 0x20 ("information obsolete").
+
+### Visit flags (VA `0x45f0a`)
+
+| Bit | Meaning |
+|---|---|
+| 1 | the governor has been seen this stay |
+| 2 | kept on a return; set when sneaking in, not identified |
+| 8 | sneaked in: the bank is closed |
+
+On entering a different town the flags are cleared; on re-entering the
+same town only bits 1 and 2 are kept.
+
+### Town screen (VA `0x1869b`, picture VA `0x18547`)
+
+- **Picture:** `town.pcx`.
+  - `town.spr` frame 0 (the harbour, the ship and the shipwright's
+    shed) is drawn at (0, 258) when the ship is in port.
+  - Frame 1 (the mansion's gate shut) is drawn at (582, 216) when the
+    governor is unavailable.
+- **Scroll:** the town's name, PIRATE1, centred at (325, 38).
+- **Buildings:** seven rectangles (table at VA `0x339f4`: x0, y0, x1,
+  y1, enabled):
+  - 0 governor: open while the town has 6 or more citizens and he has
+    not been seen this stay;
+  - 1 merchant;
+  - 2 bank: closed after sneaking in;
+  - 3 tavern;
+  - 4 shipwright: closed when the ship is not in port;
+  - 5 city information (the scroll);
+  - 6 leave town.
+- **Choice 7:** the captain's cabin, from the Space key.
+- **Labels:** pointing at a building shows its label (CSTN group 84) on
+  the scroll; pointing elsewhere restores the name.
+- **Keyboard:** the arrows step through the open buildings, wrapping
+  around. Enter or Escape goes into the selected one.
+
+### City information (VA `0x19c62`, text VA `0x196d0`)
+
+- **Picture:** `arr_sea.pcx`, or `arr_land.pcx` for an inland town or a
+  land arrival.
+- **Text:** at (400, 150), up to x 620.
+  - With current information (flag 0x80), CSTN 23.0 is filled with:
+    - the name and nation;
+    - the wealth word (CSTN 9, `wealth / 64`);
+    - the forts (CSTN 23.2 with the number word of CSTN 79, plural
+      unless 1);
+    - soldiers x 10 and citizens x 100;
+    - the gold, when there is any (CSTN 23.3, in thousands).
+  - Otherwise CSTN 23.1 ("no info"), or 23.4 when the information is
+    obsolete.
+
 ## Intro (VA `0x3325`)
 
 1. `micro.pcx`: fade in, 2 s (20 x 100 ms), fade out.

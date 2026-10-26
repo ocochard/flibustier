@@ -26,6 +26,7 @@ with a message. Numbers are integers only.
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
+| `town` | `action`: `enter` (the town `sail` stopped at) or `leave` | `player_town`, `visit_flags` |
 | `board` | `weapon` (0 rapier, 1 longsword, 2 cutlass; default 2), after a `boarding` outcome | `sword` |
 | `sword` | `ticks` (1..10000; default 1), `input` (0..11, optional: the move to take next) | `events` (bits, below), `sword` |
 | `set` | `town` (name or index), `field`, `value` | none |
@@ -44,7 +45,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 6,
+  "version": 7,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -77,7 +78,7 @@ with a message. Numbers are integers only.
   "practice": 0,
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
-  "player_town": -1,
+  "player_town": -1, "visit_town": -1, "visit_flags": 0,
   "relations": [[0,-1,0,0], [-1,0,0,-1], [0,0,0,0], [0,-1,0,0]],
   "standing": [0, 0, 0, 0],
   "towns": [{"name": "Havana", "flags": 24, "x": 245, "y": 179,
