@@ -309,10 +309,23 @@ draw_target(struct sim *s)
 {
 	int b;
 
+	/* Never the town whose governor gave the mission (VA 0x471ac). */
 	do
 		b = rng_below(&s->rng, (int)s->ntowns);
-	while (b == s->player_town && s->ntowns > 1);
+	while (s->mission.type != 0 && b == s->mission.giver &&
+	    s->ntowns > 1);
 	return (b);
+}
+
+/* The game's current town (VA 0x46058): the player's, or at sea the
+ * nearest. */
+static int
+current_town(const struct sim *s)
+{
+	int dist;
+
+	return (s->player_town >= 0 ? s->player_town :
+	    sim_nearest_town(s, &dist));
 }
 
 static void
@@ -331,7 +344,7 @@ conquest(struct sim *s)
 	    (uint32_t)b->soldiers * 2 >= a->soldiers)
 		return;
 	dist = abs((int)a->x - (int)b->x) + abs((int)a->y - (int)b->y);
-	if (dist >= CONQUEST_RANGE || ib == s->player_town)
+	if (dist >= CONQUEST_RANGE || ib == current_town(s))
 		return;
 	b->nation = a->nation;
 	new_governor(s, b);
@@ -378,7 +391,8 @@ town_event(struct sim *s)
 	t = &s->towns[it];
 	do
 		e = rng_below(&s->rng, EV_COUNT);
-	while (e == EV_GOVERNOR && it == s->player_town);
+	while (e == EV_GOVERNOR && s->mission.type != 0 &&
+	    it == s->mission.giver);
 	log_news(s, NEWS_INDIANS + e, it, 0);
 	if (t->flags & FLAG_KNOWN)
 		t->flags |= FLAG_OBSOLETE;
@@ -512,9 +526,29 @@ sim_attack_begin(struct sim *s, int town)
 	t->soldiers = (uint16_t)(n > 254 ? 255 : n);
 }
 
+/*
+ * The player's side of the month (VA 0xceb8, before the world's): the
+ * land yields half its count to the fortune, the reputation fades by an
+ * eighth (rounded down), and the standings stay within -100..100.
+ */
+static void
+month_housekeeping(struct sim *s)
+{
+	int n, r = s->reputation;
+
+	s->fortune += s->acres / 2;
+	s->reputation = r - (r >= 0 ? r / 8 : -((-r + 7) / 8));
+	for (n = 0; n < 4; n++)
+		if (s->standing[n] > 100)
+			s->standing[n] = 100;
+		else if (s->standing[n] < -100)
+			s->standing[n] = -100;
+}
+
 void
 sim_world_update(struct sim *s)
 {
+	month_housekeeping(s);
 	town_growth(s);
 	conquest(s);
 	diplomacy(s);

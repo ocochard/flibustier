@@ -182,11 +182,13 @@ test_rules(void)
 		for (b = 0; b < 4; b++)
 			CHECK(s.relations[a][b] == s.relations[b][a]);
 
-	/* Same setup with the player in Beta: never captured, never given a
-	 * new governor. */
+	/* Same setup while Beta's governor has given a mission: never
+	 * captured, never given a new governor (VA 0x471ac). */
 	sim_new_game(&s, &era, &scn, 11);
 	s.diplomacy_range = 0xFFFF;
-	s.player_town = 1;
+	s.player_town = 2;
+	s.mission.type = MISSION_LETTER;
+	s.mission.giver = 1;
 	captured = wrong = 0;
 	for (m = 0; m < 2000; m++) {
 		pin_war(&s);
@@ -203,6 +205,19 @@ test_rules(void)
 	CHECK(wrong == 0);
 	CHECK(captured > 0);	/* governors do change elsewhere */
 	CHECK(s.towns[1].nation == NATION_SPAIN);
+	/* The town the player is in is never captured. */
+	sim_new_game(&s, &era, &scn, 12);
+	s.diplomacy_range = 0xFFFF;
+	s.player_town = 1;
+	for (m = 0, wrong = 0; m < 2000; m++) {
+		pin_war(&s);
+		before = s.nnews;
+		sim_world_update(&s);
+		for (k = before; k < s.nnews; k++)
+			wrong += news_abs(&s, k)->code == NEWS_CAPTURE &&
+			    news_abs(&s, k)->b == 1;
+	}
+	CHECK(wrong == 0);
 
 	/* Diplomacy keeps relations symmetric and within -1..1. */
 	sim_new_game(&s, &era, &scn, 13);
@@ -3293,6 +3308,31 @@ test_personal_log(void)
 	CHECK(s.nnews == n);
 }
 
+/* Each month: land income, the reputation fading, standings bounded. */
+static void
+test_month_housekeeping(void)
+{
+	struct sim s;
+
+	sea_game(&s, 300, 300, 0x00);
+	s.acres = 5;
+	s.fortune = 1000;
+	s.reputation = 20;
+	s.standing[1] = 120;
+	s.standing[2] = -110;
+	s.standing[3] = 50;
+	sim_world_update(&s);
+	CHECK(s.fortune == 1002 && s.reputation == 18 &&
+	    s.standing[1] == 100 && s.standing[2] == -100 &&
+	    s.standing[3] == 50);
+	s.reputation = -9;		/* an eighth, rounded down */
+	sim_world_update(&s);
+	CHECK(s.reputation == -7);
+	s.reputation = 7;
+	sim_world_update(&s);
+	CHECK(s.reputation == 7);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3404,6 +3444,7 @@ main(void)
 	test_hunted_pirate();
 	test_battle_near_town();
 	test_personal_log();
+	test_month_housekeeping();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

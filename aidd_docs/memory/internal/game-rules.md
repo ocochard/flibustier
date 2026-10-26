@@ -41,8 +41,15 @@ Runs, in this order (VA `0xceb8`):
 6. The treasure fleet's and the silver train's moves (see "The treasure
    fleet and the silver train").
 
-Some housekeeping on player-related values precedes these steps; it is
-not specified yet.
+Before them, the player's side (VA `0xceb8`):
+- the months since the plunder was divided rise by 1, by 2 with more
+  than 32767 gold aboard (see "The crew's mood");
+- the fortune rises by half the land count (VA `0x45efe += 0x45f02 /
+  2`; each grant is 50 acres);
+- the reputation loses an eighth, rounded down (`r -= r >> 3`, a signed
+  byte);
+- each nation's standing is kept within -100..100.
+The date is redrawn when the update runs on screen (VA `0xcfff`).
 
 ### Town growth (VA `0xc714`)
 
@@ -63,13 +70,14 @@ Each town, independently, grows with probability 1/4. When it does:
 ### Conquest (VA `0xc81b`)
 
 1. Pick an attacker `a = rand(towns)` and a target `b = rand(towns)`. The
-   target is re-drawn while it is the town the player is in. That rule
-   only applies when the player is in a town.
+   target is re-drawn while it is the town whose governor gave the
+   mission in progress (VA `0x471ac`, while `0x471aa` is not 0).
 2. The target changes hands when all of these hold:
    - the two nations are at war;
    - the target's soldiers, doubled, are fewer than the attacker's;
    - the Manhattan distance between the towns is below 150 map cells;
-   - the target is not the player's current town.
+   - the target is not the game's current town (VA `0x46058`: the
+     player's town, or at sea the nearest).
 3. The target then takes the attacker's nation and gets a new governor
    (see below), and the news "<nation> captures <town>" is logged.
 
@@ -99,8 +107,8 @@ The initial relations come from the start scenario (below).
 
 1. Draw `t = rand(64)`. There is an event only if `t` is a town index,
    so the chance shrinks with fewer towns.
-2. Draw the event `e = rand(5)`. "New governor" is re-drawn while it
-   would hit the player's current town.
+2. Draw the event `e = rand(5)`. "New governor" is re-drawn while a
+   mission is in progress and the town is its giver's.
 3. The town's flag bit `0x80` moves to bit `0x20`: `0x20` is set if
    `0x80` was set and cleared otherwise, then `0x80` is cleared.
 4. Effects:
@@ -2078,6 +2086,5 @@ retiring), or in prison (a famous expedition, or health 3). The cabin's
 
 ## Open questions
 
-- Treasure fleet targeting and movement (VA `0xcba7`, `0xcde9`).
-- What the world update's housekeeping does.
-- When the player counts as being in a town, for the exclusions above.
+None for the world update: the treasure fleet and silver train (VA
+`0xcde9`) and the villains (VA `0xcba7`) are specified above.
