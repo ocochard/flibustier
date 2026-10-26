@@ -16,6 +16,7 @@
 
 #define TOWN_MAX	48	/* records per era block, used or not */
 #define TOWN_FIELDS	32
+#define CONVOY_STOPS	15	/* a convoy's route */
 
 enum nation {
 	NATION_SPAIN,
@@ -73,6 +74,10 @@ struct era_towns {
 	struct town	 towns[TOWN_MAX];
 	struct town	 channel[2];
 	uint16_t	 header[18];
+	/* The treasure fleet's and the silver train's stops, town indices
+	 * or -1 (the block's first 32 bytes, VA 0x4605e, 0x4606e). */
+	int		 fleet_route[CONVOY_STOPS];
+	int		 train_route[CONVOY_STOPS];
 };
 
 extern const int town_era_years[EXE_ERAS];

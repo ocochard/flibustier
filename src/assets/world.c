@@ -438,6 +438,11 @@ world_load(struct world *w, struct packs *packs,
 		goto bad;
 	memcpy(w->encounter, p, sizeof(w->encounter));
 	if ((p = exe_at(layout, exe, len, layout->era_block_va +
+	    (uint32_t)block * ERA_BLOCK_LEN + ENCOUNTER_OFF +
+	    sizeof(w->encounter), sizeof(w->treasure_ship))) == NULL)
+		goto bad;
+	memcpy(w->treasure_ship, p, sizeof(w->treasure_ship));
+	if ((p = exe_at(layout, exe, len, layout->era_block_va +
 	    (uint32_t)block * ERA_BLOCK_LEN + BATTLE_AI_OFF,
 	    sizeof(w->battle_ai))) == NULL)
 		goto bad;

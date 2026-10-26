@@ -81,6 +81,10 @@ towns_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 		return (-1);
 	for (i = 0; i < 18; i++)
 		out->header[i] = (uint16_t)le16(b + 2 * i);
+	for (i = 0; i < CONVOY_STOPS; i++) {
+		out->fleet_route[i] = (int8_t)b[i];
+		out->train_route[i] = (int8_t)b[16 + i];
+	}
 	used = le16(b + LAST_INDEX_OFF) + 1;
 	if (used < 2 || used > TOWN_MAX)
 		return (-1);
@@ -204,6 +208,44 @@ bad:
 	return (-1);
 }
 
+/* A convoy's route: up to 15 town indices, -1 for a stop not used. */
+static int
+decode_route(const struct json *j, int *route, size_t count, char *err,
+    size_t errlen)
+{
+	size_t i;
+
+	if (j == NULL)
+		return (0);
+	if (j->type != JSON_ARRAY || j->count > CONVOY_STOPS) {
+		snprintf(err, errlen, "towns: a route of at most %d stops",
+		    CONVOY_STOPS);
+		return (-1);
+	}
+	for (i = 0; i < j->count; i++) {
+		if (j->items[i]->type != JSON_INT || j->items[i]->num < -1 ||
+		    j->items[i]->num >= (int64_t)count) {
+			snprintf(err, errlen, "towns: a route stop is a town "
+			    "index or -1");
+			return (-1);
+		}
+		route[i] = (int)j->items[i]->num;
+	}
+	return (0);
+}
+
+static void
+encode_route(const int *route, struct jbuf *b)
+{
+	int i;
+
+	for (i = 0; i < CONVOY_STOPS; i++) {
+		jb_raw(b, i == 0 ? "[" : ", ");
+		jb_int(b, route[i]);
+	}
+	jb_raw(b, "]");
+}
+
 int
 towns_decode(const uint8_t *data, size_t len, int era, struct era_towns *out,
     char *err, size_t errlen)
@@ -238,6 +280,14 @@ towns_decode(const uint8_t *data, size_t len, int era, struct era_towns *out,
 		if (decode_town(list->items[i], &out->towns[i], err,
 		    errlen) != 0)
 			goto out;
+	/* The convoys' routes, as town indices; none when absent. */
+	for (i = 0; i < CONVOY_STOPS; i++)
+		out->fleet_route[i] = out->train_route[i] = -1;
+	if (decode_route(json_get(root, "treasure_fleet"), out->fleet_route,
+	    out->count, err, errlen) != 0 ||
+	    decode_route(json_get(root, "silver_train"), out->train_route,
+	    out->count, err, errlen) != 0)
+		goto out;
 	rc = 0;
 out:
 	json_free(root);
@@ -277,7 +327,11 @@ towns_encode(const struct era_towns *era, struct jbuf *b)
 		}
 		jb_raw(b, "}");
 	}
-	jb_raw(b, "\n]}\n");
+	jb_raw(b, "\n],\n\"treasure_fleet\": ");
+	encode_route(era->fleet_route, b);
+	jb_raw(b, ",\n\"silver_train\": ");
+	encode_route(era->train_route, b);
+	jb_raw(b, "}\n");
 }
 
 int

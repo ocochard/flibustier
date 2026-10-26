@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	23
+#define STATE_VERSION	24
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -709,6 +709,23 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->escaped);
 	jb_raw(b, ",\"surnames\":");
 	jb_int(b, s->surnames);
+	jb_raw(b, ",\"fleet_town\":");
+	jb_int(b, s->fleet_town);
+	jb_raw(b, ",\"fleet_step\":");
+	jb_int(b, s->fleet_step);
+	jb_raw(b, ",\"train_town\":");
+	jb_int(b, s->train_town);
+	jb_raw(b, ",\"train_step\":");
+	jb_int(b, s->train_step);
+	for (i = 0; i < CONVOY_STOPS; i++) {
+		jb_raw(b, i == 0 ? ",\"fleet_route\":[" : ",");
+		jb_int(b, s->fleet_route[i]);
+	}
+	for (i = 0; i < CONVOY_STOPS; i++) {
+		jb_raw(b, i == 0 ? "],\"train_route\":[" : ",");
+		jb_int(b, s->train_route[i]);
+	}
+	jb_raw(b, "]");
 	jb_raw(b, ",\"ransom_slot\":");
 	jb_int(b, s->ransom_slot);
 	jb_raw(b, ",\"ransom_gold\":");
@@ -1028,6 +1045,38 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		if (tmp.ransom_slot < -1 || tmp.ransom_slot >= SIM_PRISONERS)
 			tmp.ransom_slot = -1;
 		tmp.ransom_gold = (long)json_get_int(j, "ransom_gold", 0);
+	}
+	{
+		/* Absent before version 24: away, the routes refilled from
+		 * the era's towns (sim_restore_towns). */
+		const struct json *fr = json_get(j, "fleet_route");
+		const struct json *tr = json_get(j, "train_route");
+		int k;
+
+		tmp.fleet_town = (int)json_get_int(j, "fleet_town", -1);
+		tmp.fleet_step = (int)json_get_int(j, "fleet_step", 16);
+		tmp.train_town = (int)json_get_int(j, "train_town", -1);
+		tmp.train_step = (int)json_get_int(j, "train_step", 16);
+		if (tmp.fleet_town < -1 || tmp.fleet_town >= TOWN_MAX)
+			tmp.fleet_town = -1;
+		if (tmp.train_town < -1 || tmp.train_town >= TOWN_MAX)
+			tmp.train_town = -1;
+		for (k = 0; k < CONVOY_STOPS; k++) {
+			tmp.fleet_route[k] = fr != NULL && fr->type ==
+			    JSON_ARRAY && (size_t)k < fr->count &&
+			    fr->items[k]->type == JSON_INT ?
+			    (int)fr->items[k]->num : -1;
+			tmp.train_route[k] = tr != NULL && tr->type ==
+			    JSON_ARRAY && (size_t)k < tr->count &&
+			    tr->items[k]->type == JSON_INT ?
+			    (int)tr->items[k]->num : -1;
+			if (tmp.fleet_route[k] < -1 ||
+			    tmp.fleet_route[k] >= TOWN_MAX)
+				tmp.fleet_route[k] = -1;
+			if (tmp.train_route[k] < -1 ||
+			    tmp.train_route[k] >= TOWN_MAX)
+				tmp.train_route[k] = -1;
+		}
 	}
 	{
 		/* Absent before version 22: the career starts now. */
@@ -1613,6 +1662,14 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 			return;
 		}
 		disgraced = sim_duel_end(s);
+	} else if (action != NULL && strcmp(action, "attack") == 0) {
+		/* Before a fort battle, a land battle or an assault: the
+		 * convoys' guards join the garrison. */
+		if (s->fleet.leaving < 0) {
+			reply_error(out, "no town reached");
+			return;
+		}
+		sim_attack_begin(s, s->fleet.leaving);
 	} else if (action != NULL && strcmp(action, "leave") == 0) {
 		if (s->player_town < 0) {
 			reply_error(out, "not in a town");
@@ -1621,7 +1678,7 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 		sim_leave_town(s);
 	} else {
 		reply_error(out, "town needs \"action\": enter, sail_in, sneak, "
-		    "guard, duel_end or leave");
+		    "guard, duel_end, attack or leave");
 		return;
 	}
 	jb_raw(out, "{\"ok\":true,\"player_town\":");

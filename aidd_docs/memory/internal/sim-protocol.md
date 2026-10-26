@@ -26,7 +26,7 @@ with a message. Numbers are integers only.
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
-| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
+| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
@@ -60,7 +60,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 23,
+  "version": 24,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -217,6 +217,10 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   `escaped` (at the last roll call), `surnames` (used lately),
   `ransom_slot` and `ransom_gold` (an offer pending). Absent before
   version 23: none.
+- **Convoys:** `fleet_town`, `train_town` (-1 away), `fleet_step`,
+  `train_step`, and the routes `fleet_route`, `train_route`. Absent
+  before version 24: away, the routes refilled from the era's towns
+  when the world is attached.
 - **Older states:** states from version 14 on still load. The town
   fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
   `party_x`, `party_y`) then read as 65535 until the player's program

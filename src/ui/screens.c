@@ -5827,8 +5827,10 @@ arrive_choose(struct game *g, int i)
 			g->arrive_stage = ARRIVE_ANSWER;
 		break;
 	case 1:
-		/* From the sea, a fort first fights the fleet (VA 0x18b3f);
-		 * a town without forts goes straight to the assault. */
+		/* The convoys' guards join the garrison (VA 0x18b3f). From
+		 * the sea, a fort first fights the fleet; a town without
+		 * forts goes straight to the assault. */
+		sim_attack_begin(&g->sim, town);
 		if (g->sim.towns[town].forts > 0 && !g->sim.fleet.ashore) {
 			sim_fort_battle_start(&g->sim, town);
 			game_goto(g, &screen_battle);
@@ -5923,7 +5925,11 @@ arrive_draw(struct game *g)
 	arg[1] = t->name;
 	arg[2] = forts;
 	arg[3] = game_word(g, W_NATION, t->nation & 3);
-	arg[4] = "";	/* the treasure fleet or silver train: not modelled */
+	/* "The treasure fleet is in the harbor!" (CSTN 29.2), or "The
+	 * silver train is in town!" (29.3), which wins (VA 0x18fa9). */
+	n = sim_convoys_at(&g->sim, (int)(t - g->sim.towns));
+	arg[4] = n & CONVOY_TRAIN ? game_word(g, W_ARRIVAL, 3) :
+	    n & CONVOY_FLEET ? game_word(g, W_ARRIVAL, 2) : "";
 	fill_args(text, sizeof(text), game_str(g, S_ARRIVED), arg, 5);
 	draw(g, FONT_BODY, ARR_TEXT_X, 40, 290, text, 0);
 	snprintf(label, sizeof(label), "%s", game_word(g, W_ARRIVAL,
@@ -6032,7 +6038,10 @@ const struct screen screen_assault = {
  * the fleet at once (an engine choice: the original offers them on the
  * board).
  */
-enum { SACK_MERCY, SACK_HIDDEN, SACK_INSTALL, SACK_SON, SACK_VILLAIN };
+enum { SACK_MERCY, SACK_HIDDEN, SACK_INSTALL, SACK_SON, SACK_VILLAIN,
+    SACK_FLEET, SACK_TRAIN };
+#define S_FLEET_TAKEN		186
+#define S_TRAIN_TAKEN		187
 #define S_SON_FREED		208
 
 static void	sack_after(struct game *);
@@ -6043,6 +6052,8 @@ sack_picture(struct game *g)
 	const struct sim_town *t = &g->sim.towns[g->assault_town];
 
 	game_background(g, g->sack_stage == SACK_INSTALL ? "pic/governor" :
+	    g->sack_stage == SACK_FLEET ? "pic/fleet" :
+	    g->sack_stage == SACK_TRAIN ? "pic/silvertr" :
 	    t->flags & TOWN_INLAND ? "pic/arr_land" : "pic/arr_sea");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL) {
@@ -6092,9 +6103,17 @@ sack_event(struct game *g, const struct ui_event *ev)
 	if (g->sack_stage == SACK_MERCY && g->sack.son_freed)
 		g->sack_stage = SACK_SON;
 	else if ((g->sack_stage == SACK_MERCY || g->sack_stage == SACK_SON) &&
-	    g->sack.hidden >= 0)
+	    (g->sack.convoys & CONVOY_FLEET)) {
+		g->sack_stage = SACK_FLEET;	/* fleet.pcx, CSTR 186 */
+		sack_picture(g);
+	} else if ((g->sack_stage == SACK_MERCY || g->sack_stage == SACK_SON ||
+	    g->sack_stage == SACK_FLEET) && (g->sack.convoys & CONVOY_TRAIN)) {
+		g->sack_stage = SACK_TRAIN;	/* silvertr.pcx, CSTR 187 */
+		sack_picture(g);
+	} else if (g->sack_stage != SACK_HIDDEN && g->sack.hidden >= 0) {
 		g->sack_stage = SACK_HIDDEN;
-	else
+		sack_picture(g);
+	} else
 		sack_after(g);
 }
 
@@ -6134,6 +6153,12 @@ sack_draw(struct game *g)
 		fill(text, sizeof(text), game_str(g, S_SON_FREED),
 		    g->sim.towns[g->sim.mission.giver].name, NULL);
 		break;
+	case SACK_FLEET:
+	case SACK_TRAIN:
+		draw(g, FONT_BODY, 100, 300, 520, game_str(g, g->sack_stage ==
+		    SACK_FLEET ? S_FLEET_TAKEN : S_TRAIN_TAKEN), 0);
+		continue_prompt(g);
+		return;
 	case SACK_VILLAIN:
 		return;
 	default:
@@ -7561,8 +7586,8 @@ const struct screen screen_citymap = {
  * 150) up to x 620: "I have information which may be of value to you,"
  * %s says (CSTR 165): the treasure fleet, the silver train, or ransom.
  * The news: "The %s is in %s." (CSTN 27.0) with "Treasure Fleet" or
- * "Silver Train" (CSTR 46, 45) and, while the fleets are not modelled,
- * "Spain" or "Peru" (CSTN 27.1, 27.2): they are at home.
+ * "Silver Train" (CSTR 46, 45) and the town it is in, or when away
+ * "Spain" or "Peru" (CSTN 27.1, 27.2).
  */
 #define S_HOSTAGE_TALK		165
 
@@ -7610,8 +7635,15 @@ hostage_draw(struct game *g)
 		draw(g, FONT_BODY, 340, 150, 280, text, 1);
 		return;
 	}
-	arg[0] = game_str(g, g->hostage_said == 0 ? 46 : 45);
-	arg[1] = game_word(g, 27, g->hostage_said == 0 ? 1 : 2);
+	{
+		int at = g->hostage_said == 0 ? g->sim.fleet_town :
+		    g->sim.train_town;
+
+		arg[0] = game_str(g, g->hostage_said == 0 ? 46 : 45);
+		arg[1] = at >= 0 && (size_t)at < g->sim.ntowns ?
+		    g->sim.towns[at].name : game_word(g, 27,
+		    g->hostage_said == 0 ? 1 : 2);
+	}
 	fill_args(text, sizeof(text), game_word(g, 27, 0), arg, 2);
 	draw(g, FONT_BODY, 340, 150, 280, text, 0);
 	continue_prompt(g);

@@ -47,6 +47,8 @@ enum news_code {
 	NEWS_CAPTURE = 19,	/* a: nation, b: town */
 	NEWS_TAKEN = 22,	/* a: town, b: nation it was taken for */
 	NEWS_NOT_TAKEN = 23,	/* a: town */
+	NEWS_FLEET_TAKEN = 24,	/* the treasure fleet captured */
+	NEWS_TRAIN_TAKEN = 25,	/* the silver train captured */
 	NEWS_RESCUED = 26,	/* a: the relative (CSTN 37) */
 	NEWS_LETTER = 28,	/* a: the town to deliver to */
 	NEWS_PAPERS = 29,
@@ -432,6 +434,13 @@ struct sim {
 	int		escaped;
 	int		surnames;
 	int		ransom_slot;	/* the offer pending, or -1 */
+	/* The treasure fleet and the silver train (VA 0x45e71, 0x45e70):
+	 * the town each is in or -1 (away: Spain, Peru), its stop on its
+	 * route (VA 0x45e8d, 0x45e8e), and the routes. */
+	int		fleet_town, fleet_step;
+	int		train_town, train_step;
+	int		fleet_route[CONVOY_STOPS];
+	int		train_route[CONVOY_STOPS];
 	long		ransom_gold;
 	/* The villains who know where the relatives are (VA 0x471da). */
 	struct sim_villain {
@@ -686,6 +695,21 @@ enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
 void	sim_imprison(struct sim *s, int cause, int town);
 
 /*
+ * The treasure fleet and the silver train (VA 0x13679, 0xcde9).  Each
+ * month a convoy moves 1 or 2 stops along its route, passing towns not
+ * Spanish; past stop 14 it is away.  The fleet starts its route again
+ * in month 9, the train in month 3 (each a month earlier in the odd
+ * eras).  Where it stops the town's wealth rises by 10 and, for the
+ * fleet, its gold is quartered.  sim_convoys_at: CONVOY_FLEET and
+ * CONVOY_TRAIN for those in "town"; sim_attack_begin (VA 0x18b3f) adds
+ * 10 soldiers to the town for each.
+ */
+#define CONVOY_FLEET	1
+#define CONVOY_TRAIN	2
+int	sim_convoys_at(const struct sim *s, int town);
+void	sim_attack_begin(struct sim *s, int town);
+
+/*
  * Named captains and their ransom.  A hostile warship or pirate
  * (role above 5, the player's standing below 0) has a named captain
  * (VA 0xd1fc): id = surname x 8 + rand(8) x 2 + nation x 64, the
@@ -802,6 +826,7 @@ struct sack {
 	int	cannon;		/* forts x 6 */
 	int	conquest;	/* 1: the player may install a governor */
 	int	son_freed;	/* a governor's son was held there */
+	int	convoys;	/* CONVOY_FLEET, CONVOY_TRAIN taken there */
 };
 void	sim_sack(struct sim *s, int town, struct sack *out);
 /*

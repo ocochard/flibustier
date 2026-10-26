@@ -117,6 +117,9 @@ struct world {
 	 * guns, role and two bytes not decoded (game-rules.md). */
 	uint8_t		encounter[ENCOUNTER_NATIONS][ENCOUNTER_SHIPS]
 			    [ENCOUNTER_LEN];
+	/* The treasure galleon met off the treasure fleet's town (the
+	 * record after them, VA 0x47112). */
+	uint8_t		treasure_ship[ENCOUNTER_LEN];
 	/* Sea battles: the enemy's decision per strength comparison, and
 	 * hit boxes (half sizes per ship type; widening per difficulty). */
 	uint8_t		battle_ai[BATTLE_AI_CASES];

@@ -37,8 +37,9 @@ Runs, in this order (VA `0xceb8`):
 2. Conquest.
 3. Diplomacy.
 4. Random town event.
-5. Treasure fleet targeting (not specified yet).
-6. Two treasure fleet movements (not specified yet).
+5. The villains' moves (VA `0xcba7`, not modelled).
+6. The treasure fleet's and the silver train's moves (see "The treasure
+   fleet and the silver train").
 
 Some housekeeping on player-related values precedes these steps; it is
 not specified yet.
@@ -342,6 +343,33 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   you back as %s captain" (CSTR 190, or 162 when marooned, with CSTN 73
   for the difficulty).
 
+### The treasure fleet and the silver train (VA `0x13679`, `0xcde9`)
+
+- **Routes:** the era's town block starts with them (VA `0x4605e`,
+  `0x4606e`): 15 stops each, town indices (the fleet's from Havana, the
+  train's often from Tampico or Nombre de Dios).
+- **Where each is (VA `0x45e71`, `0x45e70`):** a town, or 0xFF away (in
+  Spain, in Peru); its stop on the route at VA `0x45e8d`, `0x45e8e`.
+- **The start (VA `0x13679`):** stop `(era & 1) x 2 + day / 15 - 18`
+  for the fleet, `- 6` for the train (+24 when negative), by the day of
+  the year the career starts; the town at that stop, or away past 14.
+- **Each month (VA `0xcde9`, after the town events):** from its stop,
+  or from the start (-1) in month `9 - (era & 1)` for the fleet, `3 -
+  (era & 1)` for the train: the stop moves `rand(2) + 1` on; past 14 the
+  convoy is away; a stop at a town not Spanish moves the base one on and
+  draws again. Where it stops, the town's wealth (field 8) rises by 10
+  (255 at most) and, for the fleet, its gold (field 7) is quartered.
+- **In a town:** the arrival says so, an attack meets 10 more soldiers
+  each, and off the fleet's town the treasure galleon may be met.
+- **The sack (VA `0x22764`):** after "at your mercy" and the son, each
+  convoy there is taken: `fleet.pcx`, "You have captured the royal
+  Spanish treasure fleet!..." (CSTR 186), or `silvertr.pcx`, "You have
+  captured the silver train..." (CSTR 187), at (100, 300) up to x 620;
+  the plunder grows by the treasure galleon's cargo byte x 20 (counted
+  in tens) for each; log codes 24, 25; the convoy is away until its
+  next start (stop 16).
+- Log codes 20 and 21 ("Treasure fleet in %s.") are never written.
+
 ### Named captains (VA `0xd1fc`, `0xdb7b`, `0x127da`)
 
 - **Who:** a ship that chases the player (role above 5, the player's
@@ -365,8 +393,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   hold him for ransom. News is "The %s is in %s." (CSTN 27.0) with
   "Treasure Fleet" or "Silver Train" (CSTR 46, 45) and the town it is
   in, or "Spain" / "Peru" (CSTN 27.1, 27.2) when away (VA `0x45e71`,
-  `0x45e70` at 0xFF); the engine, without the fleets, always says they
-  are away. News lets him go. Others are held at once.
+  `0x45e70` at 0xFF). News lets him go. Others are held at once.
 - **Held:** the first free of 8 slots (VA `0x4720a`) takes `id |
   (nation & 4) << 6` (0x100 marks pirates; Hostage Status calls them
   "(pirate)", others "(hunter)").
@@ -671,8 +698,12 @@ Where the original's behaviour is not traced yet, the engine does this:
    - With chance 4/15, or when the nearest town is more than 12 cells
      away, `r = rand(20)` gives record `r / 4` of nation `r % 4`
      instead.
-   - Missions, pirate bases and treasure fleets have special cases, not
-     specified yet.
+   - Off the treasure fleet's town, when `rand(24)` is above the heat
+     (VA `0x4c09e`), the ship is the era's treasure galleon instead: the
+     record after the 20 (era block offset `0x100 + 140`, VA `0x47112`),
+     a Spanish galleon (type 7) with a rich cargo byte (240 in 1560 down
+     to 100 in 1680).
+   - Missions and pirate bases have special cases, not specified yet.
 3. **Ship record:**
 
 | Byte | Content |
@@ -910,8 +941,9 @@ Attacking a town with forts from the sea starts with a battle against
 the fort.
 - **The fort as an encounter (VA `0x18b9c`):** type 8, the town's
   nation, crew byte `(soldiers + 1) / 2`, guns `forts x 12`, role 0
-  (reload 144 ticks). A town holding the treasure fleet or the silver
-  train has 10 more soldiers (at most 255), not modelled yet.
+  (reload 144 ticks). When any attack on a town begins (VA `0x18b3f`,
+  by sea or on foot) the treasure fleet and the silver train each add
+  10 soldiers to its garrison, at most 255, for good.
 - **The field:** the town's own screen (town field 14). The fort's
   sprite corner is at `field 17, 18 x 32` (a 32 x 32 box, centre +16);
   the player's at `field 19, 20 x 32 + 16`, heading field 21 (VA
@@ -953,9 +985,7 @@ After a landing by the fort, or straight away at a town without forts:
 - **Repelled:** the fallen leave the crew; reputation -1 and an attack
   of -1 on the town's nation.
 - **Defeated:** the same, then prison (see "Prison").
-- **Not modelled:** the treasure fleet and silver train (10 more
-  soldiers), a personal enemy hiding in the town (VA `0x18913`), the
-  family members held there (VA `0x1eba6`), missions.
+- **Not modelled:** the family members held there (VA `0x1eba6`).
 
 ### The sack (VA `0x22764`)
 
@@ -1233,8 +1263,8 @@ move) and `0x38a1a` to `0x38b99`.
   - Forts: none, "One fort guards the harbor entrance." (29.0), or
     "<n> forts guard…" (29.1 with CSTN 79); 29.8 and 29.9 inland.
   - Extra: "The treasure fleet is in the harbor!" (29.2) or "The silver
-    train is in town!" (29.3) in the towns at VA `0x45e71` and
-    `0x45e70`. Not modelled yet.
+    train is in town!" (29.3, which wins when both are there) in the
+    towns at VA `0x45e71` and `0x45e70`.
 - **Choices (CSTR 115, at (330, 260)):** sail into the harbour (29.4;
   "March into town", 29.5, on land), attack the town (VA `0x18b3f`, not
   traced yet), sneak in, or leave.

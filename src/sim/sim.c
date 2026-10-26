@@ -126,6 +126,11 @@ sim_restore_towns(struct sim *s, const struct era_towns *era)
 	const struct town *t;
 	size_t i;
 
+	/* The convoys' routes are the era's. */
+	for (i = 0; i < CONVOY_STOPS; i++) {
+		s->fleet_route[i] = era->fleet_route[i];
+		s->train_route[i] = era->train_route[i];
+	}
 	for (i = 0; i < s->ntowns && i < era->count; i++) {
 		st = &s->towns[i];
 		t = &era->towns[i];
@@ -173,6 +178,8 @@ start_log(struct sim *s)
 			date += step;
 		}
 }
+
+static void	convoys_start(struct sim *, const struct era_towns *);
 
 void
 sim_new_game(struct sim *s, const struct era_towns *era,
@@ -254,6 +261,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	if (s->fleet.leaving >= 0)
 		sim_harbour_mouth(s, s->fleet.leaving);
 	start_log(s);
+	convoys_start(s, era);
 	/* The expeditions start months at sea (scenario byte 0x58). */
 	s->months = (int8_t)scn->raw[0x58];
 	s->start_year = s->year;
@@ -397,6 +405,111 @@ town_event(struct sim *s)
 	}
 }
 
+/* The era's index, by its year. */
+static int
+era_index(const struct sim *s)
+{
+	int e;
+
+	for (e = 0; e < EXE_ERAS; e++)
+		if (town_era_years[e] == s->era_year)
+			return (e);
+	return (0);
+}
+
+/* A convoy's month (VA 0xcde9): 1 or 2 stops on, past the towns not
+ * Spanish. */
+static void
+convoy_move(struct sim *s, int *step, int *town, const int *route, int from,
+    int fleet)
+{
+	struct sim_town *t;
+	int st, k;
+
+	for (;;) {
+		st = from + 1 + rng_below(&s->rng, 2);
+		*step = st;
+		if (st >= CONVOY_STOPS) {
+			k = -1;
+			break;
+		}
+		k = route[st];
+		if (k < 0 || (size_t)k >= s->ntowns) {
+			k = -1;
+			break;
+		}
+		if (s->towns[k].nation == NATION_SPAIN)
+			break;
+		from++;
+	}
+	if (k >= 0) {
+		t = &s->towns[k];
+		t->wealth = t->wealth < 245 ? (uint16_t)(t->wealth + 10) : 255;
+		if (fleet)
+			t->gold = (uint16_t)(t->gold / 4);
+	}
+	*town = k;
+}
+
+static void
+convoys_move(struct sim *s)
+{
+	int odd = era_index(s) & 1;
+
+	convoy_move(s, &s->fleet_step, &s->fleet_town, s->fleet_route,
+	    s->month == 9 - odd ? -1 : s->fleet_step, 1);
+	convoy_move(s, &s->train_step, &s->train_town, s->train_route,
+	    s->month == 3 - odd ? -1 : s->train_step, 0);
+}
+
+/* Where the convoys are at the start (VA 0x13679): by the date. */
+static void
+convoys_start(struct sim *s, const struct era_towns *era)
+{
+	int odd = era_index(s) & 1, k;
+
+	for (k = 0; k < CONVOY_STOPS; k++) {
+		s->fleet_route[k] = era->fleet_route[k];
+		s->train_route[k] = era->train_route[k];
+	}
+	s->fleet_step = odd * 2 + s->day_of_year / 15 - 18;
+	if (s->fleet_step < 0)
+		s->fleet_step += 24;
+	s->fleet_town = s->fleet_step < CONVOY_STOPS ?
+	    s->fleet_route[s->fleet_step] : -1;
+	s->train_step = odd * 2 + s->day_of_year / 15 - 6;
+	if (s->train_step < 0)
+		s->train_step += 24;
+	s->train_town = s->train_step < CONVOY_STOPS ?
+	    s->train_route[s->train_step] : -1;
+}
+
+int
+sim_convoys_at(const struct sim *s, int town)
+{
+	if (town < 0)
+		return (0);
+	return ((s->fleet_town == town ? CONVOY_FLEET : 0) |
+	    (s->train_town == town ? CONVOY_TRAIN : 0));
+}
+
+void
+sim_attack_begin(struct sim *s, int town)
+{
+	struct sim_town *t;
+	int n;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	t = &s->towns[town];
+	n = t->soldiers;
+	if (s->train_town == town)
+		n += 10;
+	if (s->fleet_town == town)
+		n += 10;
+	t->soldiers = (uint16_t)(n > 254 ? 255 : n);
+}
+
 void
 sim_world_update(struct sim *s)
 {
@@ -404,7 +517,8 @@ sim_world_update(struct sim *s)
 	conquest(s);
 	diplomacy(s);
 	town_event(s);
-	/* Treasure fleets are not specified yet; see game-rules.md. */
+	/* The villains' moves (VA 0xcba7) are not modelled. */
+	convoys_move(s);
 }
 
 /*
@@ -855,6 +969,11 @@ pick_ship(struct sim *s, int town, int dist)
 		nation = r % 4;
 	}
 	rec = s->world->encounter[nation][k];
+	/* Off the treasure fleet's town: its galleon, unless the region
+	 * is alerted (VA 0xd1fc). */
+	if (town >= 0 && town == s->fleet_town &&
+	    rng_below(&s->rng, 24) > s->heat)
+		rec = s->world->treasure_ship;
 	memset(e, 0, sizeof(*e));
 	e->stage = ENC_SIGHTED;
 	e->type = rec[0] & 7;

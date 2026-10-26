@@ -815,6 +815,23 @@ sim_sack(struct sim *s, int town, struct sack *out)
 			out->goods[i] = c;
 	}
 	gold = (long)t->gold * 1500 / (s->heat + 15);
+	/* The treasure fleet or the silver train in the town: captured,
+	 * each worth the treasure galleon's cargo byte x 20 (VA 0x22764);
+	 * each starts afresh next year. */
+	if (s->fleet_town == town) {
+		out->convoys |= CONVOY_FLEET;
+		gold += s->world != NULL ? s->world->treasure_ship[5] * 20 : 0;
+		s->fleet_town = -1;
+		s->fleet_step = 16;
+		sim_log_news(s, NEWS_FLEET_TAKEN, 0, 0);
+	}
+	if (s->train_town == town) {
+		out->convoys |= CONVOY_TRAIN;
+		gold += s->world != NULL ? s->world->treasure_ship[5] * 20 : 0;
+		s->train_town = -1;
+		s->train_step = 16;
+		sim_log_news(s, NEWS_TRAIN_TAKEN, 0, 0);
+	}
 	t->gold = gold / 50 > t->gold ? 0 : (uint16_t)(t->gold - gold / 50);
 	t->wealth = t->wealth < 20 ? 0 : (uint16_t)(t->wealth - 20);
 	/* The governor's son held here is freed (VA 0x22764). */

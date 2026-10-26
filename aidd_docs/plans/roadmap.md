@@ -277,8 +277,8 @@ Status (2026-10-26): first slice.
 - **Map of the Caribbean.**
 - **Log book:** its menu and status pages.
 - **Named captains:** the hail, hostages, prisoners, ransoms.
-- **Next:** the treasure fleet and silver train, the governor's
-  daughter and marriage.
+- **Treasure fleet and silver train.**
+- **Next:** the governor's daughter and marriage, the villains' moves.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

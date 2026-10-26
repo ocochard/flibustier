@@ -2843,6 +2843,85 @@ test_prisoners(void)
 		CHECK(s.prisoners[k] == 0);
 }
 
+/* The treasure fleet and the silver train. */
+static void
+test_convoys(void)
+{
+	struct era_towns era;
+	struct scenario scn;
+	struct sim s;
+	struct sack sack;
+	int k, wealth, gold, seen = 0;
+	long before;
+
+	make_era(&era, &scn);
+	for (k = 0; k < CONVOY_STOPS; k++)
+		era.fleet_route[k] = era.train_route[k] = -1;
+	/* Alpha and Beta are Spanish, Gamma English: passed by. */
+	era.fleet_route[0] = 0;
+	era.fleet_route[1] = 2;
+	era.fleet_route[2] = 1;
+	era.train_route[0] = 1;
+	sim_new_game(&s, &era, &scn, 3);
+	s.world = &test_world;
+	/* The start, by the date: stop doy / 15 - 18 (+24), odd eras +2. */
+	k = s.day_of_year / 15 - 18 + ((s.era_year == 1600 ||
+	    s.era_year == 1640 || s.era_year == 1680) ? 2 : 0);
+	if (k < 0)
+		k += 24;
+	CHECK(s.fleet_step == k);
+	CHECK(s.fleet_town == (k < CONVOY_STOPS ? era.fleet_route[k] : -1));
+	/* The fleet's month: back to the start, 1 or 2 stops on, never in
+	 * the English town; where it stops wealth +10, gold / 4. */
+	s.towns[0].wealth = s.towns[1].wealth = 100;
+	s.towns[0].gold = s.towns[1].gold = 400;
+	for (k = 0; k < 40; k++) {
+		s.fleet_step = -1 + 0;	/* as at the restart */
+		s.fleet_town = -1;
+		s.day_of_year = 8 * 30 - 1;	/* the next update is month 9 */
+		s.month = 8;
+		wealth = s.towns[0].wealth + s.towns[1].wealth;
+		gold = s.towns[0].gold + s.towns[1].gold;
+		sim_advance(&s, 1);
+		CHECK(s.fleet_town != 2);
+		if (s.fleet_town == 0 || s.fleet_town == 1) {
+			seen |= 1 << s.fleet_town;
+			CHECK(s.towns[0].wealth + s.towns[1].wealth >= wealth);
+			CHECK(s.towns[s.fleet_town].gold <= 100 ||
+			    s.towns[0].gold + s.towns[1].gold < gold);
+		}
+		s.towns[0].wealth = s.towns[1].wealth = 100;
+		s.towns[0].gold = s.towns[1].gold = 400;
+	}
+	CHECK(seen == 3);
+	/* An attack on the fleet's town: 10 soldiers more. */
+	s.fleet_town = k = 1;
+	CHECK(sim_convoys_at(&s, k) == CONVOY_FLEET);
+	s.train_town = -1;
+	s.towns[k].soldiers = 20;
+	sim_attack_begin(&s, k);
+	CHECK(s.towns[k].soldiers == 30);
+	/* Sacked: the fleet taken, the galleon's cargo x 20 in tens. */
+	before = s.fleet.gold;
+	s.heat = 0;
+	s.towns[k].gold = 0;
+	test_world.treasure_ship[5] = 100;
+	sim_sack(&s, k, &sack);
+	CHECK((sack.convoys & CONVOY_FLEET) && sack.gold == 100 * 20 * 10 &&
+	    s.fleet.gold == before + sack.gold && s.fleet_town == -1 &&
+	    s.fleet_step == 16);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_FLEET_TAKEN ||
+	    news_abs(&s, s.nnews - 2)->code == NEWS_FLEET_TAKEN);
+	test_world.treasure_ship[5] = 0;
+	/* Past its last stop a convoy is away. */
+	s.fleet_step = 13;
+	s.day_of_year = 30 - 1;
+	s.month = 0;
+	for (k = 0; k < 3; k++)
+		sim_advance(&s, 30);
+	CHECK(s.fleet_town == -1);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -2944,6 +3023,7 @@ main(void)
 	test_crew_mood();
 	test_prison();
 	test_prisoners();
+	test_convoys();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

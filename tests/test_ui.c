@@ -1198,9 +1198,14 @@ test_assault(void)
 	g->sim.fleet.x = t->sea_x * 16 + 8;
 	g->sim.fleet.y = t->sea_y * 16 + 8;
 	g->sim.fleet.leaving = -1;
+	/* The treasure fleet is in port: 10 more men guard the town, and
+	 * the sack takes the fleet. */
+	g->sim.fleet_town = town;
+	g->sim.train_town = -1;
+	t->soldiers = 5;
 	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_arrive);
 	CHECK(game_script(g, "down enter wait:40") == 0 &&
-	    g->screen == &screen_assault);
+	    g->screen == &screen_assault && t->soldiers == 15);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_sword && g->sw_stage == 1);
 	CHECK(game_script(g, "enter wait:2") == 0 && g->sw_stage == 2 &&
@@ -1209,10 +1214,13 @@ test_assault(void)
 	g->sim.sword.result = SWORD_WON;
 	gold = g->sim.fleet.gold;
 	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_sack &&
-	    g->sack.gold == 200L * 1500 / 15 * 10 &&
-	    g->sim.fleet.gold == gold + g->sack.gold);
+	    g->sack.gold == (200L * 1500 / 15 +
+	    g->world->treasure_ship[5] * 20) * 10 &&
+	    g->sim.fleet.gold == gold + g->sack.gold &&
+	    (g->sack.convoys & CONVOY_FLEET) && g->sim.fleet_town == -1);
 	/* The crew of 100 can hold a town of one citizen: a governor. */
 	CHECK(g->sack.conquest);
+	CHECK(game_script(g, "enter") == 0 && g->sack_stage == 5);
 	CHECK(game_script(g, "enter") == 0 && g->sack_stage == 2);
 	CHECK(game_script(g, "down down down enter wait:40") == 0 &&
 	    t->nation == 3 && g->screen == &screen_merchant && g->looting);
