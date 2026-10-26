@@ -241,6 +241,17 @@ struct game {
 	int			 gov_said;	/* her answer: a CSTR */
 	int			 sw_suitor;	/* the duel with her suitor */
 	int			 merdaugh;	/* her page: a CSTR, 0 none */
+	/* The end of a career: its figures, the page, whether it was
+	 * forced (no "Return to pirating"), the verdict's phrase. */
+	struct career_end	 end;
+	int			 end_page, end_forced, end_phrase;
+	int			 quit_prompt;	/* the cabin's "Quit (Y/N)" */
+	/* News of villains (VA 0x1eba6): who tells, of which town, the
+	 * villains named, the answer shown, where it goes next. */
+	int			 vnews_source, vnews_town, vnews_n;
+	int			 vnews_list[SIM_VILLAINS];
+	int			 vnews_said, vnews_who, vnews_where;
+	const struct screen	*vnews_back;
 	int			 hostage_said;	/* the hostage's news, or -1 */
 	int			 escape_page;	/* the roll call's second page */
 	int			 deserted_town;	/* the town just left */

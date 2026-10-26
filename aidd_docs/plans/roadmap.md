@@ -281,7 +281,9 @@ Status (2026-10-26): first slice.
 - **The governor's daughter:** courtship, the suitor's duel, marriage,
   the informant.
 - **The merchant's daughter:** the debt, the wedding, the family.
-- **Next:** the villains' moves.
+- **Villains' moves:** the monthly moves, the trail, the news of them.
+- **Retirement:** the original's score, rating, summary and verdict.
+- **Next:** see the open items in game-rules.md.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

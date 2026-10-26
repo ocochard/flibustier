@@ -3012,6 +3012,101 @@ test_merchant_daughter(void)
 		CHECK(sim_merchant_after(&s) == 0);
 }
 
+/* The villains move from town to town, leaving a trail. */
+static void
+test_villain_moves(void)
+{
+	struct sim s;
+	int k, list[SIM_VILLAINS], n, where, moved = 0;
+
+	sea_game(&s, 300, 300, 0);
+	s.player.difficulty = 3;
+	/* Alpha and Beta, Spanish, 3 cells apart; Gamma English. */
+	s.towns[0].x = 100; s.towns[0].y = 100;
+	s.towns[1].x = 102; s.towns[1].y = 101;
+	s.towns[0].garrison = s.towns[1].garrison = 0;
+	memset(s.villains, 0, sizeof(s.villains));
+	s.villains[0].active = 1;
+	s.villains[0].town = 0;
+	for (k = 0; k < 4; k++)
+		s.villains[0].trail[k] = -1;
+	/* Beta richer in soldiers than gold scores higher. */
+	s.towns[0].gold = 800; s.towns[0].soldiers = 0;
+	s.towns[1].gold = 0; s.towns[1].soldiers = 80;
+	s.towns[0].standing = s.towns[1].standing = 0;
+	for (k = 0; k < 20 && !moved; k++) {
+		sim_villains_move(&s);
+		moved = s.villains[0].town == 1;
+	}
+	CHECK(moved && s.villains[0].trail[0] == 0 &&
+	    s.towns[1].garrison == 1 && s.towns[0].garrison == 0);
+	/* Never to an English town, nor back to a town with a villain. */
+	for (k = 0; k < 20; k++) {
+		sim_villains_move(&s);
+		CHECK(s.villains[0].town == 0 || s.villains[0].town == 1);
+	}
+	/* News in Alpha: he left for Beta, or he is here. */
+	s.villains[0].town = 1;
+	s.villains[0].trail[0] = 0;
+	n = sim_villain_news(&s, 0, list);
+	CHECK(n == 1 && list[0] == 0);
+	CHECK(sim_villain_whereabouts(&s, 0, 0, &where) == 107 &&
+	    where == 1);
+	CHECK(sim_villain_whereabouts(&s, 0, 1, &where) == 108 &&
+	    where == 1);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_VILLAIN);
+	CHECK(sim_villain_news(&s, 3, list) == 0);
+	/* Leaving a town with the heat high raises its nation's alarm. */
+	s.player_town = 1;
+	s.heat = 20;
+	sim_leave_town(&s);
+	CHECK(s.alert[NATION_SPAIN] == 1);
+}
+
+/* The end of a career: its points, score, rating and words. */
+static void
+test_career_end(void)
+{
+	struct sim s;
+	struct career_end e;
+
+	sea_game(&s, 300, 300, 0);
+	s.player.expedition = -1;
+	s.start_year = s.year - 5;
+	s.fortune = 50000;
+	s.acres = 4;
+	memset(s.rank, 0, sizeof(s.rank));
+	s.rank[NATION_ENGLAND] = 4;
+	s.rank[NATION_FRANCE] = 2;
+	s.reputation = 10;
+	s.married = 2;
+	s.relative = 1;
+	s.injuries = 1;
+	sim_career_end(&s, &e);
+	/* 5000 + 200 + 3000 + 2000 + (2 + 1 - 1) x 1000 */
+	CHECK(e.points == 12200 && e.ranks == 6);
+	CHECK(e.score == (int)(12200 / 330.0 * 20 / 20.0));	/* 36 */
+	CHECK(e.rating == 19 - 36 / 5 - 1);		/* 11 */
+	CHECK(e.member == 11 && e.age == 30);
+	/* sqrt((400 + 50000) / 500) = 10, at most 6, + 2 */
+	CHECK(e.wealth == 8);
+	CHECK(e.repute == 10 / 4 + 1 + 2);
+	/* (1/8 + 2/8 + 1 - 1/6) x 20/20 x 3 = 3.6: 3, + 1 */
+	CHECK(e.mood == 4);
+	/* A poor, unknown, hurt captain. */
+	s.fortune = 0;
+	s.acres = 0;
+	memset(s.rank, 0, sizeof(s.rank));
+	s.reputation = -5;
+	s.married = s.relative = 0;
+	s.injuries = 3;
+	sim_career_end(&s, &e);
+	CHECK(e.points == -1000 - 3000 && e.score < 1 && e.rating >= 19 &&
+	    e.member == 4 && e.wealth == 2 && e.repute == 2);
+	/* (0 + 1 - 3/6) x 3 = 1.5: 1, + 1 */
+	CHECK(e.mood == 2);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3116,6 +3211,8 @@ main(void)
 	test_convoys();
 	test_daughter();
 	test_merchant_daughter();
+	test_villain_moves();
+	test_career_end();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

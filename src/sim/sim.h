@@ -453,7 +453,12 @@ struct sim {
 		int	rank;		/* CSTN 78, 0..7 */
 		int	nation;		/* CSTN 97: Spaniard... */
 		int	town;
+		int	trail[4];	/* the towns before, latest first,
+					 * -1 none */
 	} villains[SIM_VILLAINS];
+	/* Per nation, the town that last raised the alarm (VA 0x45eae):
+	 * the villains keep away from it. */
+	int		alert[4];
 	int		villain_duel;	/* the villain fought, or -1 */
 	/* The governor's mission (VA 0x471aa): a type, negative once
 	 * done; the giving town and nation, the destination, the pirate
@@ -699,6 +704,28 @@ enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
 void	sim_imprison(struct sim *s, int cause, int town);
 
 /*
+ * The end of a career (VA 0x45d0, 0x5039, 0x4a1a).  The points are
+ * fortune / 10 + land x 50 + the ranks' sum x 500 + reputation x 200 +
+ * (married + relatives found - injuries) x 1000; the score is
+ * (int)(points / 330 x (25 - years) / 20), and its rating 0 (best) to
+ * 21 (hof_rating).  The summary's words: CSTN 38 entry "member", 39
+ * "wealth", 40 "repute", 42 "mood" (each already offset as the game
+ * reads them), the age, and the ranks' sum.
+ */
+struct career_end {
+	long	points;
+	int	score;
+	int	rating;
+	int	ranks;		/* the four nations' ranks added */
+	int	member;		/* CSTN 38: 4 undistinguished .. 11 */
+	int	wealth;		/* CSTN 39: 2 pauper .. 8 */
+	int	repute;		/* CSTN 40: 2 cowardly .. 8 */
+	int	mood;		/* CSTN 42: 1 sad .. 6 fun-loving */
+	int	age;
+};
+void	sim_career_end(const struct sim *s, struct career_end *out);
+
+/*
  * The merchant's daughter (VA 0x21e56), after trading but not looting:
  * sim_merchant_after returns 2 when married into the merchant's family
  * (town field 12 bit 0x40: dinner with the wife, CSTR 295), 1 when his
@@ -781,6 +808,21 @@ void	sim_ransom_take(struct sim *s);
  * (sim_villain_duel); beaten, he gives a piece of the relative's map
  * (sim_villain_duel_end returns 1; a loss disgraces as any duel).
  */
+/*
+ * Each month (VA 0xcba7) a villain may move to the best Spanish town
+ * without a villain (town field 10 at 0), other than the last, within
+ * rand(difficulty + 5)^2 cells (|dx| + |dy|) of his town: the score is
+ * 4 x field 9 - (gold - soldiers) / 8 + the distance from the nation's
+ * alarm town - 255.  Moving, his town joins his trail, field 10 moves
+ * with him (a land battle there meets 128 more men).
+ * sim_villain_news lists the villains whose town or trail holds "town"
+ * (VA 0x1eba6); sim_villain_whereabouts says 108 ("%s is now in %s"),
+ * or 107 ("%s left for %s a few months ago") with the town he went to,
+ * and logs it.
+ */
+int	sim_villain_news(const struct sim *s, int town, int out[SIM_VILLAINS]);
+int	sim_villain_whereabouts(struct sim *s, int villain, int town,
+	    int *where);
 int	sim_villain_appear(struct sim *s);
 int	sim_villain_at(const struct sim *s, int town);
 void	sim_villain_duel(struct sim *s, int villain, int weapon);

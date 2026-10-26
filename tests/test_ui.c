@@ -284,38 +284,56 @@ test_saves(void)
 	remove(path);
 }
 
-/* Exit game: "Yes" records the career in the Hall of Fame, "No" not. */
+/* Exit game quits without a record; retiring records the career. */
 static void
 test_hall_of_fame(void)
 {
 	struct game *g;
 	struct hof h;
+	struct career_end end;
 	char path[600], err[256];
+	int k;
 	static const char *career = "enter enter down down down down enter "
 	    "down enter right enter enter type:Anne enter enter esc enter enter click:60,300 wait:40 esc ";
 
 	hof_path(saves_tmp, path, sizeof(path));
 	remove(path);
-	g = play_in(saves_tmp, "eng", career);	/* to the voyage screen */
+	g = play_in(saves_tmp, "eng", career);	/* to the cabin */
 	if (g == NULL)
 		return;
-	/* Three months at sea, then Exit game, then "No". */
-	g->sim.day = 90;
-	CHECK(game_script(g, "click:400,180 down enter") == 0);
-	CHECK(!g->started);
+	/* The cabin's Exit game: "Quit (Y/N)"; N stays, Y quits. */
+	CHECK(game_script(g, "click:400,180") == 0 && g->quit_prompt);
+	CHECK(game_script(g, "type:n") == 0 && !g->quit_prompt &&
+	    g->screen == &screen_cabin);
+	CHECK(game_script(g, "click:400,180 type:y wait:40") == 0 &&
+	    !g->started && g->screen == &screen_welcome);
 	game_free(g);
-	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 0);
+	CHECK(hof_load(path, &h, err, sizeof(err)) != 0 || h.count == 0);
 
+	/* Retiring: the further adventures, the summary, the verdict,
+	 * "Remain in retirement", then the Hall of Fame. */
 	g = play_in(saves_tmp, "eng", career);
 	if (g == NULL)
 		return;
-	g->sim.day = 90;
-	CHECK(game_script(g, "click:400,180 enter") == 0);	/* Exit, Yes */
-	CHECK(g->hof_new == 0);
+	g->sim.fortune = 20000;
+	g->sim.rank[NATION_ENGLAND] = 3;
+	g->end_forced = 0;
+	game_goto(g, &screen_ending);
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_ending);
+	for (k = 0; k < 6; k++)
+		CHECK(game_script(g, "enter") == 0);
+	CHECK(g->end_page == 6);			/* the lure of the sea */
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_retire);
+	sim_career_end(&g->sim, &end);
+	CHECK(end.points == 20000 / 10 + 3 * 500 +
+	    (long)g->sim.reputation * 200);
+	CHECK(game_script(g, "enter") == 0 && g->hof_new == 0);
 	game_free(g);
 	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 1);
-	CHECK(strcmp(h.entry[0].name, "Anne") == 0 && h.entry[0].score == 3);
-	CHECK(h.entry[0].rating == hof_rating(3));
+	CHECK(strcmp(h.entry[0].name, "Anne") == 0 &&
+	    h.entry[0].score == end.score &&
+	    h.entry[0].rating == hof_rating(end.score));
 	remove(path);
 }
 
@@ -831,6 +849,21 @@ test_tavern(void)
 	    g->screen == &screen_rumours);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_tavern);
+	/* A villain passed through: the bartender tells where he went,
+	 * asks again; "No one?" ends it. */
+	g->sim.villains[2].active = 1;
+	g->sim.villains[2].town = 3;
+	g->sim.villains[2].trail[0] = g->sim.player_town;
+	g->sim.villains[2].trail[1] = g->sim.villains[2].trail[2] =
+	    g->sim.villains[2].trail[3] = -1;
+	CHECK(game_script(g, "click:110,250 wait:40 enter wait:40") == 0 &&
+	    g->screen == &screen_vnews && g->vnews_n == 1);
+	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 107 &&
+	    g->vnews_where == 3);
+	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 0);
+	CHECK(game_script(g, "down enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	g->sim.villains[2].active = 0;
 	/* The keyboard skips the seamen now; the door leads out. */
 	g->tavern_key = 1;
 	CHECK(game_script(g, "right") == 0 && g->tavern_key == 3);

@@ -37,7 +37,7 @@ Runs, in this order (VA `0xceb8`):
 2. Conquest.
 3. Diplomacy.
 4. Random town event.
-5. The villains' moves (VA `0xcba7`, not modelled).
+5. The villains' moves (VA `0xcba7`, see "Villains").
 6. The treasure fleet's and the silver train's moves (see "The treasure
    fleet and the silver train").
 
@@ -315,7 +315,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 - **Injury:** a defeat (not the ship losses) adds 1 to VA `0x45e88`.
 - **The career may end (VA `0x1f1d7`):** a famous expedition (CSTR 159,
   at (100, 40)), or health 3 (CSTR 160, at (200, 200)), on a cleared
-  page; then the ending (the engine: the Hall of Fame).
+  page; then the end of the career (see "Retirement").
 - **Health (VA `0x1db64`):** `(years since the start (VA `0x45e85`) +
   injuries) / (3, 4 with medicine)`, at most 3.
 - **Placement (VA `0x1c056`, `0x1be71`):** prison in a town puts the
@@ -437,10 +437,32 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 
 ### Villains (VA `0x12178`, `0x18913`)
 
-- **Four slots (VA `0x471da`, 12 bytes each):** +0 active, +1 6 (not
-  identified), +2 surname (0-15), +3 rank (0-7), +4 nation (0-3), +5
-  the town he hides in, +6..+9 towns he was seen in (set to "none" and
-  not modelled further).
+- **Four slots (VA `0x471da`, 12 bytes each):** +0 the nation of the
+  towns he moves through, plus 1 (always 1: Spain; 0 a free slot), +1 6
+  (not identified), +2 surname (0-15), +3 rank (0-7), +4 nationality for
+  his name (0-3), +5 the town he hides in, +6..+9 the towns before,
+  latest first ("none" at first).
+- **Each month (VA `0xcba7`):** among the towns of his nation (all but
+  the last in the table) with town field 10 at 0, and within `rand(
+  difficulty + 5)^2` cells (`|dx| + |dy|`, a draw per town) of his own,
+  the best by `4 x field 9 - (gold - soldiers) / 8 + the distance from
+  the nation's alarm town - 255`. Moving, his town shifts into his trail,
+  field 10 is cleared there and set where he goes (a land battle meets
+  `field 10 x 128` more men). Beaten, he leaves field 10 set.
+- **The alarm town (VA `0x45eae`, per nation):** on sailing out of a
+  town (VA `0x28789`) with the heat above 15, that town.
+- **News (VA `0x1eba6`):** where a villain's town or trail holds a
+  town: "The %s quite familiar with recent comings and goings of
+  prominent persons of %s. Do you wish to inquire about..." (CSTR 154,
+  CSTN 16 citizens, bartender, traveller, crewmen; the villains one a
+  line, joined by "\r~"; "No one?"), then "%s is now in %s." (108) or
+  "%s left for %s a few months ago." (107, the next town of his trail),
+  logged (code 9), and the question again. Told by the citizens after a
+  sack (`town.pcx`, (20, 50) up to x 250), the bartender after his
+  rumours (`bartenda.pcx`, (320, 150) up to 560), the traveller after
+  his town's information (`infoman.pcx`, (20, 150) up to 280), and a
+  captured crew near a town (`crew.pcx`, (40, 350) up to 560; its
+  condition reads VA `0x4c0a0`, not identified: not done).
 - **Named (VA `0x12178`):** at a promotion, unless the fourth slot is
   taken; the first free slot. His town is drawn `rand(towns)` again
   until a Spanish one; then surname `rand(16)`, rank `rand(8)`, nation
@@ -1390,7 +1412,7 @@ same town only bits 1 and 2 are kept.
   | 6 | Search | digging, on foot only (see "Treasure maps") |
   | 7-8 | Divide party, Join party | always off, as in the original (below) |
   | 9 | Save game | the save slots |
-  | 10 | Exit game | the retirement question |
+  | 10 | Exit game | "Quit (Y/N)" (see "Retirement") |
   | 11 | Practice fencing | below |
 
 - **The log book (VA `0xc46e`):** on `shiplog.pcx` (picture 0x14), in
@@ -1950,25 +1972,59 @@ quote. The career then begins in the start town.
 
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 
-When a career ends:
+A career ends by retiring at the bank (dividing the plunder, then
+retiring), or in prison (a famous expedition, or health 3). The cabin's
+"Exit game" does not retire: it shows the "Quit (Y/N)" plaque
+(`misc.crs` frame 4 at (268, 218), VA `0x31df`) and leaves the game.
 
-1. A score is computed from several career values (VA `0x5039`). The
-   computation uses floating point and is not specified yet. Its inputs
-   include the years since the start and five values taken from the
-   start scenario, among others.
-2. The score gives a rating `r`, where 0 is best:
-   - if the score is at least 1: `r = max(19 - score / 5, 1) - 1`;
-   - otherwise: `r = min(20 - score / 10, 22) - 1`.
-3. `r / 4`, capped at 3, picks one of four retirement pictures.
-4. Depending on the difficulty and the years elapsed, the game may offer
-   "Remain in retirement / Return to pirating?" (CSTR 72).
-5. It asks "Do you wish to have your exploits recorded in the Pirate
-   Hall of Fame?" (CSTR 73). On "Yes", the career is recorded with its
-   score and rating.
-6. It asks whether to play another game (CSTR 80).
-
-The engine records careers with a stand-in score (months at sea) until
-the systems the real score weighs exist.
+1. **Points (VA `0x5039`):** `fortune / 10 + land x 50 + (the four
+   ranks added) x 500 + reputation x 200 + married x 1000 + relatives
+   found x 1000 - injuries x 1000` (married: 1 a merchant's daughter, 2
+   a governor's, 3 his niece).
+2. **Score:** `(int)(points / 330 x (25 - years) / 20)`, the years since
+   the career began.
+3. **Rating `r`, 0 best:** at least 1: `max(19 - score / 5, 1) - 1`;
+   otherwise `min(20 - score / 10, 22) - 1`. `r / 4`, at most 3, picks
+   the picture: `sunset4.pcx` (0) down to `sunset1.pcx` (3).
+4. **Pages, on that picture:** "The Further Adventures of the Pirate
+   %s..." (CSTR 74, at (20, 200) up to x 260), then at (20, 100) up to x
+   260 (VA `0x4a1a`):
+   - "You achieved the title of a Spanish Captain and an English
+     Major, making you %s member of your community" (CSTR 75; CSTN 38.1,
+     38.2 and 38.3 for the titles with CSTN 68 and 78, or 38.0 "You
+     failed to achieve a rank"; CSTN 38 entry `min(ranks x 5 / 2 + 4,
+     11)`).
+   - "You accumulated the sum of %s gold pieces %sduring your career,
+     making you %s" (CSTN 39.0: the fortune, "and %s acres of land "
+     (39.1, x 50), entry `min((int)sqrt((land x 100 + fortune) / 500),
+     6) + 2`).
+   - "Your exploits on the high seas leave you with a reputation as %s
+     captain" (CSTN 40.0, entry `clamp(reputation / 4 + 1, 0, 6) + 2`).
+   - "You retired from privateering at the age of %s" (CSTR 76, years +
+     25), the bride (CSTN 41.0, or 41.1 with 41.(married + 1)), "You
+     succeeded in rescuing %s member%s of your family" (CSTR 77, CSTN
+     79 lowercased, "s" past one), "You were wounded %s" (CSTR 78, CSTN
+     80: once, twice, numerous times), "In the course of your travels,
+     you become %s" (CSTN 42, entry `clamp((int)(3 x h), 0, 5) + 1` with
+     `h = max((relatives / 8 + married / 8 + 1 - injuries / 6) x (25 -
+     years) / 20, -1)`, 2 for an expedition).
+   - A famous expedition instead tells its share (CSTN 40.1, VA
+     `0x4938`; its word's formula is not traced, the engine uses the
+     reputation's).
+5. **Verdict (VA `0x51c2`):** "Your pirating days are over. Your
+   seafaring adventures have made you a %s in %s, where %s" (CSTR 82):
+   CSTN 43 entry `r` (King's advisor... Beggar), the place (left over by
+   the caller; the engine names the town retired in), and one of three
+   of CSTN `44 + r` (`rand(3)`).
+6. Unless the career was cut short or is an expedition: "The lure of
+   the sea is strong... Remain in retirement / Return to pirating?" (CSTR
+   72); returning goes on with the game.
+7. "Do you wish to have your exploits recorded in the Pirate Hall of
+   Fame?" (CSTR 73); "Yes" records the score and rating (the original's
+   own file, VA `0x529a`, is not reproduced: the engine keeps
+   `halloffame.txt`).
+8. "Do you wish to play another game?" (CSTR 80), "Thank you and
+   goodbye." (CSTR 81): the engine returns to the welcome menu.
 
 ## Open questions
 

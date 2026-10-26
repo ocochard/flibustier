@@ -517,7 +517,7 @@ sim_world_update(struct sim *s)
 	conquest(s);
 	diplomacy(s);
 	town_event(s);
-	/* The villains' moves (VA 0xcba7) are not modelled. */
+	sim_villains_move(s);			/* VA 0xcba7 */
 	convoys_move(s);
 }
 
@@ -1134,6 +1134,12 @@ sim_leave_town(struct sim *s)
 		sim_crew_leave(s, n);
 		s->deserted = n;
 	}
+	/* A town where the heat ran high raises its nation's alarm (VA
+	 * 0x28789). */
+	if (s->heat > 15 && s->player_town >= 0 &&
+	    (size_t)s->player_town < s->ntowns &&
+	    s->towns[s->player_town].nation < 4)
+		s->alert[s->towns[s->player_town].nation] = s->player_town;
 	/* One prisoner may jump overboard when the ship is in port. */
 	s->escaped = 0;
 	n = rng_below(&s->rng, SIM_PRISONERS);

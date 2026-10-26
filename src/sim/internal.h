@@ -57,6 +57,9 @@ void	sim_harbour_mouth(struct sim *s, int town);
 int	sim_name_captain(struct sim *s, int nation);
 void	sim_capture_captain(struct sim *s);
 
+/* The villains' month (VA 0xcba7). */
+void	sim_villains_move(struct sim *s);
+
 /* Add an entry to the log (news codes as CSTN 20). */
 void	sim_log_news(struct sim *s, int code, int a, int b);
 

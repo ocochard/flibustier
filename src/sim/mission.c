@@ -8,6 +8,7 @@
  * (VA 0x12178, 0x18913, 0x12e88, 0x1f8f7).
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "internal.h"
@@ -46,6 +47,7 @@ sim_villain_appear(struct sim *s)
 	v = &s->villains[k];
 	v->active = 1;
 	v->town = t;
+	v->trail[0] = v->trail[1] = v->trail[2] = v->trail[3] = -1;
 	v->surname = rng_below(&s->rng, 16);
 	v->rank = rng_below(&s->rng, 8);
 	v->nation = rng_below(&s->rng, 4);
@@ -377,4 +379,97 @@ sim_daughter_duel_end(struct sim *s, const struct daughter *d)
 	t->governor |= GOV_WIFE;
 	t->standing = (uint16_t)((int16_t)t->standing + 2);
 	return (1);
+}
+
+static int
+cells_apart(const struct sim_town *a, const struct sim_town *b)
+{
+	return (abs(a->x - b->x) + abs(a->y - b->y));
+}
+
+void
+sim_villains_move(struct sim *s)
+{
+	struct sim_villain *v;
+	const struct sim_town *t, *here, *alarm;
+	int k, i, best, score, top, r;
+
+	if (s->ntowns < 2)
+		return;
+	for (k = 0; k < SIM_VILLAINS; k++) {
+		v = &s->villains[k];
+		if (!v->active || v->town < 0 || (size_t)v->town >= s->ntowns)
+			continue;
+		here = &s->towns[v->town];
+		alarm = &s->towns[s->alert[NATION_SPAIN] >= 0 &&
+		    (size_t)s->alert[NATION_SPAIN] < s->ntowns ?
+		    s->alert[NATION_SPAIN] : 0];
+		best = v->town;
+		top = -999;
+		/* The original's loop stops one town short of the last. */
+		for (i = 0; i < (int)s->ntowns - 1; i++) {
+			t = &s->towns[i];
+			if (t->nation != NATION_SPAIN || t->garrison != 0)
+				continue;
+			r = rng_below(&s->rng, s->player.difficulty + 5);
+			if (cells_apart(t, here) >= r * r)
+				continue;
+			score = 4 * (int16_t)t->standing -
+			    (((int)t->gold - (int)t->soldiers) >> 3) +
+			    cells_apart(t, alarm) - 255;
+			if (score > top) {
+				best = i;
+				top = score;
+			}
+		}
+		if (best == v->town)
+			continue;
+		for (i = 3; i > 0; i--)
+			v->trail[i] = v->trail[i - 1];
+		v->trail[0] = v->town;
+		s->towns[v->town].garrison = 0;
+		v->town = best;
+		s->towns[best].garrison = 1;
+	}
+}
+
+int
+sim_villain_news(const struct sim *s, int town, int out[SIM_VILLAINS])
+{
+	const struct sim_villain *v;
+	int k, i, n = 0;
+
+	for (k = 0; k < SIM_VILLAINS; k++) {
+		v = &s->villains[k];
+		if (!v->active || town < 0)
+			continue;
+		if (v->town == town) {
+			out[n++] = k;
+			continue;
+		}
+		for (i = 0; i < 4; i++)
+			if (v->trail[i] == town) {
+				out[n++] = k;
+				break;
+			}
+	}
+	return (n);
+}
+
+int
+sim_villain_whereabouts(struct sim *s, int villain, int town, int *where)
+{
+	const struct sim_villain *v = &s->villains[villain & 3];
+	int i;
+
+	*where = v->town;
+	if (v->town != town)
+		/* He left "town": for the next town of his trail. */
+		for (i = 0; i < 4; i++)
+			if (v->trail[i] == town) {
+				*where = i > 0 ? v->trail[i - 1] : v->town;
+				break;
+			}
+	sim_log_news(s, NEWS_VILLAIN, villain, *where);
+	return (v->town == town ? 108 : 107);
 }

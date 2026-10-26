@@ -32,7 +32,7 @@ with a message. Numbers are integers only.
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
 | `shore` | after a `sail` stop at `land`: `ashore` 1 goes ashore, 0 turns the ship about | `ashore` |
 | `crew` | after a `sail` stop at `crew`: `action` `heard` (a warning), or for a mutiny `duel` (`weapon`), `sword` ticks, then `end` | `event` (none, restless, anxious, mutiny), `mood`, `months`, `crew`, `reputation` |
-| `villain` | `action`: `duel` (`weapon`) against the villain hiding in the town, run with `sword` ticks, then `end` | `villain`; `won`, `reputation` |
+| `villain` | `action`: `duel` (`weapon`) against the villain hiding in the town, run with `sword` ticks, then `end`; `news` (`town`): who is known there; `ask` (`villain`, `town`): where he is | `villain`; `won`, `reputation`; `villains`; `said` (108 here, 107 left), `where` |
 | `mission` | `action`: `accept` (the governor's offer) or `deliver` (to the contact in this town) | `type`, `dest` |
 | `captain` | `action`: `hostage` (`answer` 0 treasure fleet, 1 silver train, 2 hold him), `offer` (in town: a visit's 4 tries at a ransom) or `take` (the offer) | `ransom_slot`, `ransom_gold`, `prisoners`, `gold` |
 | `daughter` | in town at standing 2 or more: `action` `meet`, `talk`, `propose`, `duel` (`weapon`; then `sword` ticks) or `end` | `result`, `charm`, `niece`, `married` |
@@ -61,7 +61,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 25,
+  "version": 26,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -203,7 +203,8 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   is the next lost relative (0-3, 4 all found). Both are absent before
   version 19 and then read as none.
 - **Villains and missions:** `villains` (4 of `active`, `surname`,
-  `rank`, `nation`, `town`), `villain_duel`, and `mission` and
+  `rank`, `nation`, `town`, `trail`: the towns before, from version 26),
+  `alert` (per nation, the town that raised the alarm), `villain_duel`, and `mission` and
   `mission_offer` (`type`, negative once done, `giver`, `dest`,
   `nation`, `pirate`); the encounter has `named`. Absent before version
   20: none.

@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	25
+#define STATE_VERSION	26
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -673,8 +673,24 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 		jb_int(b, v->nation);
 		jb_raw(b, ",\"town\":");
 		jb_int(b, v->town);
-		jb_raw(b, "}");
+		jb_raw(b, ",\"trail\":[");
+		jb_int(b, v->trail[0]);
+		jb_raw(b, ",");
+		jb_int(b, v->trail[1]);
+		jb_raw(b, ",");
+		jb_int(b, v->trail[2]);
+		jb_raw(b, ",");
+		jb_int(b, v->trail[3]);
+		jb_raw(b, "]}");
 	}
+	jb_raw(b, "],\"alert\":[");
+	jb_int(b, s->alert[0]);
+	jb_raw(b, ",");
+	jb_int(b, s->alert[1]);
+	jb_raw(b, ",");
+	jb_int(b, s->alert[2]);
+	jb_raw(b, ",");
+	jb_int(b, s->alert[3]);
 	jb_raw(b, "],\"villain_duel\":");
 	jb_int(b, s->villain_duel);
 	mission_json(b, "mission", &s->mission);
@@ -1149,6 +1165,36 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 			if (tmp.villains[k].town < 0 ||
 			    tmp.villains[k].town >= TOWN_MAX)
 				tmp.villains[k].active = 0;
+			{
+				/* Absent before version 26: no trail. */
+				const struct json *tl = json_get(vj, "trail");
+				int m;
+
+				for (m = 0; m < 4; m++) {
+					int64_t tv = tl != NULL &&
+					    tl->type == JSON_ARRAY &&
+					    (size_t)m < tl->count &&
+					    tl->items[m]->type == JSON_INT ?
+					    tl->items[m]->num : -1;
+
+					tmp.villains[k].trail[m] = tv < -1 ||
+					    tv >= TOWN_MAX ? -1 : (int)tv;
+				}
+			}
+		}
+		{
+			const struct json *al = json_get(j, "alert");
+			int m;
+
+			for (m = 0; m < 4; m++) {
+				int64_t av = al != NULL && al->type ==
+				    JSON_ARRAY && (size_t)m < al->count &&
+				    al->items[m]->type == JSON_INT ?
+				    al->items[m]->num : 0;
+
+				tmp.alert[m] = av < 0 || av >= TOWN_MAX ? 0 :
+				    (int)av;
+			}
 		}
 		tmp.villain_duel = (int)json_get_int(j, "villain_duel", -1);
 		if (tmp.villain_duel < -1 || tmp.villain_duel >= SIM_VILLAINS)
@@ -2047,8 +2093,33 @@ cmd_villain(struct session *ss, const struct json *cmd, struct jbuf *out)
 		jb_raw(out, ",\"reputation\":");
 		jb_int(out, s->reputation);
 		jb_raw(out, "}");
+	} else if (action != NULL && strcmp(action, "news") == 0) {
+		/* Who is known in "town" (VA 0x1eba6). */
+		int list[SIM_VILLAINS], n, i;
+
+		n = sim_villain_news(s, (int)json_get_int(cmd, "town",
+		    s->player_town), list);
+		jb_raw(out, "{\"ok\":true,\"villains\":[");
+		for (i = 0; i < n; i++) {
+			if (i > 0)
+				jb_raw(out, ",");
+			jb_int(out, list[i]);
+		}
+		jb_raw(out, "]}");
+	} else if (action != NULL && strcmp(action, "ask") == 0) {
+		int where, said;
+
+		said = sim_villain_whereabouts(s, (int)json_get_int(cmd,
+		    "villain", 0), (int)json_get_int(cmd, "town",
+		    s->player_town), &where);
+		jb_raw(out, "{\"ok\":true,\"said\":");
+		jb_int(out, said);
+		jb_raw(out, ",\"where\":");
+		jb_int(out, where);
+		jb_raw(out, "}");
 	} else
-		reply_error(out, "villain needs \"action\": duel or end");
+		reply_error(out, "villain needs \"action\": duel, end, news or "
+		    "ask");
 }
 
 /*

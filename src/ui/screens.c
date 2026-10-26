@@ -8,6 +8,7 @@
  * famous expedition.  The texts are the game's own (CSTR and CSTN).
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -191,6 +192,7 @@ draw(struct game *g, int font, int x, int y, int w, const char *text,
 #define CONTINUE_IDLE		420
 #define CONTINUE_FRAME		7
 #define DISEMBARK_FRAME		8	/* "Disembark", answered Y or N */
+#define QUIT_FRAME		4	/* "Quit (Y/N)" */
 
 static void
 continue_prompt(struct game *g)
@@ -2170,7 +2172,9 @@ cabin_choose(struct game *g, int i)
 		game_goto(g, &screen_slots);
 		break;
 	case CABIN_EXIT:
-		game_goto(g, &screen_retire);
+		/* "Quit (Y/N)" (VA 0x31df, misc.crs frame 4): the game
+		 * ends there, without retirement. */
+		g->quit_prompt = 1;
 		break;
 	case CABIN_PRACTICE:
 		g->sw_practice = 1;
@@ -2201,6 +2205,18 @@ cabin_event(struct game *g, const struct ui_event *ev)
 {
 	int i;
 
+	if (g->quit_prompt) {
+		/* Y quits to the welcome menu, N or Escape stays. */
+		if (ev->type == EV_CHAR && (ev->ch == 'y' || ev->ch == 'Y')) {
+			g->quit_prompt = 0;
+			g->started = 0;
+			game_goto(g, &screen_welcome);
+		} else if ((ev->type == EV_CHAR && (ev->ch == 'n' ||
+		    ev->ch == 'N')) || (ev->type == EV_KEY &&
+		    ev->key == UI_KEY_ESCAPE))
+			g->quit_prompt = 0;
+		return;
+	}
 	switch (ev->type) {
 	case EV_MOVE:
 		g->cabin_spot = cabin_hit(g, ev->x, ev->y);
@@ -2231,6 +2247,9 @@ cabin_draw(struct game *g)
 {
 	const char *label;
 	int w;
+
+	if (g->quit_prompt && g->misc.count > QUIT_FRAME)
+		fb_frame(&g->fb, &g->misc.frames[QUIT_FRAME], 268, 218);
 
 	/* The chart on the table covers the maps' spot while there are
 	 * none (VA 0xa060). */
@@ -2337,17 +2356,6 @@ const struct screen screen_slots = {
 
 /* Retirement: offer the Hall of Fame, as the game does. */
 
-/*
- * Stand-in career score: months at sea.  The original's score weighs
- * wealth, land, titles and family (FUN_00005039), which the simulation
- * does not model yet.
- */
-static long
-career_score(const struct game *g)
-{
-	return (g->sim.day / 30);
-}
-
 static void
 retire_choose(struct game *g, int i)
 {
@@ -2367,8 +2375,9 @@ retire_choose(struct game *g, int i)
 		memset(&h, 0, sizeof(h));
 	}
 	memset(&e, 0, sizeof(e));
-	e.score = career_score(g);
-	e.rating = hof_rating(e.score);
+	sim_career_end(&g->sim, &g->end);
+	e.score = g->end.score;
+	e.rating = g->end.rating;
 	snprintf(e.name, sizeof(e.name), "%s", g->sim.player.name);
 	snprintf(e.title, sizeof(e.title), "%s", g->sim.player.title);
 	g->hof_new = hof_add(&h, &e);
@@ -2381,7 +2390,11 @@ retire_choose(struct game *g, int i)
 static void
 retire_event(struct game *g, const struct ui_event *ev)
 {
-	menu_event(g, ev, 2, NULL, retire_choose, &screen_cabin);
+	if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE) {
+		retire_choose(g, 1);		/* not recorded */
+		return;
+	}
+	menu_event(g, ev, 2, NULL, retire_choose, NULL);
 }
 
 static void
@@ -3083,6 +3096,7 @@ battle_sprites(struct game *g, int side, int type)
 }
 
 static void	prize_show(struct game *);
+static int	vnews_offer(struct game *, int, int, const struct screen *);
 
 
 static void
@@ -4614,7 +4628,9 @@ merchant_leave(struct game *g)
 	if (g->looting) {
 		g->looting = 0;
 		sim_plunder_close(&g->sim);
-		game_goto(g, &screen_sail);
+		/* The townsfolk's news of villains (VA 0x18b3f). */
+		if (!vnews_offer(g, 0, g->assault_town, &screen_sail))
+			game_goto(g, &screen_sail);
 		return;
 	}
 	sim_merchant_close(&g->sim);
@@ -5036,9 +5052,11 @@ rumours_enter(struct game *g)
 static void
 rumours_event(struct game *g, const struct ui_event *ev)
 {
+	/* Then what he knows of villains (VA 0x10b10, 0x1eba6). */
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, &screen_tavern);
+		if (!vnews_offer(g, 1, g->sim.player_town, &screen_tavern))
+			game_goto(g, &screen_tavern);
 }
 
 static void
@@ -5690,7 +5708,8 @@ bank_choose(struct game *g, int i)
 		break;
 	case BANK_SURE_END:
 		if (i == 0) {
-			game_goto(g, &screen_retire);
+			g->end_forced = 0;
+			game_goto(g, &screen_ending);
 			return;
 		}
 		sim_new_expedition(&g->sim, 0);
@@ -6395,8 +6414,10 @@ prison_event(struct game *g, const struct ui_event *ev)
 	if (g->sack_stage < 3 && !g->sim.jail.end)
 		return;
 	g->sim.jail.fresh = 0;
-	if (g->sim.jail.end)
-		retire_choose(g, 0);		/* the Hall of Fame */
+	if (g->sim.jail.end) {
+		g->end_forced = 1;		/* the career's end */
+		game_goto(g, &screen_ending);
+	}
 	else
 		game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
 }
@@ -6559,6 +6580,15 @@ traveller_choose(struct game *g, int i)
 	g->info_town = town;
 	g->info_back = &screen_tavern;
 	game_goto(g, &screen_cityinfo);
+	/* Then what he knows of villains there (VA 0x1116f). */
+	g->vnews_n = sim_villain_news(&g->sim, town, g->vnews_list);
+	if (g->vnews_n > 0) {
+		g->vnews_source = 2;
+		g->vnews_town = town;
+		g->vnews_back = &screen_tavern;
+		g->vnews_said = 0;
+		g->info_back = &screen_vnews;
+	}
 }
 
 static void
@@ -7912,4 +7942,314 @@ merdaugh_draw(struct game *g)
 const struct screen screen_merdaugh = {
 	"merchant's daughter", merdaugh_enter, merdaugh_event, NULL,
 	merdaugh_draw,
+};
+
+/*
+ * News of villains (VA 0x1eba6): "The %s quite familiar with recent
+ * comings and goings of prominent persons of %s. Do you wish to inquire
+ * about... ~%s?~No one?" (CSTR 154: CSTN 16 citizens, bartender,
+ * traveller or crewmen; the town; the villains whose town or trail it
+ * is, one a line), then "%s is now in %s." (108) or "%s left for %s a
+ * few months ago." (107), and the question again.  Pictures and boxes:
+ * citizens town.pcx (20, 50) up to x 250, bartender bartenda.pcx (320,
+ * 150) up to 560, traveller infoman.pcx (20, 150) up to 280.
+ */
+static const struct {
+	const char	*pic;
+	int		 x, y, w;
+} vnews_at[4] = {
+	{ "pic/town", 20, 50, 230 }, { "pic/bartenda", 320, 150, 240 },
+	{ "pic/infoman", 20, 150, 260 }, { "pic/crew", 40, 350, 520 },
+};
+
+/* Offer the news of "town" by "source", then go to "back"; false when
+ * nobody is known there. */
+static int
+vnews_offer(struct game *g, int source, int town, const struct screen *back)
+{
+	g->vnews_n = sim_villain_news(&g->sim, town, g->vnews_list);
+	if (g->vnews_n == 0)
+		return (0);
+	g->vnews_source = source & 3;
+	g->vnews_town = town;
+	g->vnews_back = back;
+	g->vnews_said = 0;
+	g->selected = 0;
+	game_goto(g, &screen_vnews);
+	return (1);
+}
+
+static void
+vnews_enter(struct game *g)
+{
+	game_background(g, vnews_at[g->vnews_source].pic);
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+vnews_choose(struct game *g, int i)
+{
+	if (i >= g->vnews_n) {			/* "No one?" */
+		game_goto(g, g->vnews_back);
+		return;
+	}
+	g->vnews_who = g->vnews_list[i];
+	g->vnews_said = sim_villain_whereabouts(&g->sim, g->vnews_who,
+	    g->vnews_town, &g->vnews_where);
+}
+
+static void
+vnews_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->vnews_said == 0) {
+		menu_event(g, ev, g->vnews_n + 1, NULL, vnews_choose, NULL);
+		return;
+	}
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		g->vnews_said = 0;		/* the question again */
+		g->selected = 0;
+	}
+}
+
+static void
+vnews_draw(struct game *g)
+{
+	const char *arg[3];
+	char text[900], names[400], one[80];
+	int k;
+
+	if (g->vnews_said != 0) {
+		villain_name(g, g->vnews_who, one, sizeof(one));
+		fill(text, sizeof(text), game_str(g, g->vnews_said), one,
+		    town_name(g, g->vnews_where));
+		draw(g, FONT_BODY, vnews_at[g->vnews_source].x,
+		    vnews_at[g->vnews_source].y, vnews_at[g->vnews_source].w,
+		    text, 0);
+		continue_prompt(g);
+		return;
+	}
+	names[0] = '\0';
+	for (k = 0; k < g->vnews_n; k++) {
+		villain_name(g, g->vnews_list[k], one, sizeof(one));
+		if (k > 0)
+			strncat(names, "\r~", sizeof(names) - strlen(names) - 1);
+		strncat(names, one, sizeof(names) - strlen(names) - 1);
+	}
+	arg[0] = game_word(g, 16, (size_t)g->vnews_source);
+	arg[1] = town_name(g, g->vnews_town);
+	arg[2] = names;
+	fill_args(text, sizeof(text), game_str(g, 154), arg, 3);
+	draw(g, FONT_BODY, vnews_at[g->vnews_source].x,
+	    vnews_at[g->vnews_source].y, vnews_at[g->vnews_source].w, text, 1);
+}
+
+const struct screen screen_vnews = {
+	"villain news", vnews_enter, vnews_event, NULL, vnews_draw,
+};
+
+/*
+ * The end of a career (VA 0x45d0), on the sunset picture of its rating
+ * (sunset4.pcx for ratings 0-3 down to sunset1.pcx from 12): "The
+ * Further Adventures of the Pirate %s..." (CSTR 74, at (20, 200) up to
+ * x 260); the summary (VA 0x4a1a, at (20, 100) up to x 260): the titles
+ * (CSTR 75, CSTN 38), the wealth (CSTN 39), the repute (CSTN 40), and
+ * the age, the bride, the family found, the wounds and the mood (CSTR
+ * 76, CSTN 41, CSTR 77, 78, CSTN 42); a famous expedition gives its
+ * share instead (CSTN 40.1).  Then the verdict (VA 0x51c2): "Your
+ * pirating days are over. Your seafaring adventures have made you a %s
+ * in %s, where %s" (CSTR 82: CSTN 43 by rating, the town, CSTN 44 +
+ * rating, one of three).  Unless the career was cut short, "The lure of
+ * the sea is strong... Remain in retirement / Return to pirating?" (CSTR
+ * 72); then the Hall of Fame (CSTR 73).
+ */
+enum { END_FURTHER, END_TITLES, END_WEALTH, END_REPUTE, END_LIFE,
+    END_VERDICT, END_LURE };
+
+static void
+ending_enter(struct game *g)
+{
+	static const char *sunset[4] = { "pic/sunset4", "pic/sunset3",
+	    "pic/sunset2", "pic/sunset1" };
+	int tier;
+
+	sim_career_end(&g->sim, &g->end);
+	tier = g->end.rating / 4 > 3 ? 3 : g->end.rating / 4;
+	game_background(g, sunset[tier]);
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+	g->end_page = END_FURTHER;
+	g->end_phrase = rng_below(&g->sim.rng, 3);	/* VA 0x51c2 */
+	g->selected = 0;
+}
+
+static void
+ending_lure(struct game *g, int i)
+{
+	if (i == 1) {				/* back to pirating */
+		g->sim.fleet.ashore = 0;
+		game_goto(g, g->sim.player_town >= 0 ? &screen_town :
+		    &screen_cabin);
+		return;
+	}
+	g->selected = 0;
+	game_goto(g, &screen_retire);
+}
+
+static void
+ending_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->end_page == END_LURE) {
+		menu_event(g, ev, 2, NULL, ending_lure, NULL);
+		return;
+	}
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (g->end_page == END_FURTHER && g->sim.player.expedition >= 0)
+		g->end_page = END_REPUTE;	/* the expedition's share */
+	else if (g->end_page == END_VERDICT) {
+		if (g->end_forced || g->sim.player.expedition >= 0) {
+			game_goto(g, &screen_retire);
+			return;
+		}
+		g->selected = 0;
+		g->end_page = END_LURE;
+		return;
+	}
+	if (g->end_page == END_REPUTE && g->sim.player.expedition >= 0)
+		g->end_page = END_LIFE;		/* straight to the verdict */
+	g->end_page++;
+}
+
+/* The titles held: "a Spanish Captain and an English Major". */
+static void
+ending_titles(struct game *g, char *out, size_t len)
+{
+	const char *arg[3];
+	char list[300], one[96];
+	int k, first = 1;
+
+	list[0] = '\0';
+	for (k = 0; k < 4; k++) {
+		if (g->sim.rank[k] == 0)
+			continue;
+		arg[0] = game_word(g, 68, (size_t)k);
+		arg[1] = game_word(g, W_RANK, g->sim.rank[k]);
+		fill_args(one, sizeof(one), game_word(g, 38, first ? 2 : 3),
+		    arg, 2);
+		strncat(list, one, sizeof(list) - strlen(list) - 1);
+		first = 0;
+	}
+	arg[0] = game_word(g, 38, g->end.ranks == 0 ? 0 : 1);
+	arg[1] = g->end.ranks == 0 ? "" : list;
+	arg[2] = game_word(g, 38, (size_t)g->end.member);
+	fill_args(out, len, game_str(g, 75), arg, 3);
+}
+
+static void
+ending_life(struct game *g, char *out, size_t len)
+{
+	const char *arg[2];
+	char part[300], num[16];
+
+	snprintf(num, sizeof(num), "%d", g->end.age);
+	fill(out, len, game_str(g, 76), num, NULL);
+	strncat(out, " ", len - strlen(out) - 1);
+	if (g->sim.married == 0)
+		snprintf(part, sizeof(part), "%s", game_word(g, 41, 0));
+	else
+		fill(part, sizeof(part), game_word(g, 41, 1), game_word(g, 41,
+		    (size_t)(g->sim.married + 1)), NULL);
+	strncat(out, part, len - strlen(out) - 1);
+	if (g->sim.relative > 0) {
+		char count[24];
+
+		/* "one", the number word lowercased (VA 0x2d914). */
+		snprintf(count, sizeof(count), "%s", game_word(g, 79,
+		    (size_t)g->sim.relative));
+		count[0] = (char)tolower((unsigned char)count[0]);
+		arg[0] = count;
+		arg[1] = g->sim.relative == 1 ? "" : game_word(g, 79, 0);
+		fill_args(part, sizeof(part), game_str(g, 77), arg, 2);
+		strncat(out, " ", len - strlen(out) - 1);
+		strncat(out, part, len - strlen(out) - 1);
+	}
+	if (g->sim.injuries > 0) {
+		fill(part, sizeof(part), game_str(g, 78), game_word(g, 80,
+		    (size_t)(g->sim.injuries - 1 > 2 ? 2 :
+		    g->sim.injuries - 1)), NULL);
+		strncat(out, " ", len - strlen(out) - 1);
+		strncat(out, part, len - strlen(out) - 1);
+	}
+	fill(part, sizeof(part), game_word(g, 42, 0), game_word(g, 42,
+	    (size_t)g->end.mood), NULL);
+	strncat(out, " ", len - strlen(out) - 1);
+	strncat(out, part, len - strlen(out) - 1);
+}
+
+static void
+ending_draw(struct game *g)
+{
+	const char *arg[3];
+	char text[1200], num[24], land[80], acres[24];
+	int t;
+
+	switch (g->end_page) {
+	case END_FURTHER:
+		fill(text, sizeof(text), game_str(g, 74), g->sim.player.name,
+		    NULL);
+		draw(g, FONT_BODY, 20, 200, 240, text, 0);
+		continue_prompt(g);
+		return;
+	case END_TITLES:
+		ending_titles(g, text, sizeof(text));
+		break;
+	case END_WEALTH:
+		snprintf(num, sizeof(num), "%ld", g->sim.fortune);
+		land[0] = '\0';
+		if (g->sim.acres > 0) {
+			snprintf(acres, sizeof(acres), "%d", g->sim.acres * 50);
+			fill(land, sizeof(land), game_word(g, 39, 1), acres,
+			    NULL);
+		}
+		arg[0] = num;
+		arg[1] = land;
+		arg[2] = game_word(g, 39, (size_t)g->end.wealth);
+		fill_args(text, sizeof(text), game_word(g, 39, 0), arg, 3);
+		break;
+	case END_REPUTE:
+		if (g->sim.player.expedition >= 0) {
+			snprintf(num, sizeof(num), "%ld", g->sim.fortune);
+			fill(text, sizeof(text), game_word(g, 40, 1), num,
+			    game_word(g, 40, (size_t)g->end.repute));
+		} else
+			fill(text, sizeof(text), game_word(g, 40, 0),
+			    game_word(g, 40, (size_t)g->end.repute), NULL);
+		break;
+	case END_LIFE:
+		ending_life(g, text, sizeof(text));
+		break;
+	case END_VERDICT:
+		t = g->sim.player_town >= 0 ? g->sim.player_town :
+		    g->sim.fleet.leaving;
+		arg[0] = game_word(g, 43, (size_t)g->end.rating);
+		arg[1] = t >= 0 ? town_name(g, t) : "";
+		arg[2] = game_word(g, (size_t)(44 + g->end.rating),
+		    (size_t)g->end_phrase);
+		fill_args(text, sizeof(text), game_str(g, 82), arg, 3);
+		break;
+	default:
+		draw(g, FONT_BODY, 20, 100, 240, game_str(g, 72), 1);
+		return;
+	}
+	draw(g, FONT_BODY, 20, 100, 240, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_ending = {
+	"ending", ending_enter, ending_event, NULL, ending_draw,
 };
