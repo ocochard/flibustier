@@ -464,10 +464,10 @@ test_terrain(struct packs *packs)
 	}
 	for (era = 0; era < EXE_ERAS; era++) {
 		/* The era's diplomacy range and shipwright tolerance (era
-		 * block 0xF8, 0xF9; 1560 shares 1600's block). */
-		static const uint8_t range[EXE_ERAS] = { 175, 175, 140, 120,
+		 * block 0xF8, 0xF9; a block per era). */
+		static const uint8_t range[EXE_ERAS] = { 150, 175, 140, 120,
 		    105, 145 };
-		static const uint8_t wright[EXE_ERAS] = { 150, 150, 135, 110,
+		static const uint8_t wright[EXE_ERAS] = { 105, 150, 135, 110,
 		    115, 145 };
 
 		CHECK(world_load(&w, packs, layout, b.data, b.len, era, err,

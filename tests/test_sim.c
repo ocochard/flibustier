@@ -965,7 +965,8 @@ test_battles(void)
 	gold = s.fleet.gold;
 	CHECK(sim_battle_finish(&s, 1) == BAT_SURRENDER);
 	CHECK(s.fleet.nships == 2 && s.fleet.ships[1] == 4);
-	CHECK(s.fleet.gold == gold + 300 && s.fleet.crew == 30);
+	CHECK(s.fleet.gold == gold + bt->loot_gold &&
+	    bt->loot_gold % 10 == 0 && s.fleet.crew == 30);
 	CHECK(!s.sword.active && !bt->active);
 	/* Driven back: no prize, the losses stay. */
 	battle_game(&s);
@@ -2205,7 +2206,7 @@ test_assault(void)
 	/* The loot for nothing: "Take all" starts with the selected good,
 	 * then the first left, until the hold is full. */
 	{
-		const int loot[3] = { 3, 5, 100 };
+		const int loot[BOARD_GOODS] = { 3, 5, 100, 0 };
 
 		s.fleet.capacity = 1;		/* 10 tons */
 		s.fleet.guns = s.fleet.food = s.fleet.goods = s.fleet.sugar = 0;
@@ -2881,9 +2882,10 @@ test_convoys(void)
 	era.train_route[0] = 1;
 	sim_new_game(&s, &era, &scn, 3);
 	s.world = &test_world;
-	/* The start, by the date: stop doy / 15 - 18 (+24), odd eras +2. */
-	k = s.day_of_year / 15 - 18 + ((s.era_year == 1600 ||
-	    s.era_year == 1640 || s.era_year == 1680) ? 2 : 0);
+	/* The start, by the date: stop doy / 15 - 18 (+24), +2 with an
+	 * odd era code (1620: 3, 1660: 5). */
+	k = s.day_of_year / 15 - 18 + ((s.era_year == 1620 ||
+	    s.era_year == 1660) ? 2 : 0);
 	if (k < 0)
 		k += 24;
 	CHECK(s.fleet_step == k);
@@ -3333,6 +3335,80 @@ test_month_housekeeping(void)
 	CHECK(s.reputation == 7);
 }
 
+/* A capture's plunder: gold by the town's wealth and her cargo byte,
+ * goods cut to her tonnage, her guns on the board, volunteers. */
+static void
+test_capture_plunder(void)
+{
+	struct sim s;
+	int k, total, gold_seen = 0, vol_seen = 0, n;
+	long gold;
+
+	for (n = 0; n < 200; n++) {
+		sea_game(&s, 300, 300, 0x00);
+		s.towns[0].wealth = 100;
+		memset(&s.battle, 0, sizeof(s.battle));
+		s.battle.active = 1;
+		s.battle.outcome = BAT_SURRENDER;
+		s.battle.you.crew = 40;
+		s.battle.foe.type = 1;		/* a sloop: 40 tons */
+		s.battle.foe.guns = 7;
+		s.encounter.nation = NATION_PIRATE;
+		s.encounter.crew = 30;
+		s.encounter.cargo = 20;
+		s.encounter.gold = 200;
+		s.reputation = 20;
+		s.fleet.nships = 1;
+		s.fleet.ships[0] = 7;		/* room for 288 */
+		gold = s.fleet.gold;
+		sim_battle_finish(&s, 0);
+		CHECK(s.fleet.gold == gold + s.battle.loot_gold &&
+		    s.battle.loot_gold % 10 == 0);
+		/* the nearest town's (wealth + 64) / 16 = 10, x 20 */
+		CHECK(s.battle.loot_gold < 10L * 20 * 10);
+		gold_seen += s.battle.loot_gold > 0;
+		CHECK(s.battle.loot[3] == 8);	/* 7 guns, rounded up */
+		for (k = 0, total = 4; k < 3; k++)
+			total += s.battle.loot[k];
+		/* Cut toward 40 tons; a pass on an empty good still
+		 * counts, as in the original, so a little may remain. */
+		CHECK(total < 1 * 20 + 20 + 20);
+		CHECK(s.battle.loot[0] <= 30 && s.battle.loot[1] < 100 &&
+		    s.battle.loot[2] < 100);
+		/* rand((20 + 5) x 30 / 10) = rand(75) */
+		CHECK(s.battle.volunteers == 0 ||
+		    (s.battle.volunteers > 1 && s.battle.volunteers < 75));
+		vol_seen += s.battle.volunteers > 0;
+	}
+	CHECK(gold_seen > 150 && vol_seen > 150);
+	k = s.fleet.crew + s.battle.volunteers;
+	sim_take_volunteers(&s);
+	CHECK(s.fleet.crew == k && s.battle.volunteers == 0);
+}
+
+/* The treasure fleet restarts its route in October, in September in
+ * 1620 and 1660 (the era code's parity; the 1987 manual's calendar). */
+static void
+test_fleet_calendar(void)
+{
+	static const int sept[EXE_ERAS] = { 0, 0, 1, 0, 1, 0 };
+	struct sim s;
+	int e;
+
+	for (e = 0; e < EXE_ERAS; e++) {
+		sea_game(&s, 300, 300, 0x00);
+		s.era_year = town_era_years[e];
+		s.fleet_step = 10;
+		s.month = 9 - sept[e];		/* 0-based: 9 is October */
+		sim_world_update(&s);
+		CHECK(s.fleet_step == 0 || s.fleet_step == 1);
+		s.fleet_step = 10;
+		s.month = 8 + sept[e];		/* the other month */
+		sim_world_update(&s);
+		CHECK(s.fleet_step >= 11);
+	}
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3445,6 +3521,8 @@ main(void)
 	test_battle_near_town();
 	test_personal_log();
 	test_month_housekeeping();
+	test_capture_plunder();
+	test_fleet_calendar();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

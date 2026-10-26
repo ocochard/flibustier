@@ -84,8 +84,9 @@ Each town, independently, grows with probability 1/4. When it does:
 ### Diplomacy (VA `0xc938`)
 
 1. Draw `r = rand(range)`, `range` the era block's byte `0xF8` (VA
-   `0x4707e`, copied with the block by VA `0x1361c`): 175 in 1560 and
-   1600, 140 in 1620, 120 in 1640, 105 in 1660, 145 in 1680. Nothing
+   `0x4707e`, copied with the block by VA `0x1361c`; block = era code,
+   less 1 past 1, so one block per era): 150 in 1560, 175 in 1600, 140
+   in 1620, 120 in 1640, 105 in 1660, 145 in 1680. Nothing
    happens unless `r < 28`.
 2. Nations `a = r & 3` and `b = (r >> 2) & 3`. Nothing happens when they
    are the same.
@@ -360,6 +361,11 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   train's often from Tampico or Nombre de Dios).
 - **Where each is (VA `0x45e71`, `0x45e70`):** a town, or 0xFF away (in
   Spain, in Peru); its stop on the route at VA `0x45e8d`, `0x45e8e`.
+- **`era` here is the era code (VA `0x45e8c`):** the era menu's choice
+  plus 1 past the first, so 1560 is 0 and 1600-1680 are 2-6 (the year
+  is `1560 + code x 20`, VA `0xc46e`; code 1 is unused). Odd codes are
+  1620 and 1660: the fleet restarts in October (month 9 from 0), in
+  September in those two, as the 1987 manual's calendar has it.
 - **The start (VA `0x13679`):** stop `(era & 1) x 2 + day / 15 - 18`
   for the fleet, `- 6` for the train (+24 when negative), by the day of
   the year the career starts; the town at that stop, or away past 14.
@@ -704,6 +710,10 @@ inside the town, on land.
   right edge, 40 above it or below it comes back at the right edge
   (view x + 640) at a random height 0..439. Clouds start off the view,
   so they enter from the right.
+- **Shown:** only a cloud its move found in that range (VA `0x4c792`);
+  one put back at the edge waits for the next pass. Without this, a
+  cloud drifting a pixel east past the edge flickers there at a new
+  height every pass.
 - **Drawing:** first the shadow, 30 pixels left and 30 down, which
   replaces each covered pixel through the 256-byte table at VA
   `0x3400c`; then the cloud.
@@ -790,7 +800,7 @@ Where the original's behaviour is not traced yet, the engine does this:
 
 | Byte | Content |
 |---|---|
-| 0 | ship type (`& 7`): 0 pinnace … 7 galleon; type 5 shows as 8 (fast galleon) while VA `0x45e8c` is below 4 |
+| 0 | ship type (`& 7`): 0 pinnace … 7 galleon; type 5 shows as 8 (fast galleon) while the era code (VA `0x45e8c`) is below 4: 1560 to 1620 |
 | 1 | nation, 4 = pirate |
 | 2 | crew (judging by the values) |
 | 3 | guns (judging by the values) |
@@ -825,8 +835,12 @@ Where the original's behaviour is not traced yet, the engine does this:
 - **Hostile pirates:** they use the "He's chasing us" dialog (CSTR 311).
   The original's named pirates (CSTR 121) need the pirate name lists.
 - **Pictures:**
-  - Ship portraits (`S_*.PCX`) hold 5 round views; the engine shows the
-    first.
+  - Ship portraits (`S_*.PCX`) hold 5 views of 200x200 at (1, 1), (202,
+    1), (403, 1), (1, 202), (202, 202), shown in turn in a window at
+    (220, 10) while the question waits (VA `0xfb24`, table at VA
+    `0x32d90`), each for 11 ticks of the 60.9 Hz clock; the ship rocks.
+  - The flag uses the same window, 8 frames, each for 1 + rand jitter
+    (-1..+1) + 1 ticks (VA `0xfc0a`, table at VA `0x32dc0`).
   - Flags (`F-*.PCX`, and `FJOLLY*` for pirates) hold 8 frames of
     200x200 on a pure green key; the engine waves them in turn. The
     original composites them with `BASEFLAG.PCX` (VA `0x108cf`), not
@@ -1090,8 +1104,7 @@ After a landing by the fort, or straight away at a town without forts:
    194, on `governor.pcx`): the town's nation, standing 2, governor
    `rand(16)`; for a new nation, the player's standing with it +3 and
    an attack of -2 on the old one (log 22, "Captured %s for %s").
-8. Cannon: `forts x 6`, offered on the board. The engine gives them to
-   the fleet at once.
+8. Cannon: `forts x 6`, offered on the board's fourth row.
 
 Back to sea afterwards.
 
@@ -1141,10 +1154,26 @@ byte), return to the fleet.
   by the prize's room, and the crew rises to at least `slot x 8`.
 - **Prize text (VA `0xdb7b`):** the prize is `class x 20 + 20` tons, its
   guns are rounded up to even, and the hold space is
-  `sum(2 x class + 2) x 10` over the fleet, minus cargo (none yet).
-- **Prize:** a captured ship pays the encounter record's byte 6 x 10
-  gold, standing in for cargo and treasure. Kept, she joins the fleet
-  with her guns.
+  `sum(2 x class + 2) x 10` over the fleet, minus cargo.
+- **Plunder (VA `0xdb7b`), kept or sunk, after the captain's part:**
+  - gold `rand(((current town's wealth + 64) / 16) x record byte 5) x
+    10`, the current town being the player's or at sea the nearest;
+  - on the loot board (`plunder.pcx`, mode 2, with "%s gold pieces
+    plundered!"): food = record byte 2 (her crew), goods and sugar each
+    `(r x r >> 15) x byte 6 >> 16` with `r = rand(32767)`, cannon = her
+    guns rounded up to even; cut a unit at a time, the good by the
+    running total mod 3 (food, goods, sugar), while `food + goods +
+    sugar + cannon / 2` exceeds her tonnage. A pass on an empty good
+    still counts, so a little more may remain;
+  - the gold is added; then `n = rand((reputation + 5) x byte 2 / 10)`:
+    with `n > 1` and room (`crew + n <= sum((class + 2) x 32)`), on
+    `crew.pcx` "Captain, %s sailors wish to join our crew. ~Take
+    them~Leave them" (CSTR 166) at (100, 280) up to x 540.
+  - A kept prize brings no guns by herself: they are on the board.
+- **The board's rows (VA `0x20229`):** the town merchant shows food,
+  goods and sugar (layout records 0-22); the loot board (VA `0x2264f`:
+  overboard, capture, sack) adds cannon (records 23-28), which weigh
+  half a ton each.
 - **Marooned:** with no ship left, the game shows CSTR 161 and 162
   (VA `0x1f2a1`). The player then continues with a pinnace and at least
   8 men. The original keeps the last ship's entry and runs routines not
@@ -1481,7 +1510,8 @@ same town only bits 1 and 2 are kept.
     the leader, crew, cannon, gold, food in days (`(food x 256 +
     fraction) / crew`), the crew's mood word (CSTN 72, `clamp(mood / 4 +
     1, 0, 3)`), goods, and the third good under its era's name (CSTR
-    87 Hides before 1620, 88 Tobacco to 1640, 89 Sugar).
+    87 Hides in 1560, 88 Tobacco in 1600 and 1620, 89 Sugar after; era
+    codes below 2, below 4, VA `0x1d8b2`).
   - **Personal Status (VA `0xa5a7`):** CSTR 105 at (140, 100) up to x
     560: for England, France, Holland and Spain, "   %s %s" (CSTR 90)
     with the nation and the rank, or without one CSTN 21 by standing (2
@@ -1563,8 +1593,8 @@ same town only bits 1 and 2 are kept.
 - **Refusals, before anything else:**
   - "We do not trade with pirates!" (CSTR 256) in a Spanish town when
     `rank with Spain x 25 + the era's tolerance` (VA `0x45e7f`, and
-    `0x4707f`, the era block's byte `0xF9`: 150 in 1560 and 1600, 135,
-    110, 115, 145) is below the town's wealth (word 8). The same
+    `0x4707f`, the era block's byte `0xF9`: 105 in 1560, 150 in 1600,
+    135, 110, 115, 145) is below the town's wealth (word 8). The same
     test guards the merchant (VA `0x21424`).
   - "You have nothing of worth" (CSTR 278) when the arrival mode (VA
     `0x47aca`) is 3, probably a party on foot.

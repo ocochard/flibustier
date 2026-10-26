@@ -403,6 +403,19 @@ test_encounter_screens(void)
 }
 
 /* A sea battle: fight, see the outcome, take the prize, sail on. */
+/* After a capture: leave her cargo board, answer her sailors. */
+static void
+after_capture(struct game *g)
+{
+	int i;
+
+	for (i = 0; i < 4; i++)
+		if (g->screen == &screen_merchant)
+			CHECK(game_script(g, "click:320,450 wait:40") == 0);
+		else if (g->screen == &screen_volunteers)
+			CHECK(game_script(g, "down enter wait:40") == 0);
+}
+
 static void
 test_battle_screen(void)
 {
@@ -472,8 +485,10 @@ test_battle_screen(void)
 		CHECK(game_script(g, "enter wait:16") == 0);
 	CHECK(g->btl_stage == 1 && g->sim.battle.outcome != BAT_NONE);
 	CHECK(game_script(g, "enter") == 0);
-	if (g->btl_stage == 2)			/* a prize: keep her */
-		CHECK(game_script(g, "enter") == 0);
+	if (g->btl_stage == 2) {		/* a prize: keep her */
+		CHECK(game_script(g, "enter wait:40") == 0);
+		after_capture(g);
+	}
 	CHECK(g->screen == &screen_sail && !g->sim.battle.active);
 	CHECK(g->sim.fleet.nships >= 1);
 	game_free(g);
@@ -557,6 +572,7 @@ test_sword_screen(void)
 		CHECK(g->screen == &screen_battle && g->btl_stage == 2);
 		CHECK(game_script(g, "enter wait:30") == 0);	/* keep her */
 		CHECK(g->sim.fleet.nships == 2);
+		after_capture(g);
 	} else if (g->sim.sword.result == SWORD_LOST) {
 		/* Prison, "in the ship": the defeat, the months, the
 		 * way back. */
@@ -1669,6 +1685,30 @@ test_crew(void)
 	    0 && !g->sim.prize_pending && g->sim.fleet.ships[1] == 6 &&
 	    g->screen == &screen_sail);
 	g->sim.fleet.nships = 1;
+	/* A capture's plunder: her cargo and guns on the loot board (four
+	 * rows), then her sailors. */
+	g->sim.battle.loot_gold = 120;
+	g->sim.battle.loot[0] = 3;
+	g->sim.battle.loot[1] = g->sim.battle.loot[2] = 0;
+	g->sim.battle.loot[3] = 4;
+	g->sim.battle.volunteers = 9;
+	g->sim.fleet.goods = g->sim.fleet.sugar = 0;
+	g->btl_loot = 1;
+	g->btl_news = -1;
+	g->btl_landed = g->btl_hunted = 0;
+	rep = g->sim.fleet.guns;
+	game_goto(g, &screen_battle_end);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_merchant && g->prize_loot &&
+	    g->sim.market.plunder && g->sim.market.stock[3] == 4);
+	CHECK(game_script(g, "down down down right right") == 0 &&
+	    g->selected == 3 && g->sim.fleet.guns == rep + 2 &&
+	    g->sim.market.stock[3] == 2);
+	CHECK(game_script(g, "click:320,450 wait:40") == 0 &&
+	    g->screen == &screen_volunteers && !g->sim.market.plunder);
+	rep = g->sim.fleet.crew;
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->sim.fleet.crew == rep + 9 && g->screen == &screen_sail);
 	/* Seven men for the last ship: abandoned, marooned. */
 	g->sim.fleet.crew = 7;
 	g->sim.player.expedition = -1;

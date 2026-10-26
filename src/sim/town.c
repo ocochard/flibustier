@@ -240,7 +240,8 @@ sim_merchant_open(struct sim *s)
 static int *
 cargo(struct sim_fleet *f, int good)
 {
-	return (good == 0 ? &f->food : good == 1 ? &f->goods : &f->sugar);
+	return (good == 0 ? &f->food : good == 1 ? &f->goods : good == 2 ?
+	    &f->sugar : &f->guns);
 }
 
 int
@@ -250,7 +251,7 @@ sim_trade(struct sim *s, int good, int n)
 	struct sim_fleet *f = &s->fleet;
 	int *held, done = 0, price;
 
-	if (!m->open || good < 0 || good >= GOODS)
+	if (!m->open || good < 0 || good >= (m->plunder ? BOARD_GOODS : GOODS))
 		return (0);
 	held = cargo(f, good);
 	price = m->price[good];
@@ -849,7 +850,7 @@ sim_sack(struct sim *s, int town, struct sack *out)
 		sim_log_news(s, NEWS_PLUNDERED, town, 0);
 	else
 		out->conquest = 1;
-	out->cannon = t->forts * 6;
+	out->cannon = t->forts * 6;	/* offered on the board */
 	out->gold = gold * 10;
 	s->fleet.gold += out->gold;
 }
@@ -875,11 +876,12 @@ sim_install_governor(struct sim *s, int town, int nation)
 }
 
 void
-sim_plunder_open(struct sim *s, const int goods[3])
+sim_plunder_open(struct sim *s, const int goods[BOARD_GOODS])
 {
 	int i;
 
-	for (i = 0; i < GOODS; i++) {
+	s->market.plunder = 1;
+	for (i = 0; i < BOARD_GOODS; i++) {
 		s->market.stock[i] = goods[i];
 		s->market.price[i] = 0;
 	}
@@ -892,6 +894,7 @@ void
 sim_plunder_close(struct sim *s)
 {
 	s->market.open = 0;
+	s->market.plunder = 0;
 	s->merchant_gold = -1;
 }
 
@@ -901,14 +904,16 @@ sim_take_all(struct sim *s, int good)
 	struct sim_market *m = &s->market;
 	int n = 0, k;
 
-	if (!m->open || good < 0 || good >= GOODS)
+	int goods = m->plunder ? BOARD_GOODS : GOODS;
+
+	if (!m->open || good < 0 || good >= goods)
 		return (0);
 	while (sim_hold_space(s) != 0) {
 		k = good;
 		if (m->stock[k] == 0)
-			for (k = 0; k < GOODS && m->stock[k] == 0; k++)
+			for (k = 0; k < goods && m->stock[k] == 0; k++)
 				;
-		if (k == GOODS)
+		if (k == goods)
 			break;
 		/* The original then loops for ever; the engine stops. */
 		if (m->price[good] >= s->fleet.gold && m->price[good] > 0)

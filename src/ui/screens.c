@@ -1998,9 +1998,11 @@ logbook_draw(struct game *g)
 		snprintf(a[5], sizeof(a[5]), "%s", game_word(g, W_MOOD,
 		    (size_t)(lvl < 0 ? 0 : lvl > 3 ? 3 : lvl)));
 		snprintf(a[6], sizeof(a[6]), "%d", f->goods);
+		/* By the era code (VA 0x1d8b2): hides in 1560 (code
+		 * 0), tobacco in 1600 and 1620 (2, 3), sugar after. */
 		k = g->world != NULL ? g->world->era : 0;
 		snprintf(a[7], sizeof(a[7]), "%s", game_str(g, W_HIDES +
-		    (k < 2 ? 0 : k < 4 ? 1 : 2)));
+		    (k < 1 ? 0 : k < 3 ? 1 : 2)));
 		snprintf(a[8], sizeof(a[8]), "%d", f->sugar);
 		for (k = 0; k < 9; k++)
 			arg[k] = a[k];
@@ -2536,7 +2538,8 @@ follow_ship(struct game *g, int force)
  * frame (0, 1, 2 or 0 again).  Every sailing pass cloud i drifts with
  * the wind by (4i + 6) x 2, in eighths; once out of -100..640 across or
  * -40..480 down from the view, it comes back at the right edge at a
- * random height.  Each is drawn with its shadow 30 pixels left and down,
+ * random height.  Only a cloud found in view by its move is drawn (VA
+ * 0x4c792), so one put back at the edge waits for the next pass.  Each is drawn with its shadow 30 pixels left and down,
  * which darkens what it covers through the table at VA 0x3400c.
  */
 #define CLOUD_SHADOW		30
@@ -2562,6 +2565,7 @@ clouds_start(struct game *g)
 	for (i = 0; i < 3; i++) {
 		g->clouds[i].frame = frames[cloud_random(g, 4)];
 		g->clouds[i].x = g->clouds[i].y = 0;	/* off the view */
+		g->clouds[i].shown = 0;
 	}
 }
 
@@ -2591,7 +2595,9 @@ clouds_move(struct game *g)
 		g->clouds[i].y -= cloud_sine(g, w + 0x40, (4 * i + 6) * 2) >> 3;
 		sx = g->clouds[i].x - g->view_x;
 		sy = g->clouds[i].y - g->view_y;
-		if (sx < -100 || sx > FB_W || sy < -40 || sy > FB_H) {
+		g->clouds[i].shown = !(sx < -100 || sx > FB_W || sy < -40 ||
+		    sy > FB_H);
+		if (!g->clouds[i].shown) {
 			g->clouds[i].x = g->view_x + FB_W;
 			g->clouds[i].y = g->view_y + cloud_random(g, 440);
 		}
@@ -2607,7 +2613,8 @@ clouds_draw(struct game *g)
 	int i, n = clouds_count(g), x, y, sx, sy, px, py;
 
 	for (i = 0; i < n && i < 3; i++) {
-		if ((size_t)g->clouds[i].frame >= g->cloud_spr.count)
+		if (!g->clouds[i].shown ||
+		    (size_t)g->clouds[i].frame >= g->cloud_spr.count)
 			continue;
 		f = &g->cloud_spr.frames[g->clouds[i].frame];
 		sx = g->clouds[i].x - g->view_x;
@@ -2963,8 +2970,11 @@ encounter_event(struct game *g, const struct ui_event *ev)
 
 /*
  * Ship portraits are sheets of 5 round views of about 200 pixels, and
- * flags sheets of 8 waving frames of 200x200 on a green key.  Show the
- * first view, and wave the flag.
+ * flags sheets of 8 waving frames of 200x200 on a green key, both shown
+ * in a 200x200 window at (220, 10) while the question waits (VA 0xfb24,
+ * 0xfc0a; tables at VA 0x32d90, 0x32dc0).  A frame lasts n + 1 ticks of
+ * the 60.9 Hz clock: the ship 11, the flag 2 on average (1 + rand jitter
+ * of -1..+1).
  */
 #define PORTRAIT_VIEW	200
 #define FLAG_FRAME	200
@@ -2980,15 +2990,19 @@ encounter_picture(struct game *g)
 		return;		/* "Sail ho!" is a full picture */
 	fb_clear(&g->fb, fb_nearest(&g->fb, 0, 0, 0));
 	if (e->stage == ENC_IDENTIFIED) {
-		fb_image_part(&g->fb, &g->bg, 0, 0, PORTRAIT_VIEW,
-		    PORTRAIT_VIEW, (FB_W - PORTRAIT_VIEW) / 2, 50, -1);
+		static const int vx[5] = { 1, 202, 403, 1, 202 };
+		static const int vy[5] = { 1, 1, 1, 202, 202 };
+
+		f = (int)(g->ticks / 11) % 5;
+		fb_image_part(&g->fb, &g->bg, vx[f], vy[f], PORTRAIT_VIEW,
+		    PORTRAIT_VIEW, (FB_W - PORTRAIT_VIEW) / 2, 10, -1);
 		return;
 	}
-	f = (int)(g->ticks / 6) % FLAG_FRAMES;
+	f = (int)(g->ticks / 2) % FLAG_FRAMES;
 	key = fb_nearest(&g->fb, 0, 255, 0);
 	fb_image_part(&g->fb, &g->bg, (f % 4) * FLAG_FRAME,
 	    (f / 4) * FLAG_FRAME, FLAG_FRAME, FLAG_FRAME,
-	    (FB_W - FLAG_FRAME) / 2, 50, key);
+	    (FB_W - FLAG_FRAME) / 2, 10, key);
 }
 
 static void
@@ -3202,6 +3216,7 @@ battle_finish(struct game *g, int keep)
 	g->btl_chosen = 0;
 	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
 	g->btl_news = g->sim.battle.news_town;
+	g->btl_loot = g->btl_final == BAT_SURRENDER;
 	if (g->sim.jail.fresh) {
 		/* Beaten aboard, or the last ship gone (VA 0x16647). */
 		game_goto(g, &screen_prison);
@@ -3240,8 +3255,20 @@ after_battle_enter(struct game *g)
 	if (g->btl_hunted && g->sim.mission.type == -MISSION_PIRATE) {
 		/* The pirate a governor wanted (CSTR 207, VA 0x1f8f7). */
 		g->btl_hunted = 0;
-		g->villain_back = &screen_sail;
+		g->villain_back = &screen_battle_end;
 		game_goto(g, &screen_contact);
+		return;
+	}
+	if (g->btl_loot) {
+		/* Her cargo on the board, then her sailors (VA 0xdb7b). */
+		g->btl_loot = 0;
+		g->looting = 1;
+		g->prize_loot = 1;
+		game_goto(g, &screen_merchant);
+		return;
+	}
+	if (g->sim.battle.volunteers > 0) {
+		game_goto(g, &screen_volunteers);
 		return;
 	}
 	if (landed) {
@@ -4617,8 +4644,10 @@ const struct screen screen_shipwright = {
  * pick a good, Right buys one, Left sells one; a click on the left of a
  * row buys, on the right sells; Enter, Escape or the exit sign leaves.
  */
-#define BOARD_ROWS		3	/* food, goods, sugar (cannon: row 3) */
-#define BOARD_PIECES		23	/* layout records for those rows */
+/* Rows: food, goods, sugar, and cannon on the loot board (VA 0x20229:
+ * the merchant shows the first 23 layout records, the loot board all 29). */
+#define BOARD_ROWS(g)		((g)->sim.market.plunder ? BOARD_GOODS : GOODS)
+#define BOARD_PIECES(g)		((g)->sim.market.plunder ? 29 : 23)
 #define BOARD_ROW_Y		116
 #define BOARD_ROW_H		50
 #define BOARD_SIGN		82	/* "Sell", then "Buy" */
@@ -4676,7 +4705,8 @@ merchant_enter(struct game *g)
 	int lang = strcmp(g->lang, "fre") == 0 ? 1 :
 	    strcmp(g->lang, "ger") == 0 ? 2 : 0, i;
 
-	game_background(g, g->jettison ? "pic/plunder" : g->looting ?
+	game_background(g, g->jettison || g->prize_loot ? "pic/plunder" :
+	    g->looting ?
 	    (g->sim.towns[g->assault_town].flags & TOWN_INLAND ?
 	    "pic/arr_land" : "pic/arr_sea") : "pic/merchant");
 	game_portrait(g, NULL);
@@ -4691,12 +4721,20 @@ merchant_enter(struct game *g)
 		/* "You have more cargo than will fit in your hold! You
 		 * must throw some overboard!" (CSTR 113, VA 0x1f65f), then
 		 * the board, nothing to take. */
-		static const int none[3] = { 0, 0, 0 };
+		static const int none[BOARD_GOODS] = { 0, 0, 0, 0 };
 
 		sim_plunder_open(&g->sim, none);
 		g->shop_stage = 3;
+	} else if (g->prize_loot) {
+		/* A capture's cargo and guns (VA 0xdb7b, board mode 2). */
+		sim_plunder_open(&g->sim, g->sim.battle.loot);
+		g->shop_stage = 1;
 	} else if (g->looting) {	/* the loot, for nothing (VA 0x2264f) */
-		sim_plunder_open(&g->sim, g->sack.goods);
+		int loot[BOARD_GOODS];
+
+		memcpy(loot, g->sack.goods, sizeof(g->sack.goods));
+		loot[3] = g->sack.cannon;	/* the forts' guns */
+		sim_plunder_open(&g->sim, loot);
 		g->shop_stage = 1;
 	} else if (sim_merchant_refuses(&g->sim))
 		g->shop_stage = 2;
@@ -4717,6 +4755,11 @@ merchant_leave(struct game *g)
 		g->looting = 0;
 		g->jettison = 0;
 		sim_plunder_close(&g->sim);
+		if (g->prize_loot) {
+			g->prize_loot = 0;
+			game_goto(g, &screen_battle_end);
+			return;
+		}
 		/* After a sack, the townsfolk's news of villains (VA
 		 * 0x18b3f). */
 		if (thrown || !vnews_offer(g, 0, g->assault_town, &screen_sail))
@@ -4779,7 +4822,7 @@ merchant_event(struct game *g, const struct ui_event *ev)
 			sim_take_all(&g->sim, g->selected);	/* Take all */
 		else if (x >= 252 && x <= 391 && y >= 433)
 			merchant_leave(g);			/* the exit */
-		else if (y >= 107 && (row = (y - 107) / 50) < BOARD_ROWS &&
+		else if (y >= 107 && (row = (y - 107) / 50) < BOARD_ROWS(g) &&
 		    (y - 107) % 50 <= 40 &&
 		    ((x >= 169 && x <= 190) || (x >= 444 && x <= 465))) {
 			/* A row's arrow: the good and the way, no trade
@@ -4793,10 +4836,11 @@ merchant_event(struct game *g, const struct ui_event *ev)
 		return;
 	switch (ev->key) {
 	case UI_KEY_UP:
-		g->selected = (g->selected + BOARD_ROWS - 1) % BOARD_ROWS;
+		g->selected = (g->selected + BOARD_ROWS(g) - 1) %
+		    BOARD_ROWS(g);
 		break;
 	case UI_KEY_DOWN:
-		g->selected = (g->selected + 1) % BOARD_ROWS;
+		g->selected = (g->selected + 1) % BOARD_ROWS(g);
 		break;
 	case UI_KEY_RIGHT:
 		merchant_trade(g, g->selected, 1);
@@ -4839,11 +4883,12 @@ merchant_draw(struct game *g)
 	if (g->looting) {	/* "... gold pieces plundered!" (CSTN 10.6) */
 		char line[96];
 
-		snprintf(line, sizeof(line), "%ld%s", g->sack.gold,
+		snprintf(line, sizeof(line), "%ld%s", g->prize_loot ?
+		    g->sim.battle.loot_gold : g->sack.gold,
 		    game_word(g, W_PLUNDERED, PLUNDERED_WORD));
 		draw_centered(g, FONT_BODY, 400, line);
 	}
-	for (i = 0; i < BOARD_PIECES; i++) {
+	for (i = 0; i < BOARD_PIECES(g); i++) {
 		if (board_piece(g, i, r) != 0)
 			continue;
 		row = i < 5 ? -1 : (i - 5) / 6;
@@ -4851,9 +4896,10 @@ merchant_draw(struct game *g)
 	}
 	board_frame(g, 0, BOARD_SIGN + g->shop_buying, 235, 101);
 	board_frame(g, 2, 0, 252, 430);
-	for (i = 0; i < BOARD_ROWS; i++) {
+	for (i = 0; i < BOARD_ROWS(g); i++) {
 		sel = i == g->selected;
-		held = i == 0 ? f->food : i == 1 ? f->goods : f->sugar;
+		held = i == 0 ? f->food : i == 1 ? f->goods : i == 2 ?
+		    f->sugar : f->guns;
 		/* The merchant's stock, the player's cargo, the price on
 		 * both sides (VA 0x207f1, 0x20940). */
 		board_number(g, m->stock[i], 106, 117 + i * BOARD_ROW_H,
@@ -6419,7 +6465,6 @@ sack_enter(struct game *g)
 static void
 sack_loot(struct game *g)
 {
-	g->sim.fleet.guns += g->sack.cannon;
 	g->looting = 1;
 	game_goto(g, &screen_merchant);
 }
@@ -7977,7 +8022,7 @@ hostage_choose(struct game *g, int i)
 {
 	sim_hostage_answer(&g->sim, i);
 	if (i == 2)
-		game_goto(g, &screen_sail);
+		game_goto(g, &screen_battle_end);
 	else
 		g->hostage_said = i;
 }
@@ -7991,7 +8036,7 @@ hostage_event(struct game *g, const struct ui_event *ev)
 	}
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, &screen_sail);
+		game_goto(g, &screen_battle_end);
 }
 
 static void
@@ -8450,4 +8495,48 @@ lastship_draw(struct game *g)
 
 const struct screen screen_lastship = {
 	"last ship", lastship_enter, lastship_event, NULL, lastship_draw,
+};
+
+/*
+ * The sailors of a captured ship (VA 0xdb7b): on crew.pcx, "Captain, %s
+ * sailors wish to join our crew. ~Take them~Leave them" (CSTR 166) at
+ * (100, 280) up to x 540.
+ */
+static void
+volunteers_enter(struct game *g)
+{
+	game_background(g, "pic/crew");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+volunteers_choose(struct game *g, int i)
+{
+	if (i == 0)
+		sim_take_volunteers(&g->sim);
+	g->sim.battle.volunteers = 0;
+	game_goto(g, &screen_battle_end);
+}
+
+static void
+volunteers_event(struct game *g, const struct ui_event *ev)
+{
+	menu_event(g, ev, 2, NULL, volunteers_choose, NULL);
+}
+
+static void
+volunteers_draw(struct game *g)
+{
+	char text[256], men[16];
+
+	snprintf(men, sizeof(men), "%d", g->sim.battle.volunteers);
+	fill(text, sizeof(text), game_str(g, 166), men, NULL);
+	draw(g, FONT_BODY, 100, 280, 440, text, 1);
+}
+
+const struct screen screen_volunteers = {
+	"volunteers", volunteers_enter, volunteers_event, NULL,
+	volunteers_draw,
 };

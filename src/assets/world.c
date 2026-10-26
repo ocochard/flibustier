@@ -405,9 +405,9 @@ world_load(struct world *w, struct packs *packs,
 		goto bad;
 	if (load_map(w, packs, era, p, err, errlen) != 0)
 		return (-1);
-	/* The game numbers eras from 1 and uses block max(era, 1), so 1560
-	 * and 1600 share a block (VA 0x1361c). */
-	block = era > 0 ? era : 1;
+	/* The game's era code is 0 for 1560 and 2..6 after, and its block
+	 * the code less one past 1 (VA 0x1361c): the era's index. */
+	block = era;
 	if ((p = exe_at(layout, exe, len, layout->battle_sets_va,
 	    2 * BATTLE_SETS * BATTLE_PIECES)) == NULL) {
 		snprintf(err, errlen, "no battle screen sets");

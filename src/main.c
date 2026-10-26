@@ -28,7 +28,7 @@ usage(void)
 	    "                extracted CD (default: $STMALO_DATA)\n"
 	    "  --pack DIR    asset pack with a pack.ini, over the data;\n"
 	    "                later packs take priority\n"
-	    "  --lang LANG   eng, fre or ger (default: eng)\n"
+	    "  --lang LANG   eng, fre or ger, or en, fr, de (default: eng)\n"
 	    "  --saves DIR   saved games (default: $STMALO_SAVES, else\n"
 	    "                ~/.local/share/stmalo/saves)\n"
 	    "\n"
@@ -93,6 +93,24 @@ list_ids(struct packs *packs)
 		printf("%s\n", ids[i]);
 	packs_list_free(ids, n);
 	return (0);
+}
+
+/* The game's language code for "name", which may be the ISO one. */
+static const char *
+game_lang(const char *name)
+{
+	static const char *codes[][3] = {
+		{ "eng", "en", "english" },
+		{ "fre", "fr", "fra" },
+		{ "ger", "de", "deu" },
+	};
+	size_t i, k;
+
+	for (i = 0; i < sizeof(codes) / sizeof(codes[0]); i++)
+		for (k = 0; k < 3; k++)
+			if (strcmp(name, codes[i][k]) == 0)
+				return (codes[i][0]);
+	return (NULL);
 }
 
 int
@@ -169,9 +187,11 @@ main(int argc, char **argv)
 		return (1);
 	}
 
-	if (strcmp(lang, "eng") != 0 && strcmp(lang, "fre") != 0 &&
-	    strcmp(lang, "ger") != 0)
-		usage();
+	if ((lang = game_lang(lang)) == NULL) {
+		fprintf(stderr, "unknown language: use eng, fre or ger\n");
+		packs_free(packs);
+		return (1);
+	}
 	switch (cmd) {
 	case PLAY:
 		rc = play_run(packs, lang, saves, shot, shot_frames, crt);

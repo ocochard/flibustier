@@ -421,15 +421,19 @@ town_event(struct sim *s)
 	}
 }
 
-/* The era's index, by its year. */
+/*
+ * The game's era code (VA 0x45e8c), by the era's year: the era menu's
+ * choice, plus 1 past the first, so 1560 is 0 and 1600 to 1680 are 2 to
+ * 6 (the year is 1560 + code x 20, VA 0xc46e).
+ */
 static int
-era_index(const struct sim *s)
+era_code(const struct sim *s)
 {
 	int e;
 
 	for (e = 0; e < EXE_ERAS; e++)
 		if (town_era_years[e] == s->era_year)
-			return (e);
+			return (e == 0 ? 0 : e + 1);
 	return (0);
 }
 
@@ -470,7 +474,7 @@ convoy_move(struct sim *s, int *step, int *town, const int *route, int from,
 static void
 convoys_move(struct sim *s)
 {
-	int odd = era_index(s) & 1;
+	int odd = era_code(s) & 1;
 
 	convoy_move(s, &s->fleet_step, &s->fleet_town, s->fleet_route,
 	    s->month == 9 - odd ? -1 : s->fleet_step, 1);
@@ -482,7 +486,7 @@ convoys_move(struct sim *s)
 static void
 convoys_start(struct sim *s, const struct era_towns *era)
 {
-	int odd = era_index(s) & 1, k;
+	int odd = era_code(s) & 1, k;
 
 	for (k = 0; k < CONVOY_STOPS; k++) {
 		s->fleet_route[k] = era->fleet_route[k];
@@ -1028,9 +1032,9 @@ pick_ship(struct sim *s, int town, int dist)
 	memset(e, 0, sizeof(*e));
 	e->stage = ENC_SIGHTED;
 	e->type = rec[0] & 7;
-	/* Shown as a fast galleon in the early eras (assumed: the game
-	 * tests a value below 4 that looks like the era). */
-	if (e->type == 5 && s->world->era < 4)
+	/* Shown as a fast galleon while the era code is below 4, 1560
+	 * to 1620 (VA 0xd1db). */
+	if (e->type == 5 && s->world->era < 3)
 		e->type = 8;
 	e->nation = rec[1] <= NATION_PIRATE ? rec[1] : NATION_PIRATE;
 	e->crew = rec[2];

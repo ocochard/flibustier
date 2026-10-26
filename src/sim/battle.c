@@ -720,17 +720,68 @@ sim_drop_ship(struct sim *s, int i, int keep)
 	f->guns -= (int)((double)((float)f->guns * r) + 0.5);
 }
 
+/*
+ * A capture's plunder (VA 0xdb7b), whether the prize is kept or sunk:
+ * rand(((the current town's wealth + 64) / 16) x cargo byte) x 10 gold;
+ * on the board her crew byte in food and twice (r x r >> 15) x gold
+ * byte >> 16, r = rand(32767), in goods and sugar, cut a unit at a
+ * time (the good by the running total mod 3) to her class x 20 + 20
+ * tons with half her guns, rounded up to even, also offered.  Then rand((reputation + 5) x crew
+ * byte / 10) sailors ask to join, when more than 1 and the fleet has
+ * room for them, 32 men a class step.
+ */
+static void
+plunder(struct sim *s)
+{
+	struct sim_battle *bt = &s->battle;
+	struct sim_fleet *f = &s->fleet;
+	const struct sim_encounter *e = &s->encounter;
+	int dist, town, wealth, r, guns, total, k, room;
+	long v;
+
+	town = s->player_town >= 0 ? s->player_town :
+	    sim_nearest_town(s, &dist);
+	wealth = town >= 0 ? s->towns[town].wealth : 0;
+	v = (long)((wealth + 64) / 16) * e->cargo;
+	bt->loot_gold = (v > 0 ? (long)rng_below(&s->rng, (int)v) : 0) * 10;
+	f->gold += bt->loot_gold;
+	bt->loot[0] = e->crew;
+	for (k = 1; k < 3; k++) {
+		r = rng_below(&s->rng, 0x7FFF);
+		bt->loot[k] = (int)((((uint32_t)r * (uint32_t)r >> 15) *
+		    (uint32_t)e->gold) >> 16);
+	}
+	guns = (bt->foe.guns + 1) & ~1;
+	bt->loot[3] = guns;
+	total = bt->loot[0] + bt->loot[1] + bt->loot[2] + guns / 2;
+	for (; total > (bt->foe.type & 0xF) * 20 + 20; total--) {
+		k = total % 3;		/* food, goods, sugar */
+		if (bt->loot[k] > 0)
+			bt->loot[k]--;
+	}
+	for (k = 0, room = 0; k < f->nships; k++)
+		room += ((f->ships[k] & 0xF) + 2) * 32;
+	v = (long)(s->reputation + 5) * e->crew / 10;
+	r = v > 0 ? rng_below(&s->rng, (int)v) : 0;
+	bt->volunteers = r > 1 && r + f->crew <= room ? r : 0;
+}
+
+void
+sim_take_volunteers(struct sim *s)
+{
+	s->fleet.crew += s->battle.volunteers;
+	s->battle.volunteers = 0;
+}
+
 static void
 capture(struct sim *s, int keep)
 {
 	struct sim_fleet *f = &s->fleet;
 	const struct sim_battle *bt = &s->battle;
 
-	/* Stand-in plunder until cargo and treasure are traced. */
-	f->gold += (long)s->encounter.gold * 10;
+	plunder(s);
 	if (!keep)
 		return;
-	f->guns += bt->foe.guns;
 	if (f->nships < MAX_SHIPS) {
 		f->nships++;
 		sim_prize_place(s, f->nships - 1, bt->foe.type,
@@ -795,6 +846,9 @@ sim_battle_finish(struct sim *s, int keep)
 	if (!bt->active)
 		return (BAT_NONE);
 	bt->news_town = -1;
+	bt->loot_gold = 0;
+	memset(bt->loot, 0, sizeof(bt->loot));
+	bt->volunteers = 0;
 	/* Boarding: the sword fight decides, and its losses count. */
 	if (o == BAT_BOARDING) {
 		const struct sim_sword *sw = &s->sword;

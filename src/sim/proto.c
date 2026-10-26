@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	28
+#define STATE_VERSION	29
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -790,11 +790,13 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_raw(b, "]");
 	jb_raw(b, ",\"market\":{\"open\":");
 	jb_int(b, s->market.open);
-	for (i = 0; i < GOODS; i++) {
+	jb_raw(b, ",\"plunder\":");
+	jb_int(b, s->market.plunder);
+	for (i = 0; i < BOARD_GOODS; i++) {
 		jb_raw(b, i == 0 ? ",\"stock\":[" : ",");
 		jb_int(b, s->market.stock[i]);
 	}
-	for (i = 0; i < GOODS; i++) {
+	for (i = 0; i < BOARD_GOODS; i++) {
 		jb_raw(b, i == 0 ? "],\"price\":[" : ",");
 		jb_int(b, s->market.price[i]);
 	}
@@ -1227,12 +1229,14 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 
 		if (mk == NULL || st == NULL || pr == NULL ||
 		    st->type != JSON_ARRAY || pr->type != JSON_ARRAY ||
-		    st->count != GOODS || pr->count != GOODS) {
+		    st->count < GOODS || st->count > BOARD_GOODS ||
+		    pr->count != st->count) {
 			snprintf(err, errlen, "bad market");
 			return (-1);
 		}
 		tmp.market.open = json_get_int(mk, "open", 0) != 0;
-		for (k = 0; k < GOODS; k++) {
+		tmp.market.plunder = json_get_int(mk, "plunder", 0) != 0;
+		for (k = 0; k < (int)st->count; k++) {
 			tmp.market.stock[k] = (int)st->items[k]->num;
 			tmp.market.price[k] = (int)pr->items[k]->num;
 		}
@@ -1686,6 +1690,20 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, ss->sim.fleet.crew);
 	jb_raw(out, ",\"gold\":");
 	jb_int(out, ss->sim.fleet.gold);
+	if (o == BAT_SURRENDER) {
+		/* Her plunder (VA 0xdb7b): gold aboard already, the cargo
+		 * for "merchant" "loot", sailors for "crew" "volunteers". */
+		int k;
+
+		jb_raw(out, ",\"loot_gold\":");
+		jb_int(out, ss->sim.battle.loot_gold);
+		for (k = 0; k < BOARD_GOODS; k++) {
+			jb_raw(out, k == 0 ? ",\"loot\":[" : ",");
+			jb_int(out, ss->sim.battle.loot[k]);
+		}
+		jb_raw(out, "],\"volunteers\":");
+		jb_int(out, ss->sim.battle.volunteers);
+	}
 	if (ss->sim.battle.news_town >= 0) {
 		/* The captured crew knows of villains there (VA 0xdb7b). */
 		int list[4], n = sim_villain_news(&ss->sim,
@@ -1827,7 +1845,12 @@ cmd_crew(struct session *ss, const struct json *cmd, struct jbuf *out)
 	} else if (action != NULL && strcmp(action, "abandon") == 0 &&
 	    sim_crew_check(s) == CHECK_ABANDON)
 		sim_abandon_ship(s, (int)json_get_int(cmd, "ship", 0));
-	else if (action != NULL && strcmp(action, "abandon_last") == 0 &&
+	else if (action != NULL && strcmp(action, "volunteers") == 0) {
+		/* A capture's sailors: "accept" 1 takes them (CSTR 166). */
+		if (json_get_int(cmd, "accept", 0) != 0)
+			sim_take_volunteers(s);
+		s->battle.volunteers = 0;
+	} else if (action != NULL && strcmp(action, "abandon_last") == 0 &&
 	    sim_crew_check(s) == CHECK_LAST)
 		sim_abandon_last(s);
 	else if (action != NULL) {
@@ -1939,19 +1962,24 @@ cmd_shipwright(struct session *ss, const struct json *cmd, struct jbuf *out)
 /*
  * The merchant: "open" rolls this visit's stock and prices; "buy" and
  * "sell" take "good" (food, goods, sugar) and "count"; "close" ends the
- * visit.
+ * visit.  "loot" opens the board on the last capture's cargo, anywhere,
+ * where "cannon" is a good too and everything is free.
  */
 static void
 cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
-	static const char *goods[GOODS] = { "food", "goods", "sugar" };
+	static const char *goods[BOARD_GOODS] = { "food", "goods", "sugar",
+	    "cannon" };
 	const char *action = json_get_str(cmd, "action");
 	const char *good = json_get_str(cmd, "good");
 	int64_t count = json_get_int(cmd, "count", 1);
 	struct sim *s = &ss->sim;
-	int g = -1, done = 0, i;
+	int g = -1, done = 0, i, n;
 
-	if (s->player_town < 0) {
+	if (action != NULL && strcmp(action, "loot") == 0) {
+		sim_plunder_open(s, s->battle.loot);
+		memset(s->battle.loot, 0, sizeof(s->battle.loot));
+	} else if (s->player_town < 0 && !s->market.plunder) {
 		reply_error(out, "not in a town");
 		return;
 	}
@@ -1960,7 +1988,12 @@ cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
 		    "or close");
 		return;
 	}
-	if (strcmp(action, "open") == 0) {
+	n = s->market.plunder ? BOARD_GOODS : GOODS;
+	if (strcmp(action, "loot") == 0) {
+		/* opened above */
+	} else if (strcmp(action, "close") == 0 && s->market.plunder) {
+		sim_plunder_close(s);
+	} else if (strcmp(action, "open") == 0) {
 		if (sim_merchant_refuses(s)) {
 			reply_error(out, "we do not trade with pirates");
 			return;
@@ -1976,7 +2009,7 @@ cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
 	} else if (strcmp(action, "pay_debt") == 0) {
 		done = sim_merchant_pay_debt(s);
 	} else if (strcmp(action, "buy") == 0 || strcmp(action, "sell") == 0) {
-		for (i = 0; good != NULL && i < GOODS; i++)
+		for (i = 0; good != NULL && i < n; i++)
 			if (strcmp(good, goods[i]) == 0)
 				g = i;
 		if (!s->market.open || g < 0 || count < 1 || count > 10000) {
@@ -1998,11 +2031,11 @@ cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, s->merchant_gold);
 	jb_raw(out, ",\"hold_space\":");
 	jb_int(out, sim_hold_space(s));
-	for (i = 0; i < GOODS; i++) {
+	for (i = 0; i < n; i++) {
 		jb_raw(out, i == 0 ? ",\"stock\":[" : ",");
 		jb_int(out, s->market.stock[i]);
 	}
-	for (i = 0; i < GOODS; i++) {
+	for (i = 0; i < n; i++) {
 		jb_raw(out, i == 0 ? "],\"price\":[" : ",");
 		jb_int(out, s->market.price[i]);
 	}

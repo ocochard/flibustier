@@ -55,7 +55,7 @@ STMALO_DATA=~/games/pirates_gold ctest --test-dir build
 ## Running
 
 ```sh
-./build/stmalo --data ~/games/pirates_gold [--lang eng|fre|ger]
+./build/stmalo --data ~/games/pirates_gold [--lang eng|fre|ger, or en|fr|de]
 ```
 
 So far this runs the start of the game: the intro, the welcome menu, and

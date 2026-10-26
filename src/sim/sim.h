@@ -66,6 +66,8 @@ enum news_code {
 	NEWS_DISPLEASED = 36	/* a mission failed */
 };
 
+#define BOARD_GOODS	4	/* food, goods, sugar, cannon */
+
 struct sim_town {
 	char		name[17];
 	uint16_t	flags;
@@ -318,6 +320,11 @@ struct sim_battle {
 	int		news_town;	/* after a capture near a town, its
 					 * crew tells of villains there; or
 					 * -1 */
+	/* A capture's plunder (VA 0xdb7b): gold already aboard, goods
+	 * to take for nothing, sailors who would join. */
+	long		loot_gold;
+	int		loot[BOARD_GOODS];
+	int		volunteers;
 	int		crew_ashore;	/* crew and guns left with the fleet */
 	int		guns_ashore;
 	int		fort;		/* against a town's fort */
@@ -480,8 +487,10 @@ struct sim {
 	} mission, mission_offer;
 	struct sim_market {
 		int	open;
-		int	stock[3];	/* food, goods, sugar */
-		int	price[3];
+		int	plunder;	/* the loot board: cannon too */
+		int	stock[BOARD_GOODS];	/* food, goods, sugar,
+						 * cannon */
+		int	price[BOARD_GOODS];
 		long	gold_at_open;	/* the player's */
 	} market;
 	int8_t		relations[4][4];
@@ -595,7 +604,8 @@ int	sim_repair(struct sim *s, unsigned mask);
  * ship always stays. */
 int	sim_sell_ships(struct sim *s, unsigned mask);
 
-/* The merchant (VA 0x21e56).  Goods: 0 food, 1 goods, 2 sugar. */
+/* The merchant (VA 0x21e56).  Goods: 0 food, 1 goods, 2 sugar; the
+ * loot board (VA 0x2264f) adds 3, cannon (BOARD_GOODS). */
 #define GOODS		3
 
 /* Free space in the hold, in tons; guns take half a ton. */
@@ -957,7 +967,7 @@ int	sim_land_end(struct sim *s);
 void	sim_log_failure(struct sim *s, int town);
 
 /* The plunder's goods on the trading board, for nothing; and done. */
-void	sim_plunder_open(struct sim *s, const int goods[3]);
+void	sim_plunder_open(struct sim *s, const int goods[BOARD_GOODS]);
 /* "Take all" (VA 0x20cd9): while the hold has room, a unit of the
  * selected good, or else of the first one left, bought while its price
  * is below the gold (the selected good's price is the one checked).
@@ -982,6 +992,8 @@ void	sim_board(struct sim *s, int weapon);
  * hold given up; the crew rises to 8 men for each ship before the slot.
  */
 void	sim_prize_place(struct sim *s, int slot, int type, int damage);
+/* The volunteers of a capture join the crew (CSTR 166, "Take them"). */
+void	sim_take_volunteers(struct sim *s);
 enum battle_outcome sim_battle_finish(struct sim *s, int keep);
 
 /* One world update; exposed for tests. */

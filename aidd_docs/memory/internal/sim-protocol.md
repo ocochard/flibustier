@@ -25,7 +25,7 @@ with a message. Numbers are integers only.
 | `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land`, `town`, `encounter` or `crew`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
-| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold`; after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
+| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold`; after a capture `loot_gold` (already aboard), `loot` (food, goods, sugar, cannon: take with `merchant` `loot`), `volunteers` (`crew` `volunteers` with `accept`); after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
 | `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
@@ -41,7 +41,7 @@ with a message. Numbers are integers only.
 | `march` | on foot: `dx`, `dy` (-1..1), `ticks` (1..23360) | `stop` (`ticks`, `town`, `boarded`), `town`, `x`, `y`, `day` |
 | `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
 | `bank` | `action`: `divide` (the plunder), or `continue` (another expedition; `advance`: 0 or 1) | `share`, `mood` (0-3), `yours`, `fortune`, `gold`, `crew`, `difficulty` |
-| `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`), `close` (`traded` then 2: dinner with the wife, 1: his daughter, 0: nobody), `propose` (297 refused, 298 his debt) or `pay_debt` (300 short, 299 married) | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
+| `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`), `close` (`traded` then 2: dinner with the wife, 1: his daughter, 0: nobody), `propose` (297 refused, 298 his debt) or `pay_debt` (300 short, 299 married); `loot` opens the board on the last capture's cargo anywhere, free, with `cannon` as a fourth good, `close` ends it | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
 | `tavern` | `action`: `open` (counts the recruits) or `recruit` (`accept`: 0 or 1) | `recruits`, `crew`, `tavern_spots` |
 | `governor` | `action`: `visit` (once a stay: the mission's report or an offer, promotion, a new villain, then his offer) or `pay` | `promoted`, `acres`, `paid`, `offer` (none, marque, pardon, daughter), `price`, `gold`, `villain_here` (a villain hiding in the town, or -1: fight him with `villain`), `report` (1, 2 the pirate, -1 failed, 0), `mission_offer` (its type, 0 none) and `mission_dest`, `villain` (the slot named, or -1) |
 | `board` | `weapon` (0 rapier, 1 longsword, 2 cutlass; default 2), after a `boarding` outcome | `sword` |
@@ -62,7 +62,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 28,
+  "version": 29,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,

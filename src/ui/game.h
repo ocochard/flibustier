@@ -211,6 +211,7 @@ struct game {
 	struct {
 		int		 x, y;		/* world pixels */
 		int		 frame;
+		int		 shown;		/* in view at its last move */
 	}			 clouds[3];
 	uint32_t		 cloud_rand;	/* the engine's own, not the sim's */
 	unsigned		 sail_wait;	/* frames to the next pass */
@@ -250,6 +251,8 @@ struct game {
 	int			 panel_replace;	/* ... to make room for a prize */
 	/* After a sea battle, the steps still to show. */
 	int			 btl_news, btl_landed, btl_aboard, btl_hunted;
+	int			 btl_loot;	/* a capture's board to show */
+	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the
 	 * villains named, the answer shown, where it goes next. */
