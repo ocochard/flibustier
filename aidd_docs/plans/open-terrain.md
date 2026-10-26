@@ -99,6 +99,12 @@ export gives byte-identical output.
   anew (roadmap, licensing risk), tuned against the original rules.
 - Size: large; tooling outside the engine (scripts under `tools/`).
 
+## Remaining map data
+
+- `coast` (executable, VA 0x33b18): a byte per map tile, read by the
+  prison escape (`sim/prison.c`). Like the land battle ground, it
+  belongs in the map tile sheet for open packs; not done yet.
+
 ## Beyond terrain
 
 The other tables read from the executable are not map data but still

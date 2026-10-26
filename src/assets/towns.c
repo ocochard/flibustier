@@ -62,6 +62,8 @@ parse_town(const uint8_t *r, struct town *t)
 	t->sea_x = t->raw[26];
 	t->sea_y = t->raw[27];
 	t->sea_heading = t->raw[28];
+	t->citymap_x = t->raw[29];
+	t->citymap_y = t->raw[30];
 }
 
 int
@@ -142,6 +144,8 @@ static const struct {
 	{ "sea", 3, { offsetof(struct town, sea_x),
 	    offsetof(struct town, sea_y),
 	    offsetof(struct town, sea_heading) } },
+	{ "citymap", 2, { offsetof(struct town, citymap_x),
+	    offsetof(struct town, citymap_y) } },
 };
 
 #define FIELD(t, off)	(*(int *)((char *)(t) + (off)))

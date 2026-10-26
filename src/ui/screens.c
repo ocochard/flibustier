@@ -7425,11 +7425,12 @@ citymap_enter(struct game *g)
 		memcpy(g->ink, g->bg.palette, 3);
 	memset(g->cm_x, 0, sizeof(g->cm_x));
 	memset(g->cm_y, 0, sizeof(g->cm_y));
-	if (towns_load(g->layout, g->exe, g->exe_len, g->world != NULL ?
-	    g->world->era : 0, &e) == 0)
+	if (towns_for_era(g->packs, g->layout, g->exe, g->exe_len,
+	    g->world != NULL ? g->world->era : 0, &e, g->err,
+	    sizeof(g->err)) == 0)
 		for (i = 0; i < e.count && i < g->sim.ntowns; i++) {
-			g->cm_x[i] = e.towns[i].raw[29];
-			g->cm_y[i] = e.towns[i].raw[30];
+			g->cm_x[i] = e.towns[i].citymap_x;
+			g->cm_y[i] = e.towns[i].citymap_y;
 		}
 	g->cm_scroll = 0;
 	if ((size_t)g->cm_sel >= g->sim.ntowns)

@@ -727,7 +727,8 @@ same_town(const struct town *a, const struct town *b)
 	    a->ship_y == b->ship_y && a->ship_heading == b->ship_heading &&
 	    a->party_x == b->party_x && a->party_y == b->party_y &&
 	    a->sea_x == b->sea_x && a->sea_y == b->sea_y &&
-	    a->sea_heading == b->sea_heading);
+	    a->sea_heading == b->sea_heading &&
+	    a->citymap_x == b->citymap_x && a->citymap_y == b->citymap_y);
 }
 
 /*

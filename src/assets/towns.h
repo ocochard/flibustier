@@ -55,6 +55,9 @@ struct town {
 	int		 ship_x, ship_y, ship_heading;	/* f19-f21 */
 	int		 party_x, party_y;	/* f22, f23 */
 	int		 sea_x, sea_y, sea_heading;	/* f26-f28 */
+	/* f29, f30: the town's dot on the Map of the Caribbean
+	 * (pic/citymap). */
+	int		 citymap_x, citymap_y;
 	uint16_t	 raw[TOWN_FIELDS];	/* original data only */
 };
 
@@ -95,7 +98,8 @@ int	towns_for_era(struct packs *packs, const struct exe_layout *layout,
  *	    "citizens": 9000, "gold": 50, "wealth": 195, "standing": 0,
  *	    "garrison": 0, "governor": 3, "family": 0, "barmaid": 0,
  *	    "land": [x, y], "fort": [x, y], "ship": [x, y, heading],
- *	    "party": [x, y], "sea": [x, y, heading] }, ... ] }
+ *	    "party": [x, y], "sea": [x, y, heading],
+ *	    "citymap": [x, y] }, ... ] }
  *
  * Every member is required; numbers are 0..65535, nations "spain",
  * "england", "france" or "holland".  towns_encode() writes that form.

@@ -1391,7 +1391,8 @@ test_town_files(void)
 	    "\"gold\": 50, \"wealth\": 195, \"standing\": 1, \"garrison\": 2, "
 	    "\"governor\": 3, \"family\": 64, \"barmaid\": 5, "
 	    "\"land\": [1, 2], \"fort\": [3, 4], \"ship\": [5, 6, 7], "
-	    "\"party\": [8, 9], \"sea\": [10, 11, 12]}]}";
+	    "\"party\": [8, 9], \"sea\": [10, 11, 12], "
+	    "\"citymap\": [13, 14]}]}";
 	static struct era_towns era, back;
 	struct jbuf b = { 0 };
 	char err[256], text[1024];
@@ -1407,7 +1408,7 @@ test_town_files(void)
 	    t->wealth == 195 && t->forts == 4 && t->id == 6 &&
 	    t->land_x == 1 && t->fort_x == 3 && t->fort_y == 4 &&
 	    t->ship_x == 5 && t->ship_y == 6 && t->party_y == 9 &&
-	    t->sea_y == 11 &&
+	    t->sea_y == 11 && t->citymap_x == 13 && t->citymap_y == 14 &&
 	    t->land_y == 2 && t->ship_heading == 7 && t->sea_x == 10 &&
 	    t->sea_heading == 12);
 
