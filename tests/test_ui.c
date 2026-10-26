@@ -15,6 +15,7 @@
 
 #include <unistd.h>
 
+#include "assets/pic.h"
 #include "assets/towns.h"
 #include "data/pack.h"
 #include "sim/hof.h"
@@ -1526,6 +1527,135 @@ test_crew(void)
 	game_free(g);
 }
 
+static int
+touch(const char *dir, const char *name, const char *text)
+{
+	char path[1024];
+	FILE *fp;
+
+	snprintf(path, sizeof(path), "%s/%s", dir, name);
+	if ((fp = fopen(path, "w")) == NULL)
+		return (-1);
+	fputs(text, fp);
+	return (fclose(fp));
+}
+
+/*
+ * Per-town assets: the town's own, else its nation's, else the shared
+ * one; outside a town, the shared one.
+ */
+static void
+test_town_assets(void)
+{
+	static const char *const files[] = { "pack.ini", "tavern.png",
+	    "governor.png", "tavern.pcx", NULL };
+	struct image want;
+	struct blob pic;
+	FILE *fp;
+	char dir[] = "/tmp/stmalo-test-XXXXXX", path[1024], id[96], slug[32];
+	struct packs *own, *saved;
+	struct game *g;
+	struct sim_town *t;
+	size_t i;
+
+	town_slug("Port Royale", slug, sizeof(slug));
+	CHECK(strcmp(slug, "port-royale") == 0);
+	town_slug("St. Augustine", slug, sizeof(slug));
+	CHECK(strcmp(slug, "st-augustine") == 0);
+	town_slug("  San--Juan ", slug, sizeof(slug));
+	CHECK(strcmp(slug, "san-juan") == 0);
+	town_slug("Cura\xc3\xa7" "ao", slug, sizeof(slug));	/* UTF-8 */
+	CHECK(strcmp(slug, "cura-ao") == 0);
+	town_slug("Maracaibo", slug, 5);
+	CHECK(strcmp(slug, "mara") == 0);
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter "
+	    "click:60,300 wait:30");
+	if (g == NULL || mkdtemp(dir) == NULL) {
+		CHECK(!"set up");
+		return;
+	}
+	for (i = 0; i < g->sim.ntowns; i++)
+		if (strcmp(g->sim.towns[i].name, "Port Royale") == 0)
+			break;
+	CHECK(i < g->sim.ntowns);
+	if (i == g->sim.ntowns)
+		return;
+	t = &g->sim.towns[i];
+	CHECK(t->nation == NATION_ENGLAND);
+	CHECK(touch(dir, "pack.ini", "[assets]\n"
+	    "pic/tavern/port-royale = tavern.png\n"
+	    "pic/governor/england = governor.png\n") == 0);
+	CHECK(touch(dir, "tavern.png", "x") == 0);
+	CHECK(touch(dir, "governor.png", "x") == 0);
+	/* A stack of its own, so later tests keep the original. */
+	own = packs_new();
+	CHECK(packs_add_original(own, getenv("STMALO_DATA")) == 0);
+	CHECK(packs_add_dir(own, dir) == 0);
+	saved = g->packs;
+	g->packs = own;
+
+	g->sim.player_town = -1;
+	CHECK(strcmp(game_town_asset(g, "pic/tavern", id, sizeof(id)),
+	    "pic/tavern") == 0);
+	g->sim.player_town = (int)i;
+	CHECK(strcmp(game_town_asset(g, "pic/tavern", id, sizeof(id)),
+	    "pic/tavern/port-royale") == 0);
+	CHECK(strcmp(game_town_asset(g, "pic/governor", id, sizeof(id)),
+	    "pic/governor/england") == 0);
+	CHECK(strcmp(game_town_asset(g, "pic/barmaid", id, sizeof(id)),
+	    "pic/barmaid") == 0);
+	/* Taken by Spain: no Spanish governor, so the shared one. */
+	t->nation = NATION_SPAIN;
+	CHECK(strcmp(game_town_asset(g, "pic/governor", id, sizeof(id)),
+	    "pic/governor") == 0);
+	/* Too small a buffer: the shared one, never a cut ID. */
+	t->nation = NATION_ENGLAND;
+	CHECK(strcmp(game_town_asset(g, "pic/tavern", id, 12),
+	    "pic/tavern") == 0);
+
+	/* In the game: Port Royale's tavern shows its own picture, here
+	 * the governor's (copied for the test only). */
+	g->packs = saved;
+	g->sim.player_town = -1;
+	CHECK(packs_load(saved, "pic/governor", &pic) == 0);
+	snprintf(path, sizeof(path), "%s/tavern.pcx", dir);
+	if ((fp = fopen(path, "wb")) != NULL) {
+		fwrite(pic.data, 1, pic.len, fp);
+		fclose(fp);
+	}
+	blob_free(&pic);
+	CHECK(touch(dir, "pack.ini", "[assets]\n"
+	    "pic/tavern/port-royale = tavern.pcx\n") == 0);
+	packs_free(own);
+	own = packs_new();
+	CHECK(packs_add_original(own, getenv("STMALO_DATA")) == 0);
+	CHECK(packs_add_dir(own, dir) == 0);
+	g->packs = own;
+	g->sim.encounters = 0;
+	g->sim.fleet.x = t->sea_x * 16 + 8;	/* at its harbour mouth */
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;
+	CHECK(game_script(g, "wait:40 enter wait:40 click:250,350 wait:40") ==
+	    0);
+	CHECK(g->screen == &screen_tavern && g->sim.player_town == (int)i);
+	CHECK(pic_load(own, "pic/governor", &want) == 0);
+	CHECK(g->bg.pixels != NULL && want.pixels != NULL &&
+	    g->bg.w == want.w && g->bg.h == want.h &&
+	    memcmp(g->bg.pixels, want.pixels, (size_t)want.w * want.h) == 0);
+	image_free(&want);
+
+	g->packs = saved;
+	packs_free(own);
+	game_free(g);
+	for (i = 0; files[i] != NULL; i++) {
+		snprintf(path, sizeof(path), "%s/%s", dir, files[i]);
+		remove(path);
+	}
+	remove(dir);
+}
+
 int
 main(void)
 {
@@ -1552,6 +1682,7 @@ main(void)
 	test_pointer();
 	test_intro();
 	test_town();
+	test_town_assets();
 	test_shipwright();
 	test_merchant();
 	test_tavern();

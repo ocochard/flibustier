@@ -4068,9 +4068,12 @@ town_hit(const struct game *g, int x, int y)
 static void
 town_enter(struct game *g)
 {
-	game_background(g, "pic/town");
+	char id[96];
+
+	game_background(g, game_town_asset(g, "pic/town", id, sizeof(id)));
 	game_portrait(g, NULL);
-	load_bank(g, "spr/town", 0, &g->town_spr);
+	load_bank(g, game_town_asset(g, "spr/town", id, sizeof(id)), 0,
+	    &g->town_spr);
 	g->town_spot = -1;
 	g->ink[0] = g->ink[1] = g->ink[2] = 0;
 	g->highlight[0] = g->highlight[1] = g->highlight[2] = 0;
@@ -4795,9 +4798,12 @@ tavern_hit(const struct game *g, int x, int y)
 static void
 tavern_enter(struct game *g)
 {
-	game_background(g, "pic/tavern");
+	char id[96];
+
+	game_background(g, game_town_asset(g, "pic/tavern", id, sizeof(id)));
 	game_portrait(g, NULL);
-	load_bank(g, "spr/tavern", 0, &g->tavern_spr);
+	load_bank(g, game_town_asset(g, "spr/tavern", id, sizeof(id)), 0,
+	    &g->tavern_spr);
 	g->tavern_spot = -1;
 	g->ink[0] = g->ink[1] = g->ink[2] = 0;
 }
@@ -4981,7 +4987,10 @@ const struct screen screen_recruit = {
 static void
 rumours_enter(struct game *g)
 {
-	game_background(g, "pic/bartenda");
+	char id[96];
+
+	game_background(g, game_town_asset(g, "pic/bartenda", id,
+	    sizeof(id)));
 	game_portrait(g, NULL);
 	/* Ink entry 0 (VA 0x1e78d): palette index 0. */
 	if (g->bg.pixels != NULL)
@@ -5122,7 +5131,9 @@ villain_text(struct game *g, int k, int str, char *out, size_t len)
 static void
 governor_inks(struct game *g, const char *pic)
 {
-	game_background(g, pic);
+	char id[96];
+
+	game_background(g, game_town_asset(g, pic, id, sizeof(id)));
 	game_portrait(g, NULL);
 	g->ink[0] = 240;
 	g->ink[1] = 220;
@@ -5162,6 +5173,7 @@ governor_next(struct game *g)
 {
 	long price;
 	enum governor_offer o;
+	char id[96];
 	int v;
 
 	switch (g->gov_stage) {
@@ -5195,7 +5207,8 @@ governor_next(struct game *g)
 	case GOV_TASK:
 		g->gov_rank = sim_governor_promote(&g->sim, &g->gov_acres);
 		if (g->gov_rank > 0) {
-			load_bank(g, "spr/gov", 0, &g->gov_spr);
+			load_bank(g, game_town_asset(g, "spr/gov", id,
+			    sizeof(id)), 0, &g->gov_spr);
 			g->gov_stage = GOV_PROMOTED;
 			return;
 		}
@@ -6384,7 +6397,10 @@ enum { MAID_DRINK, MAID_ASK, MAID_EVENING, MAID_HEART, MAID_NOTHING,
 static void
 barmaid_enter(struct game *g)
 {
-	game_background(g, "pic/barmaid");
+	char id[96];
+
+	game_background(g, game_town_asset(g, "pic/barmaid", id,
+	    sizeof(id)));
 	game_portrait(g, NULL);
 	talk_inks(g);
 	switch (sim_barmaid_meet(&g->sim)) {

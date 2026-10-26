@@ -47,6 +47,9 @@ int		 packs_load(struct packs *packs, const char *id,
 		    struct blob *out);
 void		 blob_free(struct blob *blob);
 
+/* Whether some pack provides "id" (it is loaded to find out). */
+int		 packs_has(struct packs *packs, const char *id);
+
 /*
  * The same, from the highest-priority pack whose file for "id" has
  * extension "ext" ("pcx"): for example the original picture behind a

@@ -227,3 +227,29 @@ original files and executable.
   and a `pack.ini`. Exported from the original data, it is for local
   checks and as a starting point only: never distribute it.
 
+## Per-town assets
+
+Town screens look up their assets per town (`game_town_asset()`,
+`src/ui/game.c`), so a pack can give any town its own:
+
+1. `<base>/<town>`: the town's name in lowercase, each run of
+   characters other than a-z and 0-9 a `-` (`pic/tavern/port-royale`,
+   `pic/governor/st-augustine`);
+2. `<base>/<nation>`: the town's current nation, `spain`, `england`,
+   `france` or `holland` (`pic/governor/england`), so a change of
+   owner changes the picture;
+3. `<base>`: the shared asset, as in the original.
+
+| Screen | Assets looked up |
+|---|---|
+| Village | `pic/town`, `spr/town` |
+| Tavern | `pic/tavern`, `spr/tavern` |
+| Bartender | `pic/bartenda` |
+| Barmaid | `pic/barmaid` |
+| Governor | `pic/governor`, `spr/gov` |
+
+- The clickable spots of each screen come from the executable and do
+  not change per town: a town's picture must keep the shared layout.
+- Town names come from the town data, so an open pack's own names give
+  its keys.
+

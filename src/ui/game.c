@@ -215,6 +215,55 @@ game_free(struct game *g)
 }
 
 void
+town_slug(const char *name, char *buf, size_t len)
+{
+	size_t n = 0;
+	int dash = 0;
+	char c;
+
+	if (len == 0)
+		return;
+	for (; *name != '\0'; name++) {
+		c = *name;
+		if (c >= 'A' && c <= 'Z')
+			c = (char)(c - 'A' + 'a');
+		if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			if (dash && n > 0 && n + 1 < len)
+				buf[n++] = '-';
+			dash = 0;
+			if (n + 1 < len)
+				buf[n++] = c;
+		} else
+			dash = 1;
+	}
+	buf[n] = '\0';
+}
+
+const char *
+game_town_asset(struct game *g, const char *base, char *buf, size_t len)
+{
+	static const char *const nations[] = { "spain", "england", "france",
+	    "holland" };
+	const struct sim_town *t;
+	char slug[64];
+
+	if (!g->started || g->sim.player_town < 0 ||
+	    (size_t)g->sim.player_town >= g->sim.ntowns)
+		return (base);
+	t = &g->sim.towns[g->sim.player_town];
+	town_slug(t->name, slug, sizeof(slug));
+	if (slug[0] != '\0' &&
+	    (size_t)snprintf(buf, len, "%s/%s", base, slug) < len &&
+	    packs_has(g->packs, buf))
+		return (buf);
+	if (t->nation < sizeof(nations) / sizeof(nations[0]) &&
+	    (size_t)snprintf(buf, len, "%s/%s", base, nations[t->nation]) <
+	    len && packs_has(g->packs, buf))
+		return (buf);
+	return (base);
+}
+
+void
 game_switch(struct game *g, const struct screen *s)
 {
 	g->screen = s;

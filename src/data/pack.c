@@ -537,6 +537,17 @@ packs_load(struct packs *packs, const char *id, struct blob *out)
 }
 
 int
+packs_has(struct packs *packs, const char *id)
+{
+	struct blob b;
+
+	if (packs_load(packs, id, &b) != 0)
+		return (0);
+	blob_free(&b);
+	return (1);
+}
+
+int
 packs_load_ext(struct packs *packs, const char *id, const char *ext,
     struct blob *out)
 {

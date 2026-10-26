@@ -255,6 +255,21 @@ struct game {
 int	game_init(struct game *g, struct packs *packs, const char *lang,
 	    const char *save_dir);
 void	game_free(struct game *g);
+
+/*
+ * The asset to use for "base" (an ID such as "pic/tavern") in the town
+ * the player is in, so packs can give each town its own:
+ * "<base>/<town>" when a pack has it, else "<base>/<nation>" for the
+ * town's nation (spain, england, france, holland), else "base" itself.
+ * <town> is the town's name in lowercase, each run of other characters
+ * than a-z and 0-9 a "-": "port-royale".  Outside a town, "base".  The
+ * result is "buf" or "base".
+ */
+const char *game_town_asset(struct game *g, const char *base, char *buf,
+	    size_t len);
+
+/* The ID part for a town name: "Port Royale" is "port-royale". */
+void	town_slug(const char *name, char *buf, size_t len);
 /* Go to a screen at once, without a fade (steps of one picture). */
 void	game_switch(struct game *g, const struct screen *s);
 
