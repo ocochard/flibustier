@@ -2695,7 +2695,7 @@ battle_enter(struct game *g)
 	}
 	/* Several ships: which one to command, before the first tick. */
 	if (g->btl_stage == 0 && g->sim.battle.tick == 0 &&
-	    g->sim.fleet.nships > 1) {
+	    g->sim.fleet.nships > 1 && !g->btl_chosen) {
 		g->btl_stage = BTL_COMMAND;
 		g->selected = 0;
 	}
@@ -2703,13 +2703,6 @@ battle_enter(struct game *g)
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 }
 
-static void
-command_choose(struct game *g, int i)
-{
-	sim_battle_command(&g->sim, i);
-	battle_sprites(g, 0, g->sim.battle.you.type);
-	g->btl_stage = 0;
-}
 
 static void
 battle_finish(struct game *g, int keep)
@@ -2718,6 +2711,7 @@ battle_finish(struct game *g, int keep)
 	    g->sim.battle.outcome == BAT_LANDED;
 	int aboard = g->sim.battle.crew_ashore;
 
+	g->btl_chosen = 0;
 	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
 	if (landed) {
 		/* The assault follows (VA 0x18c2c). */
@@ -2746,11 +2740,7 @@ battle_event(struct game *g, const struct ui_event *ev)
 		menu_event(g, ev, 2, NULL, prize_choose, NULL);
 		return;
 	}
-	if (g->btl_stage == BTL_COMMAND) {
-		menu_event(g, ev, g->sim.fleet.nships, NULL, command_choose,
-		    NULL);
-		return;
-	}
+
 	if (g->btl_stage == 1) {
 		if (!((ev->type == EV_KEY && ev->key == UI_KEY_ENTER) ||
 		    ev->type == EV_CLICK))
@@ -2869,6 +2859,10 @@ battle_end_picture(int outcome)
 static void
 battle_tick(struct game *g)
 {
+	if (g->btl_stage == BTL_COMMAND && g->fading == 0) {
+		game_goto(g, &screen_fleet_panel);	/* VA 0xf246 */
+		return;
+	}
 	if (g->fading != 0 || g->btl_stage != 0)
 		return;
 	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
@@ -2998,22 +2992,6 @@ battle_draw(struct game *g)
 
 	if (g->btl_stage == 0)
 		return;
-	if (g->btl_stage == BTL_COMMAND) {
-		/* "Which ship will you command?" (CSTR 286) and the fleet;
-		 * the original picks on its fleet panel (VA 0xffae). */
-		int i;
-
-		text_band(g, 160, 290);
-		snprintf(text, sizeof(text), "%s", game_str(g, S_COMMAND));
-		for (i = 0; i < g->sim.fleet.nships; i++) {
-			strncat(text, "\r~", sizeof(text) - strlen(text) - 1);
-			strncat(text, game_word(g, W_SHIP_TYPE,
-			    (size_t)(g->sim.fleet.ships[i] % 9)),
-			    sizeof(text) - strlen(text) - 1);
-		}
-		draw(g, FONT_BODY, 80, 170, 400, text, 1);
-		return;
-	}
 	if (g->btl_stage == 2) {
 		text_band(g, 160, 290);
 		/* "%sa %s ton %s with %s guns... space for %s tons" (VA
@@ -3758,10 +3736,17 @@ const struct screen screen_town = {
 #define W_NUMBER		79	/* 0 "s", then "One".."Five" */
 #define W_WEALTH		9
 
+static const struct sim_town *
+info_town(const struct game *g)
+{
+	return (g->info_town >= 0 && (size_t)g->info_town < g->sim.ntowns ?
+	    &g->sim.towns[g->info_town] : here(g));
+}
+
 static void
 cityinfo_enter(struct game *g)
 {
-	const struct sim_town *t = here(g);
+	const struct sim_town *t = info_town(g);
 
 	game_background(g, t != NULL && (t->flags & TOWN_INLAND) ?
 	    "pic/arr_land" : "pic/arr_sea");
@@ -3775,8 +3760,12 @@ static void
 cityinfo_event(struct game *g, const struct ui_event *ev)
 {
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
-	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, &screen_town);
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		game_goto(g, g->info_back != NULL ? g->info_back :
+		    &screen_town);
+		g->info_town = -1;
+		g->info_back = NULL;
+	}
 }
 
 /* The town's description as the game words it. */
@@ -3818,7 +3807,7 @@ city_text(const struct game *g, const struct sim_town *t, char *out,
 static void
 cityinfo_draw(struct game *g)
 {
-	const struct sim_town *t = here(g);
+	const struct sim_town *t = info_town(g);
 	char text[512];
 
 	if (t == NULL)
@@ -4271,6 +4260,7 @@ const struct screen screen_merchant = {
 #define S_RECRUITS		151
 #define S_NO_RECRUITS		309
 #define S_GOSSIP		125
+#define W_TAVERN_SPOT		90	/* Map Seller, Traveller... */
 #define TAVERN_MAPMAN		0
 #define TAVERN_INFOMAN		1
 #define TAVERN_BARTENDER	3
@@ -4317,6 +4307,7 @@ tavern_enter(struct game *g)
 	game_background(g, "pic/tavern");
 	game_portrait(g, NULL);
 	load_bank(g, "spr/tavern", 0, &g->tavern_spr);
+	g->tavern_spot = -1;
 	g->ink[0] = g->ink[1] = g->ink[2] = 0;
 }
 
@@ -4331,6 +4322,12 @@ tavern_choose(struct game *g, int i)
 		game_goto(g, &screen_recruit);
 	else if (i == TAVERN_BARTENDER)
 		game_goto(g, &screen_rumours);
+	else if (i == TAVERN_MAPMAN)
+		game_goto(g, &screen_mapman);
+	else if (i == TAVERN_INFOMAN)
+		game_goto(g, &screen_traveller);
+	else if (i == TAVERN_BARMAID)
+		game_goto(g, &screen_barmaid);
 	else if (i == SPOT_CABIN)
 		game_goto(g, &screen_cabin);
 	else
@@ -4361,7 +4358,10 @@ tavern_event(struct game *g, const struct ui_event *ev)
 			tavern_choose(g, i);
 		break;
 	case EV_MOVE:
-		if ((i = tavern_hit(g, ev->x, ev->y)) >= 0)
+		/* Pointing at someone names them on the scroll (VA
+		 * 0x11acb, CSTN 90). */
+		g->tavern_spot = i = tavern_hit(g, ev->x, ev->y);
+		if (i >= 0)
 			g->tavern_key = i;
 		break;
 	case EV_KEY:
@@ -4396,7 +4396,9 @@ tavern_draw(struct game *g)
 		    (g->sim.tavern_spots & (1u << who[i])))
 			fb_frame(&g->fb, &g->tavern_spr.frames[i], at[i][0],
 			    at[i][1]);
-	name = game_word(g, W_TAVERN_NAME, (size_t)g->sim.player_town);
+	name = g->tavern_spot >= 0 ? game_word(g, W_TAVERN_SPOT,
+	    (size_t)g->tavern_spot) : game_word(g, W_TAVERN_NAME,
+	    (size_t)g->sim.player_town);
 	w = text_width(&g->font[FONT_TITLE], name);
 	draw(g, FONT_TITLE, 320 - w / 2, TOWN_NAME_Y, FB_W, name, 0);
 	if (g->msg[0] != '\0')		/* an engine note, in the ink */
@@ -5433,4 +5435,402 @@ prison_draw(struct game *g)
 
 const struct screen screen_prison = {
 	"prison", prison_enter, prison_event, NULL, prison_draw,
+};
+
+/*
+ * The tavern's people (VA 0x11867).  The map seller (VA 0x112ef, on
+ * mapman.pcx): part of a treasure map, CSTR 153 at (340, 150) up to x
+ * 620; it costs 50 gold, although his words say 500.  The traveller (VA
+ * 0x1116f, infoman.pcx): news of a town for his price, CSTR 152 at (20,
+ * 150) up to x 280, then that town's information.  The barmaid (VA
+ * 0x114d4, barmaid.pcx, texts at (40, 150) up to x 320).  Without the
+ * gold: "You have insufficient funds!" (CSTR 94).
+ */
+#define S_TRAVELLER		152
+#define S_MAP_SELLER		153
+#define S_NO_FUNDS		94
+#define S_DRINK			301
+#define S_LOOKING_FOR		302
+#define S_EVENING		303
+#define S_HEART			304
+#define S_NOTHING_TO_SAY	305
+#define S_INFORMANT		306
+#define S_GOSSIP_ON		307
+#define S_MAP_PIECE		308
+
+static void
+talk_inks(struct game *g)
+{
+	if (g->bg.pixels != NULL) {
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+	}
+	g->selected = 0;
+}
+
+static int
+talk_go(const struct ui_event *ev)
+{
+	return (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)));
+}
+
+/* The map seller: 0 the offer, 1 bought, 2 no funds. */
+static void
+mapman_enter(struct game *g)
+{
+	game_background(g, "pic/mapman");
+	game_portrait(g, NULL);
+	talk_inks(g);
+	g->talk = 0;
+}
+
+static void
+mapman_choose(struct game *g, int i)
+{
+	if (i != 0) {
+		game_goto(g, &screen_tavern);
+		return;
+	}
+	g->talk = sim_buy_map(&g->sim) ? 1 : 2;
+}
+
+static void
+mapman_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->talk == 0)
+		menu_event(g, ev, 2, NULL, mapman_choose, NULL);
+	else if (talk_go(ev))
+		game_goto(g, &screen_tavern);
+}
+
+static void
+mapman_draw(struct game *g)
+{
+	if (g->talk == 0) {
+		draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_MAP_SELLER),
+		    1);
+		return;
+	}
+	/* The piece itself (VA 0x1f08a) waits for the treasure maps. */
+	draw(g, FONT_BODY, 340, 150, 280, g->talk == 2 ?
+	    game_str(g, S_NO_FUNDS) :
+	    "(A piece of a treasure map is yours. Treasure maps are not "
+	    "implemented yet.)", 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_mapman = {
+	"mapman", mapman_enter, mapman_event, NULL, mapman_draw,
+};
+
+/* The traveller: 0 the offer, 2 no funds. */
+static void
+traveller_enter(struct game *g)
+{
+	game_background(g, "pic/infoman");
+	game_portrait(g, NULL);
+	talk_inks(g);
+	g->talk = 0;
+}
+
+static void
+traveller_choose(struct game *g, int i)
+{
+	int town;
+
+	if (i != 0) {
+		game_goto(g, &screen_tavern);
+		return;
+	}
+	if ((town = sim_buy_news(&g->sim)) < 0) {
+		g->talk = 2;
+		return;
+	}
+	g->info_town = town;
+	g->info_back = &screen_tavern;
+	game_goto(g, &screen_cityinfo);
+}
+
+static void
+traveller_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->talk == 0)
+		menu_event(g, ev, 2, NULL, traveller_choose, NULL);
+	else if (talk_go(ev))
+		game_goto(g, &screen_tavern);
+}
+
+static void
+traveller_draw(struct game *g)
+{
+	char text[512], price[16];
+
+	if (g->talk != 0) {
+		draw(g, FONT_BODY, 20, 150, 260, game_str(g, S_NO_FUNDS), 0);
+		continue_prompt(g);
+		return;
+	}
+	snprintf(price, sizeof(price), "%d", g->sim.news_price);
+	fill(text, sizeof(text), game_str(g, S_TRAVELLER),
+	    g->sim.towns[g->sim.news_town].name, price);
+	draw(g, FONT_BODY, 20, 150, 260, text, 1);
+}
+
+const struct screen screen_traveller = {
+	"traveller", traveller_enter, traveller_event, NULL, traveller_draw,
+};
+
+/*
+ * The barmaid.  Stages: 0 "a drink?" (CSTR 301), 1 "what would ye be
+ * lookin' for?" (CSTR 302), 2 a pleasant evening (303), 3 her heart won
+ * (304), 4 nothing to report (305), 5 her report (306), 6 the gossip on
+ * a town (307), 7 a map piece (308).
+ */
+enum { MAID_DRINK, MAID_ASK, MAID_EVENING, MAID_HEART, MAID_NOTHING,
+    MAID_REPORT, MAID_GOSSIP, MAID_MAP };
+
+static void
+barmaid_enter(struct game *g)
+{
+	game_background(g, "pic/barmaid");
+	game_portrait(g, NULL);
+	talk_inks(g);
+	switch (sim_barmaid_meet(&g->sim)) {
+	case 0:
+		g->talk = MAID_DRINK;
+		break;
+	case 1:
+		g->talk = MAID_ASK;
+		break;
+	default:
+		g->talk = g->sim.tavern_spots & (TAVERN_NEWS | TAVERN_MAPS) ?
+		    MAID_REPORT : MAID_NOTHING;
+		break;
+	}
+}
+
+static void
+barmaid_choose(struct game *g, int i)
+{
+	int r;
+
+	if (g->talk == MAID_DRINK) {
+		if (i == 0)
+			sim_barmaid(&g->sim, BARMAID_DRINK);
+		game_goto(g, &screen_tavern);
+		return;
+	}
+	r = sim_barmaid(&g->sim, i);
+	if (i == BARMAID_COMPANY && r >= 0)
+		g->talk = r ? MAID_HEART : MAID_EVENING;
+	else
+		game_goto(g, &screen_tavern);
+}
+
+static void
+barmaid_event(struct game *g, const struct ui_event *ev)
+{
+	int town;
+
+	if (g->talk == MAID_DRINK || g->talk == MAID_ASK) {
+		menu_event(g, ev, g->talk == MAID_DRINK ? 2 : 3, NULL,
+		    barmaid_choose, NULL);
+		return;
+	}
+	if (!talk_go(ev))
+		return;
+	if (g->talk == MAID_NOTHING) {
+		g->sim.tavern_spots &= ~TAVERN_MAID;
+		game_goto(g, &screen_tavern);
+	} else if (g->talk == MAID_REPORT) {
+		switch (sim_barmaid_report(&g->sim, &town)) {
+		case 1:
+			g->talk_town = town;
+			g->talk = MAID_GOSSIP;
+			break;
+		default:
+			g->talk = MAID_MAP;
+			break;
+		}
+	} else if (g->talk == MAID_GOSSIP) {
+		/* The town's information (VA 0x196d0). */
+		g->info_town = g->talk_town;
+		g->info_back = &screen_tavern;
+		game_goto(g, &screen_cityinfo);
+	} else
+		game_goto(g, &screen_tavern);
+}
+
+static void
+barmaid_draw(struct game *g)
+{
+	static const int text_of[] = { S_DRINK, S_LOOKING_FOR, S_EVENING,
+	    S_HEART, S_NOTHING_TO_SAY, S_INFORMANT, S_GOSSIP_ON, S_MAP_PIECE };
+	char text[512];
+
+	if (g->talk == MAID_GOSSIP)
+		fill(text, sizeof(text), game_str(g, S_GOSSIP_ON),
+		    g->sim.towns[g->talk_town].name, NULL);
+	else
+		snprintf(text, sizeof(text), "%s",
+		    game_str(g, text_of[g->talk]));
+	draw(g, FONT_BODY, 40, 150, 280, text,
+	    g->talk == MAID_DRINK || g->talk == MAID_ASK);
+	if (g->talk != MAID_DRINK && g->talk != MAID_ASK)
+		continue_prompt(g);
+}
+
+const struct screen screen_barmaid = {
+	"barmaid", barmaid_enter, barmaid_event, NULL, barmaid_draw,
+};
+
+/*
+ * The fleet panel (VA 0xffae), here to pick the ship to command (VA
+ * 0xf246): shipsel.pcx, the ships in two rows of four, each its battle
+ * picture at its damage stage, with its type (CSTN 8) and damage (CSTN
+ * 14) centred below.  Clicking a ship marks it, in ink entry 3; clicking
+ * it again unmarks it; "SELECT" (CSTN 87.1) ends the choice once one is
+ * marked.  The keys step through the ships and the button; Enter acts.
+ * The prompt, "Which ship will you command?" (CSTR 286), is centred
+ * across x 5..420 at y 400.  The layout is the table at VA 0x32e68.
+ */
+#define PANEL_SHIPS		8
+#define PANEL_DONE		8
+#define W_DAMAGE		14
+#define W_PANEL_BUTTON		87
+
+static int
+panel_word(const struct game *g, uint32_t off, int i)
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->fleet_panel_va + off + (uint32_t)i * 2, 2);
+
+	return (p != NULL ? (int16_t)(p[0] | p[1] << 8) : 0);
+}
+
+static int
+panel_hit(const struct game *g, int x, int y)
+{
+	int i;
+
+	for (i = 0; i <= PANEL_DONE; i++) {
+		if (i < PANEL_DONE && i >= g->sim.fleet.nships)
+			continue;
+		if (x >= panel_word(g, 0x20, i * 5) &&
+		    y >= panel_word(g, 0x20, i * 5 + 1) &&
+		    x <= panel_word(g, 0x20, i * 5 + 2) &&
+		    y <= panel_word(g, 0x20, i * 5 + 3))
+			return (i);
+	}
+	return (-1);
+}
+
+static int
+panel_level(int damage)
+{
+	return (damage / 16 > 3 ? 3 : damage / 16);
+}
+
+static void
+panel_enter(struct game *g)
+{
+	int i;
+
+	game_background(g, "pic/shipsel");
+	game_portrait(g, NULL);
+	for (i = 0; i < PANEL_SHIPS; i++)
+		if (i < g->sim.fleet.nships)
+			load_bank(g, damage_picture[g->sim.fleet.ships[i] % 9],
+			    1, &g->panel_spr[i]);
+		else
+			bank_free(&g->panel_spr[i]);
+	g->panel_cursor = 0;
+	g->panel_marked = 0;
+}
+
+static void
+panel_act(struct game *g, int i)
+{
+	int k;
+
+	if (i == PANEL_DONE) {
+		if (g->panel_marked == 0)
+			return;
+		for (k = 0; k < PANEL_SHIPS; k++)
+			if (g->panel_marked & (1u << k))
+				break;
+		sim_battle_command(&g->sim, k);
+		g->btl_chosen = 1;
+		game_goto(g, &screen_battle);
+		return;
+	}
+	if (i < 0 || i >= g->sim.fleet.nships)
+		return;
+	if (g->panel_marked & (1u << i))
+		g->panel_marked &= ~(1u << i);
+	else if (g->panel_marked == 0)		/* one ship at most */
+		g->panel_marked = 1u << i;
+}
+
+static void
+panel_event(struct game *g, const struct ui_event *ev)
+{
+	int n = g->sim.fleet.nships < PANEL_SHIPS ? g->sim.fleet.nships :
+	    PANEL_SHIPS;
+
+	if (ev->type == EV_CLICK) {
+		panel_act(g, panel_hit(g, ev->x, ev->y));
+		return;
+	}
+	if (ev->type != EV_KEY)
+		return;
+	if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+		g->panel_cursor = g->panel_cursor == PANEL_DONE ? 0 :
+		    g->panel_cursor + 1 >= n ? PANEL_DONE : g->panel_cursor + 1;
+	else if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+		g->panel_cursor = g->panel_cursor == 0 ? PANEL_DONE :
+		    g->panel_cursor == PANEL_DONE ? n - 1 : g->panel_cursor - 1;
+	else if (ev->key == UI_KEY_ENTER)
+		panel_act(g, g->panel_cursor);
+}
+
+static void
+panel_draw(struct game *g)
+{
+	const struct sim_fleet *f = &g->sim.fleet;
+	const char *word;
+	uint8_t plain[3], marked[3];
+	int i, lvl, w;
+
+	memcpy(plain, g->bg.pixels != NULL ? g->bg.palette : g->ink, 3);
+	memcpy(marked, g->bg.pixels != NULL ? &g->bg.palette[31 * 3] :
+	    g->ink, 3);
+	for (i = 0; i < f->nships && i < PANEL_SHIPS; i++) {
+		lvl = panel_level(f->damage[i]);
+		if ((size_t)lvl < g->panel_spr[i].count)
+			fb_frame(&g->fb, &g->panel_spr[i].frames[lvl],
+			    panel_word(g, 0, i), panel_word(g, 0x10, i));
+		memcpy(g->ink, g->panel_marked & (1u << i) ? marked : plain, 3);
+		word = game_word(g, W_SHIP_TYPE, (size_t)(f->ships[i] % 9));
+		w = text_width(&g->font[FONT_TITLE], word);
+		draw(g, FONT_TITLE, panel_word(g, 0x7c, i) - w / 2,
+		    panel_word(g, 0x8c, i), FB_W, word, 0);
+		word = game_word(g, W_DAMAGE, (size_t)lvl);
+		w = text_width(&g->font[FONT_BODY], word);
+		draw(g, FONT_BODY, panel_word(g, 0x9c, i) - w / 2,
+		    panel_word(g, 0xac, i), FB_W, word, 0);
+	}
+	memcpy(g->ink, plain, 3);
+	word = game_str(g, S_COMMAND);
+	w = text_width(&g->font[FONT_BODY], word);
+	draw(g, FONT_BODY, 5 + (415 - (w < 415 ? w : 415)) / 2, 400, 415,
+	    word, 0);
+	word = game_word(g, W_PANEL_BUTTON, 1);
+	w = text_width(&g->font[FONT_TITLE], word);
+	draw(g, FONT_TITLE, 510 - w / 2, 436, FB_W, word, 0);
+}
+
+const struct screen screen_fleet_panel = {
+	"fleet panel", panel_enter, panel_event, NULL, panel_draw,
 };

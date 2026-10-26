@@ -1902,6 +1902,59 @@ test_command(void)
 	CHECK(s.fleet.ships[0] == 5);
 }
 
+/* The tavern's people: the traveller, the map seller, the barmaid. */
+static void
+test_tavern_people(void)
+{
+	struct sim s;
+	int i, seen = 0, town, maps = 0;
+
+	for (i = 0; i < 50; i++) {
+		sea_game(&s, 300, 300, 0);
+		rng_seed(&s.rng, (uint64_t)i + 1, 1);
+		sim_enter_town(&s, 1);
+		sim_tavern_open(&s);
+		CHECK(!(s.tavern_spots & TAVERN_MYSTERY));
+		if (s.tavern_spots & TAVERN_NEWS) {
+			CHECK(s.news_price >= 60 && s.news_price <= 140 &&
+			    s.news_town != 1 &&
+			    !(s.towns[s.news_town].flags & 0x80));
+			seen++;
+		}
+		maps += (s.tavern_spots & TAVERN_MAPS) != 0;
+	}
+	CHECK(seen > 30 && maps > 2 && maps < 25);
+	/* Buying: news of the town, a map piece for 50. */
+	sea_game(&s, 300, 300, 0);
+	sim_enter_town(&s, 1);
+	s.tavern_spots |= TAVERN_NEWS | TAVERN_MAPS;
+	s.news_town = 2;
+	s.news_price = 80;
+	s.fleet.gold = 100;
+	s.towns[2].flags &= ~0x80;
+	CHECK(sim_buy_news(&s) == 2 && s.fleet.gold == 20 &&
+	    (s.towns[2].flags & 0x80) && !(s.tavern_spots & TAVERN_NEWS));
+	CHECK(sim_buy_map(&s) == 0 && s.fleet.gold == 20);
+	s.fleet.gold = 60;
+	CHECK(sim_buy_map(&s) == 1 && s.fleet.gold == 10 &&
+	    s.fleet.map_pieces == 1);
+	/* The barmaid: company for 5, her heart at 10, then reports. */
+	s.towns[1].barmaid = 9;
+	s.fleet.gold = 7;
+	CHECK(sim_barmaid(&s, BARMAID_COMPANY) == 1 && s.fleet.gold == 2);
+	CHECK(sim_barmaid(&s, BARMAID_COMPANY) == -1);
+	CHECK(sim_barmaid(&s, BARMAID_DRINK) == 0 && s.fleet.gold == 1);
+	s.towns[1].barmaid = 11;
+	CHECK(sim_barmaid_meet(&s) == 2);
+	s.tavern_spots |= TAVERN_NEWS | TAVERN_MAID;
+	s.news_town = 3;
+	s.towns[3].flags &= ~0x80;
+	CHECK(sim_barmaid_report(&s, &town) == 1 && town == 3 &&
+	    (s.towns[3].flags & 0x80) && !(s.tavern_spots & TAVERN_MAID));
+	s.tavern_spots |= TAVERN_MAPS;
+	CHECK(sim_barmaid_report(&s, &town) == 2 && s.fleet.map_pieces == 2);
+}
+
 /* The assault on a town, the sack, a new governor. */
 static void
 test_assault(void)
@@ -2216,6 +2269,7 @@ main(void)
 	test_fort_battle();
 	test_leave_heading();
 	test_assault();
+	test_tavern_people();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

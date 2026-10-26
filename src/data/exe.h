@@ -44,6 +44,7 @@ struct exe_layout {
 	uint32_t	 battle_sets_va;	/* 5 x 5 u16: battle screens */
 	uint32_t	 weapon_spots_va;	/* 3 x {i16 x0, y0, x1, y1, on} */
 	uint32_t	 shade_va;		/* 256 bytes: a colour's shadow */
+	uint32_t	 fleet_panel_va;	/* the fleet panel's layout */
 	uint32_t	 story_va;		/* career stories: byte scripts */
 	uint32_t	 credits_va;		/* 6 x 4 i16 rects in the credits
 						 * picture, 20 RGB ink steps */

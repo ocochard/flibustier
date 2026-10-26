@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	15
+#define STATE_VERSION	16
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -37,6 +37,7 @@ static const struct {
 	FIELD(standing), FIELD(governor), FIELD(family), FIELD(id),
 	FIELD(sea_x), FIELD(sea_y), FIELD(fort_x), FIELD(fort_y),
 	FIELD(ship_x), FIELD(ship_y), FIELD(ship_heading), FIELD(sea_heading),
+	FIELD(barmaid),
 };
 #define NFIELDS	(sizeof(town_fields) / sizeof(town_fields[0]))
 
@@ -537,6 +538,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.ticks);
 	jb_raw(b, ",\"leaving\":");
 	jb_int(b, s->fleet.leaving);
+	jb_raw(b, ",\"map_pieces\":");
+	jb_int(b, s->fleet.map_pieces);
 	jb_raw(b, "},\"wind\":");
 	jb_int(b, s->wind);
 	jb_raw(b, ",\"encounters\":");
@@ -594,6 +597,12 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->tavern_spots);
 	jb_raw(b, ",\"recruits\":");
 	jb_int(b, s->recruits);
+	jb_raw(b, ",\"news_town\":");
+	jb_int(b, s->news_town);
+	jb_raw(b, ",\"news_price\":");
+	jb_int(b, s->news_price);
+	jb_raw(b, ",\"barmaid_mood\":");
+	jb_int(b, s->barmaid_mood);
 	jb_raw(b, ",\"market\":{\"open\":");
 	jb_int(b, s->market.open);
 	for (i = 0; i < GOODS; i++) {
@@ -758,6 +767,7 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	f->speed = (int)json_get_int(j, "speed", 0);
 	f->ticks = (uint32_t)json_get_int(j, "ticks", 0);
 	f->leaving = (int)json_get_int(j, "leaving", -1);
+	f->map_pieces = (int)json_get_int(j, "map_pieces", 0);
 	if (f->crew < 0 || f->guns < 0 || f->gold < 0 || f->x < 0 ||
 	    f->x >= WORLD_PX_W || f->y < 0 || f->y >= WORLD_PX_H ||
 	    f->fx > 7 || f->fy > 7 || f->speed < 0 || f->speed > 12) {
@@ -842,6 +852,11 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.tavern_spots = (unsigned)json_get_int(j, "tavern_spots", 0) &
 	    TAVERN_ALL;
 	tmp.recruits = (int)json_get_int(j, "recruits", 0);
+	tmp.news_town = (int)json_get_int(j, "news_town", 0);
+	if (tmp.news_town < 0 || (size_t)tmp.news_town >= TOWN_MAX)
+		tmp.news_town = 0;
+	tmp.news_price = (int)json_get_int(j, "news_price", 0);
+	tmp.barmaid_mood = (int)json_get_int(j, "barmaid_mood", 0);
 	{
 		const struct json *mk = json_get(j, "market");
 		const struct json *st = json_get(mk, "stock");

@@ -427,10 +427,17 @@ test_battle_screen(void)
 		g->sim.fleet.ships[1] = 5;
 		g->sim.battle.tick = 0;
 		game_switch(g, &screen_battle);
-		CHECK(game_script(g, "wait:2") == 0 && g->btl_stage == 4);
-		CHECK(game_script(g, "down enter") == 0 &&
-		    g->btl_stage == 0 && g->sim.fleet.ships[0] == 5 &&
-		    g->sim.battle.you.type == 5);
+		CHECK(game_script(g, "wait:40") == 0 &&
+		    g->screen == &screen_fleet_panel);
+		/* SELECT does nothing until a ship is marked; the second
+		 * slot, then SELECT. */
+		CHECK(game_script(g, "click:540,450") == 0 &&
+		    g->screen == &screen_fleet_panel);
+		CHECK(game_script(g, "click:240,120") == 0 &&
+		    g->panel_marked == 2);
+		CHECK(game_script(g, "click:540,450 wait:40") == 0 &&
+		    g->screen == &screen_battle && g->btl_stage == 0 &&
+		    g->sim.fleet.ships[0] == 5 && g->sim.battle.you.type == 5);
 		g->sim.fleet.nships = n;	/* the frigate fights on */
 	}
 	/* Raising sail takes 160 ticks, then full sails. */
@@ -875,6 +882,52 @@ test_story(void)
 	game_free(g);
 }
 
+/* The tavern's people: names when pointed at, the traveller's news,
+ * the map seller, the barmaid. */
+static void
+test_tavern_people(void)
+{
+	struct game *g;
+	long gold;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter wait:40 "
+	    "click:250,350 wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_tavern);
+	CHECK(game_script(g, "move:450,250") == 0 && g->tavern_spot == 4);
+	/* The traveller, here for sure. */
+	g->sim.tavern_spots |= TAVERN_NEWS | TAVERN_MAPS;
+	g->sim.news_town = 2;
+	g->sim.news_price = 70;
+	g->sim.fleet.gold = 1000;
+	CHECK(game_script(g, "click:180,290 wait:40") == 0 &&
+	    g->screen == &screen_traveller);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_cityinfo && g->info_town == 2 &&
+	    g->sim.fleet.gold == 930);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_tavern && g->info_town == -1);
+	/* The map seller: 50 gold. */
+	CHECK(game_script(g, "click:40,350 wait:40") == 0 &&
+	    g->screen == &screen_mapman);
+	gold = g->sim.fleet.gold;
+	CHECK(game_script(g, "enter") == 0 && g->sim.fleet.gold == gold - 50 &&
+	    g->sim.fleet.map_pieces == 1);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	/* The barmaid: some company. */
+	g->sim.towns[g->sim.player_town].barmaid = 2;
+	CHECK(game_script(g, "click:450,250 wait:40") == 0 &&
+	    g->screen == &screen_barmaid && g->talk == 1);
+	CHECK(game_script(g, "down down enter") == 0 && g->talk == 2 &&
+	    g->sim.towns[g->sim.player_town].barmaid == 3);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	game_free(g);
+}
+
 /* Storming a town without forts: the assault, the sack, the loot. */
 static void
 test_assault(void)
@@ -1177,6 +1230,7 @@ main(void)
 	test_pace();
 	test_cabin();
 	test_assault();
+	test_tavern_people();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

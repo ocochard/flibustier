@@ -385,12 +385,26 @@ fight computes its level the same way with fencing.
   strength `w = rand(3)` rolled during the encounter (VA `0xd1fc`).
   Both ships start with battle sails.
 - **Which ship (VA `0xf246`):** with more than one ship, the player
-  picks the ship to command on the fleet panel (VA `0xffae`), under
-  "Which ship will you command?" (CSTR 286). The code fills CSTR 123
-  ("We have %s men and %s cannon ready for battle. Winds are %s…")
-  first, but copies CSTR 286 over it. The chosen ship swaps places
-  with the flagship, then fights with `crew - 8 x (ships - 1)` men. The
-  engine shows a list of the ships instead of the panel.
+  picks the ship to command on the fleet panel, under "Which ship will
+  you command?" (CSTR 286). The code fills CSTR 123 ("We have %s men
+  and %s cannon ready for battle. Winds are %s…") first, but copies
+  CSTR 286 over it. The chosen ship swaps places with the flagship,
+  then fights with `crew - 8 x (ships - 1)` men.
+
+### The fleet panel (VA `0xffae`)
+
+- `shipsel.pcx`, the ships in two rows of four (layout table at VA
+  `0x32e68`: picture corners, rectangles, label centres). Each ship is
+  its battle picture (`*btl.cur`) at its damage stage `min(damage / 16,
+  3)`, with its type (CSTN 8) and damage (CSTN 14) centred below.
+- Clicking a ship marks it, its labels in ink entry 3; again unmarks
+  it; no more than the allowed number can be marked. The button at
+  (437, 429)-(639, 479), labelled from CSTN 87 (SELECT, REPAIR, SELL,
+  BUY) centred at (510, 436), ends the choice once enough are marked.
+  Two keys step through the ships and the button; Enter acts.
+- The prompt is centred across x 5..420 at y 400 (x 320..420 with
+  prices). The shipwright's modes also show each ship's price and the
+  total (not used by the engine's shipwright yet).
 - **Enemy reload:** `|144 - 8 x role|` ticks.
 
 ### Each tick
@@ -1115,7 +1129,38 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - 5 a stranger (frame 2 at (349, 199));
   - 6 the door.
 - **Presence:** whoever is spoken to leaves; all are back on the next
-  arrival in town (VA `0x18fa9`).
+  arrival in town (VA `0x18fa9`). On each entry (VA `0x11867`):
+  - The traveller (VA `0x110c7`) draws a price `(rand(10) + 5) x 10`
+    and a random town, again while that town's information is current
+    and the price is not 50. He stays away when the price is 50 or the
+    town is the one the player is in. Drawing sets visit flag 2.
+  - The map seller (VA `0x112b1`) is there one time in five, and never
+    once all the map pieces are held.
+  - The mystery man comes with a personal enemy (VA `0x18913`) or a
+    mission (VA `0x1f8f7`); neither is modelled, so he stays away.
+- **Labels:** pointing at someone writes their name on the scroll
+  (CSTN 90: Map Seller, Traveller, Unemployed Sailors, Bartender,
+  Barmaid, Mystery Man, Exit).
+- **The map seller (VA `0x112ef`), on `mapman.pcx`:** "…part of an old
+  treasure map for 500 gold pieces" (CSTR 153, at (340, 150) up to x
+  620), but the code takes 50. Without the gold: CSTR 94. The piece
+  (VA `0x1f08a`) waits for the treasure maps; the engine counts it.
+- **The traveller (VA `0x1116f`), on `infoman.pcx`:** "A traveller from
+  %s offers to sell you information for %s gold pieces" (CSTR 152, at
+  (20, 150) up to x 280). Paying makes that town's information current,
+  clears the "obsolete" mark of the town the player is in, and shows
+  the town's information.
+- **The barmaid (VA `0x114d4`), on `barmaid.pcx`, texts at (40, 150) up
+  to x 320:** her fondness is town field 13.
+  - Below 11: at 0, five times in six, "Will ye be wantin' a drink?"
+    (CSTR 301); yes costs 1 gold. Otherwise CSTR 302: nothing, a drink
+    (1 gold), or a drink and company: with 5 gold, fondness +1 and "a
+    pleasant evening" (CSTR 303), or at 10 "You've won the barmaid's
+    heart!" (CSTR 304).
+  - Above 10 she reports: nothing (CSTR 305) when neither the traveller
+    nor the map seller is there; otherwise CSTR 306, then the
+    traveller's town (CSTR 307, the town's information) or a map piece
+    (CSTR 308). Either way she leaves for the stay.
 - **Recruits (VA `0x10e2a`), counted on entering:**
   - `n = (rep + 7 - difficulty) x (citizens + rand(citizens)) / 9`;
   - with fewer than `4m` men aboard, at least `m = (4 - difficulty) x

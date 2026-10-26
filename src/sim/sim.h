@@ -63,6 +63,7 @@ struct sim_town {
 	uint16_t	ship_x, ship_y;	/* fields 19, 20: the attacker's */
 	uint16_t	ship_heading;	/* field 21 */
 	uint16_t	sea_heading;	/* field 28: leaving, x 32 */
+	uint16_t	barmaid;	/* field 13: her fondness, 0..11 */
 	uint16_t	sea_x, sea_y;	/* fields 26, 27: water outside the
 					 * harbour, 0 for inland towns */
 };
@@ -111,6 +112,7 @@ struct sim_fleet {
 	int		speed;		/* 4..12 once under way */
 	uint32_t	ticks;		/* sailing ticks, 64 per day */
 	int		leaving;	/* town just left, or -1 */
+	int		map_pieces;	/* treasure map pieces bought */
 };
 
 /* Why sim_sail() stopped. */
@@ -322,7 +324,10 @@ struct sim {
 	int		wright_cannon;	/* guns the shipwright holds */
 	int		reputation;	/* -128..127: captures, failed boardings */
 	unsigned	tavern_spots;	/* people still there, bit per spot */
-	int		recruits;	/* men offering to sign on */
+	int		recruits;
+	int		news_town;	/* the traveller's town, and price */
+	int		news_price;
+	int		barmaid_mood;	/* rand(6) on meeting her */	/* men offering to sign on */
 	struct sim_market {
 		int	open;
 		int	stock[3];	/* food, goods, sugar */
@@ -443,11 +448,32 @@ void	sim_merchant_close(struct sim *s);
 #define TAVERN_SPOTS	10
 #define TAVERN_ALL	0x3FFu
 #define TAVERN_CREW	((1u << 2) | (1u << 7) | (1u << 8) | (1u << 9))
+#define TAVERN_MAPS	(1u << 0)	/* the map seller */
+#define TAVERN_NEWS	(1u << 1)	/* the traveller */
+#define TAVERN_MAID	(1u << 4)
+#define TAVERN_MYSTERY	(1u << 5)
+#define MAP_PRICE	50	/* the map seller's text says 500 */
 
 /* Entering the tavern: count the men who would sign on. */
 void	sim_tavern_open(struct sim *s);
 /* Sign them up (or not); the crew is then gone until next time. */
 void	sim_recruit(struct sim *s, int accept);
+/* The map seller (VA 0x112ef): a piece of a treasure map for 50 gold;
+ * 0 when the player cannot pay. */
+int	sim_buy_map(struct sim *s);
+/* The traveller (VA 0x1116f): news of his town for his price; returns
+ * the town now known, or -1 when the player cannot pay. */
+int	sim_buy_news(struct sim *s);
+/* The barmaid (VA 0x114d4).  sim_barmaid_meet: 0 she offers a drink
+ * (CSTR 301), 1 she asks what the player wants (CSTR 302), 2 she
+ * reports (CSTR 305-308). */
+enum barmaid_answer { BARMAID_NOTHING, BARMAID_DRINK, BARMAID_COMPANY };
+int	sim_barmaid_meet(struct sim *s);
+/* A drink (1 gold) or company (5 gold, fondness +1): returns 1 when
+ * her heart is won (fondness 10), 0 otherwise, -1 without the gold. */
+int	sim_barmaid(struct sim *s, int answer);
+/* Her report: 0 nothing, 1 news of a town (*town), 2 a map piece. */
+int	sim_barmaid_report(struct sim *s, int *town);
 
 /* The governor (VA 0x13269). */
 enum governor_offer {

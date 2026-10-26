@@ -177,6 +177,15 @@ struct game {
 	int			 sack_stage;
 	struct sack		 sack;
 	int			 looting;	/* the merchant board is the loot */
+	int			 info_town;	/* city information: -1 the current */
+	const struct screen	*info_back;	/* where it returns */
+	int			 talk;		/* a tavern talk's stage */
+	int			 talk_town;
+	int			 tavern_spot;	/* pointed at, or -1 */
+	int			 btl_chosen;	/* the ship to command is chosen */
+	int			 panel_cursor;	/* the fleet panel: 0-7 a ship, 8 done */
+	unsigned		 panel_marked;	/* ships selected, bit by bit */
+	struct sprite_bank	 panel_spr[8];
 	int			 sw_named;	/* the chosen weapon's name shows */
 	int			 cabin_spot;	/* pointed at, or -1 */
 	int			 cabin_key;	/* selected with the keys */

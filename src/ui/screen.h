@@ -56,6 +56,10 @@ extern const struct screen screen_disgrace;
 extern const struct screen screen_assault;
 extern const struct screen screen_sack;
 extern const struct screen screen_prison;
+extern const struct screen screen_mapman;
+extern const struct screen screen_traveller;
+extern const struct screen screen_barmaid;
+extern const struct screen screen_fleet_panel;
 
 /* Fade to another screen; NULL quits. */
 void	game_goto(struct game *g, const struct screen *s);

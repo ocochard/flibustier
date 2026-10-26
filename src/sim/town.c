@@ -305,8 +305,10 @@ sim_tavern_open(struct sim *s)
 	int n, least, most;
 
 	s->recruits = 0;
-	if (t == NULL || !(s->tavern_spots & TAVERN_CREW))
+	if (t == NULL)
 		return;
+	if (!(s->tavern_spots & TAVERN_CREW))
+		goto people;
 	n = ((s->reputation + 7 - s->player.difficulty) * (t->citizens +
 	    (t->citizens > 0 ? (int)rng_below(&s->rng, t->citizens) : 0))) /
 	    9;
@@ -319,6 +321,111 @@ sim_tavern_open(struct sim *s)
 	if (n < 0)
 		n = 1;
 	s->recruits = n;
+people:
+	/* No personal enemy nor mission is modelled: no mystery man. */
+	s->tavern_spots &= ~TAVERN_MYSTERY;
+	/* The traveller (VA 0x110c7): a price and a town not known yet,
+	 * tried until one is found or the price comes out at 50. */
+	if (s->tavern_spots & TAVERN_NEWS) {
+		do {
+			s->visit_flags |= VISIT_KEPT;
+			s->news_price = (rng_below(&s->rng, 10) + 5) * 10;
+			s->news_town = rng_below(&s->rng, (int)s->ntowns);
+		} while ((s->towns[s->news_town].flags & 0x80) &&
+		    s->news_price != 50);
+		if (s->news_price == 50 || s->news_town == s->player_town)
+			s->tavern_spots &= ~TAVERN_NEWS;
+	}
+	/* The map seller (VA 0x112b1): one time in five. */
+	if ((s->tavern_spots & TAVERN_MAPS) && rng_below(&s->rng, 5) != 0)
+		s->tavern_spots &= ~TAVERN_MAPS;
+}
+
+int
+sim_buy_map(struct sim *s)
+{
+	if (s->fleet.gold < MAP_PRICE)
+		return (0);
+	s->fleet.gold -= MAP_PRICE;
+	s->fleet.map_pieces++;
+	s->tavern_spots &= ~TAVERN_MAPS;
+	return (1);
+}
+
+/* Information on a town: current again; the town the player is in
+ * loses its "obsolete" mark too (VA 0x111f0). */
+static void
+learn_town(struct sim *s, int town)
+{
+	struct sim_town *t = current(s);
+
+	s->towns[town].flags |= 0x80;
+	if (t != NULL)
+		t->flags = (uint16_t)(t->flags & ~0x20);
+}
+
+int
+sim_buy_news(struct sim *s)
+{
+	if (s->fleet.gold < s->news_price || s->news_town < 0 ||
+	    (size_t)s->news_town >= s->ntowns)
+		return (-1);
+	s->fleet.gold -= s->news_price;
+	learn_town(s, s->news_town);
+	s->tavern_spots &= ~TAVERN_NEWS;
+	return (s->news_town);
+}
+
+int
+sim_barmaid_meet(struct sim *s)
+{
+	struct sim_town *t = current(s);
+
+	s->barmaid_mood = rng_below(&s->rng, 6);
+	if (t == NULL || t->barmaid > 10)
+		return (2);
+	return (t->barmaid == 0 && s->barmaid_mood != 0 ? 0 : 1);
+}
+
+int
+sim_barmaid(struct sim *s, int answer)
+{
+	struct sim_town *t = current(s);
+
+	if (t == NULL)
+		return (0);
+	if (answer == BARMAID_DRINK) {
+		if (s->fleet.gold > 0)
+			s->fleet.gold--;
+		return (0);
+	}
+	if (answer != BARMAID_COMPANY)
+		return (0);
+	if (s->fleet.gold < 5)
+		return (-1);
+	s->fleet.gold -= 5;
+	t->barmaid++;
+	return (t->barmaid >= 10);
+}
+
+int
+sim_barmaid_report(struct sim *s, int *town)
+{
+	int r = 0;
+
+	*town = -1;
+	if (s->tavern_spots & TAVERN_NEWS) {
+		learn_town(s, s->news_town);
+		*town = s->news_town;
+		s->tavern_spots &= ~TAVERN_NEWS;
+		r = 1;
+	} else if (s->tavern_spots & TAVERN_MAPS) {
+		s->fleet.map_pieces++;
+		s->tavern_spots &= ~TAVERN_MAPS;
+		r = 2;
+	}
+	s->tavern_spots &= ~TAVERN_MAID;
+	return (r);
 }
 
 void
