@@ -712,6 +712,7 @@ sim_enter_town(struct sim *s, int town)
 	if (town != s->visit_town) {
 		s->visit_flags = 0;
 		s->wright_gold = -1;
+		s->wright_cannon = 0;
 		s->merchant_gold = -1;
 	} else
 		s->visit_flags &= VISIT_GOVERNOR | VISIT_KEPT;

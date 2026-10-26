@@ -7,6 +7,7 @@
  * aidd_docs/memory/internal/game-rules.md.
  */
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -416,4 +417,88 @@ sim_governor_pay(struct sim *s)
 	s->standing[n] = (int8_t)(s->standing[n] + 2 > 2 ? 2 :
 	    s->standing[n] + 2);
 	return (1);
+}
+
+#define REFIT_SPELLS	4	/* the refit: four spells of 26 days */
+#define REFIT_DAYS	26
+#define NEW_FOOD	15
+
+void
+sim_divide_plunder(struct sim *s, struct plunder *out)
+{
+	struct sim_fleet *f = &s->fleet;
+	double root;
+	int crew = f->crew > 0 ? f->crew : 1, r;
+
+	out->share = (int)((double)f->gold / crew * 0.8 + 0.5);
+	root = sqrt((double)out->share);
+	out->mood = (int)(root / 23.0);
+	if (out->mood > 3)
+		out->mood = 3;
+	/* The crew's mood moves the reputation halfway (VA 0x181fb). */
+	r = ((int)root + s->reputation + 1) / 2;
+	s->reputation = r < -128 ? -128 : r > 127 ? 127 : r;
+	out->portions = (s->player.difficulty & 3) * 2 + 2;
+	out->yours = (long)(s->player.difficulty + 1) * f->gold / 20;
+	s->fortune += out->yours;
+}
+
+void
+sim_new_expedition(struct sim *s, int advance)
+{
+	struct sim_fleet *f = &s->fleet;
+	long gold = f->gold;
+	int type, i;
+
+	if (advance && s->player.difficulty < 3)
+		s->player.difficulty++;
+	if (gold == 0) {
+		s->fortune -= s->fortune / 10;
+		gold = s->fortune;
+	}
+	f->gold = gold / 10;
+	type = f->ships[0] & 7;
+	f->ships[0] = (uint8_t)type;
+	f->damage[0] = 0;
+	f->nships = 1;
+	f->capacity = sim_ship_room(type);
+	f->guns = type * 2 + 6;
+	f->food = NEW_FOOD;
+	f->goods = f->sugar = 0;
+	f->crew = s->reputation + 16;
+	if (f->crew <= 0)
+		f->crew = 1;
+	s->visit_flags = 0;
+	for (i = 0; i < REFIT_SPELLS; i++)
+		sim_advance(s, REFIT_DAYS);
+}
+
+int
+sim_trade_cannon(struct sim *s, int n)
+{
+	struct sim_fleet *f = &s->fleet;
+	int done = 0;
+
+	if (current(s) == NULL)
+		return (0);
+	sim_shipwright_gold(s);
+	for (; n < 0; n++, done++) {		/* selling */
+		if (f->guns <= 0 || CANNON_PRICE > s->wright_gold)
+			break;
+		f->guns--;
+		s->wright_cannon++;
+		s->wright_gold -= CANNON_PRICE;
+		f->gold += CANNON_PRICE;
+	}
+	for (; n > 0; n--, done++) {		/* buying back */
+		/* Only a hold exactly full refuses (VA 0x20bcd). */
+		if (s->wright_cannon <= 0 || CANNON_PRICE > f->gold ||
+		    sim_hold_space(s) == 0)
+			break;
+		f->guns++;
+		s->wright_cannon--;
+		s->wright_gold += CANNON_PRICE;
+		f->gold -= CANNON_PRICE;
+	}
+	return (done);
 }

@@ -608,9 +608,6 @@ test_town(void)
 	CHECK(g->screen == &screen_cityinfo);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_town);
-	/* A building not done yet says so. */
-	CHECK(game_script(g, "click:540,320 wait:2") == 0 &&
-	    strstr(g->msg, "Bank") != NULL);
 	/* Leave: back at sea, out of the town. */
 	CHECK(game_script(g, "click:60,300 wait:40") == 0);
 	CHECK(g->screen == &screen_sail && g->sim.player_town == -1);
@@ -829,6 +826,66 @@ test_story(void)
 	game_free(g);
 }
 
+/* Selling cannon to the shipwright, 50 gold each, and buying back. */
+static void
+test_cannon(void)
+{
+	struct game *g;
+	long gold;
+	int guns;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter wait:40");
+	if (g == NULL)
+		return;
+	guns = g->sim.fleet.guns;
+	gold = g->sim.fleet.gold;
+	CHECK(game_script(g, "click:60,400 wait:40") == 0 &&
+	    g->screen == &screen_shipwright);
+	CHECK(game_script(g, "down down down enter wait:40") == 0 &&
+	    g->screen == &screen_cannon);
+	CHECK(game_script(g, "left left") == 0 &&
+	    g->sim.fleet.guns == guns - 2 && g->sim.wright_cannon == 2 &&
+	    g->sim.fleet.gold == gold + 100);
+	CHECK(game_script(g, "right") == 0 &&
+	    g->sim.fleet.guns == guns - 1 && g->sim.fleet.gold == gold + 50);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_shipwright);
+	game_free(g);
+}
+
+/* The bank: divide the plunder, the cave, another expedition. */
+static void
+test_bank(void)
+{
+	struct game *g;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_town);
+	g->sim.fleet.gold = 60000;
+	g->sim.fleet.crew = 50;
+	g->sim.fleet.nships = 2;
+	CHECK(game_script(g, "click:540,320 wait:40") == 0 &&
+	    g->screen == &screen_bank);
+	CHECK(game_script(g, "enter") == 0 && g->plunder.share == 960 &&
+	    g->plunder.mood == 1 && g->sim.fortune == 3000);
+	CHECK(game_script(g, "enter enter wait:40") == 0 &&
+	    g->screen == &screen_cave);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_bank && g->bank_stage == 3);
+	/* Plan another expedition: back in town with one ship. */
+	CHECK(game_script(g, "enter enter wait:40") == 0 &&
+	    g->screen == &screen_town);
+	CHECK(g->sim.fleet.nships == 1 && g->sim.fleet.gold == 6000);
+	/* No: the bank lets the player go. */
+	CHECK(game_script(g, "click:540,320 wait:40 down enter wait:40") == 0
+	    && g->screen == &screen_town && g->sim.fleet.gold == 6000);
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -860,6 +917,8 @@ main(void)
 	test_tavern();
 	test_governor();
 	test_story();
+	test_bank();
+	test_cannon();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

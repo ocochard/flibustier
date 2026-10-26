@@ -2892,8 +2892,7 @@ sword_tick(struct game *g)
 }
 
 static void
-sword_fighter(struct game *g, int side, const struct sword_side *f,
-    int boarding)
+sword_fighter(struct game *g, int side, const struct sword_side *f)
 {
 	static const int order[2][6] = {
 		{ 0, 1, 2, 3, 4, -1 },	/* body, weapon, wounds */
@@ -2910,7 +2909,10 @@ sword_fighter(struct game *g, int side, const struct sword_side *f,
 		y -= SW_FALL_DROP;
 	for (i = 0; i < 6; i++) {
 		layer = order[side][i];
-		if (layer < 0 || (layer == 5 && !boarding) ||
+		/* The opponent's head is its own layer, always drawn: the
+		 * deck's head here (hehead1; alleys and forts have theirs,
+		 * VA 0x15f84). */
+		if (layer < 0 ||
 		    (layer >= 2 && layer <= 4 && f->wounds[layer - 2] == 0))
 			continue;
 		grp = &g->sw_parts[side][layer];
@@ -2972,8 +2974,8 @@ sword_draw(struct game *g)
 	}
 	if (g->world == NULL)
 		return;
-	sword_fighter(g, 0, &sw->you, sw->kind == SWORD_CREW);
-	sword_fighter(g, 1, &sw->foe, sw->kind == SWORD_CREW);
+	sword_fighter(g, 0, &sw->you);
+	sword_fighter(g, 1, &sw->foe);
 	nation = sw->nation < 0 || sw->nation > 4 ? 4 : sw->nation;
 	sword_flag(g, 0, SW_YOU_FLAG_X, 6 + (int)(g->ticks & 7), sw->you.bar);
 	sword_flag(g, 1, SW_FOE_FLAG_X, 14 + 8 * nation + (int)(g->ticks & 7),
@@ -3128,6 +3130,10 @@ town_choose(struct game *g, int i)
 		break;
 	case SPOT_GOVERNOR:
 		game_goto(g, &screen_governor);
+		break;
+	case SPOT_BANK:
+		g->bank_stage = 0;
+		game_goto(g, &screen_bank);
 		break;
 	case SPOT_TAVERN:
 		sim_tavern_open(&g->sim);
@@ -3387,8 +3393,7 @@ wright_menu_choose(struct game *g, int i)
 		if (g->sim.fleet.guns < 2)
 			wright_note(g, S_ONLY_CANNON);
 		else
-			snprintf(g->msg, sizeof(g->msg),
-			    "(Selling cannon: not implemented yet.)");
+			game_goto(g, &screen_cannon);
 		break;
 	}
 	g->selected = 0;
@@ -4182,4 +4187,310 @@ governor_draw(struct game *g)
 
 const struct screen screen_governor = {
 	"governor", governor_enter, governor_event, NULL, governor_draw,
+};
+
+/*
+ * Bank (VA 0x180c8): "Are you sure you want to divide the plunder?",
+ * then each man's share and the crew's mood (CSTR 155), the captain's
+ * portions (CSTR 156), the treasure the captain has put aside (the cave,
+ * VA 0xbdfe), and "Plan another expedition / Retire / Advance to the
+ * next level" (CSTR 157 and 97).  The date is on the small sign.
+ */
+#define S_SURE			86
+#define S_DIVIDE		95
+#define S_END_GAME		96
+#define S_ADVANCE		97
+#define S_SHARES		155
+#define S_PORTIONS		156
+#define S_PLAN			157
+#define S_REFIT			158
+#define W_MOOD			72
+#define BANK_TEXT_X		40
+#define BANK_TEXT_Y		280
+#define BANK_TEXT_W		580
+enum { BANK_ASK, BANK_SHARES, BANK_PORTIONS, BANK_PLAN, BANK_SURE_END,
+    BANK_REFIT };
+
+static void
+bank_enter(struct game *g)
+{
+	game_background(g, "pic/bank");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	g->highlight[0] = 255;
+	g->highlight[1] = 200;
+	g->highlight[2] = 60;
+	g->selected = 0;
+}
+
+static void
+bank_choose(struct game *g, int i)
+{
+	switch (g->bank_stage) {
+	case BANK_ASK:
+		if (i != 0) {
+			game_goto(g, &screen_town);
+			return;
+		}
+		sim_divide_plunder(&g->sim, &g->plunder);
+		g->bank_stage = BANK_SHARES;
+		break;
+	case BANK_PLAN:
+		if (i == 1) {
+			g->bank_stage = BANK_SURE_END;
+			break;
+		}
+		sim_new_expedition(&g->sim, i == 2);
+		g->bank_stage = BANK_REFIT;
+		break;
+	case BANK_SURE_END:
+		if (i == 0) {
+			game_goto(g, &screen_retire);
+			return;
+		}
+		sim_new_expedition(&g->sim, 0);
+		g->bank_stage = BANK_REFIT;
+		break;
+	default:
+		break;
+	}
+	g->selected = 0;
+}
+
+static void
+bank_event(struct game *g, const struct ui_event *ev)
+{
+	int go = ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE));
+
+	switch (g->bank_stage) {
+	case BANK_ASK:
+	case BANK_SURE_END:
+		menu_event(g, ev, 2, NULL, bank_choose, NULL);
+		break;
+	case BANK_PLAN:
+		menu_event(g, ev, g->sim.player.difficulty < 3 ? 3 : 2, NULL,
+		    bank_choose, NULL);
+		break;
+	case BANK_SHARES:
+		if (go)
+			g->bank_stage = BANK_PORTIONS;
+		break;
+	case BANK_PORTIONS:
+		if (go) {
+			g->bank_stage = BANK_PLAN;
+			game_goto(g, &screen_cave);
+		}
+		break;
+	case BANK_REFIT:
+		if (go)
+			game_goto(g, &screen_town);
+		break;
+	}
+}
+
+static void
+bank_draw(struct game *g)
+{
+	char text[1200], a[32], b[32], date[64], line[160];
+	const char *arg[3];
+	int menu = 0;
+
+	date_text(g, date, sizeof(date));
+	{
+		int w = text_width(&g->font[FONT_BODY], date);
+
+		draw(g, FONT_BODY, 306 - w / 2, 244, 200, date, 0);
+	}
+	switch (g->bank_stage) {
+	case BANK_ASK:
+	case BANK_SURE_END:
+		fill(text, sizeof(text), game_str(g, S_SURE), game_str(g,
+		    g->bank_stage == BANK_ASK ? S_DIVIDE : S_END_GAME), NULL);
+		menu = 1;
+		break;
+	case BANK_SHARES:
+		snprintf(a, sizeof(a), "%d", g->plunder.share);
+		fill(text, sizeof(text), game_str(g, S_SHARES), a,
+		    game_word(g, W_MOOD, (size_t)g->plunder.mood));
+		break;
+	case BANK_PORTIONS:
+		snprintf(a, sizeof(a), "%d", g->plunder.portions);
+		snprintf(b, sizeof(b), "%ld", g->plunder.yours);
+		arg[0] = game_word(g, W_DIFFICULTY,
+		    (size_t)g->sim.player.difficulty);
+		arg[1] = a;
+		arg[2] = b;
+		fill_args(text, sizeof(text), game_str(g, S_PORTIONS), arg, 3);
+		break;
+	case BANK_PLAN:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_PLAN));
+		if (g->sim.player.difficulty < 3) {
+			fill(line, sizeof(line), game_str(g, S_ADVANCE),
+			    game_word(g, W_DIFFICULTY,
+			    (size_t)g->sim.player.difficulty + 1), NULL);
+			if (text[0] != '\0' && text[strlen(text) - 1] != '\r')
+				strncat(text, "\r", sizeof(text) -
+				    strlen(text) - 1);
+			strncat(text, line, sizeof(text) - strlen(text) - 1);
+		}
+		menu = 1;
+		break;
+	case BANK_REFIT:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_REFIT));
+		break;
+	}
+	draw(g, FONT_BODY, BANK_TEXT_X, BANK_TEXT_Y, BANK_TEXT_W, text, menu);
+	if (!menu)
+		continue_prompt(g);
+}
+
+const struct screen screen_bank = {
+	"bank", bank_enter, bank_event, NULL, bank_draw,
+};
+
+/*
+ * The treasure cave (VA 0xbdfe): eight piles (tcave0-7), each shown
+ * once the captain's fortune passes its mark (table at VA 0x32928: x,
+ * y, mark; 500, 1000, then by thousands).
+ */
+static const char *cave_pile[8] = {
+	"spr/tcave0", "spr/tcave1", "spr/tcave2", "spr/tcave3",
+	"spr/tcave4", "spr/tcave5", "spr/tcave6", "spr/tcave7",
+};
+
+static int
+cave_pile_at(const struct game *g, int i, int r[3])
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->cave_va + (uint32_t)i * 12, 12);
+	int k;
+
+	if (p == NULL)
+		return (-1);
+	for (k = 0; k < 3; k++)
+		r[k] = (int32_t)(p[4 * k] | p[4 * k + 1] << 8 |
+		    p[4 * k + 2] << 16 | (uint32_t)p[4 * k + 3] << 24);
+	return (0);
+}
+
+static void
+cave_enter(struct game *g)
+{
+	int i;
+
+	game_background(g, "pic/trescave");
+	game_portrait(g, NULL);
+	for (i = 0; i < 8; i++)
+		load_bank(g, cave_pile[i], 0, &g->cave[i]);
+}
+
+static void
+cave_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_bank);
+}
+
+static void
+cave_draw(struct game *g)
+{
+	int i, r[3];
+
+	for (i = 0; i < 8; i++)
+		if (cave_pile_at(g, i, r) == 0 && r[2] < g->sim.fortune &&
+		    g->cave[i].count > 0)
+			fb_frame(&g->fb, &g->cave[i].frames[0], r[0], r[1]);
+	continue_prompt(g);
+}
+
+const struct screen screen_cave = {
+	"cave", cave_enter, cave_event, NULL, cave_draw,
+};
+
+/*
+ * Selling cannon (VA 0x22c76): the trading board, lower on the
+ * shipwright's picture, with a single row: the shipwright's stock and
+ * the player's guns, 50 gold each, paid from the shipwright's gold.
+ * Left sells, Right buys back; Enter, Escape or the sign leaves.
+ */
+#define S_CANNON_PRICE		313
+
+static void
+cannon_enter(struct game *g)
+{
+	int lang = strcmp(g->lang, "fre") == 0 ? 1 :
+	    strcmp(g->lang, "ger") == 0 ? 2 : 0, i;
+
+	game_background(g, "pic/swright");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;	/* light, on the dark blue */
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	for (i = 0; i < 3; i++)
+		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
+	g->shop_buying = 0;
+	sim_shipwright_gold(&g->sim);
+}
+
+static void
+cannon_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK) {
+		if (ev->y >= 420)
+			game_goto(g, &screen_shipwright);
+		else if (ev->y >= 340) {
+			g->shop_buying = ev->x < FB_W / 2;
+			sim_trade_cannon(&g->sim, g->shop_buying ? 1 : -1);
+		}
+		return;
+	}
+	if (ev->type != EV_KEY)
+		return;
+	if (ev->key == UI_KEY_LEFT) {
+		g->shop_buying = 0;
+		sim_trade_cannon(&g->sim, -1);
+	} else if (ev->key == UI_KEY_RIGHT) {
+		g->shop_buying = 1;
+		sim_trade_cannon(&g->sim, 1);
+	} else if (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)
+		game_goto(g, &screen_shipwright);
+}
+
+static void
+cannon_draw(struct game *g)
+{
+	const struct sim_fleet *f = &g->sim.fleet;
+	int room, used;
+
+	board_frame(g, 1, 0, 204, 265);
+	board_frame(g, 0, 84, 71, 326);		/* the gold boxes */
+	board_frame(g, 0, 84, 491, 326);
+	board_frame(g, 0, 87, 487, 248);	/* the player's colours */
+	board_frame(g, 0, 88, 67, 250);		/* the shipwright's */
+	board_frame(g, 2, 1, 63, 360);		/* the cannon, each side */
+	board_frame(g, 2, 2, 483, 360);
+	board_frame(g, 2, 0, 252, 430);		/* the sign */
+	board_frame(g, 0, BOARD_SIGN + g->shop_buying, 238, 350);
+	board_number(g, g->sim.wright_gold > 999999 ? 999999 :
+	    g->sim.wright_gold, 87, 336, GLYPH_SMALL + 1, 8, 6, 1);
+	board_number(g, g->sim.fleet.gold > 999999 ? 999999 :
+	    g->sim.fleet.gold, 507, 336, GLYPH_SMALL + 1, 8, 6, 1);
+	board_number(g, g->sim.wright_cannon, 78, 372, GLYPH_BIG + 10, 15, 4,
+	    1);
+	board_number(g, g->sim.fleet.guns, 520, 372, GLYPH_BIG + 10, 15, 4, 0);
+	/* The space in the hold and its gauge, as the merchant's, lower. */
+	room = sim_hold_space(&g->sim);
+	board_number(g, room, 336, 386, GLYPH_SMALL + 23, 8, 4, 1);
+	used = f->capacity * 10 - room;
+	board_frame(g, 0, BOARD_GAUGE, 249 + (f->capacity > 0 ?
+	    used * 113 / (f->capacity * 10) : 0), 320);
+	draw(g, FONT_BODY, 150, 20, 470, game_str(g, S_CANNON_PRICE), 0);
+}
+
+const struct screen screen_cannon = {
+	"cannon", cannon_enter, cannon_event, NULL, cannon_draw,
 };

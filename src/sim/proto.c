@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	10
+#define STATE_VERSION	12
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -540,12 +540,16 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->visit_flags);
 	jb_raw(b, ",\"wright_gold\":");
 	jb_int(b, s->wright_gold);
+	jb_raw(b, ",\"wright_cannon\":");
+	jb_int(b, s->wright_cannon);
 	jb_raw(b, ",\"merchant_gold\":");
 	jb_int(b, s->merchant_gold);
 	jb_raw(b, ",\"reputation\":");
 	jb_int(b, s->reputation);
 	jb_raw(b, ",\"acres\":");
 	jb_int(b, s->acres);
+	jb_raw(b, ",\"fortune\":");
+	jb_int(b, s->fortune);
 	jb_raw(b, ",\"rank\":[");
 	for (i = 0; i < 5; i++) {
 		if (i > 0)
@@ -786,9 +790,11 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.visit_town = (int)json_get_int(j, "visit_town", -1);
 	tmp.visit_flags = (int)json_get_int(j, "visit_flags", 0);
 	tmp.wright_gold = (int)json_get_int(j, "wright_gold", -1);
+	tmp.wright_cannon = (int)json_get_int(j, "wright_cannon", 0);
 	tmp.merchant_gold = (int)json_get_int(j, "merchant_gold", -1);
 	tmp.reputation = (int)json_get_int(j, "reputation", 0);
 	tmp.acres = (int)json_get_int(j, "acres", 0);
+	tmp.fortune = (long)json_get_int(j, "fortune", 0);
 	{
 		const struct json *rk = json_get(j, "rank");
 		int k;
@@ -1342,6 +1348,20 @@ cmd_shipwright(struct session *ss, const struct json *cmd, struct jbuf *out)
 		r = sim_sell_ships(s, mask);
 		jb_raw(out, "{\"ok\":true,\"result\":");
 		jb_str(out, sales[r]);
+	} else if (action != NULL && (strcmp(action, "sell_cannon") == 0 ||
+	    strcmp(action, "buy_cannon") == 0)) {
+		int64_t count = json_get_int(cmd, "count", 1);
+
+		if (count < 1 || count > 1000) {
+			reply_error(out, "cannon needs \"count\" (1..1000)");
+			return;
+		}
+		r = sim_trade_cannon(s, action[0] == 's' ? -(int)count :
+		    (int)count);
+		jb_raw(out, "{\"ok\":true,\"traded\":");
+		jb_int(out, r);
+		jb_raw(out, ",\"guns\":");
+		jb_int(out, s->fleet.guns);
 	} else if (action != NULL && strcmp(action, "prices") == 0) {
 		jb_raw(out, "{\"ok\":true,\"repair\":[");
 		for (r = 0; r < s->fleet.nships; r++) {
@@ -1357,8 +1377,8 @@ cmd_shipwright(struct session *ss, const struct json *cmd, struct jbuf *out)
 		}
 		jb_raw(out, "]");
 	} else {
-		reply_error(out, "shipwright needs \"action\": prices, repair "
-		    "or sell");
+		reply_error(out, "shipwright needs \"action\": prices, repair, "
+		    "sell, sell_cannon or buy_cannon");
 		return;
 	}
 	jb_raw(out, ",\"gold\":");
@@ -1515,6 +1535,44 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* The bank: "divide" the plunder, then "continue" ("advance": 0 or 1). */
+static void
+cmd_bank(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	struct plunder p;
+
+	memset(&p, 0, sizeof(p));
+	if (s->player_town < 0) {
+		reply_error(out, "not in a town");
+		return;
+	}
+	if (action != NULL && strcmp(action, "divide") == 0)
+		sim_divide_plunder(s, &p);
+	else if (action != NULL && strcmp(action, "continue") == 0)
+		sim_new_expedition(s, json_get_int(cmd, "advance", 0) != 0);
+	else {
+		reply_error(out, "bank needs \"action\": divide or continue");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"share\":");
+	jb_int(out, p.share);
+	jb_raw(out, ",\"mood\":");
+	jb_int(out, p.mood);
+	jb_raw(out, ",\"yours\":");
+	jb_int(out, p.yours);
+	jb_raw(out, ",\"fortune\":");
+	jb_int(out, s->fortune);
+	jb_raw(out, ",\"gold\":");
+	jb_int(out, s->fleet.gold);
+	jb_raw(out, ",\"crew\":");
+	jb_int(out, s->fleet.crew);
+	jb_raw(out, ",\"difficulty\":");
+	jb_int(out, s->player.difficulty);
+	jb_raw(out, "}");
+}
+
 static void
 cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1621,6 +1679,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_tavern(ss, cmd, out);
 	else if (strcmp(name, "governor") == 0)
 		cmd_governor(ss, cmd, out);
+	else if (strcmp(name, "bank") == 0)
+		cmd_bank(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

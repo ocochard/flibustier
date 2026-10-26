@@ -732,14 +732,53 @@ same town only bits 1 and 2 are kept.
   - Ships go in fleet order while the shipwright's gold covers the
     price; otherwise he lacks the funds (CSTR 319).
   - A sold ship keeps its cargo in the fleet (VA `0x1f2a1` with keep 1).
-- **Cannon:** "not the only one" (CSTR 284) under 2 guns. Otherwise a
-  trading screen at 50 gold a gun (VA `0x22c76`), shared with the
-  merchant's; not traced yet.
+- **Cannon (VA `0x22c76`):** "not the only one" (CSTR 284) under 2
+  guns. Otherwise the merchant's trading board, lower on the
+  shipwright's picture, with "I pay 50 gold pieces per cannon" (CSTR
+  313) above it:
+  - One row: the shipwright's stock, from 0 each visit, and the
+    player's guns, at 50 gold either way. The merchant's steps apply
+    (VA `0x20ad4` sell, `0x20bcd` buy).
+  - Selling needs the shipwright's gold to cover the price.
+  - Buying back needs the player's gold, his stock, and room in the
+    hold. As for the merchant, only a hold exactly full refuses (the
+    test is `space != 0`), so an overfull hold still takes guns.
 - **Engine choices:**
   - Ranks come from governors' promotions; standing rises only through
     captures and Letters of Marque so far.
   - The original picks several ships at once on a fleet panel; the
     engine takes one ship per choice and shows the list again.
+
+### Bank (VA `0x180c8`)
+
+Dividing the plunder ends an expedition. The date is on the small
+sign, the texts at (40, 280) up to x 620.
+
+1. **"Are you sure you want to divide the plunder?"** (CSTR 86 with 95).
+   No leaves.
+2. **The crew's share (CSTR 155):**
+   - `share = trunc(gold / crew x 0.8 + 0.5)`.
+   - The crew's mood (CSTN 72, angry to happy) is
+     `min(trunc(sqrt(share) / 23), 3)`.
+   - The reputation becomes `(trunc(sqrt(share)) + reputation + 1) / 2`.
+3. **The captain's portions (CSTR 156):** `2 x difficulty + 2`
+   portions, worth `(difficulty + 1) x gold / 20`, added to the
+   captain's own fortune (VA `0x45efe`).
+4. **The treasure cave (VA `0xbdfe`):** eight piles (`tcave0`-`7`),
+   each drawn once the fortune passes its mark (table at VA `0x32928`:
+   x, y and the mark; 500, 1000, then by thousands to 7000).
+5. **"Do you... Plan another expedition? Retire from privateering?"**
+   (CSTR 157). Below Grand Master (difficulty 3), "Advance to <level>
+   level?" (CSTR 97) is a third choice that raises the difficulty.
+   - Retire asks "Are you sure you want to end the game?" (CSTR 86
+     with 96). Yes goes to the retirement.
+   - Another expedition (VA `0x184a8`, `0x1ef87`): the refit (CSTR
+     158) advances the calendar four times by 26 days (VA `0x1dd0e`,
+     the world's monthly step for each month crossed). Then the
+     flagship alone, repaired, with a tenth of the gold; when the gold
+     is 0, a tenth of the fortune less a tenth. The fleet gets that
+     ship's capacity, `type x 2 + 6` guns, 15 food, no goods, and a new
+     crew of `reputation + 16` (at least 1).
 
 ### Cargo
 

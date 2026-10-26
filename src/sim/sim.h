@@ -296,6 +296,7 @@ struct sim {
 	int		visit_flags;	/* VISIT_* for the current visit */
 	int		wright_gold;	/* the shipwright's, -1 until known */
 	int		merchant_gold;	/* the merchant's, -1 until known */
+	int		wright_cannon;	/* guns the shipwright holds */
 	int		reputation;	/* -128..127: captures, failed boardings */
 	unsigned	tavern_spots;	/* people still there, bit per spot */
 	int		recruits;	/* men offering to sign on */
@@ -308,6 +309,7 @@ struct sim {
 	int8_t		relations[4][4];
 	uint8_t		rank[5];	/* title per nation: CSTN 78 */
 	int		acres;		/* land granted by governors */
+	long		fortune;	/* the player's own, from divided plunder */
 	int8_t		standing[5];	/* player standing per nation, and
 					 * pirates (always -1 so far) */
 	size_t		ntowns;
@@ -362,6 +364,11 @@ int	sim_shipwright_gold(struct sim *s);
 /* Ship "i": the cost of its repair, and its price. */
 int	sim_repair_cost(const struct sim *s, int i);
 int	sim_ship_price(const struct sim *s, int i);
+/* Sell (n < 0) or buy back (n > 0) cannon at the shipwright, 50 gold
+ * each, one at a time while the rules allow (VA 0x22c76); returns the
+ * guns traded. */
+#define CANNON_PRICE	50
+int	sim_trade_cannon(struct sim *s, int n);
 /* Repair the ships in "mask" (bit i: ship i), paying for them. */
 int	sim_repair(struct sim *s, unsigned mask);
 /* Sell the ships in "mask", in fleet order, while his gold lasts; one
@@ -412,6 +419,18 @@ int	sim_governor_promote(struct sim *s, int *acres);
 enum governor_offer sim_governor_offer(const struct sim *s, long *price);
 /* Pay for the Letter of Marque or the pardon; 0 if short of gold. */
 int	sim_governor_pay(struct sim *s);
+
+/* The bank (VA 0x180c8): dividing the plunder ends an expedition. */
+struct plunder {
+	int	share;		/* each crew member's gold */
+	int	mood;		/* 0 angry .. 3 happy (CSTN 72) */
+	long	yours;		/* the captain's portions */
+	int	portions;	/* how many: 2 x difficulty + 2 */
+};
+void	sim_divide_plunder(struct sim *s, struct plunder *out);
+/* Plan another expedition (VA 0x1ef87): the flagship alone, a tenth of
+ * the gold, a new crew; "advance" raises the difficulty first. */
+void	sim_new_expedition(struct sim *s, int advance);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);

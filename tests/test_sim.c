@@ -1700,6 +1700,98 @@ test_governor(void)
 	CHECK(!sim_shipwright_refuses(&s));
 }
 
+/* Cannon at the shipwright: 50 gold each, within both purses. */
+static void
+test_cannon(void)
+{
+	struct sim s;
+
+	sea_game(&s, 300, 300, 0);
+	sim_enter_town(&s, 1);
+	s.fleet.guns = 6;
+	s.fleet.gold = 0;
+	s.fleet.capacity = 4;
+	s.fleet.food = s.fleet.goods = s.fleet.sugar = 0;
+	s.wright_gold = 120;
+	/* Two sold: the shipwright's 120 pays for no third. */
+	CHECK(sim_trade_cannon(&s, -3) == 2 && s.fleet.guns == 4 &&
+	    s.fleet.gold == 100 && s.wright_gold == 20 &&
+	    s.wright_cannon == 2);
+	/* Bought back: his stock of 2 is the limit. */
+	CHECK(sim_trade_cannon(&s, 5) == 2 && s.fleet.guns == 6 &&
+	    s.fleet.gold == 0 && s.wright_cannon == 0);
+	/* A hold exactly full refuses; an overfull one does not. */
+	s.wright_cannon = 2;
+	s.fleet.gold = 500;
+	s.fleet.food = 37;		/* 40 - 37 - 6 / 2 = 0 */
+	CHECK(sim_trade_cannon(&s, 1) == 0);
+	s.fleet.food = 38;		/* -1 */
+	CHECK(sim_trade_cannon(&s, 1) == 1 && s.fleet.guns == 7);
+	/* None left to sell. */
+	s.fleet.guns = 0;
+	CHECK(sim_trade_cannon(&s, -1) == 0);
+}
+
+/* The bank: dividing the plunder, then another expedition. */
+static void
+test_bank(void)
+{
+	struct sim s;
+	struct plunder p;
+	int32_t day;
+
+	sea_game(&s, 300, 300, 0);
+	sim_enter_town(&s, 1);
+	s.player.difficulty = 1;
+	s.reputation = 0;
+	s.fortune = 0;
+	s.fleet.gold = 10000;
+	s.fleet.crew = 40;
+	/* 10000 / 40 x 0.8 + 0.5 = 200; sqrt 14 / 23: angry; the
+	 * reputation (14 + 0 + 1) / 2 = 7; the captain 2 x 10000 / 20. */
+	sim_divide_plunder(&s, &p);
+	CHECK(p.share == 200 && p.mood == 0 && s.reputation == 7);
+	CHECK(p.portions == 4 && p.yours == 1000 && s.fortune == 1000);
+	/* Happy from sqrt(share) / 23 >= 3, that is a share of 4761. */
+	s.fleet.gold = 4761 * 50 / 4;		/* share 4761.25 + 0.5 */
+	s.fleet.crew = 10;
+	sim_divide_plunder(&s, &p);
+	CHECK(p.share == 4761 && p.mood == 3);
+	s.fleet.gold = 6600;			/* a share of 528: angry */
+	sim_divide_plunder(&s, &p);
+	CHECK(p.share == 528 && p.mood == 0);
+	s.fleet.crew = 8;
+	s.fleet.gold = 5290;			/* 529: sqrt 23, unhappy */
+	sim_divide_plunder(&s, &p);
+	CHECK(p.share == 529 && p.mood == 1);
+
+	/* Another expedition: the flagship alone, a tenth of the gold, a
+	 * new crew of reputation + 16, 104 days of refit. */
+	s.fleet.nships = 3;
+	s.fleet.ships[0] = 4;
+	s.fleet.damage[0] = 40;
+	s.fleet.gold = 10000;
+	s.fleet.goods = 30;
+	s.reputation = 7;
+	day = s.day;
+	sim_new_expedition(&s, 0);
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 4 &&
+	    s.fleet.damage[0] == 0);
+	CHECK(s.fleet.gold == 1000 && s.fleet.capacity == 10 &&
+	    s.fleet.guns == 14 && s.fleet.food == 15 && s.fleet.goods == 0);
+	CHECK(s.fleet.crew == 23 && s.day == day + 104);
+	/* Advancing the difficulty; no gold: a tenth of the fortune, less
+	 * a tenth. */
+	s.fleet.gold = 0;
+	s.fortune = 5000;
+	sim_new_expedition(&s, 1);
+	CHECK(s.player.difficulty == 2 && s.fortune == 4500 &&
+	    s.fleet.gold == 450);
+	s.player.difficulty = 3;
+	sim_new_expedition(&s, 1);
+	CHECK(s.player.difficulty == 3);
+}
+
 int
 main(void)
 {
@@ -1721,6 +1813,8 @@ main(void)
 	test_merchant();
 	test_tavern();
 	test_governor();
+	test_bank();
+	test_cannon();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

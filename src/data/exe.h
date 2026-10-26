@@ -39,6 +39,7 @@ struct exe_layout {
 						 * records */
 	uint32_t	 tavern_spots_va;	/* 10 x {i16 x0, y0, x1, y1, on} */
 	uint32_t	 town_spots_va;		/* 8 x {i16 x0, y0, x1, y1, on} */
+	uint32_t	 cave_va;		/* 8 x {i32 x, y, fortune mark} */
 	uint32_t	 story_va;		/* career stories: byte scripts */
 	uint32_t	 credits_va;		/* 6 x 4 i16 rects in the credits
 						 * picture, 20 RGB ink steps */

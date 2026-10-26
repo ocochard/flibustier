@@ -164,6 +164,9 @@ struct game {
 	struct sprite_bank	 misc;		/* ui/misc: the "continue" plaque */
 	unsigned		 idle;		/* ticks since the last input */
 	int			 master_page;	/* the sailing master: 0 or 1 */
+	int			 bank_stage;
+	struct plunder		 plunder;
+	struct sprite_bank	 cave[8];	/* the treasure piles */
 	struct sprite_bank	 gov_spr;	/* the proclamation */
 	int			 gov_stage;	/* greeting, promotion, land, offer,
 						 * short of gold */

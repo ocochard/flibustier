@@ -230,8 +230,10 @@ Status (2026-10-26): first slice.
   open), city information, leaving, and the captain's cabin (our travel
   menu for now). In the simulation: entering and leaving a town, and the
   visit flags.
-- **Shipwright:** repairs and ship sales, with his gold per stay.
-  Selling cannon waits for the merchant's trading screen.
+- **Shipwright:** repairs, ship sales and cannon trading, with his
+  gold per stay.
+- **Bank:** dividing the plunder, the treasure cave, another expedition
+  (a refit, optionally at a higher difficulty) or retirement.
 - **Merchant:** cargo (food, goods, sugar, hold capacity) and trading
   on the original board. The daughter's subplot and "Take all" wait.
 - **Tavern:** the people, recruiting crew, the bartender's rumours, and
@@ -240,8 +242,7 @@ Status (2026-10-26): first slice.
 - **Governor:** the political news, standing changes from captures,
   promotions with land, Letters of Marque and pardons. Missions, the
   family quest, prisoners and his daughter wait.
-- **Next:** bank, selling cannon (the same board), and the arrival
-  choices (attack, sneak in).
+- **Next:** the arrival choices (attack, sneak in).
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

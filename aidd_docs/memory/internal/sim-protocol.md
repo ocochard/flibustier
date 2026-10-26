@@ -28,6 +28,8 @@ with a message. Numbers are integers only.
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
 | `town` | `action`: `enter` (the town `sail` stopped at) or `leave` | `player_town`, `visit_flags` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
+| `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
+| `bank` | `action`: `divide` (the plunder), or `continue` (another expedition; `advance`: 0 or 1) | `share`, `mood` (0-3), `yours`, `fortune`, `gold`, `crew`, `difficulty` |
 | `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`) or `close` | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
 | `tavern` | `action`: `open` (counts the recruits) or `recruit` (`accept`: 0 or 1) | `recruits`, `crew`, `tavern_spots` |
 | `governor` | `action`: `visit` (once a stay: promotion, then his offer) or `pay` | `promoted`, `acres`, `paid`, `offer` (none, marque, pardon, daughter), `price`, `gold` |
@@ -49,7 +51,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 10,
+  "version": 12,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -84,9 +86,9 @@ with a message. Numbers are integers only.
   "era": 1660, "year": 1661, "day_of_year": 125, "month": 4, "day": 485,
   "diplomacy_range": 100,
   "player_town": -1, "visit_town": -1, "visit_flags": 0,
-  "wright_gold": -1, "merchant_gold": -1,
+  "wright_gold": -1, "wright_cannon": 0, "merchant_gold": -1,
   "reputation": 0, "tavern_spots": 1023, "recruits": 0,
-  "acres": 0, "rank": [0, 0, 0, 0, 0],
+  "acres": 0, "fortune": 0, "rank": [0, 0, 0, 0, 0],
   "market": {"open": 0, "stock": [0, 0, 0], "price": [0, 0, 0],
              "gold_at_open": 0},
   "relations": [[0,-1,0,0], [-1,0,0,-1], [0,0,0,0], [0,-1,0,0]],
