@@ -15,6 +15,8 @@
 #include "data/exe.h"
 #include "data/pack.h"
 #include "assets/digital.h"
+#include "assets/fmmusic.h"
+#include "audio/music.h"
 #include "assets/font.h"
 #include "assets/img.h"
 #include "assets/pcx.h"
@@ -812,6 +814,41 @@ test_world_export(struct packs *orig)
 	remove(dir);
 }
 
+/* PSOUND.PIR: the tunes' streams, and tune 9 sounding. */
+static void
+test_music(struct packs *packs)
+{
+	static const int tunes[] = { 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+	    19, 20, 21, 22, 23, 24, 27, 43, 44, 45 };
+	struct fmmusic d;
+	struct music *m;
+	struct blob b;
+	int16_t *buf;
+	size_t i;
+	long peak = 0;
+
+	CHECK(packs_load(packs, "driver/psound", &b) == 0);
+	CHECK(fmmusic_decode(b.data, b.len, &d) == 0);
+	blob_free(&b);
+	for (i = 0; i < sizeof(tunes) / sizeof(tunes[0]); i++)
+		CHECK(d.nstreams[tunes[i]] >= 3);
+	/* Tune 9 places its eight streams on voices 0-7. */
+	CHECK(d.nstreams[9] == 8 && d.voice[9][0] == 0 && d.voice[9][7] == 7);
+	CHECK((m = music_new(&d)) != NULL);
+	music_command(m, 9);
+	CHECK((buf = malloc(MUSIC_RATE * 2 * sizeof(*buf))) != NULL);
+	music_render(m, buf, MUSIC_RATE);
+	for (i = 0; i < MUSIC_RATE * 2; i++)
+		if (labs(buf[i]) > peak)
+			peak = labs(buf[i]);
+	CHECK(peak > 1000 && music_active(m) == 8);
+	music_stop(m);
+	CHECK(music_active(m) == 2);	/* voices 6-7 are not the tune's */
+	free(buf);
+	music_free(m);
+	fmmusic_free(&d);
+}
+
 /* DIGITAL.PIR: nine effects, their lengths from the driver's tables. */
 static void
 test_digital(struct packs *packs)
@@ -860,6 +897,7 @@ main(void)
 	test_sheet_terrain(packs);
 	test_world_export(packs);
 	test_digital(packs);
+	test_music(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

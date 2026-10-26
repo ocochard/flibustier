@@ -2174,6 +2174,16 @@ without that driver it plays FM sounds through the music driver instead
 
 The sword fight's effect replaces its FM sound for that pass.
 
+## Music
+
+The engine plays the OPL3 driver `PSOUND.PIR` (Sound Blaster Pro 2 /
+Pro Audio Spectrum class), the best of the game's FM arrangements and
+in stereo; the Roland MT-32 one would need Roland's ROMs. Its scripts
+run 60.9 times a second on an emulated YMF262 (ymfm, vendored); see "The
+FM music engine" in asset-formats.md. Not yet: the percussion instruments'
+noise bursts (played as plain notes), the fade when a tune stops (it
+stops at once), and which tune the game plays when (VA `0x1b8cb` calls).
+
 ## Open questions
 
 None for the world update: the treasure fleet and silver train (VA

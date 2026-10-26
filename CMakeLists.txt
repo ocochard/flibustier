@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(flibustier VERSION 0.1.0 LANGUAGES C)
+project(flibustier VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -26,6 +26,12 @@ add_library(flibustier_core STATIC
 	src/assets/img.c
 	src/assets/pcx.c
 	src/assets/digital.c
+	src/assets/fmmusic.c
+	src/audio/music.c
+	src/audio/opl3.cpp
+	src/external/ymfm/ymfm_opl.cpp
+	src/external/ymfm/ymfm_adpcm.cpp
+	src/external/ymfm/ymfm_pcm.cpp
 	src/assets/pic.c
 	src/assets/png.c
 	src/assets/rsd.c
@@ -64,6 +70,14 @@ target_include_directories(flibustier_core PUBLIC src)
 target_compile_options(flibustier_core PRIVATE ${FLIBUSTIER_WARNINGS})
 # The vendored stb_image is not ours to keep warning-free.
 set_source_files_properties(src/assets/png.c PROPERTIES COMPILE_OPTIONS -w)
+# The vendored ymfm (an OPL3 emulator, C++14) neither: the only C++ in the
+# engine, with its C wrapper.
+set_source_files_properties(src/external/ymfm/ymfm_opl.cpp
+	src/external/ymfm/ymfm_adpcm.cpp src/external/ymfm/ymfm_pcm.cpp
+	PROPERTIES COMPILE_OPTIONS -w)
+set_source_files_properties(src/audio/opl3.cpp PROPERTIES COMPILE_OPTIONS
+	-Wno-unused-parameter)
+set_property(TARGET flibustier_core PROPERTY CXX_STANDARD 14)
 
 # FreeType draws the open pack's fonts: hardened for untrusted font files,
 # which packs from third parties are.  Use a system FreeType when

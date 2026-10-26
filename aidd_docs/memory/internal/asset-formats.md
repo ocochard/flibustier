@@ -333,6 +333,124 @@ The first 512 bytes of the matching PCX, presumably a backup for the
   - A 46-entry command dispatcher (`ASOUND` entry 1) covers both music and
     effects.
   - `PGJUKE` lists 20 tunes (A-T).
+- **The FM music engine (`ASOUND`, traced; `PSOUND` is the same engine
+  recompiled):** image offsets below are `ASOUND`'s.
+  - Entry 0 loads the data segment (`mov ax,0x22c; mov ds,ax`: image
+    offset `0x22c0`; `PSOUND` `0x2fd0`). Entry 1 dispatches driver
+    command `n` (`n` up to the word at `ds:0x85e`, 45) through the word
+    table at `cs:0x1d54` (`PSOUND` `cs:0x9ab`). The game calls it with
+    the tune number (VA `0x7c1f`, by VA `0x1b8cb`).
+  - A tune's handler stops the music, then starts its streams: `mov cx,
+    stream; call 0x1875` (`PSOUND`: `lea cx,[stream]; call 0x541`).
+    `0x1875` takes the first free voice of 0-5, then 6-8; `0x18c6` (the
+    FM effects) takes 6-8. Tunes are commands 9-26 and 43-45 (20, as
+    `PGJUKE` lists), with 4 to 9 streams; 0-8 are effects; 1 stops.
+  - The timer (PIT `0x4C90`, 60.9 Hz, interrupt 8 at `0x1829`) steps the
+    nine voices once per tick (`0x1624` -> `0x13b0` -> `0x6aa` per voice,
+    channel = voice number); the BIOS clock is chained every third tick.
+  - **Voice record (46 bytes at `ds:0xc852 + 46 x n`):** `+0` ticks left
+    (0 = idle), `+1` pitch slide per tick, `+2` volume ramp step, `+3`
+    pan ramp step, `+4` note, `+5` instrument, `+6` velocity, `+7` gate,
+    `+8` ticks to key-off, `+9/+0xa` volume ramp count/period, `+0xb/
+    +0xc` pan ramp count/period, `+0xd` pan (0x40 centre), `+0x10`
+    stream pointer, `+0x12` inner loop start, `+0x14` outer loop start,
+    `+0x16` stream start, `+0x18` return address, `+0x1a/+0x1c` loop
+    counts, `+0x24` percussion countdown, `+0x26` detune, `+0x27` volume
+    (0-127), `+0x2a` transpose, `+0x2b` fading, `+0x2c` fixed release.
+  - **Stream:** a byte below `0xbe` (signed compare with `0xbd`) is a
+    note: note, then duration in ticks (note 0 rests; duration 0 ends
+    the voice). Key-off comes `duration - gate` ticks later, or after
+    the fixed release. `0xbe`-`0xff` are commands (table at `cs:0x123a`),
+    lengths in bytes including the opcode: `be`, `c0`, `c1` 2 (globals
+    `0x856`, `0x852`, `0x6dc`); `bf` 3 (global word `0x854`); `c2` 4
+    (nothing); `c3` 2; `c4` 3 (calls driver code); `c5`-`d1`, `d3`, `d4`
+    5: compare two script variables (bytes at `ds:0xc830 + v`) or a
+    variable and a constant, and on success call the word at +3 (`c5`
+    var b < var a, `c6` >, `c7` !=, `c8` ==, `c9` const < var, `d4` var
+    == const; the others not traced); `d2` 3 jump; `e5`/`e6` 2
+    decrement/increment a variable; `e7 v n` 3 writes the variable into
+    the stream at +3+n; `e8 a b` 3 copies; `e9 v x` 3 sets; `ea v n
+    table off` (n+4) and `ec n table off` (n+3) write a table entry
+    (by a variable, or at random) into the stream; `eb a b n` 4 writes
+    a random value in a..b at +4+n (self-modifying patterns); `ee t` 2
+    transpose; `ef period step` 3 pan ramp; `f0 p` 2 pan; `f1 v` 2
+    volume; `f2 d` 2 detune; `f3 period step` 3 volume ramp; `f4 v` 2
+    velocity; `f5 s` 2 pitch slide; `f6 t` 2 fixed release; `f7 g` 2
+    gate; `f8 i` 2 instrument; `f9` return; `fa w` call; `fb w` goto;
+    `fc w` new start; `fd` restart (state reset); `fe n`/`ff n` 2
+    repeat the outer/inner section n more times (0: mark the start).
+    The random generator is `seed = ror3(seed + 0x9248)`, taken & 0x7fff.
+  - **Per tick:** key-off countdown; then events until a note; then the
+    slide, and every period the volume ramp (`+0x27` clamped 0-127) and
+    the pan ramp; any change rewrites the levels.
+  - **Pitch:** `n = note + transpose - 1`; block `n / 12`; F-number =
+    word table at `ds:0x7e0` [`n % 12`] + detune; `A0+ch`, `B0+ch` with
+    key-on `0x20`.
+  - **Level (OPL2 path, card type below `0x18`):** `L = t[velocity] +
+    t[volume] - 1` (byte table at `ds:0x75e`), clamped 0-63; carrier
+    total level `63 - L`, keeping KSL; with the additive connection the
+    modulator gets `63 - clamp(L - (63 - its level))`. Stereo cards
+    (type `0x18` up) subtract pan tables (`ds:0x6de` by pan, `ds:0x75d -
+    pan`) per side and write two chips.
+  - **Instrument `i`:** 44 bytes at `ds:0x50 + 44 i`, modulator then
+    carrier (22 bytes each): attack, decay, sustain level, release, EG
+    type, KSR, level (63 loud), KSL, waveform, multiplier, feedback, AM,
+    vibrato, connection (0 additive), percussion countdown, then words
+    for the percussion noise. Operators: modulator slot `ds:0x7fc +
+    2ch`, carrier `ds:0x7fd + 2ch`, register offset `ds:0x80e + slot`.
+    The `C0` register is written last from the carrier block.
+  - Register writes go to port `0x388` (shadow at `ds:0xc9f4 + reg`).
+  - **`PSOUND` ("Pirates! Pro 7-13-93", what the engine plays):** the
+    same script engine for an OPL3, with its own arrangement. Data
+    segment image offset `0x2fd0`; command table `cs:0x9ab`; starters
+    `0x541` (first free voice of 0-5), `0x510` (of 6-8: commands 25 and
+    28-42, short stingers), `0x596 + 5k` voice k, `0x5be` voice 8, called
+    or jumped to after `lea cx,[stream]`; `0x72d` stops. Tunes: commands
+    9-24, 27, 43-45 (26 is empty).
+    - Start-up: bank 2 register `0x05` = 1 (OPL3), `0x04` = `0x3f` (the six
+      4-operator pairs), `0xBD` = `0xC0` on both banks.
+    - Register writes take a bank mask (VA `0x29e`): bit 0 the first bank
+      (base port, shadow `ds:0xba6c`), bit 1 the second (base + 2, shadow
+      `ds:0xbb6c`); reads come from the second's when bit 1 is set.
+    - **Voices:** nine records of 50 bytes at `ds:0xb8a4`, stepped once a
+      tick (60.9 Hz) in order; voice n uses bank mask `ds:0xae82[n]` (1, 1,
+      1, 2, 2, 2, 3, 3, 3) and channel `ds:0xae8c[n]` (0-2, 0-2, 6-8):
+      voices 0-5 are 4-operator voices on either bank, 6-8 2-operator
+      voices written to both banks. Operator offsets `ds:0xae96 + 4n`.
+    - **Record:** as `ASOUND`'s up to `+0xd` (pan); then `+0xe` volume
+      (`f1 v`: `v / 2 - 50`, signed), `+0xf` connection (0-3), `+0x10`-
+      `+0x13` the operators' levels, `+0x14` (start copy), `+0x16` stream
+      pointer, `+0x18`/`+0x1a` inner/outer loop starts, `+0x1c`/`+0x1e`
+      their counts, `+0x20` start, `+0x22` return address, `+0x2a`
+      percussion, `+0x2c` detune, `+0x2d` transpose, `+0x2e` fading,
+      `+0x30` fixed release. Velocity (`f4 v`) is `v / 2`. Variables at
+      `ds:0xb882`.
+    - **Opcodes** as `ASOUND`'s, and: `db a b` 3 (var a modulo var b),
+      `ed n` (n+3) skips a data block; `d4` is a goto. `f0` applies the
+      pan at once; `f3`, `f1` are held off while fading. The volume ramp
+      is not clamped.
+    - **Pitch:** `n = note + transpose` (no `- 1`), block `n / 12`,
+      F-number `ds:0xae66[n % 12]` + detune.
+    - **Levels (VA `0xe26`):** `A = 0x7e - velocity - volume`. 4-operator
+      voices: +6 when the pan is 0x2b-0x54 (both sides); each carrier
+      gets `63 - clamp(A - its level)` with its KSL; carriers by
+      connection: 0 op 3; 1 ops 1, 3; 2 ops 0, 3; 3 ops 0, 2, 3.
+      2-operator voices: op 1, and op 0 with connection 0, per bank with
+      the pan table added (`ds:0xade6[pan]` on the first, `[0x7f - pan]`
+      on the second).
+    - **Pan (VA `0x12ba`):** 4-operator voices set the OPL3 output bits of
+      both channels of the pair (`C0`, `C3`...): `0x30` for pan 0x2b-0x54,
+      `0x10` below, `0x20` above.
+    - **Instrument `i` (VA `0x1616`):** 64 bytes at `ds:0xaeba + 64 i`:
+      four 14-byte operator blocks (two for voices 6-8): attack, decay,
+      sustain level, release, EG type, KSR, level (63 loud), KSL,
+      waveform (0-7), multiplier, feedback, AM, vibrato, connection; the
+      first block's feedback and connection are the voice's (connection
+      bit 1 to the first channel's `C0`, bit 0 to the paired one's; 2-
+      operator voices: bit 0, with `0x10` on the first bank and `0x20` on
+      the second). Modulators keep `63 - level`, carriers start silent.
+      Then `+0x38` percussion flag, words `+0x3a`-`+0x3e` its noise
+      (VA `0x484`, not traced).
 - `DIGITAL.PIR`: 9 effects in 8-bit unsigned PCM at about 7330 Hz
   (`mov cx,1CA2h`). Start table at image offset `0x9f`, end table at
   `0xb1` (words, image offsets; the image follows the MZ header, its
