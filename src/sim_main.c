@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2026, Olivier Cochard-Labbé
  *
- * stmalo-sim: the simulation without graphics, driven by JSON lines on
+ * flibustier-sim: the simulation without graphics, driven by JSON lines on
  * stdin (one command per line, one response per line on stdout).  A file
  * of commands is a replay: the same file always gives the same output.
  */
@@ -96,7 +96,7 @@ main(int argc, char **argv)
 	int a, quit = 0;
 	size_t npacks = 0, i;
 
-	data = getenv("STMALO_DATA");
+	data = getenv("FLIBUSTIER_DATA");
 	for (a = 1; a < argc; a++) {
 		if (strcmp(argv[a], "--data") == 0 && a + 1 < argc)
 			data = argv[++a];
@@ -104,13 +104,13 @@ main(int argc, char **argv)
 		    npacks < MAX_PACKS)
 			pack[npacks++] = argv[++a];
 		else {
-			fprintf(stderr, "usage: stmalo-sim [--data PATH] "
+			fprintf(stderr, "usage: flibustier-sim [--data PATH] "
 			    "[--pack DIR]... < commands.jsonl\n");
 			return (2);
 		}
 	}
 	if (data == NULL) {
-		fprintf(stderr, "no game data: use --data or set STMALO_DATA\n");
+		fprintf(stderr, "no game data: use --data or set FLIBUSTIER_DATA\n");
 		return (1);
 	}
 	if ((packs = packs_new()) == NULL ||

@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_FONT_H
-#define STMALO_FONT_H
+#ifndef FLIBUSTIER_FONT_H
+#define FLIBUSTIER_FONT_H
 
 #include <stddef.h>
 #include <stdint.h>

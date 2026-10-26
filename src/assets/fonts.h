@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_FONTS_H
-#define STMALO_FONTS_H
+#ifndef FLIBUSTIER_FONTS_H
+#define FLIBUSTIER_FONTS_H
 
 #include "data/pack.h"
 #include "font.h"

@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SHA256_H
-#define STMALO_SHA256_H
+#ifndef FLIBUSTIER_SHA256_H
+#define FLIBUSTIER_SHA256_H
 
 #include <stddef.h>
 #include <stdint.h>

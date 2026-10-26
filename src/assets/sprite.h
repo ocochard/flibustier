@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SPRITE_H
-#define STMALO_SPRITE_H
+#ifndef FLIBUSTIER_SPRITE_H
+#define FLIBUSTIER_SPRITE_H
 
 #include <stddef.h>
 #include <stdint.h>

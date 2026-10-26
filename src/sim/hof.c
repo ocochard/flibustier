@@ -11,7 +11,7 @@
 
 #include "hof.h"
 
-#define HOF_HEADER	"# stmalo hall of fame 1"
+#define HOF_HEADER	"# flibustier hall of fame 1"
 
 int
 hof_rating(long score)

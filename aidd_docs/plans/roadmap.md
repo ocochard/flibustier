@@ -1,4 +1,4 @@
-# stmalo roadmap
+# flibustier roadmap
 
 Status: draft, 2026-10-25.
 
@@ -103,7 +103,7 @@ The engine runs from asset packs:
      sail heading N", "choose menu item 2" or "attack high", and a fixed
      tick. It never polls the keyboard or the clock directly. The raylib
      front end turns input into commands; a bot sends the same commands.
-   - `stmalo-sim`: a separate binary with no raylib and no window. It reads
+   - `flibustier-sim`: a separate binary with no raylib and no window. It reads
      commands and writes state over stdin/stdout as line-based JSON. Bots,
      AI agents and CI tests drive it.
    - State snapshots (dump and load the whole game state as text) and
@@ -138,7 +138,7 @@ PNG pictures (`pic/`) and sprite sheets load; OGG does not yet.
 - `src/assets/`: loaders for PCX, RSD, sprite banks (SPR, CRS, CUR, BMP),
   GRP, IMG, IMB, CHR, CSTR/CSTN (converted from Mac Roman to UTF-8), and the
   town tables.
-- `stmalo --viewer`: browse every asset with its palette, frames and
+- `flibustier --viewer`: browse every asset with its palette, frames and
   strings.
 - Tests: run against the user's own data and skip when it is absent.
   Checks are structural (frame counts, dimensions, parse to EOF) plus
@@ -146,7 +146,7 @@ PNG pictures (`pic/`) and sprite sheets load; OGG does not yet.
 
 ### Phase 1b: simulation core and headless harness
 
-Status (2026-10-26): harness done. `stmalo-sim` runs the monthly world
+Status (2026-10-26): harness done. `flibustier-sim` runs the monthly world
 update: town growth, conquest, diplomacy and random town events, as
 specified in `game-rules.md`. Treasure fleets and anything involving the
 player are still to come.
@@ -154,7 +154,7 @@ player are still to come.
 
 - `src/sim/`: game state structure, command type, a `step` function, a
   seeded RNG, and text serialisation of the state.
-- `stmalo-sim`: the stdin/stdout JSON protocol, replay files, and a first
+- `flibustier-sim`: the stdin/stdout JSON protocol, replay files, and a first
   CTest suite that replays scripted sessions.
 - Every later gameplay phase adds its commands and tests here first, and
   its screens second.

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2026, Olivier Cochard-Labbé
  *
- * Tests against the user's own Pirates! Gold data.  Set STMALO_DATA to
+ * Tests against the user's own Pirates! Gold data.  Set FLIBUSTIER_DATA to
  * the GOG DATA.DAT, its install directory, or an extracted copy.  The
  * test is skipped (exit code 77) when it is not set.
  */
@@ -650,9 +650,9 @@ test_sheet_terrain(struct packs *orig)
 	static const char *const files[] = { "pack.ini", "map.tiles",
 	    "map.png", "map-terrain.png", "battle.tiles", "battle.png",
 	    "battle-terrain.png", NULL };
-	const char *data = getenv("STMALO_DATA");
+	const char *data = getenv("FLIBUSTIER_DATA");
 	const struct exe_layout *layout;
-	char dir[] = "/tmp/stmalo-test-XXXXXX", path[1024], err[256];
+	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024], err[256];
 	struct packs *packs;
 	struct blob b;
 	size_t i, bad;
@@ -757,9 +757,9 @@ test_world_export(struct packs *orig)
 	    "towns-1660.json", "towns-1680.json", "treasure.json",
 	    "battle-sets.json", NULL };
 	static struct era_towns t, tref;
-	const char *data = getenv("STMALO_DATA");
+	const char *data = getenv("FLIBUSTIER_DATA");
 	const struct exe_layout *layout = NULL;
-	char dir[] = "/tmp/stmalo-test-XXXXXX", path[1024], err[256];
+	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024], err[256];
 	struct packs *packs;
 	struct blob b;
 	size_t i;
@@ -817,8 +817,8 @@ main(void)
 	const char *path;
 	struct packs *packs;
 
-	if ((path = getenv("STMALO_DATA")) == NULL || *path == '\0') {
-		printf("STMALO_DATA not set, skipping\n");
+	if ((path = getenv("FLIBUSTIER_DATA")) == NULL || *path == '\0') {
+		printf("FLIBUSTIER_DATA not set, skipping\n");
 		return (SKIP);
 	}
 	if ((packs = packs_new()) == NULL)

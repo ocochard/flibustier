@@ -1,17 +1,17 @@
-# Run a replay twice through stmalo-sim: every command must succeed and
+# Run a replay twice through flibustier-sim: every command must succeed and
 # both runs must print exactly the same output.  Skipped without game data.
 #
-# cmake -DSIM=<stmalo-sim> -DREPLAY=<file.jsonl> -P replay.cmake
+# cmake -DSIM=<flibustier-sim> -DREPLAY=<file.jsonl> -P replay.cmake
 
-if("$ENV{STMALO_DATA}" STREQUAL "")
-	message("SKIP: STMALO_DATA not set")
+if("$ENV{FLIBUSTIER_DATA}" STREQUAL "")
+	message("SKIP: FLIBUSTIER_DATA not set")
 	return()
 endif()
 foreach(run 1 2)
 	execute_process(COMMAND ${SIM} INPUT_FILE ${REPLAY}
 	    OUTPUT_VARIABLE out${run} RESULT_VARIABLE rc)
 	if(NOT rc EQUAL 0)
-		message(FATAL_ERROR "stmalo-sim exited with ${rc}")
+		message(FATAL_ERROR "flibustier-sim exited with ${rc}")
 	endif()
 endforeach()
 if(out1 MATCHES "\"ok\":false")

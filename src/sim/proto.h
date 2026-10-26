@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_PROTO_H
-#define STMALO_PROTO_H
+#ifndef FLIBUSTIER_PROTO_H
+#define FLIBUSTIER_PROTO_H
 
 #include "json.h"
 #include "sim.h"

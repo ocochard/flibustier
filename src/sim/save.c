@@ -16,7 +16,7 @@
 #include "proto.h"
 #include "save.h"
 
-#define SAVE_FORMAT	"stmalo-save"
+#define SAVE_FORMAT	"flibustier-save"
 #define SAVE_VERSION	1
 #define MAX_SAVE	(4 * 1024 * 1024)
 
@@ -160,14 +160,14 @@ save_dir(char *out, size_t len, char *err, size_t errlen)
 {
 	const char *v;
 
-	if ((v = getenv("STMALO_SAVES")) != NULL && *v != '\0')
+	if ((v = getenv("FLIBUSTIER_SAVES")) != NULL && *v != '\0')
 		snprintf(out, len, "%s", v);
 	else if ((v = getenv("XDG_DATA_HOME")) != NULL && *v != '\0')
-		snprintf(out, len, "%s/stmalo/saves", v);
+		snprintf(out, len, "%s/flibustier/saves", v);
 	else if ((v = getenv("HOME")) != NULL && *v != '\0')
-		snprintf(out, len, "%s/.local/share/stmalo/saves", v);
+		snprintf(out, len, "%s/.local/share/flibustier/saves", v);
 	else {
-		snprintf(err, errlen, "no save directory: set STMALO_SAVES");
+		snprintf(err, errlen, "no save directory: set FLIBUSTIER_SAVES");
 		return (-1);
 	}
 	if (make_dirs(out) != 0) {

@@ -284,7 +284,7 @@ viewer_run(struct packs *packs, const char *start_id, const char *shot,
 	open_selected(&vw);
 
 	SetTraceLogLevel(LOG_WARNING);
-	InitWindow(WIN_W, WIN_H, "stmalo asset viewer");
+	InitWindow(WIN_W, WIN_H, "flibustier asset viewer");
 	SetTargetFPS(60);
 	t0 = GetTime();
 	while (!WindowShouldClose()) {

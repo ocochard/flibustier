@@ -22,15 +22,15 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-	    "usage: stmalo [--data PATH] [--pack DIR]... [command]\n"
+	    "usage: flibustier [--data PATH] [--pack DIR]... [command]\n"
 	    "\n"
 	    "  --data PATH   GOG DATA.DAT, its install directory, or an\n"
-	    "                extracted CD (default: $STMALO_DATA)\n"
+	    "                extracted CD (default: $FLIBUSTIER_DATA)\n"
 	    "  --pack DIR    asset pack with a pack.ini, over the data;\n"
 	    "                later packs take priority\n"
 	    "  --lang LANG   eng, fre or ger, or en, fr, de (default: eng)\n"
-	    "  --saves DIR   saved games (default: $STMALO_SAVES, else\n"
-	    "                ~/.local/share/stmalo/saves)\n"
+	    "  --saves DIR   saved games (default: $FLIBUSTIER_SAVES, else\n"
+	    "                ~/.local/share/flibustier/saves)\n"
 	    "\n"
 	    "commands:\n"
 	    "  (none)        play [--crt] [--screenshot OUT.png [--frames N]]\n"
@@ -125,7 +125,7 @@ main(int argc, char **argv)
 	int shot_frames = 30, rc, a, crt = 0;
 	char err[256];
 
-	data = getenv("STMALO_DATA");
+	data = getenv("FLIBUSTIER_DATA");
 	for (a = 1; a < argc; a++) {
 		if (strcmp(argv[a], "--data") == 0 && a + 1 < argc)
 			data = argv[++a];
@@ -182,7 +182,7 @@ main(int argc, char **argv)
 			return (1);
 		}
 	if (packs_count(packs) == 0) {
-		fprintf(stderr, "no game data: use --data or set STMALO_DATA\n");
+		fprintf(stderr, "no game data: use --data or set FLIBUSTIER_DATA\n");
 		packs_free(packs);
 		return (1);
 	}

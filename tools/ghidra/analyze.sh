@@ -28,7 +28,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 
 # Ghidra refuses project paths with a component starting with '.', such
 # as ~/.cache, and the project is only needed during the run.
-proj=$(mktemp -d "${TMPDIR:-/tmp}/stmalo-ghidra.XXXXXX")
+proj=$(mktemp -d "${TMPDIR:-/tmp}/flibustier-ghidra.XXXXXX")
 trap 'rm -rf "$proj"' EXIT
 mkdir -p "$out"
 tail -c +$((IMAGE_OFFSET + 1)) "$exe" > "$out/pirates_flat.bin"

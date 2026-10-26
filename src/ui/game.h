@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_GAME_H
-#define STMALO_GAME_H
+#ifndef FLIBUSTIER_GAME_H
+#define FLIBUSTIER_GAME_H
 
 #include <stddef.h>
 #include <stdint.h>

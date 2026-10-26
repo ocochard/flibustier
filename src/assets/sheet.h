@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SHEET_H
-#define STMALO_SHEET_H
+#ifndef FLIBUSTIER_SHEET_H
+#define FLIBUSTIER_SHEET_H
 
 #include "data/pack.h"
 #include "sprite.h"

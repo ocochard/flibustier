@@ -131,9 +131,9 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		game_free(&g);
 		return (1);
 	}
-	SetTraceLogLevel(getenv("STMALO_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
+	SetTraceLogLevel(getenv("FLIBUSTIER_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
-	InitWindow(FB_W * WINDOW_SCALE, FB_H * WINDOW_SCALE, "stmalo");
+	InitWindow(FB_W * WINDOW_SCALE, FB_H * WINDOW_SCALE, "flibustier");
 	SetExitKey(KEY_NULL);	/* Escape is a game key */
 	HideCursor();		/* the game draws its own sword pointer */
 	SetTargetFPS(60);
@@ -231,7 +231,7 @@ play_headless(struct packs *packs, const char *lang, const char *saves,
 	fb_to_rgb(&g.fb, g.brightness, rgb);
 	im = (Image){ rgb, g.fb.out_w, g.fb.out_h, 1,
 	    PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
-	SetTraceLogLevel(getenv("STMALO_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
+	SetTraceLogLevel(getenv("FLIBUSTIER_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
 	if (out != NULL && !ExportImage(im, out))
 		rc = 1;
 	free(rgb);

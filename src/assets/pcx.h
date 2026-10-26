@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_PCX_H
-#define STMALO_PCX_H
+#ifndef FLIBUSTIER_PCX_H
+#define FLIBUSTIER_PCX_H
 
 #include <stddef.h>
 #include <stdint.h>

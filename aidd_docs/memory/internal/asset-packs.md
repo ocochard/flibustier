@@ -221,7 +221,7 @@ original files and executable.
   group layers refused. Files end in `.tmj` (or `.json`).
 - A pack that gives one of these must give it whole and valid: a broken
   file is an error, never a silent fallback to the original.
-- `stmalo --export-world DIR` writes the installed world (the original's
+- `flibustier --export-world DIR` writes the installed world (the original's
   unless a pack replaces it) in these formats, with Tiled tilesets
   `map.tsj` and `battle.tsj` (images `map.png`, `battle.png` to supply)
   and a `pack.ini`. Exported from the original data, it is for local

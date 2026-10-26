@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(stmalo VERSION 0.1.0 LANGUAGES C)
+project(flibustier VERSION 0.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -10,12 +10,12 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-	set(STMALO_WARNINGS -Wall -Wextra -Wpedantic)
+	set(FLIBUSTIER_WARNINGS -Wall -Wextra -Wpedantic)
 endif()
 
 # Engine core: data access and asset decoding, no raylib dependency, so
 # headless tools and tests can use it.
-add_library(stmalo_core STATIC
+add_library(flibustier_core STATIC
 	src/data/exe.c
 	src/data/iso9660.c
 	src/data/pack.c
@@ -59,8 +59,8 @@ add_library(stmalo_core STATIC
 	src/ui/screens.c
 	src/ui/script.c
 	src/view/view.c)
-target_include_directories(stmalo_core PUBLIC src)
-target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
+target_include_directories(flibustier_core PUBLIC src)
+target_compile_options(flibustier_core PRIVATE ${FLIBUSTIER_WARNINGS})
 # The vendored stb_image is not ours to keep warning-free.
 set_source_files_properties(src/assets/png.c PROPERTIES COMPILE_OPTIONS -w)
 
@@ -69,7 +69,7 @@ set_source_files_properties(src/assets/png.c PROPERTIES COMPILE_OPTIONS -w)
 # available, otherwise fetch a pinned release.
 find_package(Freetype QUIET)
 if(FREETYPE_FOUND)
-	target_link_libraries(stmalo_core PRIVATE Freetype::Freetype)
+	target_link_libraries(flibustier_core PRIVATE Freetype::Freetype)
 else()
 	message(STATUS "System FreeType not found, fetching FreeType 2.14.3")
 	include(FetchContent)
@@ -83,15 +83,15 @@ else()
 		GIT_TAG VER-2-14-3
 		GIT_SHALLOW TRUE)
 	FetchContent_MakeAvailable(freetype)
-	target_link_libraries(stmalo_core PRIVATE freetype)
+	target_link_libraries(flibustier_core PRIVATE freetype)
 endif()
 if(UNIX)
-	target_link_libraries(stmalo_core PRIVATE m)
+	target_link_libraries(flibustier_core PRIVATE m)
 endif()
 
 # Use a system raylib 5.5 or later when available (CMake config or
 # pkg-config), otherwise fetch a pinned release.
-set(STMALO_RAYLIB raylib)
+set(FLIBUSTIER_RAYLIB raylib)
 find_package(raylib QUIET)
 if(raylib_FOUND AND raylib_VERSION AND raylib_VERSION VERSION_LESS 5.5)
 	set(raylib_FOUND FALSE)
@@ -101,7 +101,7 @@ if(NOT raylib_FOUND)
 	if(PKG_CONFIG_FOUND)
 		pkg_check_modules(RAYLIB QUIET IMPORTED_TARGET raylib>=5.5)
 		if(RAYLIB_FOUND)
-			set(STMALO_RAYLIB PkgConfig::RAYLIB)
+			set(FLIBUSTIER_RAYLIB PkgConfig::RAYLIB)
 			set(raylib_FOUND TRUE)
 		endif()
 	endif()
@@ -121,28 +121,28 @@ endif()
 # Some raylib builds (FreeBSD raylib-6.0 package) omit libm and pthreads
 # from their own dependencies, so link them explicitly.
 find_package(Threads REQUIRED)
-add_executable(stmalo src/main.c src/play.c src/crt.c src/viewer.c)
-target_link_libraries(stmalo PRIVATE stmalo_core ${STMALO_RAYLIB}
+add_executable(flibustier src/main.c src/play.c src/crt.c src/viewer.c)
+target_link_libraries(flibustier PRIVATE flibustier_core ${FLIBUSTIER_RAYLIB}
 	Threads::Threads)
 if(UNIX)
-	target_link_libraries(stmalo PRIVATE m)
+	target_link_libraries(flibustier PRIVATE m)
 endif()
-target_compile_options(stmalo PRIVATE ${STMALO_WARNINGS})
+target_compile_options(flibustier PRIVATE ${FLIBUSTIER_WARNINGS})
 
 # Headless simulation, driven by JSON lines (bots, AI agents, tests).
-add_executable(stmalo-sim src/sim_main.c)
-target_link_libraries(stmalo-sim PRIVATE stmalo_core)
-target_compile_options(stmalo-sim PRIVATE ${STMALO_WARNINGS})
+add_executable(flibustier-sim src/sim_main.c)
+target_link_libraries(flibustier-sim PRIVATE flibustier_core)
+target_compile_options(flibustier-sim PRIVATE ${FLIBUSTIER_WARNINGS})
 
-# Tests.  test_original needs the game data: set STMALO_DATA to the GOG
+# Tests.  test_original needs the game data: set FLIBUSTIER_DATA to the GOG
 # DATA.DAT (or an install directory) in the environment, otherwise it is
 # reported as skipped.
 include(CTest)
 if(BUILD_TESTING)
 	foreach(t test_formats test_original test_sim test_ui)
 		add_executable(${t} tests/${t}.c)
-		target_link_libraries(${t} PRIVATE stmalo_core)
-		target_compile_options(${t} PRIVATE ${STMALO_WARNINGS})
+		target_link_libraries(${t} PRIVATE flibustier_core)
+		target_compile_options(${t} PRIVATE ${FLIBUSTIER_WARNINGS})
 		add_test(NAME ${t} COMMAND ${t})
 	endforeach()
 	set_tests_properties(test_original test_ui PROPERTIES
@@ -151,7 +151,7 @@ if(BUILD_TESTING)
 	foreach(r ${replays})
 		get_filename_component(name ${r} NAME_WE)
 		add_test(NAME replay_${name} COMMAND ${CMAKE_COMMAND}
-		    -DSIM=$<TARGET_FILE:stmalo-sim> -DREPLAY=${r}
+		    -DSIM=$<TARGET_FILE:flibustier-sim> -DREPLAY=${r}
 		    -P ${CMAKE_SOURCE_DIR}/tests/replay.cmake)
 		set_tests_properties(replay_${name} PROPERTIES
 		    SKIP_REGULAR_EXPRESSION "SKIP: ")

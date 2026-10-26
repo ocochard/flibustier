@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_TOWNS_H
-#define STMALO_TOWNS_H
+#ifndef FLIBUSTIER_TOWNS_H
+#define FLIBUSTIER_TOWNS_H
 
 #include <stddef.h>
 #include <stdint.h>

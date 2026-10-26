@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SEA_H
-#define STMALO_SEA_H
+#ifndef FLIBUSTIER_SEA_H
+#define FLIBUSTIER_SEA_H
 
 #include <stdint.h>
 

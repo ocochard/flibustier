@@ -137,8 +137,8 @@ write_text(const char *dir, const char *name, const char *text)
 static void
 test_packs(void)
 {
-	char low[] = "/tmp/stmalo-test-XXXXXX";
-	char high[] = "/tmp/stmalo-test-XXXXXX";
+	char low[] = "/tmp/flibustier-test-XXXXXX";
+	char high[] = "/tmp/flibustier-test-XXXXXX";
 	char path[1024];
 	struct packs *packs;
 	struct blob b;
@@ -281,8 +281,8 @@ test_pic(void)
 	static const uint8_t want_orig[] = { 7, 7, 7, 7, 0xC5, 2 };
 	/* Cube indices of red, green, blue, white, black and near red. */
 	static const uint8_t want_fixed[] = { 180, 30, 5, 215, 0, 180 };
-	char low[] = "/tmp/stmalo-test-XXXXXX";
-	char high[] = "/tmp/stmalo-test-XXXXXX";
+	char low[] = "/tmp/flibustier-test-XXXXXX";
+	char high[] = "/tmp/flibustier-test-XXXXXX";
 	uint8_t pcx[1024];
 	struct packs *packs;
 	struct image img;
@@ -769,8 +769,8 @@ test_sheets(void)
 	static const char flag[] = "[sheet]\nimage = flag.png\n\n[frames]\n"
 	    "# frame = x y w h\n1 = 0 0 2 2\n0 = 0 0 4 2\n";
 	static struct fb fb;
-	char low[] = "/tmp/stmalo-test-XXXXXX";
-	char high[] = "/tmp/stmalo-test-XXXXXX";
+	char low[] = "/tmp/flibustier-test-XXXXXX";
+	char high[] = "/tmp/flibustier-test-XXXXXX";
 	char path[1024];
 	uint8_t raw[16], *rgb;
 	struct packs *packs;
@@ -890,7 +890,7 @@ test_font_file(void)
 		"/Library/Fonts/Arial Unicode.ttf",
 		"C:/Windows/Fonts/arial.ttf",
 	};
-	const char *env = getenv("STMALO_TEST_FONT");
+	const char *env = getenv("FLIBUSTIER_TEST_FONT");
 	size_t i;
 
 	if (env != NULL && access(env, R_OK) == 0)
@@ -955,7 +955,7 @@ test_fonts(void)
 	    "size = 22.5\nbaseline = 19\n";
 	static struct fb fb;
 	const char *ttf = test_font_file();
-	char dir[] = "/tmp/stmalo-test-XXXXXX";
+	char dir[] = "/tmp/flibustier-test-XXXXXX";
 	struct packs *packs;
 	struct font f, caps;
 	const struct glyph *a;
@@ -965,7 +965,7 @@ test_fonts(void)
 
 	if (ttf == NULL) {
 		printf("font tests skipped: no TrueType font found "
-		    "(set STMALO_TEST_FONT)\n");
+		    "(set FLIBUSTIER_TEST_FONT)\n");
 		return;
 	}
 	if (mkdtemp(dir) == NULL) {
@@ -1096,8 +1096,8 @@ test_tiles(void)
 	    "count = 4\nframes = 2\nperiod = 4\n";
 	static uint8_t imb[IMB_LEN];
 	static struct fb fb;
-	char low[] = "/tmp/stmalo-test-XXXXXX";
-	char high[] = "/tmp/stmalo-test-XXXXXX";
+	char low[] = "/tmp/flibustier-test-XXXXXX";
+	char high[] = "/tmp/flibustier-test-XXXXXX";
 	struct packs *packs;
 	struct tileset ts;
 	struct image t;
@@ -1218,7 +1218,7 @@ test_tile_terrain(void)
 		    TERRAIN_SHALLOWS },
 		{ TERRAIN_LAND, TERRAIN_LAND, TERRAIN_SEA, TERRAIN_SEA },
 	};
-	char dir[] = "/tmp/stmalo-test-XXXXXX";
+	char dir[] = "/tmp/flibustier-test-XXXXXX";
 	char text[512];
 	struct packs *packs;
 	struct tileset ts;

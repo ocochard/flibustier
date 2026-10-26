@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_PACK_H
-#define STMALO_PACK_H
+#ifndef FLIBUSTIER_PACK_H
+#define FLIBUSTIER_PACK_H
 
 #include <stddef.h>
 #include <stdint.h>

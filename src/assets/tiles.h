@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_TILES_H
-#define STMALO_TILES_H
+#ifndef FLIBUSTIER_TILES_H
+#define FLIBUSTIER_TILES_H
 
 #include "data/pack.h"
 #include "image.h"

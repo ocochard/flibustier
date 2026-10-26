@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_RSD_H
-#define STMALO_RSD_H
+#ifndef FLIBUSTIER_RSD_H
+#define FLIBUSTIER_RSD_H
 
 #include <stddef.h>
 #include <stdint.h>

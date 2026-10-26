@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_JSON_H
-#define STMALO_JSON_H
+#ifndef FLIBUSTIER_JSON_H
+#define FLIBUSTIER_JSON_H
 
 #include <stddef.h>
 #include <stdint.h>

@@ -399,7 +399,7 @@ test_snapshot(void)
 static void
 test_hof(void)
 {
-	static const char *path = "/tmp/stmalo-test-hof.txt";
+	static const char *path = "/tmp/flibustier-test-hof.txt";
 	struct hof h, back;
 	struct hof_entry e;
 	char err[128];
@@ -435,7 +435,7 @@ test_hof(void)
 
 	/* Hand edited out of order: sorted on load. */
 	if ((fp = fopen(path, "w")) != NULL) {
-		fputs("# stmalo hall of fame 1\n3\t17\tA\tX\n9\t0\tB\tY\n",
+		fputs("# flibustier hall of fame 1\n3\t17\tA\tX\n9\t0\tB\tY\n",
 		    fp);
 		fclose(fp);
 	}

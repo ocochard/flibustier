@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_HOF_H
-#define STMALO_HOF_H
+#ifndef FLIBUSTIER_HOF_H
+#define FLIBUSTIER_HOF_H
 
 #include <stddef.h>
 
@@ -13,7 +13,7 @@
  * The Hall of Fame: the 10 best careers, best first, kept in a text file
  * with one tab-separated line per entry:
  *	score	rating	name	title
- * after a "# stmalo hall of fame 1" header line.
+ * after a "# flibustier hall of fame 1" header line.
  */
 
 #define HOF_ENTRIES	10

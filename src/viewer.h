@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_VIEWER_H
-#define STMALO_VIEWER_H
+#ifndef FLIBUSTIER_VIEWER_H
+#define FLIBUSTIER_VIEWER_H
 
 #include "data/pack.h"
 

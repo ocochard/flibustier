@@ -70,7 +70,7 @@ original data.
 Status (2026-10-26): done (`asset-packs.md`, open world data). Towns
 gained named fields for everything the sim reads. `test_original`
 exports the original world and towns and loads them back identical in
-every era; the ten-year replay through `stmalo-sim --pack` with the
+every era; the ten-year replay through `flibustier-sim --pack` with the
 export gives byte-identical output.
 
 - **Tile grids:** the map per era and the battle screens are tile-number

@@ -4,7 +4,7 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  *
  * Game shell tests: drive the start screens with scripted input, without
- * a window.  Needs the game data (STMALO_DATA); skipped otherwise.
+ * a window.  Needs the game data (FLIBUSTIER_DATA); skipped otherwise.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -30,7 +30,7 @@
 
 static int failures;
 static struct packs *packs;
-static char saves_tmp[] = "/tmp/stmalo-ui-XXXXXX";
+static char saves_tmp[] = "/tmp/flibustier-ui-XXXXXX";
 
 #define CHECK(cond) do {						\
 	if (!(cond)) {							\
@@ -1748,7 +1748,7 @@ test_town_assets(void)
 	struct image want;
 	struct blob pic;
 	FILE *fp;
-	char dir[] = "/tmp/stmalo-test-XXXXXX", path[1024], id[96], slug[32];
+	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024], id[96], slug[32];
 	struct packs *own, *saved;
 	struct game *g;
 	struct sim_town *t;
@@ -1787,7 +1787,7 @@ test_town_assets(void)
 	CHECK(touch(dir, "governor.png", "x") == 0);
 	/* A stack of its own, so later tests keep the original. */
 	own = packs_new();
-	CHECK(packs_add_original(own, getenv("STMALO_DATA")) == 0);
+	CHECK(packs_add_original(own, getenv("FLIBUSTIER_DATA")) == 0);
 	CHECK(packs_add_dir(own, dir) == 0);
 	saved = g->packs;
 	g->packs = own;
@@ -1826,7 +1826,7 @@ test_town_assets(void)
 	    "pic/tavern/port-royale = tavern.pcx\n") == 0);
 	packs_free(own);
 	own = packs_new();
-	CHECK(packs_add_original(own, getenv("STMALO_DATA")) == 0);
+	CHECK(packs_add_original(own, getenv("FLIBUSTIER_DATA")) == 0);
 	CHECK(packs_add_dir(own, dir) == 0);
 	g->packs = own;
 	g->sim.encounters = 0;
@@ -1857,8 +1857,8 @@ main(void)
 {
 	const char *path;
 
-	if ((path = getenv("STMALO_DATA")) == NULL || *path == '\0') {
-		printf("STMALO_DATA not set, skipping\n");
+	if ((path = getenv("FLIBUSTIER_DATA")) == NULL || *path == '\0') {
+		printf("FLIBUSTIER_DATA not set, skipping\n");
 		return (SKIP);
 	}
 	if ((packs = packs_new()) == NULL ||

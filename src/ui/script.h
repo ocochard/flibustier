@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SCRIPT_H
-#define STMALO_SCRIPT_H
+#ifndef FLIBUSTIER_SCRIPT_H
+#define FLIBUSTIER_SCRIPT_H
 
 #include "game.h"
 

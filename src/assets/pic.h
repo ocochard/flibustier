@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_PIC_H
-#define STMALO_PIC_H
+#ifndef FLIBUSTIER_PIC_H
+#define FLIBUSTIER_PIC_H
 
 #include "data/pack.h"
 #include "image.h"

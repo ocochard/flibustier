@@ -1,6 +1,6 @@
 # Simulation protocol
 
-`stmalo-sim` runs the game rules without graphics, for bots, AI agents
+`flibustier-sim` runs the game rules without graphics, for bots, AI agents
 and tests. It reads one JSON object per line on stdin and writes one per
 line on stdout. Blank lines and lines starting with `#` are ignored, so a
 file of commands works as a replay: the same file always gives the same
@@ -8,7 +8,7 @@ output. The implementation is in `src/sim/proto.c`; the rules are in
 [game-rules](game-rules.md).
 
 ```sh
-stmalo-sim --data ~/games/pirates_gold < tests/replays/ten_years.jsonl
+flibustier-sim --data ~/games/pirates_gold < tests/replays/ten_years.jsonl
 ```
 
 Every response has `"ok": true|false`. A failure also carries `"error"`
@@ -193,14 +193,14 @@ A saved game is one file per slot, `save0.json` to `save9.json`
 (`src/sim/save.c`):
 
 ```json
-{"format": "stmalo-save", "version": 1,
+{"format": "flibustier-save", "version": 1,
  "description": "Olivier, English Buccaneer, April 1660",
  "state": { ...the state above... }}
 ```
 
 - **Location:** the directory comes from `--saves DIR`, else
-  `$STMALO_SAVES`, else `$XDG_DATA_HOME/stmalo/saves`, else
-  `~/.local/share/stmalo/saves`. It is created when missing.
+  `$FLIBUSTIER_SAVES`, else `$XDG_DATA_HOME/flibustier/saves`, else
+  `~/.local/share/flibustier/saves`. It is created when missing.
 - **Treasure maps:** `maps` holds the three maps (pirate, relative,
   lost), each `pieces` (bits 1-8 the quarters, 16 shown), `x`, `y`
   (cells), `value` (the lost treasure's people) and `town`; `relative`
@@ -244,7 +244,7 @@ A saved game is one file per slot, `save0.json` to `save9.json`
 - **Readable:** saves are written one value per line so people can read
   and edit them; any valid JSON loads.
 - **Hall of Fame:** kept in `halloffame.txt` in the same directory: a
-  `# stmalo hall of fame 1` line, then one line per career, best first,
+  `# flibustier hall of fame 1` line, then one line per career, best first,
   with tab-separated fields: score, rating (0 = best), name, title. A
   hand-edited file is sorted again on load.
 - **Original saves:** the original's `PIRATES-<n>.SAV` layout is in
@@ -255,6 +255,6 @@ A saved game is one file per slot, `save0.json` to `save9.json`
 
 - `tests/test_sim.c` covers the RNG, JSON, the rules, the protocol and
   snapshots. It uses a synthetic era, so it needs no game data.
-- Every `tests/replays/*.jsonl` file is run twice through `stmalo-sim`
+- Every `tests/replays/*.jsonl` file is run twice through `flibustier-sim`
   (`tests/replay.cmake`). The test fails if a command fails or the two
   outputs differ.

@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_VIEW_H
-#define STMALO_VIEW_H
+#ifndef FLIBUSTIER_VIEW_H
+#define FLIBUSTIER_VIEW_H
 
 #include <stddef.h>
 #include <stdint.h>

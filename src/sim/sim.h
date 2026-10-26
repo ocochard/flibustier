@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SIM_H
-#define STMALO_SIM_H
+#ifndef FLIBUSTIER_SIM_H
+#define FLIBUSTIER_SIM_H
 
 #include <stddef.h>
 #include <stdint.h>

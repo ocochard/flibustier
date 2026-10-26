@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_EXE_H
-#define STMALO_EXE_H
+#ifndef FLIBUSTIER_EXE_H
+#define FLIBUSTIER_EXE_H
 
 #include <stddef.h>
 #include <stdint.h>

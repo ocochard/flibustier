@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_RNG_H
-#define STMALO_RNG_H
+#ifndef FLIBUSTIER_RNG_H
+#define FLIBUSTIER_RNG_H
 
 #include <stdint.h>
 

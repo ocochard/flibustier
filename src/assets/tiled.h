@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_TILED_H
-#define STMALO_TILED_H
+#ifndef FLIBUSTIER_TILED_H
+#define FLIBUSTIER_TILED_H
 
 #include <stddef.h>
 #include <stdint.h>

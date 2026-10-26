@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_PLAY_H
-#define STMALO_PLAY_H
+#ifndef FLIBUSTIER_PLAY_H
+#define FLIBUSTIER_PLAY_H
 
 #include "data/pack.h"
 

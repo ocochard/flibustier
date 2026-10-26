@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SCREEN_H
-#define STMALO_SCREEN_H
+#ifndef FLIBUSTIER_SCREEN_H
+#define FLIBUSTIER_SCREEN_H
 
 #include "game.h"
 

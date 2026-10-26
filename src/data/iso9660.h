@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_ISO9660_H
-#define STMALO_ISO9660_H
+#ifndef FLIBUSTIER_ISO9660_H
+#define FLIBUSTIER_ISO9660_H
 
 #include <stddef.h>
 #include <stdint.h>

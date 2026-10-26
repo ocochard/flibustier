@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_TILESET_H
-#define STMALO_TILESET_H
+#ifndef FLIBUSTIER_TILESET_H
+#define FLIBUSTIER_TILESET_H
 
 #include <stddef.h>
 #include <stdint.h>

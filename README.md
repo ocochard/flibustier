@@ -1,4 +1,4 @@
-# stmalo
+# flibustier
 
 An open source engine re-implementation of **Pirates! Gold**, MicroProse's
 1993 remake of Sid Meier's *Pirates!*, built on [raylib](https://www.raylib.com/).
@@ -41,21 +41,21 @@ On FreeBSD: `pkg install cmake raylib freetype2`
 ```sh
 cmake -B build
 cmake --build build
-./build/stmalo
+./build/flibustier
 ```
 
 Run the tests with `ctest --test-dir build`. Tests that need the original
-game data are skipped unless `STMALO_DATA` points to the GOG `DATA.DAT`
+game data are skipped unless `FLIBUSTIER_DATA` points to the GOG `DATA.DAT`
 (or its install directory, or an extracted copy of the CD):
 
 ```sh
-STMALO_DATA=~/games/pirates_gold ctest --test-dir build
+FLIBUSTIER_DATA=~/games/pirates_gold ctest --test-dir build
 ```
 
 ## Running
 
 ```sh
-./build/stmalo --data ~/games/pirates_gold [--lang eng|fre|ger, or en|fr|de]
+./build/flibustier --data ~/games/pirates_gold [--lang eng|fre|ger, or en|fr|de]
 ```
 
 So far this runs the start of the game: the intro, the welcome menu, and
@@ -69,7 +69,7 @@ Up/Down pick the line, Right steps back), and Escape opens the menu
 its corners as diagonals. `--crt` (or F2 while playing) gives the
 window a CRT look, like dosbox-staging's default shader. "Exit game" offers the Hall of Fame. Saves (one
 JSON file per slot) and the Hall of Fame (a tab-separated text file) go
-to `~/.local/share/stmalo/saves`, or wherever `--saves DIR` says.
+to `~/.local/share/flibustier/saves`, or wherever `--saves DIR` says.
 `--script "enter down enter ..." out.png` plays the same screens without
 a window and saves the last one, for tests and bots.
 
@@ -78,7 +78,7 @@ a window and saves the last one, for tests and bots.
 A viewer for the original assets:
 
 ```sh
-./build/stmalo --data ~/games/pirates_gold --viewer
+./build/flibustier --data ~/games/pirates_gold --viewer
 ```
 
 Up/Down picks an asset, Left/Right steps through its frames, PgUp/PgDn
@@ -94,13 +94,13 @@ the original data.
 
 ## Headless simulation
 
-`stmalo-sim` runs the game rules without graphics, driven by JSON
+`flibustier-sim` runs the game rules without graphics, driven by JSON
 commands on stdin, for bots, AI agents and tests:
 
 ```sh
 echo '{"cmd":"new_game","era":1660,"seed":7}
 {"cmd":"advance","days":360}
-{"cmd":"state"}' | ./build/stmalo-sim --data ~/games/pirates_gold
+{"cmd":"state"}' | ./build/flibustier-sim --data ~/games/pirates_gold
 ```
 
 The protocol is described in
@@ -108,7 +108,7 @@ The protocol is described in
 
 ## Methodology and legal
 
-stmalo is an interoperable re-implementation. It does not contain the
+flibustier is an interoperable re-implementation. It does not contain the
 original game; it reads the files of a copy the player owns.
 
 How the original is studied:

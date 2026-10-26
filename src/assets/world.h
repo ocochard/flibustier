@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_WORLD_H
-#define STMALO_WORLD_H
+#ifndef FLIBUSTIER_WORLD_H
+#define FLIBUSTIER_WORLD_H
 
 #include <stdint.h>
 

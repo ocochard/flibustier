@@ -4,8 +4,8 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#ifndef STMALO_SCENARIO_H
-#define STMALO_SCENARIO_H
+#ifndef FLIBUSTIER_SCENARIO_H
+#define FLIBUSTIER_SCENARIO_H
 
 #include <stdint.h>
 
