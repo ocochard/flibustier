@@ -721,6 +721,20 @@ Where the original's behaviour is not traced yet, the engine does this:
 
 ## Sea battles (VA `0xe245`; loop at VA `0x7db8`)
 
+- **Sprite banks (names at VA `0x32d64`):** the player's ship (two
+  banks, 3 and 4), the enemy's (5, 6), `sbtlmisc.cur` (7: sails' gauges,
+  shots, smoke, the cross), the damage pictures. A sprite id is bank and
+  frame (VA `0x29a63`): below 0x100 bank 3, 0x100 bank 4, 0x200 3 then 4
+  past frame 7, 0x300 5 then 6, 0x400 bank 7, 0x500 the damage bank,
+  0x600 bank 5.
+- **The cross off the bow (VA `0xf903`):** every pass object 0, the
+  player's ship, is type 0x30 and draws sprite 0x414 (`sbtlmisc.cur`
+  frame 20, 15 x 15, colours 225-238: gold to orange in the battle
+  palettes) at the ship plus the offset for `heading / 16` (table at VA
+  `0x40fbc`: a circle of about 50 pixels around (32, 23)) plus (3, 2).
+  It marks the player's ship and where her bow points; the guns fire
+  abeam, not at it. The engine centres the circle on the ship.
+
 Helper names below are those `tools/ghidra/RegParams.java` gives:
 `div16(a, b)` is `a / b`, or 0 when `a < b` or `b == 0`; `sine_mul`
 and `cosine_mul` are the sailing sine products.
@@ -1731,7 +1745,10 @@ Then the credits (VA `0x1fe91`):
 - **Keys:** a key during blocks 0-4 jumps to block 5; a key during
   block 5 ends the credits.
 
-The welcome menu (VA `0x1443e`) is full screen on `textback.pcx`:
+The welcome menu (VA `0x1443e`) is full screen on `textback.pcx`
+(its last option, "Return to DOS?", reads as the cabin's "Exit game"
+(CSTN 86.9) with a question mark: an engine choice, translated in every
+language):
 - the 10 lines of CSTN group 100 are centred at x 320, at heights 70,
   120, 145, 170, 195, 250, 300, 330, 360 and 390;
 - the 6 heading lines use PIRATE4, and the 4 options PIRATE1. The game

@@ -101,6 +101,7 @@
 #define FONT_BODY		1
 #define FONT_SMALL		2	/* PIRATE3, 14 px */
 #define FONT_PIRATE4		3
+#define BOW_MARK		20	/* sbtlmisc.cur: the red cross */
 #define W_RANK			78	/* Mr., Ensign, Captain... */
 #define W_MOOD			72	/* angry .. happy */
 #define W_UNKNOWN		92	/* 5: "?", 9: "NONE" */
@@ -684,7 +685,7 @@ welcome_draw(struct game *g)
 	    195, 250, 300, 330, 360, 390 };
 	struct text_target t = { plot, &g->fb };
 	struct text_style st;
-	char opt[256];
+	char opt[256], quit[96];
 	const char *text;
 	int i, w;
 
@@ -695,6 +696,14 @@ welcome_draw(struct game *g)
 			draw(g, FONT_PIRATE4, FB_W / 2 - w / 2, line_y[i],
 			    FB_W, text, 0);
 			continue;
+		}
+		/* "Return to DOS?" reads as the cabin's "Exit game"
+		 * (CSTN 86.9), translated in every language: there is no
+		 * DOS to return to (an engine choice). */
+		if (i == WELCOME_HEADING + WELCOME_QUIT) {
+			snprintf(quit, sizeof(quit), "%s?",
+			    game_word(g, 86, 9));
+			text = quit;
 		}
 		snprintf(opt, sizeof(opt), "~%s", text);
 		w = text_width(&g->font[FONT_TITLE], text);
@@ -3060,6 +3069,7 @@ battle_sprites(struct game *g, int side, int type)
 	static const char *b[3] = { "cur/ship0b", "cur/ship1b", "cur/ship2b" };
 	int size = (type & 7) < 3 ? 0 : (type & 7) < 6 ? 1 : 2;
 
+	load_bank(g, "cur/sbtlmisc", 1, &g->btl_misc);
 	load_bank(g, a[size], 1, &g->btl_ship[side][0]);
 	load_bank(g, b[size], 1, &g->btl_ship[side][1]);
 	load_bank(g, side == 1 && g->sim.battle.fort ? "cur/fortbtl" :
@@ -3355,6 +3365,41 @@ battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 	}
 }
 
+/*
+ * The red cross off the player's bow (VA 0xf903, object type 0x30):
+ * sbtlmisc.cur frame 20, at the ship plus the offset for heading / 16
+ * (table at VA 0x40fbc, a circle of about 50 pixels around (32, 23))
+ * plus (3, 2).  It shows which ship is the player's and where her bow
+ * points; the guns fire abeam, not at it.  The engine centres that
+ * circle on the ship.
+ */
+static void
+battle_bow_mark(struct game *g, const struct battle_ship *b)
+{
+	static const int8_t off[16][2] = {
+		{ 32, -28 }, { 52, -24 }, { 68, -13 }, { 79, 3 }, { 83, 23 },
+		{ 78, 45 }, { 65, 62 }, { 50, 72 }, { 32, 74 }, { 12, 70 },
+		{ -3, 61 }, { -14, 45 }, { -19, 23 }, { -16, 5 }, { -5, -12 },
+		{ 13, -24 },
+	};
+	const struct frame *f;
+	int i = (b->heading >> 4) & 15, x, y, sx, sy;
+
+	if (g->btl_misc.count <= BOW_MARK)
+		return;
+	f = &g->btl_misc.frames[BOW_MARK];
+	sx = b->x / 256 + off[i][0] - 32 + 3 - f->w / 2;
+	sy = b->y / 256 + off[i][1] - 23 + 2 - f->h / 2;
+	for (y = 0; y < f->h; y++)
+		for (x = 0; x < f->w; x++) {
+			uint8_t c = f->pixels[y * f->w + x];
+
+			if (c != 0 && sx + x >= 0 && sx + x < AREA &&
+			    sy + y >= 0 && sy + y < AREA)
+				g->fb.px[(sy + y) * FB_W + sx + x] = c;
+		}
+}
+
 static void
 battle_side_text(struct game *g, int y, const struct battle_ship *b,
     int status)
@@ -3402,6 +3447,7 @@ battle_draw(struct game *g)
 				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
 			}
 	battle_ship_draw(g, 0, &bt->you);
+	battle_bow_mark(g, &bt->you);
 	if (!bt->fort)		/* a fort is drawn in its screen (VA 0x8db6) */
 		battle_ship_draw(g, 1, &bt->foe);
 	if (bt->you.shot.ticks > 0)

@@ -116,6 +116,7 @@ struct game {
 	int			 enc_result;	/* -1 while the dialogs go on */
 	struct sprite_bank	 btl_ship[2][2];	/* [you, foe][A, B] */
 	struct sprite_bank	 btl_damage[2];	/* damage pictures */
+	struct sprite_bank	 btl_misc;	/* sbtlmisc.cur */
 	struct tileset		 btl_tiles;	/* 32 x 32 battle tiles */
 	int			 btl_fire, btl_sails;	/* pending inputs */
 	int			 btl_stage;	/* 0 fight, 1 outcome, 2 prize */
