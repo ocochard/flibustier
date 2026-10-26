@@ -225,6 +225,21 @@ test_rules(void)
 
 	/* Time: an update per 30-day month, the year turns every 360 days. */
 	sim_new_game(&s, &era, &scn, 5);
+	/* The career starts mid-year with six entries in the log (VA
+	 * 0x132f8, 0x13679): spread from New Year, war or alliance by the
+	 * pair's relation, a town event at peace. */
+	CHECK(s.day_of_year >= 65 && s.day_of_year < 215 && s.nnews == 6);
+	for (k = 0; k < 6; k++) {
+		const struct sim_news *e = news_abs(&s, k);
+
+		CHECK(e->day < 0 && e->date >= 1660 * 360 &&
+		    e->date < 1660 * 360 + s.day_of_year);
+		CHECK(k == 0 || e->date > news_abs(&s, k - 1)->date);
+		CHECK(e->code == NEWS_WAR || e->code == NEWS_ALLIANCE ||
+		    (e->code >= NEWS_INDIANS && e->code <= NEWS_PLUNDER));
+	}
+	CHECK(news_abs(&s, 0)->date - 1660 * 360 == s.day_of_year / 12);
+	s.day_of_year = s.month = 0;	/* the calendar from New Year */
 	before = s.nnews;
 	s.diplomacy_range = 28;	/* every draw is a diplomatic event */
 	sim_advance(&s, 29);
@@ -562,6 +577,7 @@ sea_game(struct sim *s, int cx, int cy, int heading)
 	make_era(&era, &scn);
 	scn.nships = 1;
 	sim_new_game(s, &era, &scn, 21);
+	s->day_of_year = s->month = 0;	/* mechanics from New Year */
 	s->world = &test_world;
 	s->fleet.x = cx * WORLD_TILE + 8;
 	s->fleet.y = cy * WORLD_TILE + 8;
@@ -2106,6 +2122,19 @@ test_assault(void)
 	    k.cannon == 12 && k.hidden == -1);
 	CHECK(k.goods[0] < 80 && k.goods[1] < 80 && k.goods[2] < 80);
 	CHECK(s.standing[n] == -3 && s.reputation == 2 && k.conquest);
+	/* The loot for nothing: "Take all" starts with the selected good,
+	 * then the first left, until the hold is full. */
+	{
+		const int loot[3] = { 3, 5, 100 };
+
+		s.fleet.capacity = 1;		/* 10 tons */
+		s.fleet.guns = s.fleet.food = s.fleet.goods = s.fleet.sugar = 0;
+		sim_plunder_open(&s, loot);
+		CHECK(sim_take_all(&s, 1) == 10 && s.fleet.goods == 5 &&
+		    s.fleet.food == 3 && s.fleet.sugar == 2 &&
+		    sim_hold_space(&s) == 0);
+		sim_plunder_close(&s);
+	}
 	sim_install_governor(&s, 1, (n + 1) & 3);
 	CHECK(t->nation == ((n + 1) & 3) && t->standing == 2 &&
 	    s.standing[(n + 1) & 3] >= 3);
@@ -2348,6 +2377,64 @@ test_bank(void)
 	CHECK(s.player.difficulty == 3);
 }
 
+/* Removes every ',"key":<number>' from a JSON text. */
+static void
+strip_key(char *text, const char *key)
+{
+	char pat[32], *p, *e;
+
+	snprintf(pat, sizeof(pat), ",\"%s\":", key);
+	while ((p = strstr(text, pat)) != NULL) {
+		e = p + strlen(pat);
+		while (*e == '-' || (*e >= '0' && *e <= '9'))
+			e++;
+		memmove(p, e, strlen(e) + 1);
+	}
+}
+
+/* A version 14 state still loads; the town table fills what it lacks. */
+static void
+test_old_state(void)
+{
+	static const char *later[] = { "barmaid", "garrison", "land_x",
+	    "land_y", "party_x", "party_y", "date" };
+	struct era_towns era;
+	struct scenario scn;
+	struct sim s, t;
+	struct jbuf st = { 0 };
+	struct json *j;
+	char err[128], *v;
+	size_t i;
+
+	make_era(&era, &scn);
+	era.towns[0].raw[10] = 7;		/* a garrison */
+	era.towns[0].raw[22] = 9;		/* a landing cell */
+	sim_new_game(&s, &era, &scn, 3);
+	CHECK(s.towns[0].garrison == 7 && s.towns[0].party_x == 9);
+	sim_to_json(&s, &st);
+	for (i = 0; i < sizeof(later) / sizeof(later[0]); i++)
+		strip_key(st.s, later[i]);
+	CHECK((v = strstr(st.s, "\"version\":18")) != NULL);
+	if (v != NULL)
+		memcpy(v, "\"version\":14", 12);
+	j = json_parse(st.s, err, sizeof(err));
+	CHECK(j != NULL && sim_from_json(&t, j, err, sizeof(err)) == 0);
+	CHECK(t.towns[0].garrison == TOWN_UNSET);
+	sim_restore_towns(&t, &era);
+	CHECK(t.towns[0].garrison == 7 && t.towns[0].party_x == 9);
+	/* Undated news is dated back from today. */
+	CHECK(t.nnews == s.nnews && sim_news_at(&t, 0)->date ==
+	    sim_news_at(&s, 0)->date);
+	/* A newer version than the engine knows is refused. */
+	if (v != NULL)
+		memcpy(v, "\"version\":99", 12);
+	json_free(j);
+	j = json_parse(st.s, err, sizeof(err));
+	CHECK(j != NULL && sim_from_json(&t, j, err, sizeof(err)) != 0);
+	json_free(j);
+	jb_free(&st);
+}
+
 int
 main(void)
 {
@@ -2381,6 +2468,7 @@ main(void)
 	test_tavern_people();
 	test_landing();
 	test_land_battle();
+	test_old_state();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

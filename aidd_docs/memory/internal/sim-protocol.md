@@ -55,7 +55,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 17,
+  "version": 18,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -188,6 +188,13 @@ A saved game is one file per slot, `save0.json` to `save9.json`
 - **Location:** the directory comes from `--saves DIR`, else
   `$STMALO_SAVES`, else `$XDG_DATA_HOME/stmalo/saves`, else
   `~/.local/share/stmalo/saves`. It is created when missing.
+- **Older states:** states from version 14 on still load. The town
+  fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
+  `party_x`, `party_y`) then read as 65535 until the player's program
+  refills them from the era's town table (`sim_restore_towns`, done when
+  the world is attached); undated news is dated back from today. The
+  headless `load` command does not refill them. A newer version than the
+  engine knows is refused.
 - **Writing:** a save goes to a temporary file that is then renamed, so a
   crash never leaves a broken slot.
 - **Readable:** saves are written one value per line so people can read

@@ -848,3 +848,30 @@ sim_plunder_close(struct sim *s)
 	s->market.open = 0;
 	s->merchant_gold = -1;
 }
+
+int
+sim_take_all(struct sim *s, int good)
+{
+	struct sim_market *m = &s->market;
+	int n = 0, k;
+
+	if (!m->open || good < 0 || good >= GOODS)
+		return (0);
+	while (sim_hold_space(s) != 0) {
+		k = good;
+		if (m->stock[k] == 0)
+			for (k = 0; k < GOODS && m->stock[k] == 0; k++)
+				;
+		if (k == GOODS)
+			break;
+		/* The original then loops for ever; the engine stops. */
+		if (m->price[good] >= s->fleet.gold && m->price[good] > 0)
+			break;
+		m->stock[k]--;
+		(*cargo(&s->fleet, k))++;
+		s->merchant_gold += m->price[k];
+		s->fleet.gold -= m->price[k];
+		n++;
+	}
+	return (n);
+}

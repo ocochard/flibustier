@@ -10,7 +10,9 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	17
+#define STATE_VERSION	18
+#define STATE_OLDEST	14	/* the oldest state still read */
+#define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -24,6 +26,8 @@ static const struct {
 	{ "governor", NEWS_GOVERNOR }, { "plunder", NEWS_PLUNDER },
 	{ "war", NEWS_WAR }, { "peace", NEWS_PEACE },
 	{ "alliance", NEWS_ALLIANCE }, { "capture", NEWS_CAPTURE },
+	{ "plundered", NEWS_PLUNDERED }, { "taken", NEWS_TAKEN },
+	{ "not_taken", NEWS_NOT_TAKEN },
 };
 
 /* Town fields addressable by name in state and "set" commands. */
@@ -98,6 +102,8 @@ news_json(const struct sim *s, const struct sim_news *n, struct jbuf *b)
 
 	jb_raw(b, "{\"day\":");
 	jb_int(b, n->day);
+	jb_raw(b, ",\"date\":");
+	jb_int(b, n->date);
 	jb_raw(b, ",\"event\":");
 	jb_str(b, news_name(n->code));
 	jb_raw(b, ",\"a\":");
@@ -798,13 +804,14 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 {
 	const struct json *rng, *towns, *t, *news, *n;
 	struct sim tmp;
-	int64_t v[4], total;
+	int64_t v[4], total, version;
 	size_t i, f, kept;
 	const char *name;
 	int a;
 
 	memset(&tmp, 0, sizeof(tmp));
-	if (json_get_int(j, "version", 0) != STATE_VERSION) {
+	version = json_get_int(j, "version", 0);
+	if (version < STATE_OLDEST || version > STATE_VERSION) {
 		snprintf(err, errlen, "unsupported state version");
 		return (-1);
 	}
@@ -940,6 +947,11 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		for (f = 0; f < NFIELDS; f++) {
 			int64_t fv = json_get_int(t, town_fields[f].name, -1);
 
+			/* Older states lack the later fields: the town
+			 * table fills them in (sim_restore_towns). */
+			if (fv < 0 && version < STATE_VERSION &&
+			    f >= TOWN_FIELDS_14)
+				fv = TOWN_UNSET;
 			if (fv < 0 || fv > 0xFFFF) {
 				snprintf(err, errlen, "town %zu: bad %s", i,
 				    town_fields[f].name);
@@ -975,6 +987,11 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		}
 		tmp.news[tmp.nnews % SIM_NEWS_MAX].day =
 		    (int32_t)json_get_int(n, "day", 0);
+		/* Undated (before version 18): dated back from today. */
+		tmp.news[tmp.nnews % SIM_NEWS_MAX].date =
+		    (int32_t)json_get_int(n, "date", tmp.year * 360 +
+		    tmp.day_of_year - (tmp.day -
+		    tmp.news[tmp.nnews % SIM_NEWS_MAX].day));
 		tmp.news[tmp.nnews % SIM_NEWS_MAX].code = news_code(name);
 		tmp.news[tmp.nnews % SIM_NEWS_MAX].a =
 		    (int)json_get_int(n, "a", 0);

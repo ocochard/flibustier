@@ -755,11 +755,16 @@ test_merchant(void)
 	    g->sim.fleet.gold == gold - 2 * price && g->shop_buying);
 	CHECK(game_script(g, "left") == 0 && g->sim.fleet.food == food + 1 &&
 	    !g->shop_buying);
-	/* Down selects goods; a click on the right of its row sells (none
-	 * held), on the left buys. */
-	CHECK(game_script(g, "down") == 0 && g->selected == 1);
-	CHECK(game_script(g, "click:500,175") == 0 && g->sim.fleet.goods == 0);
-	CHECK(game_script(g, "click:100,175") == 0 && g->sim.fleet.goods == 1);
+	/* A row's arrow selects goods without trading; the player's flag
+	 * buys, the merchant's tag sells (none held). */
+	CHECK(game_script(g, "click:455,175") == 0 && g->selected == 1 &&
+	    g->shop_buying && g->sim.fleet.goods == 0);
+	CHECK(game_script(g, "click:40,30") == 0 && g->sim.fleet.goods == 0);
+	CHECK(game_script(g, "click:600,30") == 0 && g->sim.fleet.goods == 1);
+	/* Take all: the hold filled with goods, while the gold lasts. */
+	CHECK(game_script(g, "click:360,112") == 0 &&
+	    (sim_hold_space(&g->sim) == 0 || g->sim.market.stock[1] == 0 ||
+	    g->sim.fleet.gold <= g->sim.market.price[1]));
 	/* O.K.: back in town, the shop closed. */
 	CHECK(game_script(g, "click:320,440 wait:40") == 0);
 	CHECK(g->screen == &screen_town && !g->sim.market.open);

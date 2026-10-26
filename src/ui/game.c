@@ -361,6 +361,15 @@ game_attach_world(struct game *g)
 		}
 	}
 	g->sim.world = g->world;
+	/* An older save lacks some town data: the town table has it. */
+	{
+		struct era_towns towns;
+
+		if (towns_load(g->layout, g->exe, g->exe_len, era,
+		    &towns) != 0)
+			return (-1);
+		sim_restore_towns(&g->sim, &towns);
+	}
 	return (0);
 }
 

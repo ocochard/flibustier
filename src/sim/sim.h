@@ -73,6 +73,7 @@ struct sim_town {
 
 struct sim_news {
 	int32_t		day;
+	int32_t		date;		/* year x 360 + day of the year */
 	int		code;		/* enum news_code */
 	int		a, b;
 };
@@ -391,6 +392,11 @@ struct sim {
 /* Placeholder until the original's value is traced. */
 #define SIM_DIPLOMACY_RANGE	100
 
+/* A town field an older state lacks, until sim_restore_towns. */
+#define TOWN_UNSET	0xFFFF
+
+/* Fills the town fields an older state lacked from the era's table. */
+void	sim_restore_towns(struct sim *s, const struct era_towns *era);
 void	sim_new_game(struct sim *s, const struct era_towns *era,
 	    const struct scenario *scn, uint64_t seed);
 
@@ -635,6 +641,11 @@ void	sim_log_failure(struct sim *s, int town);
 
 /* The plunder's goods on the trading board, for nothing; and done. */
 void	sim_plunder_open(struct sim *s, const int goods[3]);
+/* "Take all" (VA 0x20cd9): while the hold has room, a unit of the
+ * selected good, or else of the first one left, bought while its price
+ * is below the gold (the selected good's price is the one checked).
+ * Returns the units taken. */
+int	sim_take_all(struct sim *s, int good);
 void	sim_plunder_close(struct sim *s);
 /* Install a governor of "nation" in a sacked town (CSTR 194). */
 void	sim_install_governor(struct sim *s, int town, int nation);

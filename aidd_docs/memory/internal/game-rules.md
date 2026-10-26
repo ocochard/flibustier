@@ -115,6 +115,24 @@ The initial relations come from the start scenario (below).
 - Field 9 (governor standing, presumably) is reset to 0.
 - Unless bit `0x40` of field 11 is set, field 11 becomes `rand(16)`.
 
+## The log and the news
+
+- **Entries (VA `0x47242`, 8 bytes):** the date (`year x 360 + day`),
+  the code (CSTN 20) and a value. A line reads "Jan 16:  …" (CSTN 20.0,
+  "%s %s:  %s", with the month word of CSTN 6 and `date % 30 + 1`, VA
+  `0x1e144`).
+- **The start (VA `0x132f8`, `0x13679`):** a career begins on day
+  `rand(150) + 65` of the era's year (March to early August), and the
+  log already holds six entries, one per pair of nations, spread from
+  New Year to that day: a sixth of the days so far apart, the first at
+  half a step. A pair at war or allied logs that (codes 16, 18); a pair
+  at peace logs a random town event (codes 11-15, town `rand(towns)`).
+- **What others tell (VA `0x1e040`, `0x1e548`):** the bartender (12
+  items) and a hailed ship (6) report only the world's news, codes
+  10-19, up to today; a town the player took reads as a capture (22 as
+  19), one plundered as "Pirates plunder" (3 as 15). They print the
+  latest items oldest first.
+
 ## Start scenarios
 
 There are 30 records of 90 bytes at VA `0x35b90` (file `0x3a337`):
@@ -711,6 +729,9 @@ byte), return to the fleet.
   a surrender.
 - **Lost boarding:** the enemy takes the flagship, as if it sank;
   prison (VA `0x16647`) is not modelled.
+- **The prize's picture:** `plunder.pcx`, the question at (40, 50) up to
+  x 620 in ink entry 0. With 8 ships already, the fleet panel then asks
+  which one to replace (CSTR 130); not done yet.
 - **Prize text (VA `0xdb7b`):** the prize is `class x 20 + 20` tons, its
   guns are rounded up to even, and the hold space is
   `sum(2 x class + 2) x 10` over the fleet, minus cargo (none yet).
@@ -1186,8 +1207,25 @@ sign, the texts at (40, 280) up to x 620.
   - Digits are glyphs of `buysell.spr`: big 0-19, small 20-52.
   - Pieces are per language (`buysell`, `buyboard`, `buysell1`, with
     `f` and `g` variants).
-  - Its "Take all" button and the slider (VA `0x20ff3`) are not traced.
-    The engine places the slider by the hold's fill, a guess.
+  - **Its areas (VA `0x20515`, table at VA `0x34b04`):**
+    - The slider's arrows, (226, 62)-(248, 90) and (386, 62)-(410, 90),
+      and the two name tags, (0, 0)-(83, 70) and (557, 0)-(639, 70):
+      left sells to the merchant (on the loot board, leaves it), right
+      buys (takes), a unit at once and again every 100 loop passes
+      while the button is held.
+    - A row's arrows, (169, 107 + 50k)-(190, 147 + 50k) and (444, …)-
+      (465, …): they select the row and the way (VA `0x21122`), and
+      trade nothing.
+    - The sign (234, 100)-(314, 126) only shows the way; a click on it
+      does nothing.
+    - "Take all" (321, 100)-(401, 126) (VA `0x20cd9`): while the hold
+      has room, a unit of the selected good, or else of the first good
+      left (food, goods, sugar, cannon), bought while the selected
+      good's price is below the gold. The original then loops for ever
+      when the player cannot pay; the engine stops.
+    - The exit (252, 433)-(391, 479).
+  - The slider itself (VA `0x20ff3`) is not traced; the engine places
+    it by the hold's fill, a guess.
 
 ### Reputation (VA `0x45e76`)
 

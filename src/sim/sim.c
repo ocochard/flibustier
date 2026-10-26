@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 
 #include "internal.h"
@@ -49,6 +50,7 @@ sim_log_news(struct sim *s, int code, int a, int b)
 	struct sim_news *n = &s->news[s->nnews % SIM_NEWS_MAX];
 
 	n->day = s->day;
+	n->date = s->year * DAYS_PER_YEAR + s->day_of_year;
 	n->code = code;
 	n->a = a;
 	n->b = b;
@@ -108,6 +110,68 @@ harbour_mouth(struct sim *s, int town)
 	s->fleet.y = t->sea_y * WORLD_TILE + 8;
 	s->fleet.heading = (uint8_t)((t->sea_heading & 7) * 32);
 	s->fleet.speed = 0;
+}
+
+/*
+ * The career starts on day rand(150) + 65 of the era's year (VA
+ * 0x132f8), and its log already holds the news of the year so far (VA
+ * 0x13679): for each pair of nations, at war or allied, that; at peace,
+ * a random town event (codes 11-15).  Six entries, a sixth of the time
+ * since New Year apart, the first half a step in.
+ */
+void
+sim_restore_towns(struct sim *s, const struct era_towns *era)
+{
+	static const struct {
+		size_t	off;
+		int	raw;
+	} later[] = {
+		{ offsetof(struct sim_town, barmaid), 13 },
+		{ offsetof(struct sim_town, garrison), 10 },
+		{ offsetof(struct sim_town, land_x), 15 },
+		{ offsetof(struct sim_town, land_y), 16 },
+		{ offsetof(struct sim_town, party_x), 22 },
+		{ offsetof(struct sim_town, party_y), 23 },
+	};
+	uint16_t *v;
+	size_t i, k;
+
+	for (i = 0; i < s->ntowns && i < era->count; i++)
+		for (k = 0; k < sizeof(later) / sizeof(later[0]); k++) {
+			v = (uint16_t *)((char *)&s->towns[i] + later[k].off);
+			if (*v == TOWN_UNSET)
+				*v = (uint16_t)era->towns[i].raw[later[k].raw];
+		}
+}
+
+static void
+start_log(struct sim *s)
+{
+	int step, date, i, j, r;
+	struct sim_news *n;
+
+	s->day_of_year = rng_below(&s->rng, 150) + 65;
+	s->month = s->day_of_year / DAYS_PER_MONTH;
+	step = s->day_of_year / 6;
+	date = step / 2;
+	for (i = 0; i < 3; i++)
+		for (j = i + 1; j < 4; j++) {
+			n = &s->news[s->nnews % SIM_NEWS_MAX];
+			r = s->relations[i][j];
+			if (r == 0) {
+				n->code = NEWS_INDIANS + rng_below(&s->rng, 5);
+				n->a = rng_below(&s->rng, (int)s->ntowns);
+				n->b = 0;
+			} else {
+				n->code = NEWS_PEACE + r;	/* war, alliance */
+				n->a = i;
+				n->b = j;
+			}
+			n->date = s->year * DAYS_PER_YEAR + date;
+			n->day = date - s->day_of_year;
+			s->nnews++;
+			date += step;
+		}
 }
 
 void
@@ -174,18 +238,20 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->towns[i].sea_x = t->raw[26];
 		s->towns[i].sea_y = t->raw[27];
 		s->towns[i].sea_heading = t->raw[28];
-		s->towns[i].barmaid = t->raw[13];
-		s->towns[i].garrison = t->raw[10];
-		s->towns[i].land_x = t->raw[15];
-		s->towns[i].land_y = t->raw[16];
-		s->towns[i].party_x = t->raw[22];
-		s->towns[i].party_y = t->raw[23];
+		s->towns[i].barmaid = TOWN_UNSET;
+		s->towns[i].garrison = TOWN_UNSET;
+		s->towns[i].land_x = TOWN_UNSET;
+		s->towns[i].land_y = TOWN_UNSET;
+		s->towns[i].party_x = TOWN_UNSET;
+		s->towns[i].party_y = TOWN_UNSET;
 	}
+	sim_restore_towns(s, era);
 	/* The start position is in a town; the voyage starts on the water
 	 * outside its harbour. */
 	s->fleet.leaving = town_near(s, ARRIVAL_CELLS + 3);
 	if (s->fleet.leaving >= 0)
 		harbour_mouth(s, s->fleet.leaving);
+	start_log(s);
 }
 
 static void

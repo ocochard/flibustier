@@ -33,6 +33,7 @@
 #define S_EXPEDITION_TEXT	267	/* six expedition descriptions */
 #define W_MONTH			7	/* January.. */
 #define W_LOG			20	/* log sentences, by news code */
+#define W_MONTH_SHORT		6	/* Jan, Feb... */
 #define W_DIFFICULTY		35
 #define W_NATION		71	/* Spanish, English, French, Dutch */
 #define W_ABILITY		83
@@ -1683,8 +1684,53 @@ town_name(const struct game *g, int i)
 }
 
 /* A news item as the game's log words it. */
+/*
+ * The latest news others tell (VA 0x1e040), newest first, at most "max":
+ * world news only (codes 10-19); a town the player took reads as a
+ * capture, a town plundered as pirates plundering.
+ */
+static size_t
+public_news(const struct game *g, struct sim_news *out, size_t max)
+{
+	size_t kept = sim_news_kept(&g->sim), i, n = 0;
+	struct sim_news e;
+
+	for (i = kept; i > 0 && n < max; i--) {
+		e = *sim_news_at(&g->sim, i - 1);
+		if (e.code == NEWS_TAKEN) {
+			e.code = NEWS_CAPTURE;
+			e.a = e.b;
+			e.b = sim_news_at(&g->sim, i - 1)->a;
+		} else if (e.code == NEWS_PLUNDERED)
+			e.code = NEWS_PLUNDER;
+		if (e.code < 10 || e.code > 19)
+			continue;
+		out[n++] = e;
+	}
+	return (n);
+}
+
+static void	news_body(const struct game *, const struct sim_news *, char *,
+		    size_t);
+
 static void
 news_text(const struct game *g, const struct sim_news *n, char *out,
+    size_t len)
+{
+	const char *arg[3];
+	char text[256], day[8];
+
+	/* "Jan 16:  ..." (CSTN 20.0, VA 0x1e144). */
+	news_body(g, n, text, sizeof(text));
+	snprintf(day, sizeof(day), "%d", n->date % 30 + 1);
+	arg[0] = game_word(g, W_MONTH_SHORT, (size_t)((n->date % 360) / 30));
+	arg[1] = day;
+	arg[2] = text;
+	fill_args(out, len, game_word(g, W_LOG, 0), arg, 3);
+}
+
+static void
+news_body(const struct game *g, const struct sim_news *n, char *out,
     size_t len)
 {
 	const char *fmt = game_word(g, W_LOG, (size_t)n->code);
@@ -2586,12 +2632,6 @@ encounter_event(struct game *g, const struct ui_event *ev)
 	menu_event(g, ev, count, NULL, encounter_choose, NULL);
 }
 
-/* A dark band behind the text, so it reads over any picture. */
-static void
-text_band(struct game *g, int y, int h)
-{
-	fb_rect(&g->fb, 60, y, FB_W - 120, h, fb_nearest(&g->fb, 20, 15, 10));
-}
 
 /*
  * Ship portraits are sheets of 5 round views of about 200 pixels, and
@@ -2647,9 +2687,11 @@ encounter_draw(struct game *g)
 		if (kept == 0)
 			draw(g, FONT_BODY, 20, y, 290,
 			    game_word(g, W_NEWS, NEWS_NONE), 0);
-		for (i = kept; i > 0 && i + NEWS_SHOWN > kept && y < 420;
-		    i--) {
-			n = sim_news_at(&g->sim, i - 1);
+		struct sim_news pub[NEWS_SHOWN];
+		size_t np = public_news(g, pub, NEWS_SHOWN);
+
+		for (i = np; i > 0 && y < 420; i--) {
+			n = &pub[i - 1];
 			news_text(g, n, text, sizeof(text));
 			y += draw(g, FONT_BODY, 20, y, 290, text, 0) + 8;
 		}
@@ -2750,6 +2792,8 @@ battle_sprites(struct game *g, int side, int type)
 	    damage_picture[type % 9], 1, &g->btl_damage[side]);
 }
 
+static void	prize_show(struct game *);
+
 static void
 battle_enter(struct game *g)
 {
@@ -2767,10 +2811,8 @@ battle_enter(struct game *g)
 	g->btl_fire = g->btl_sails = 0;
 	g->btl_stage = g->sim.battle.outcome == BAT_NONE ? 0 : 1;
 	if (g->sim.battle.outcome == BAT_BOARDING &&
-	    g->sim.sword.result == SWORD_WON) {
-		g->btl_stage = 2;	/* back from the fight: the prize */
-		g->selected = 0;
-	}
+	    g->sim.sword.result == SWORD_WON)
+		prize_show(g);		/* back from the fight: the prize */
 	/* Several ships: which one to command, before the first tick. */
 	if (g->btl_stage == 0 && g->sim.battle.tick == 0 &&
 	    g->sim.fleet.nships > 1 && !g->btl_chosen) {
@@ -2781,6 +2823,41 @@ battle_enter(struct game *g)
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 }
 
+
+/* The prize's question (CSTR 164, VA 0xdb7b): "%sa %s ton %s with %s
+ * guns... space for %s tons": 20 tons per class step, the guns rounded
+ * up to even, and the space left in the hold. */
+static void
+prize_draw(struct game *g)
+{
+	const struct sim_battle *bt = &g->sim.battle;
+	const char *arg[5];
+	char text[600], tons[16], guns[16], space[16];
+
+	snprintf(tons, sizeof(tons), "%d", (bt->foe.type & 0xF) * 20 + 20);
+	snprintf(guns, sizeof(guns), "%d", (bt->foe.guns + 1) & ~1);
+	snprintf(space, sizeof(space), "%d", sim_hold_space(&g->sim));
+	arg[0] = "";
+	arg[1] = tons;
+	arg[2] = game_word(g, W_SHIP_TYPE, (size_t)(bt->foe.type % 10));
+	arg[3] = guns;
+	arg[4] = space;
+	fill_args(text, sizeof(text), game_str(g, S_PRIZE), arg, 5);
+	draw(g, FONT_BODY, 40, 50, 580, text, 1);
+}
+
+/* The prize (VA 0xdb7b): on plunder.pcx, in ink entry 0. */
+static void
+prize_show(struct game *g)
+{
+	g->btl_stage = 2;
+	g->selected = 0;
+	game_background(g, "pic/plunder");
+	if (g->bg.pixels != NULL) {
+		memcpy(g->ink, g->bg.palette, 3);
+		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+	}
+}
 
 static void
 battle_finish(struct game *g, int keep)
@@ -2823,10 +2900,9 @@ battle_event(struct game *g, const struct ui_event *ev)
 		if (!((ev->type == EV_KEY && ev->key == UI_KEY_ENTER) ||
 		    ev->type == EV_CLICK))
 			return;
-		if (outcome == BAT_SURRENDER) {
-			g->btl_stage = 2;
-			g->selected = 0;
-		} else
+		if (outcome == BAT_SURRENDER)
+			prize_show(g);
+		else
 			battle_finish(g, 0);
 		return;
 	}
@@ -3019,11 +3095,15 @@ static void
 battle_draw(struct game *g)
 {
 	const struct sim_battle *bt = &g->sim.battle;
-	char text[600], from[64], tons[16], guns[16];
+	char text[600], from[64];
 	int cx, cy, lvl;
 
 	if (g->btl_stage == 1 && battle_end_picture(bt->outcome) != NULL) {
 		battle_end_draw(g);
+		return;
+	}
+	if (g->btl_stage == 2) {
+		prize_draw(g);
 		return;
 	}
 	/* The battle's screen: 15 x 15 battle tiles (VA 0x2a9e8). */
@@ -3070,36 +3150,7 @@ battle_draw(struct game *g)
 
 	if (g->btl_stage == 0)
 		return;
-	if (g->btl_stage == 2) {
-		text_band(g, 160, 290);
-		/* "%sa %s ton %s with %s guns... space for %s tons" (VA
-		 * 0xdb7b): 20 tons per class step, guns rounded up to even,
-		 * and the fleet's room (no cargo is carried yet). */
-		{
-			const char *arg[5];
-			char space[16];
-			int i, room = 0;
 
-			for (i = 0; i < g->sim.fleet.nships; i++)
-				room += ((g->sim.fleet.ships[i] & 0xF) * 2 + 2) *
-				    10;
-			snprintf(tons, sizeof(tons), "%d",
-			    (bt->foe.type & 0xF) * 20 + 20);
-			snprintf(guns, sizeof(guns), "%d",
-			    (bt->foe.guns + 1) & ~1);
-			snprintf(space, sizeof(space), "%d", room);
-			arg[0] = "";
-			arg[1] = tons;
-			arg[2] = game_word(g, W_SHIP_TYPE,
-			    (size_t)(bt->foe.type % 10));
-			arg[3] = guns;
-			arg[4] = space;
-			fill_args(text, sizeof(text), game_str(g, S_PRIZE), arg,
-			    5);
-		}
-		draw(g, FONT_BODY, 80, 170, 400, text, 1);
-		return;
-	}
 	/* The colours struck: written over the battle, no box. */
 	battle_end_text(g, text, sizeof(text));
 	draw(g, FONT_BODY, 100, 300, 460, text, 0);
@@ -4205,11 +4256,27 @@ merchant_event(struct game *g, const struct ui_event *ev)
 		return;
 	}
 	if (ev->type == EV_CLICK) {
-		row = (ev->y - BOARD_ROW_Y) / BOARD_ROW_H;
-		if (ev->y >= 420)
-			merchant_leave(g);		/* the exit sign */
-		else if (ev->y >= BOARD_ROW_Y && row < BOARD_ROWS)
-			merchant_trade(g, row, ev->x < FB_W / 2);
+		/* The board's areas (VA 0x20515, table at VA 0x34b04). */
+		int x = ev->x, y = ev->y;
+
+		if ((x >= 226 && x <= 248 && y >= 62 && y <= 90) ||
+		    (x <= 83 && y <= 70))
+			merchant_trade(g, g->selected, 0);	/* sell */
+		else if ((x >= 386 && x <= 410 && y >= 62 && y <= 90) ||
+		    (x >= 557 && y <= 70))
+			merchant_trade(g, g->selected, 1);	/* buy */
+		else if (x >= 321 && x <= 401 && y >= 100 && y <= 126)
+			sim_take_all(&g->sim, g->selected);	/* Take all */
+		else if (x >= 252 && x <= 391 && y >= 433)
+			merchant_leave(g);			/* the exit */
+		else if (y >= 107 && (row = (y - 107) / 50) < BOARD_ROWS &&
+		    (y - 107) % 50 <= 40 &&
+		    ((x >= 169 && x <= 190) || (x >= 444 && x <= 465))) {
+			/* A row's arrow: the good and the way, no trade
+			 * yet (VA 0x21122). */
+			g->selected = row;
+			g->shop_buying = x >= 444;
+		}
 		return;
 	}
 	if (ev->type != EV_KEY)
@@ -4568,10 +4635,12 @@ rumours_draw(struct game *g)
 	} else {
 		y += draw(g, FONT_BODY, 222, y, 388, game_word(g, W_NEWS, 1),
 		    0) + 6;
-		for (i = kept; i > 0 && i + RUMOURS_SHOWN > kept && y < 400;
-		    i--) {
-			news_text(g, sim_news_at(&g->sim, i - 1), text,
-			    sizeof(text));
+		/* The latest public items, oldest first (VA 0x1e548). */
+		struct sim_news pub[RUMOURS_SHOWN];
+		size_t np = public_news(g, pub, RUMOURS_SHOWN);
+
+		for (i = np; i > 0 && y < 400; i--) {
+			news_text(g, &pub[i - 1], text, sizeof(text));
 			y += draw(g, FONT_BODY, 222, y, 388, text, 0) + 4;
 		}
 	}
