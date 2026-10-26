@@ -234,8 +234,11 @@ Status (2026-10-26): first slice.
   Selling cannon waits for the merchant's trading screen.
 - **Merchant:** cargo (food, goods, sugar, hold capacity) and trading
   on the original board. The daughter's subplot and "Take all" wait.
-- **Next:** tavern, governor, bank, selling cannon (the same board), and
-  the arrival choices (attack, sneak in).
+- **Tavern:** the people, recruiting crew, the bartender's rumours, and
+  the reputation. The map and information sellers, the barmaid and the
+  stranger wait.
+- **Next:** governor, bank, selling cannon (the same board), and the
+  arrival choices (attack, sneak in).
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

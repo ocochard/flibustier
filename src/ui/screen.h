@@ -40,6 +40,9 @@ extern const struct screen screen_town;
 extern const struct screen screen_cityinfo;
 extern const struct screen screen_shipwright;
 extern const struct screen screen_merchant;
+extern const struct screen screen_tavern;
+extern const struct screen screen_recruit;
+extern const struct screen screen_rumours;
 
 /* Fade to another screen; NULL quits. */
 void	game_goto(struct game *g, const struct screen *s);

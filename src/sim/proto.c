@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	8
+#define STATE_VERSION	9
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -542,6 +542,12 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->wright_gold);
 	jb_raw(b, ",\"merchant_gold\":");
 	jb_int(b, s->merchant_gold);
+	jb_raw(b, ",\"reputation\":");
+	jb_int(b, s->reputation);
+	jb_raw(b, ",\"tavern_spots\":");
+	jb_int(b, s->tavern_spots);
+	jb_raw(b, ",\"recruits\":");
+	jb_int(b, s->recruits);
 	jb_raw(b, ",\"market\":{\"open\":");
 	jb_int(b, s->market.open);
 	for (i = 0; i < GOODS; i++) {
@@ -772,6 +778,10 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.visit_flags = (int)json_get_int(j, "visit_flags", 0);
 	tmp.wright_gold = (int)json_get_int(j, "wright_gold", -1);
 	tmp.merchant_gold = (int)json_get_int(j, "merchant_gold", -1);
+	tmp.reputation = (int)json_get_int(j, "reputation", 0);
+	tmp.tavern_spots = (unsigned)json_get_int(j, "tavern_spots", 0) &
+	    TAVERN_ALL;
+	tmp.recruits = (int)json_get_int(j, "recruits", 0);
 	{
 		const struct json *mk = json_get(j, "market");
 		const struct json *st = json_get(mk, "stock");
@@ -1403,6 +1413,38 @@ cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "]}");
 }
 
+/* The tavern: "open" counts the recruits; "recruit" with "accept". */
+static void
+cmd_tavern(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+
+	if (s->player_town < 0) {
+		reply_error(out, "not in a town");
+		return;
+	}
+	if (action != NULL && strcmp(action, "open") == 0)
+		sim_tavern_open(s);
+	else if (action != NULL && strcmp(action, "recruit") == 0) {
+		if (!(s->tavern_spots & TAVERN_CREW)) {
+			reply_error(out, "no one to recruit");
+			return;
+		}
+		sim_recruit(s, json_get_int(cmd, "accept", 1) != 0);
+	} else {
+		reply_error(out, "tavern needs \"action\": open or recruit");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"recruits\":");
+	jb_int(out, s->recruits);
+	jb_raw(out, ",\"crew\":");
+	jb_int(out, s->fleet.crew);
+	jb_raw(out, ",\"tavern_spots\":");
+	jb_int(out, s->tavern_spots);
+	jb_raw(out, "}");
+}
+
 static void
 cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1505,6 +1547,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_shipwright(ss, cmd, out);
 	else if (strcmp(name, "merchant") == 0)
 		cmd_merchant(ss, cmd, out);
+	else if (strcmp(name, "tavern") == 0)
+		cmd_tavern(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

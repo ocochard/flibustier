@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "assets/img.h"
+#include "assets/scenario.h"
 #include "assets/pcx.h"
 #include "sim/hof.h"
 #include "sim/save.h"
@@ -225,45 +226,6 @@ menu_event(struct game *g, const struct ui_event *ev, int count,
 	}
 }
 
-/*
- * Draw a word list as menu options on a grid of "cols" columns, and record
- * their hit boxes for input.
- */
-static void
-draw_grid(struct game *g, size_t group, int count, int x, int y, int cols,
-    int colw)
-{
-	struct text_target t = { plot, &g->fb };
-	struct text_style st;
-	struct text_layout lay;
-	char buf[128];
-	int i, line;
-
-	style(g, FONT_BODY, 0, &st);
-	st.line_gap = 0;	/* the scroll is short */
-	line = st.font->height + st.line_gap;
-	memset(&g->options, 0, sizeof(g->options));
-	for (i = 0; i < count && i < TEXT_MAX_OPTIONS; i++) {
-		snprintf(buf, sizeof(buf), "~%s",
-		    game_word(g, group, (size_t)i));
-		text_draw(&t, &st, x + (i % cols) * colw, y + (i / cols) * line,
-		    colw, buf, i == g->selected ? 0 : -1, &lay);
-		g->options.option[i] = lay.option[0];
-		g->options.noptions = i + 1;
-	}
-}
-
-static void
-draw_portrait(struct game *g)
-{
-	const struct frame *f;
-
-	if (g->portrait.count == 0)
-		return;
-	f = &g->portrait.frames[0];
-	fb_frame_clip(&g->fb, f, (OVAL_X0 + OVAL_X1 - f->w) / 2,
-	    (OVAL_Y0 + OVAL_Y1 - f->h) / 2, OVAL_X0, OVAL_Y0, OVAL_X1, OVAL_Y1);
-}
 
 /*
  * Intro (VA 0x3325): the MicroProse logo; "and", "MPS Labs" and
@@ -755,9 +717,15 @@ const struct screen screen_era = {
 static void
 expedition_choose(struct game *g, int i)
 {
+	struct scenario scn;
+
 	g->career.expedition = i;
 	g->career.era = expedition_era[i];
-	game_goto(g, &screen_name);
+	/* The expedition's own colours, for the flag. */
+	if (scenario_load(g->layout, g->exe, g->exe_len,
+	    SCENARIO_CAREERS + i, &scn) == 0)
+		g->career.nation = scn.nation;
+	game_goto(g, &screen_ability);
 }
 
 static void
@@ -783,68 +751,377 @@ const struct screen screen_expedition = {
 	expedition_draw,
 };
 
-/* Nationality, with the nation's flag in the oval. */
+/*
+ * Identity (VA 0x1482e): one picture that fills in as the player
+ * answers.  The captain's portrait sits in the oval; the nationality is
+ * chosen by clicking one of four flags, two on each side (VA 0x14aa4),
+ * and its big flag then stays at the top left; the special ability is
+ * one of five icons along the bottom (VA 0x14e6e), its picture then at
+ * the top right; the difficulty is a row of four levels on the scroll,
+ * the portrait changing with each (VA 0x151c6); the name comes last.
+ * Pointing at a choice names it on the scroll.  The rectangles are the
+ * game's (VA 0x33488, 0x334b0, 0x33448).
+ */
+#define W_COLORS		82	/* "English colors"... */
+#define W_DIFF_TEXT		101	/* "An easy level"... */
+#define ID_LABEL_Y		368
+#define FLAG_SLOTS		4	/* English, French, Dutch, Spanish */
+#define SKILL_SLOTS		5
+
+/* Flag slots, in the game's order, as town nations. */
+static const int flag_nation[FLAG_SLOTS] = {
+	NATION_ENGLAND, NATION_FRANCE, NATION_HOLLAND, NATION_SPAIN,
+};
+static const struct { int x0, y0, x1, y1; } flag_rect[FLAG_SLOTS] = {
+	{ 0, 0, 129, 133 }, { 51, 155, 199, 279 }, { 481, 1, 629, 139 },
+	{ 441, 151, 599, 279 },
+};
+/* Ability slots: the icon frame shown in each. */
+static const int skill_frame[SKILL_SLOTS] = { 0, 3, 1, 2, 4 };
+static const struct { int x0, y0, x1, y1; } skill_rect[SKILL_SLOTS] = {
+	{ 42, 342, 85, 477 }, { 147, 391, 178, 474 }, { 276, 396, 353, 470 },
+	{ 421, 396, 527, 456 }, { 540, 345, 620, 460 },
+};
+static const int level_x[4] = { 80, 190, 300, 410 };
+#define LEVEL_Y			345
+#define LEVEL_H			20
+
+/* Captain portraits, one per difficulty level. */
+static const char *captain_portrait[4] = {
+	"spr/bigman0", "spr/bigman1", "spr/bigman2", "spr/bigman3",
+};
 
 static void
 identity_enter(struct game *g)
 {
 	game_background(g, "pic/idselect");
 	game_portrait(g, NULL);
-}
-
-static int
-nation_enabled(const struct game *g, int i)
-{
-	/* No Dutch careers in 1560: the scenario slot is empty. */
-	return (!(i == NATION_HOLLAND && g->career.era == 0));
+	g->id_key = -1;
 }
 
 static void
-nation_choose(struct game *g, int i)
+id_frame(struct game *g, int bank, int frame, int x, int y)
 {
-	g->career.nation = i;
-	game_goto(g, &screen_name);
+	if ((size_t)frame < g->id_spr[bank].count)
+		fb_frame(&g->fb, &g->id_spr[bank].frames[frame], x, y);
+}
+
+static void
+id_label(struct game *g, int cx, int y, const char *text)
+{
+	int w = text_width(&g->font[FONT_BODY], text);
+
+	draw(g, FONT_BODY, cx - w / 2, y, FB_W, text, 0);
+}
+
+/* The labels under the big pictures, in the game's second, light ink. */
+static void
+id_caption(struct game *g, int cx, int y, const char *text)
+{
+	static const uint8_t light[3] = { 240, 220, 170 };
+	uint8_t keep[3];
+
+	memcpy(keep, g->ink, 3);
+	memcpy(g->ink, light, 3);
+	id_label(g, cx, y, text);
+	memcpy(g->ink, keep, 3);
+}
+
+/* What is decided so far: portrait, big flag and ability picture. */
+static void
+identity_draw_base(struct game *g, int flag, int skill)
+{
+	id_frame(g, 2, 0, OVAL_X0, OVAL_Y0);
+	if (flag) {
+		id_frame(g, 3, 0, 0, 0);
+		id_caption(g, 160, 250, game_word(g, W_NATION,
+		    (size_t)g->career.nation));
+	}
+	if (skill) {
+		id_frame(g, 4, 0, 440, 0);
+		id_caption(g, 520, 250, game_word(g, W_ABILITY,
+		    (size_t)g->career.ability));
+	}
+}
+
+static int
+flag_open(const struct game *g, int slot)
+{
+	/* No Dutch careers in 1560: the scenario slot is empty. */
+	return (!(flag_nation[slot] == NATION_HOLLAND && g->career.era == 0));
+}
+
+static int
+id_hit_flag(const struct game *g, int x, int y)
+{
+	int i;
+
+	for (i = 0; i < FLAG_SLOTS; i++)
+		if (flag_open(g, i) && x >= flag_rect[i].x0 &&
+		    x <= flag_rect[i].x1 && y >= flag_rect[i].y0 &&
+		    y <= flag_rect[i].y1)
+			return (i);
+	return (-1);
+}
+
+static void
+nation_enter(struct game *g)
+{
+	identity_enter(g);
+	load_bank(g, "spr/lilflgs", 0, &g->id_spr[0]);
+	load_bank(g, captain_portrait[0], 0, &g->id_spr[2]);
+}
+
+static void
+nation_choose(struct game *g, int slot)
+{
+	g->career.nation = flag_nation[slot];
+	load_bank(g, nation_flag[g->career.nation & 3], 0, &g->id_spr[3]);
+	game_switch(g, &screen_ability);
+}
+
+/* The keyboard steps through the open slots (codes 2 and 4). */
+static int
+id_step(int key, int n, int d, int (*open)(const struct game *, int),
+    const struct game *g)
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		key = key < 0 ? (d > 0 ? 0 : n - 1) : (key + d + n) % n;
+		if (open == NULL || open(g, key))
+			break;
+	}
+	return (key);
 }
 
 static void
 nation_event(struct game *g, const struct ui_event *ev)
 {
-	menu_event(g, ev, 4, nation_enabled, nation_choose, &screen_era);
+	int i;
+
+	switch (ev->type) {
+	case EV_MOVE:
+		g->id_key = id_hit_flag(g, ev->x, ev->y);
+		break;
+	case EV_CLICK:
+		if ((i = id_hit_flag(g, ev->x, ev->y)) >= 0)
+			nation_choose(g, i);
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+			g->id_key = id_step(g->id_key, FLAG_SLOTS, 1, flag_open,
+			    g);
+		else if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+			g->id_key = id_step(g->id_key, FLAG_SLOTS, -1,
+			    flag_open, g);
+		else if (ev->key == UI_KEY_ENTER && g->id_key >= 0)
+			nation_choose(g, g->id_key);
+		else if (ev->key == UI_KEY_ESCAPE)
+			game_goto(g, &screen_era);
+		break;
+	default:
+		break;
+	}
 }
 
 static void
 nation_draw(struct game *g)
 {
-	int y;
+	int i;
 
-	if (g->portrait.count == 0 || g->ticks == 0 ||
-	    g->career.nation != g->selected) {
-		game_portrait(g, nation_flag[g->selected & 3]);
-		g->career.nation = g->selected;
-	}
-	draw_portrait(g);
-	y = draw(g, FONT_BODY, SCROLL_X, SCROLL_Y, SCROLL_W,
-	    game_str(g, S_NATION_PROMPT), 0);
-	draw_grid(g, W_NATION, 4, SCROLL_X + 40, SCROLL_Y + y + 4, 2,
-	    SCROLL_COL);
+	identity_draw_base(g, 0, 0);
+	for (i = 0; i < FLAG_SLOTS; i++)
+		if (flag_open(g, i))
+			id_frame(g, 0, i, flag_rect[i].x0, flag_rect[i].y0);
+	draw(g, FONT_BODY, 180, 316, 280, game_str(g, S_NATION_PROMPT), 0);
+	if (g->id_key >= 0)
+		id_label(g, 320, ID_LABEL_Y, game_word(g, W_COLORS,
+		    (size_t)g->id_key));
 }
 
 const struct screen screen_nation = {
-	"nation", identity_enter, nation_event, NULL, nation_draw,
+	"nation", nation_enter, nation_event, NULL, nation_draw,
 };
 
-/* Name entry. */
+/* Special ability: five icons along the bottom. */
 
-/* Captain portraits; assumed to follow the town nation order. */
-static const char *captain_portrait[4] = {
-	"spr/bigman0", "spr/bigman1", "spr/bigman2", "spr/bigman3",
+static int
+id_hit_skill(int x, int y)
+{
+	int i;
+
+	for (i = 0; i < SKILL_SLOTS; i++)
+		if (x >= skill_rect[i].x0 && x <= skill_rect[i].x1 &&
+		    y >= skill_rect[i].y0 && y <= skill_rect[i].y1)
+			return (i);
+	return (-1);
+}
+
+static void
+ability_enter(struct game *g)
+{
+	g->id_key = -1;
+	load_bank(g, "spr/lilskls", 0, &g->id_spr[1]);
+	if (g->id_spr[2].count == 0)
+		load_bank(g, captain_portrait[0], 0, &g->id_spr[2]);
+	if (g->career.expedition >= 0 || g->id_spr[3].count == 0) {
+		identity_enter(g);
+		load_bank(g, nation_flag[g->career.nation & 3], 0,
+		    &g->id_spr[3]);
+	}
+}
+
+static void
+ability_choose(struct game *g, int i)
+{
+	g->career.ability = i;
+	load_bank(g, ability_portrait[i], 0, &g->id_spr[4]);
+	game_switch(g, &screen_difficulty);
+}
+
+static void
+ability_event(struct game *g, const struct ui_event *ev)
+{
+	int i;
+
+	switch (ev->type) {
+	case EV_MOVE:
+		g->id_key = id_hit_skill(ev->x, ev->y);
+		break;
+	case EV_CLICK:
+		if ((i = id_hit_skill(ev->x, ev->y)) >= 0)
+			ability_choose(g, i);
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+			g->id_key = id_step(g->id_key, SKILL_SLOTS, 1, NULL, g);
+		else if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+			g->id_key = id_step(g->id_key, SKILL_SLOTS, -1, NULL,
+			    g);
+		else if (ev->key == UI_KEY_ENTER && g->id_key >= 0)
+			ability_choose(g, g->id_key);
+		else if (ev->key == UI_KEY_ESCAPE)
+			game_goto(g, g->career.expedition >= 0 ?
+			    &screen_expedition : &screen_nation);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+ability_draw(struct game *g)
+{
+	int i;
+
+	identity_draw_base(g, 1, 0);
+	draw(g, FONT_BODY, 180, 316, 280, game_str(g, S_ABILITY_PROMPT), 0);
+	for (i = 0; i < SKILL_SLOTS; i++)
+		id_frame(g, 1, skill_frame[i], skill_rect[i].x0,
+		    skill_rect[i].y0);
+	if (g->id_key >= 0)
+		id_label(g, 320, ID_LABEL_Y, game_word(g, W_ABILITY,
+		    (size_t)g->id_key));
+}
+
+const struct screen screen_ability = {
+	"ability", ability_enter, ability_event, NULL, ability_draw,
 };
+
+/* Difficulty: four levels in a row; the portrait follows. */
+
+static void
+difficulty_show(struct game *g, int i)
+{
+	g->id_key = i;
+	load_bank(g, captain_portrait[i & 3], 0, &g->id_spr[2]);
+}
+
+static int
+id_hit_level(int x, int y)
+{
+	static const int x1[4] = { 199, 295, 423, 479 };
+	int i;
+
+	for (i = 0; i < 4; i++)
+		if (x >= level_x[i] && x <= x1[i] && y >= LEVEL_Y &&
+		    y <= LEVEL_Y + LEVEL_H)
+			return (i);
+	return (-1);
+}
+
+static void
+difficulty_enter(struct game *g)
+{
+	difficulty_show(g, 0);
+}
+
+static void
+difficulty_choose(struct game *g, int i)
+{
+	g->career.difficulty = i;
+	game_switch(g, &screen_name);
+}
+
+static void
+difficulty_event(struct game *g, const struct ui_event *ev)
+{
+	int i;
+
+	switch (ev->type) {
+	case EV_MOVE:
+		if ((i = id_hit_level(ev->x, ev->y)) >= 0 && i != g->id_key)
+			difficulty_show(g, i);
+		break;
+	case EV_CLICK:
+		if ((i = id_hit_level(ev->x, ev->y)) >= 0)
+			difficulty_choose(g, i);
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+			difficulty_show(g, (g->id_key + 1) & 3);
+		else if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+			difficulty_show(g, (g->id_key + 3) & 3);
+		else if (ev->key == UI_KEY_ENTER)
+			difficulty_choose(g, g->id_key);
+		else if (ev->key == UI_KEY_ESCAPE)
+			game_switch(g, &screen_ability);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+difficulty_draw(struct game *g)
+{
+	uint8_t keep[3];
+	int i;
+
+	identity_draw_base(g, 1, 1);
+	id_label(g, 320, 316, game_str(g, S_DIFFICULTY_PROMPT));
+	for (i = 0; i < 4; i++) {
+		memcpy(keep, g->ink, 3);
+		if (i == g->id_key)
+			memcpy(g->ink, g->highlight, 3);
+		draw(g, FONT_BODY, level_x[i], LEVEL_Y, 140,
+		    game_word(g, W_DIFFICULTY, (size_t)i), 0);
+		memcpy(g->ink, keep, 3);
+	}
+	id_label(g, 320, 380, game_word(g, W_DIFF_TEXT, (size_t)g->id_key));
+}
+
+const struct screen screen_difficulty = {
+	"difficulty", difficulty_enter, difficulty_event, NULL,
+	difficulty_draw,
+};
+
+/* Name entry, last, under the chosen portrait. */
 
 static void
 name_enter(struct game *g)
 {
-	identity_enter(g);
-	game_portrait(g, captain_portrait[g->career.nation & 3]);
 	g->career.name[0] = '\0';
 }
 
@@ -861,94 +1138,26 @@ name_event(struct game *g, const struct ui_event *ev)
 	    len > 0)
 		g->career.name[len - 1] = '\0';
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_ENTER && len > 0)
-		game_goto(g, &screen_difficulty);
+		game_goto(g, &screen_summary);
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)
-		game_goto(g, g->career.expedition >= 0 ? &screen_expedition :
-		    &screen_nation);
+		game_switch(g, &screen_difficulty);
 }
 
 static void
 name_draw(struct game *g)
 {
 	char buf[NAME_MAX_LEN * 2 + 4];
-	int y;
 
-	draw_portrait(g);
-	y = draw(g, FONT_BODY, SCROLL_X, SCROLL_Y, SCROLL_W,
-	    game_str(g, S_NAME_PROMPT), 0);
+	identity_draw_base(g, 1, 1);
+	id_label(g, 320, 322, game_str(g, S_NAME_PROMPT));
 	/* A blinking cursor after the name typed so far. */
 	snprintf(buf, sizeof(buf), "%s%s", g->career.name,
 	    (g->ticks / 30) % 2 ? "_" : "");
-	draw(g, FONT_TITLE, SCROLL_X + 40, SCROLL_Y + y + 6, SCROLL_W, buf, 0);
+	id_label(g, 320, 352, buf);
 }
 
 const struct screen screen_name = {
 	"name", name_enter, name_event, NULL, name_draw,
-};
-
-/* Difficulty level. */
-
-static void
-difficulty_choose(struct game *g, int i)
-{
-	g->career.difficulty = i;
-	game_goto(g, &screen_ability);
-}
-
-static void
-difficulty_event(struct game *g, const struct ui_event *ev)
-{
-	menu_event(g, ev, 4, NULL, difficulty_choose, &screen_name);
-}
-
-static void
-difficulty_draw(struct game *g)
-{
-	int y;
-
-	y = draw(g, FONT_BODY, SCROLL_X, SCROLL_Y, SCROLL_W,
-	    game_str(g, S_DIFFICULTY_PROMPT), 0);
-	draw_grid(g, W_DIFFICULTY, 4, SCROLL_X + 40, SCROLL_Y + y + 4, 2,
-	    SCROLL_COL);
-}
-
-const struct screen screen_difficulty = {
-	"difficulty", identity_enter, difficulty_event, NULL, difficulty_draw,
-};
-
-/* Special ability, with its portrait in the oval. */
-
-static void
-ability_choose(struct game *g, int i)
-{
-	g->career.ability = i;
-	game_goto(g, &screen_summary);
-}
-
-static void
-ability_event(struct game *g, const struct ui_event *ev)
-{
-	menu_event(g, ev, 5, NULL, ability_choose, &screen_difficulty);
-}
-
-static void
-ability_draw(struct game *g)
-{
-	int y;
-
-	if (g->portrait.count == 0 || g->career.ability != g->selected) {
-		game_portrait(g, ability_portrait[g->selected % 5]);
-		g->career.ability = g->selected;
-	}
-	draw_portrait(g);
-	y = draw(g, FONT_BODY, SCROLL_X, SCROLL_Y, SCROLL_W,
-	    game_str(g, S_ABILITY_PROMPT), 0);
-	draw_grid(g, W_ABILITY, 5, SCROLL_X + 40, SCROLL_Y + y + 4, 2,
-	    SCROLL_COL);
-}
-
-const struct screen screen_ability = {
-	"ability", identity_enter, ability_event, NULL, ability_draw,
 };
 
 /* Summary: the career is created; the voyage itself is the next phase. */
@@ -2446,6 +2655,11 @@ town_choose(struct game *g, int i)
 	case SPOT_MERCHANT:
 		game_goto(g, &screen_merchant);
 		break;
+	case SPOT_TAVERN:
+		sim_tavern_open(&g->sim);
+		g->tavern_key = 6;
+		game_goto(g, &screen_tavern);
+		break;
 	case SPOT_LEAVE:
 		sim_leave_town(&g->sim);
 		bank_free(&g->town_spr);
@@ -3023,4 +3237,271 @@ merchant_draw(struct game *g)
 
 const struct screen screen_merchant = {
 	"merchant", merchant_enter, merchant_event, NULL, merchant_draw,
+};
+
+/*
+ * Tavern (VA 0x11867): the tavern's name on the scroll (CSTN 96, by
+ * town) and ten spots: the map seller, the information seller, three
+ * groups of seamen to recruit, the bartender's rumours, the barmaid, a
+ * stranger, and the door.  People leave once spoken to and are back on
+ * the next arrival.  The arrows step through them, Enter goes, Space
+ * opens the cabin.
+ */
+#define W_TAVERN_NAME		96
+#define W_REPUTATION		34	/* cowardly .. infamous */
+#define W_RANK			78	/* Mr., Ensign, Captain... */
+#define W_GOSSIP		33	/* "your promising plans"... */
+#define S_RECRUITS		151
+#define S_NO_RECRUITS		309
+#define S_GOSSIP		125
+#define TAVERN_MAPMAN		0
+#define TAVERN_INFOMAN		1
+#define TAVERN_BARTENDER	3
+#define TAVERN_BARMAID		4
+#define TAVERN_STRANGER		5
+#define TAVERN_DOOR		6
+#define RUMOURS_SHOWN		12
+
+static int
+tavern_rect(const struct game *g, int i, int r[4])
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->tavern_spots_va + (uint32_t)i * 10, 8);
+	int k;
+
+	if (p == NULL)
+		return (-1);
+	for (k = 0; k < 4; k++)
+		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+	return (0);
+}
+
+static int
+tavern_open_spot(const struct game *g, int i)
+{
+	return (i == TAVERN_DOOR || (g->sim.tavern_spots & (1u << i)));
+}
+
+static int
+tavern_hit(const struct game *g, int x, int y)
+{
+	int i, r[4];
+
+	for (i = 0; i < TAVERN_SPOTS; i++)
+		if (tavern_open_spot(g, i) && tavern_rect(g, i, r) == 0 &&
+		    x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
+			return (i);
+	return (-1);
+}
+
+static void
+tavern_enter(struct game *g)
+{
+	game_background(g, "pic/tavern");
+	game_portrait(g, NULL);
+	load_bank(g, "spr/tavern", 0, &g->tavern_spr);
+	g->ink[0] = g->ink[1] = g->ink[2] = 0;
+}
+
+static void
+tavern_choose(struct game *g, int i)
+{
+	g->msg[0] = '\0';
+	if (i == TAVERN_DOOR) {
+		bank_free(&g->tavern_spr);
+		game_goto(g, &screen_town);
+	} else if (TAVERN_CREW & (1u << i))
+		game_goto(g, &screen_recruit);
+	else if (i == TAVERN_BARTENDER)
+		game_goto(g, &screen_rumours);
+	else if (i == SPOT_CABIN)
+		game_goto(g, &screen_voyage);
+	else
+		snprintf(g->msg, sizeof(g->msg), "(Not implemented yet.)");
+}
+
+static void
+tavern_step(struct game *g, int d)
+{
+	int n;
+
+	for (n = 0; n < TAVERN_SPOTS; n++) {
+		g->tavern_key = (g->tavern_key + d + TAVERN_SPOTS) %
+		    TAVERN_SPOTS;
+		if (tavern_open_spot(g, g->tavern_key))
+			break;
+	}
+}
+
+static void
+tavern_event(struct game *g, const struct ui_event *ev)
+{
+	int i;
+
+	switch (ev->type) {
+	case EV_CLICK:
+		if ((i = tavern_hit(g, ev->x, ev->y)) >= 0)
+			tavern_choose(g, i);
+		break;
+	case EV_MOVE:
+		if ((i = tavern_hit(g, ev->x, ev->y)) >= 0)
+			g->tavern_key = i;
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+			tavern_step(g, -1);
+		else if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+			tavern_step(g, 1);
+		else if (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)
+			tavern_choose(g, g->tavern_key);
+		break;
+	case EV_CHAR:
+		if (ev->ch == ' ')
+			tavern_choose(g, SPOT_CABIN);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+tavern_draw(struct game *g)
+{
+	static const int who[3] = { TAVERN_MAPMAN, TAVERN_INFOMAN,
+	    TAVERN_STRANGER };
+	static const int at[3][2] = { { 0, 255 }, { 142, 259 },
+	    { 349, 199 } };
+	const char *name;
+	int i, w;
+
+	for (i = 0; i < 3; i++)
+		if ((size_t)i < g->tavern_spr.count &&
+		    (g->sim.tavern_spots & (1u << who[i])))
+			fb_frame(&g->fb, &g->tavern_spr.frames[i], at[i][0],
+			    at[i][1]);
+	name = game_word(g, W_TAVERN_NAME, (size_t)g->sim.player_town);
+	w = text_width(&g->font[FONT_TITLE], name);
+	draw(g, FONT_TITLE, 320 - w / 2, TOWN_NAME_Y, FB_W, name, 0);
+	if (g->msg[0] != '\0') {
+		text_band(g, 440, 30);
+		g->ink[0] = g->ink[1] = g->ink[2] = 240;
+		draw_centered(g, FONT_BODY, 444, g->msg);
+		g->ink[0] = g->ink[1] = g->ink[2] = 0;
+	}
+}
+
+const struct screen screen_tavern = {
+	"tavern", tavern_enter, tavern_event, NULL, tavern_draw,
+};
+
+/* Recruiting (VA 0x10f04): "Look! It's that famous sea-dog..." */
+static void
+recruit_enter(struct game *g)
+{
+	game_background(g, "pic/crew");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	g->highlight[0] = 255;
+	g->highlight[1] = 200;
+	g->highlight[2] = 60;
+}
+
+static void
+recruit_choose(struct game *g, int i)
+{
+	sim_recruit(&g->sim, i == 0);
+	game_goto(g, &screen_tavern);
+}
+
+static void
+recruit_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->sim.recruits > 0) {
+		menu_event(g, ev, 2, NULL, recruit_choose, NULL);
+		return;
+	}
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		recruit_choose(g, 1);
+}
+
+static void
+recruit_draw(struct game *g)
+{
+	const char *arg[4];
+	char text[600], men[16];
+	int r = g->sim.reputation / 4 + 1;
+
+	text_band(g, 290, 160);
+	if (g->sim.recruits == 0) {
+		draw(g, FONT_BODY, 60, 300, 520, game_str(g, S_NO_RECRUITS), 0);
+		draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+		return;
+	}
+	snprintf(men, sizeof(men), "%d", g->sim.recruits);
+	arg[0] = game_word(g, W_REPUTATION, (size_t)(r < 0 ? 0 : r > 5 ? 5 :
+	    r));
+	arg[1] = game_word(g, W_RANK, 0);	/* ranks: not modelled yet */
+	arg[2] = g->sim.player.name;
+	arg[3] = men;
+	fill_args(text, sizeof(text), game_str(g, S_RECRUITS), arg, 4);
+	draw(g, FONT_BODY, 60, 300, 520, text, 1);
+}
+
+const struct screen screen_recruit = {
+	"recruit", recruit_enter, recruit_event, NULL, recruit_draw,
+};
+
+/*
+ * Rumours (VA 0x1183e): the bartender passes on the latest news, or,
+ * with none, listens to the player's last exploit (CSTR 125).
+ */
+static void
+rumours_enter(struct game *g)
+{
+	game_background(g, "pic/bartenda");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+}
+
+static void
+rumours_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_tavern);
+}
+
+static void
+rumours_draw(struct game *g)
+{
+	char text[512];
+	size_t i, kept = sim_news_kept(&g->sim);
+	int y = 40;
+
+	text_band(g, 30, 410);
+	if (kept == 0) {
+		/* The personal log is not kept yet: "your promising plans". */
+		fill(text, sizeof(text), game_str(g, S_GOSSIP),
+		    game_word(g, W_GOSSIP, 0), NULL);
+		draw(g, FONT_BODY, 222, y, 388, text, 0);
+	} else {
+		y += draw(g, FONT_BODY, 222, y, 388, game_word(g, W_NEWS, 1),
+		    0) + 6;
+		for (i = kept; i > 0 && i + RUMOURS_SHOWN > kept && y < 400;
+		    i--) {
+			news_text(g, sim_news_at(&g->sim, i - 1), text,
+			    sizeof(text));
+			y += draw(g, FONT_BODY, 222, y, 388, text, 0) + 4;
+		}
+	}
+	draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+}
+
+const struct screen screen_rumours = {
+	"rumours", rumours_enter, rumours_event, NULL, rumours_draw,
 };

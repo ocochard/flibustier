@@ -178,6 +178,9 @@ game_free(struct game *g)
 	bank_free(&g->shop_spr[0]);
 	bank_free(&g->shop_spr[1]);
 	bank_free(&g->shop_spr[2]);
+	bank_free(&g->tavern_spr);
+	for (i = 0; i < 5; i++)
+		bank_free(&g->id_spr[i]);
 	for (i = 0; i < 2; i++)
 		for (j = 0; j < 6; j++)
 			group_free(&g->sw_parts[i][j]);
@@ -185,6 +188,16 @@ game_free(struct game *g)
 	image_free(&g->sw_weapons);
 	free(g->world);
 	free(g->exe);
+}
+
+void
+game_switch(struct game *g, const struct screen *s)
+{
+	g->screen = s;
+	g->ticks = 0;
+	g->selected = 0;
+	memset(&g->options, 0, sizeof(g->options));
+	s->enter(g);
 }
 
 void

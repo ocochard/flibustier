@@ -147,6 +147,11 @@ struct game {
 	int			 shop_stage;	/* 0 greeting, 1 trading, 2 refused */
 	struct sprite_bank	 shop_spr[3];	/* board pieces, board, exit */
 	int			 shop_buying;	/* the Sell/Buy sign */
+	struct sprite_bank	 tavern_spr;	/* the people who may be there */
+	int			 tavern_key;	/* keyboard selection */
+	struct sprite_bank	 id_spr[5];	/* small flags, small skills,
+						 * portrait, big flag, big skill */
+	int			 id_key;	/* keyboard selection, or -1 */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */
@@ -162,6 +167,8 @@ struct game {
 int	game_init(struct game *g, struct packs *packs, const char *lang,
 	    const char *save_dir);
 void	game_free(struct game *g);
+/* Go to a screen at once, without a fade (steps of one picture). */
+void	game_switch(struct game *g, const struct screen *s);
 
 void	game_event(struct game *g, const struct ui_event *ev);
 void	game_tick(struct game *g);	/* 60 per second */

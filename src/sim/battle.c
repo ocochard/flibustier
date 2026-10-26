@@ -472,6 +472,12 @@ sim_battle_finish(struct sim *s, int keep)
 	default:
 		break;
 	}
+	/* The reputation (VA 0x45e76): a capture raises it, a boarding
+	 * that fails lowers it by 2 (VA 0xdb7b, 0xe775). */
+	if (o == BAT_SURRENDER)
+		sim_reputation(s, 1);
+	else if (o == BAT_REPELLED || o == BAT_DEFEATED)
+		sim_reputation(s, -2);
 	bt->active = 0;
 	return (o);
 }

@@ -717,6 +717,7 @@ sim_enter_town(struct sim *s, int town)
 		s->visit_flags &= VISIT_GOVERNOR | VISIT_KEPT;
 	s->visit_town = town;
 	s->player_town = town;
+	s->tavern_spots = TAVERN_ALL;		/* VA 0x18fa9 */
 	t = &s->towns[town];
 	t->flags = (uint16_t)((t->flags | FLAG_KNOWN) & ~FLAG_OBSOLETE);
 }

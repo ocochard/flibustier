@@ -796,6 +796,52 @@ same town only bits 1 and 2 are kept.
   - Its "Take all" button and the slider (VA `0x20ff3`) are not traced.
     The engine places the slider by the hold's fill, a guess.
 
+### Reputation (VA `0x45e76`)
+
+A signed byte, 0 at the start:
+- +1 for each capture (VA `0xdb7b`);
+- -2 for a failed boarding (VA `0xe775`);
+- set to -1 after a disgrace in a duel (CSTR 174).
+
+It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
+5)`]: cowardly ... infamous) and brings recruits.
+
+### Tavern (VA `0x11867`)
+
+- **Picture:** `tavern.pcx`. The tavern's name (CSTN 96, by town) is on
+  the scroll at (320, 38).
+- **People:** ten spots (table at VA `0x330f0`: x0, y0, x1, y1,
+  present):
+  - 0 the map seller and 1 the information seller (`tavern.spr` frames
+    0 and 1 at (0, 255) and (142, 259));
+  - 2, 7, 8 and 9 seamen to recruit;
+  - 3 the bartender;
+  - 4 the barmaid;
+  - 5 a stranger (frame 2 at (349, 199));
+  - 6 the door.
+- **Presence:** whoever is spoken to leaves; all are back on the next
+  arrival in town (VA `0x18fa9`).
+- **Recruits (VA `0x10e2a`), counted on entering:**
+  - `n = (rep + 7 - difficulty) x (citizens + rand(citizens)) / 9`;
+  - with fewer than `4m` men aboard, at least `m = (4 - difficulty) x
+    6`;
+  - at most `(ships x 2 + capacity) x 16 - crew`, and at least 1.
+- **Recruiting (VA `0x10f04`), on `crew.pcx`:**
+  - CSTR 151 offers the men, naming the player by reputation, rank and
+    name.
+  - Signing them up adds them to the crew; all four seamen spots then
+    leave.
+  - With no recruits: CSTR 309.
+- **The bartender (VA `0x1183e`):**
+  - On `bartenda.pcx`, "The Bartender tells you that:" (CSTN 18.1),
+    then up to 12 recent public news items.
+  - With none, he listens to the player's last exploit (CSTR 125 with
+    CSTN 33, by the latest personal log entry).
+  - The engine keeps no personal log yet, so it always says "your
+    promising plans".
+- **Not done yet:** the map seller, the information seller, the barmaid
+  and the stranger.
+
 ## Intro (VA `0x3325`)
 
 1. `micro.pcx`: fade in, 2 s (20 x 100 ms), fade out.
@@ -842,6 +888,35 @@ The welcome menu (VA `0x1443e`) is full screen on `textback.pcx`:
 The title screen's passes wait 1/10 of a 10 ms tick, which is 0. So
 their speed is the CPU's. The engine runs 167 passes per 1/60 s frame,
 about 0.1 ms each, and starts the dissolve at cell 0.
+
+## New career: the identity screen (VA `0x1482e`)
+
+After the era (or a famous expedition), one picture, `idselect.pcx`,
+fills in step by step. The captain's portrait (`bigman0.spr`) sits in
+the oval at (237, 66).
+
+1. **Nationality (VA `0x14aa4`, CSTR 70):**
+   - Four small flags (`lilflgs.spr`, frames in the order English,
+     French, Dutch, Spanish) at (0, 0), (51, 155), (481, 1) and
+     (441, 151) (table at VA `0x33488`). The flags available per era are
+     at VA `0x3357c`; no Dutch in 1560.
+   - Pointing at a flag names it on the scroll (CSTN 82, centred at
+     (320, 368)); a click chooses it, and the keys step through them.
+   - The chosen nation's big flag (`big?flg.spr`) then stays at (0, 0),
+     with its name at (160, 250).
+2. **Special ability (VA `0x14e6e`, CSTR 67):**
+   - Five icons (`lilskls.spr`) along the bottom (table at VA
+     `0x334b0`). Slot i is ability i (CSTN 83 order); the icon frames
+     shown are 0, 3, 1, 2, 4.
+   - The chosen ability's picture (`bigfen.spr` ...) then stays at
+     (440, 0), with its name at (520, 250).
+   - A famous expedition starts here, with its own flag.
+3. **Difficulty (VA `0x151c6`, CSTR 66):**
+   - The four levels (CSTN 35) in a row at x 80, 190, 300, 410, y 345.
+   - Pointing at one selects it: it is highlighted, described below
+     (CSTN 101, centred at (320, 380)), and the portrait becomes
+     `bigman0`-`3` for that level. A click or Enter confirms.
+4. **Name (VA `0x155fa`),** then confirmation (VA `0x15498`).
 
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 

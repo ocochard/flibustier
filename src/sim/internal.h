@@ -24,6 +24,15 @@ int	sim_div16(int a, int b);
  */
 int	sim_bearing(int dx, int dy);
 
+/* Move the reputation, a signed byte. */
+static inline void
+sim_reputation(struct sim *s, int d)
+{
+	int r = s->reputation + d;
+
+	s->reputation = r < -128 ? -128 : r > 127 ? 127 : r;
+}
+
 /* A ship's room in the hold, in tens of tons (VA 0xdb7b, 0x1f2a1). */
 static inline int
 sim_ship_room(int type)

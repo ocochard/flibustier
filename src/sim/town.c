@@ -286,3 +286,41 @@ sim_merchant_close(struct sim *s)
 	}
 	s->market.open = 0;
 }
+
+/*
+ * Recruits (VA 0x10e2a): by reputation, difficulty and the town's
+ * people; at least a few when the crew is small, at most what the
+ * fleet can hold.
+ */
+void
+sim_tavern_open(struct sim *s)
+{
+	struct sim_town *t = current(s);
+	struct sim_fleet *f = &s->fleet;
+	int n, least, most;
+
+	s->recruits = 0;
+	if (t == NULL || !(s->tavern_spots & TAVERN_CREW))
+		return;
+	n = ((s->reputation + 7 - s->player.difficulty) * (t->citizens +
+	    (t->citizens > 0 ? (int)rng_below(&s->rng, t->citizens) : 0))) /
+	    9;
+	least = (4 - s->player.difficulty) * 6;
+	if (f->crew < least * 4 && n < least)
+		n = least;
+	most = (f->nships * 2 + f->capacity) * 16;
+	if (f->crew + n > most)
+		n = most - f->crew;
+	if (n < 0)
+		n = 1;
+	s->recruits = n;
+}
+
+void
+sim_recruit(struct sim *s, int accept)
+{
+	if (accept)
+		s->fleet.crew += s->recruits;
+	s->recruits = 0;
+	s->tavern_spots &= ~TAVERN_CREW;
+}

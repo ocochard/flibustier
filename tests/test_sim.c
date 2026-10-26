@@ -1556,6 +1556,72 @@ test_merchant(void)
 	CHECK(t->wealth == 249);		/* 237 + 12 */
 }
 
+/* The tavern: who is there, the recruits, the reputation. */
+static void
+test_tavern(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	int i, lo = 1000, hi = 0;
+
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	sim_enter_town(&s, 1);
+	CHECK(s.tavern_spots == TAVERN_ALL);
+	s.player.difficulty = 1;
+	s.fleet.nships = 1;
+	s.fleet.capacity = 4;		/* room for (2 + 4) x 16 = 96 men */
+	/* No citizens: a small crew still gets (4 - 1) x 6 = 18 men. */
+	t->citizens = 0;
+	s.fleet.crew = 10;
+	sim_tavern_open(&s);
+	CHECK(s.recruits == 18);
+	s.fleet.crew = 71;		/* under 72: still 18 */
+	sim_tavern_open(&s);
+	CHECK(s.recruits == 18);
+	s.fleet.crew = 80;		/* 18 would pass 96: 16 */
+	sim_tavern_open(&s);
+	CHECK(s.recruits == 0);		/* not small: 0 */
+	s.fleet.crew = 100;		/* over the limit: at least one */
+	sim_tavern_open(&s);
+	CHECK(s.recruits == 1);
+	/* With people: (0 + 7 - 1) x (20 + rand(20)) / 9 = 13..25. */
+	t->citizens = 20;
+	s.fleet.crew = 72;
+	for (i = 0; i < 200; i++) {
+		sim_tavern_open(&s);
+		lo = s.recruits < lo ? s.recruits : lo;
+		hi = s.recruits > hi ? s.recruits : hi;
+	}
+	CHECK(lo == 13 && hi == 24);	/* 6 x 39 / 9 = 26 caps at 24 */
+	s.reputation = 3;		/* a better name, more men */
+	s.fleet.crew = 10;
+	sim_tavern_open(&s);
+	CHECK(s.recruits >= 9 * 20 / 9);
+	/* Signing them on; then they are gone until the next arrival. */
+	i = s.recruits;
+	sim_recruit(&s, 1);
+	CHECK(s.fleet.crew == 10 + i && !(s.tavern_spots & TAVERN_CREW));
+	sim_tavern_open(&s);
+	CHECK(s.recruits == 0);
+	sim_leave_town(&s);
+	sim_enter_town(&s, 1);
+	CHECK(s.tavern_spots == TAVERN_ALL);
+
+	/* Reputation: a capture +1, a failed boarding -2. */
+	battle_game(&s);
+	s.reputation = 0;
+	s.battle.outcome = BAT_SURRENDER;
+	sim_battle_finish(&s, 0);
+	CHECK(s.reputation == 1);
+	battle_game(&s);
+	s.battle.outcome = BAT_BOARDING;
+	sim_board(&s, 0);
+	s.sword.result = SWORD_REPELLED;
+	sim_battle_finish(&s, 0);
+	CHECK(s.reputation == -2);	/* a fresh game: 0 - 2 */
+}
+
 int
 main(void)
 {
@@ -1575,6 +1641,7 @@ main(void)
 	test_towns();
 	test_shipwright();
 	test_merchant();
+	test_tavern();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

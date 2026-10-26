@@ -295,6 +295,9 @@ struct sim {
 	int		visit_flags;	/* VISIT_* for the current visit */
 	int		wright_gold;	/* the shipwright's, -1 until known */
 	int		merchant_gold;	/* the merchant's, -1 until known */
+	int		reputation;	/* -128..127: captures, failed boardings */
+	unsigned	tavern_spots;	/* people still there, bit per spot */
+	int		recruits;	/* men offering to sign on */
 	struct sim_market {
 		int	open;
 		int	stock[3];	/* food, goods, sugar */
@@ -377,6 +380,16 @@ void	sim_merchant_open(struct sim *s);
 int	sim_trade(struct sim *s, int good, int n);
 /* Close the shop: trading moves the town's wealth. */
 void	sim_merchant_close(struct sim *s);
+
+/* The tavern (VA 0x11867): ten spots, all back on each arrival. */
+#define TAVERN_SPOTS	10
+#define TAVERN_ALL	0x3FFu
+#define TAVERN_CREW	((1u << 2) | (1u << 7) | (1u << 8) | (1u << 9))
+
+/* Entering the tavern: count the men who would sign on. */
+void	sim_tavern_open(struct sim *s);
+/* Sign them up (or not); the crew is then gone until next time. */
+void	sim_recruit(struct sim *s, int accept);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);
