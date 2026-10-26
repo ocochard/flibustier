@@ -52,6 +52,7 @@ File names are matched case-insensitively.
 [pack]
 name = Pirates! Gold remixed music
 license = CC-BY-4.0
+art_height = 1080
 
 [assets]
 music/title = music/01-title.ogg
@@ -60,6 +61,29 @@ pic/town = art/town.png
 
 - File paths are relative to the pack directory and may not contain `..`.
 - Unknown `[pack]` keys are ignored, for forward compatibility.
+- `art_height`: the screen height the pack's art is drawn for, 240 to
+  4320 (default 480, the original). A full-screen picture for 1080p is
+  1440x1080; other pictures cover their 640x480 size times
+  `art_height / 480`, rounded.
+  - The engine renders at the largest `art_height` of all packs, rounded
+    down to a multiple of 3 for a whole 4:3 width.
 - Planned `[pack]` keys:
-  - `scale`: art resolution relative to 640x480.
   - `format`: version of the manifest format.
+
+## Replacement pictures (`pic/` as PNG)
+
+Loaded by `pic_load()` (`src/assets/pic.c`):
+
+- The true colours are kept at the art's resolution.
+- Palette indices are derived too, for code that works on indices
+  (colour keys, palette effects, sprites drawn in the picture's palette):
+  - the original PCX's palette and pixels when it is installed with the
+    same size;
+  - otherwise the PNG reduced to the original's palette, or to a fixed
+    palette (6x6x6 cube plus 40 greys) without original data.
+- Limits:
+  - Palette cycling and ink fades do not change true colours.
+  - `fb_image_part` draws indices only, so the credits text blocks stay
+    in original resolution.
+  - The treasure map is composed on indices, so it drops the true
+    colours of `pic/wood`.

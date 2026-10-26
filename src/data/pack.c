@@ -21,6 +21,9 @@
 #define MAX_PACKS	16
 #define MAX_PATH	1024
 #define MAX_FILE	(64L * 1024 * 1024)
+#define SCREEN_H	480	/* the original art height */
+#define MIN_ART_H	240
+#define MAX_ART_H	4320
 #define MANIFEST	"pack.ini"
 #define ORIGINAL_EXE	"PIRATESG.EXE"
 #define CD_DIR		"PIRATESG.CD"
@@ -39,6 +42,7 @@ struct pack {
 	enum pack_kind		 kind;
 	char			 name[64];
 	char			 license[64];
+	int			 art_height;		/* pack.ini */
 	char			 root[MAX_PATH];	/* directory packs */
 	struct iso		*iso;			/* original from image */
 	struct manifest_entry	*entries;
@@ -356,6 +360,7 @@ packs_add_original(struct packs *packs, const char *path)
 		return (-1);
 	}
 	pk->kind = PACK_ORIGINAL;
+	pk->art_height = SCREEN_H;
 	snprintf(pk->name, sizeof(pk->name), "Pirates! Gold (original)");
 	snprintf(pk->license, sizeof(pk->license), "proprietary");
 
@@ -414,7 +419,8 @@ valid_file(const char *file)
 static int
 parse_manifest(struct packs *packs, struct pack *pk, char *text)
 {
-	char *line, *next, *eq, *key, *val;
+	char *line, *next, *eq, *key, *val, *end;
+	long height;
 	struct manifest_entry *e;
 	enum { NONE, PACK, ASSETS } section = NONE;
 	int lineno = 0;
@@ -445,6 +451,13 @@ parse_manifest(struct packs *packs, struct pack *pk, char *text)
 			else if (strcmp(key, "license") == 0)
 				snprintf(pk->license, sizeof(pk->license), "%s",
 				    val);
+			else if (strcmp(key, "art_height") == 0) {
+				height = strtol(val, &end, 10);
+				if (*val == '\0' || *end != '\0' ||
+				    height < MIN_ART_H || height > MAX_ART_H)
+					goto bad;
+				pk->art_height = (int)height;
+			}
 			/* Unknown keys are ignored for forward compatibility. */
 			continue;
 		}
@@ -488,6 +501,7 @@ packs_add_dir(struct packs *packs, const char *path)
 		return (-1);
 	}
 	pk->kind = PACK_DIR;
+	pk->art_height = SCREEN_H;
 	snprintf(pk->root, sizeof(pk->root), "%s", path);
 	snprintf(pk->name, sizeof(pk->name), "%s", path);
 	snprintf(pk->license, sizeof(pk->license), "unknown");
@@ -517,6 +531,13 @@ packs_add_dir(struct packs *packs, const char *path)
 int
 packs_load(struct packs *packs, const char *id, struct blob *out)
 {
+	return (packs_load_ext(packs, id, NULL, out));
+}
+
+int
+packs_load_ext(struct packs *packs, const char *id, const char *ext,
+    struct blob *out)
+{
 	struct pack *pk;
 	size_t i;
 	int rc;
@@ -530,8 +551,13 @@ packs_load(struct packs *packs, const char *id, struct blob *out)
 		pk = packs->pack[i];
 		rc = pk->kind == PACK_ORIGINAL ? original_load(pk, id, out) :
 		    dir_load(pk, id, out);
+		if (rc == 0 && ext != NULL && strcmp(out->ext, ext) != 0) {
+			blob_free(out);
+			continue;
+		}
 		if (rc == 0) {
 			out->pack = pk->name;
+			out->art_height = pk->art_height;
 			return (0);
 		}
 	}
@@ -720,6 +746,18 @@ packs_license(const struct packs *packs, size_t i)
 {
 	return (i < packs->count ?
 	    packs->pack[packs->count - 1 - i]->license : NULL);
+}
+
+int
+packs_art_height(const struct packs *packs)
+{
+	size_t i;
+	int h = SCREEN_H;
+
+	for (i = 0; i < packs->count; i++)
+		if (packs->pack[i]->art_height > h)
+			h = packs->pack[i]->art_height;
+	return (h);
 }
 
 const char *

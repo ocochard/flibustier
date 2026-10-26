@@ -14,7 +14,7 @@
 
 #include "assets/img.h"
 #include "assets/scenario.h"
-#include "assets/pcx.h"
+#include "assets/pic.h"
 #include "sim/hof.h"
 #include "sim/save.h"
 #include "screen.h"
@@ -144,7 +144,7 @@ plot(void *arg, int x, int y, uint32_t ink)
 	struct fb *fb = arg;
 
 	if (x >= 0 && y >= 0 && x < FB_W && y < FB_H)
-		fb->px[(size_t)y * FB_W + x] = (uint8_t)ink;
+		fb_put(fb, (size_t)y * FB_W + x, (uint8_t)ink);
 }
 
 static void
@@ -496,7 +496,7 @@ intro_draw(struct game *g)
 		for (x = 0; x < TITLE_W; x++)
 			if (g->intro_shown[(y / 2) * CELLS_W + x / 2] &&
 			    (c = g->intro_title[y * TITLE_W + x]) != 0)
-				g->fb.px[y * FB_W + TITLE_X + x] = c;
+				fb_put(&g->fb, y * FB_W + TITLE_X + x, c);
 }
 
 const struct screen screen_intro = {
@@ -557,14 +557,9 @@ credit_ink(struct game *g, int step)
 static void
 credits_enter(struct game *g)
 {
-	struct blob b;
-
 	game_background(g, "pic/credpic");
 	image_free(&g->credits);
-	if (packs_load(g->packs, credits_picture(g), &b) == 0) {
-		pcx_decode(b.data, b.len, &g->credits);
-		blob_free(&b);
-	}
+	pic_load(g->packs, credits_picture(g), &g->credits);
 	g->cred_block = 0;
 	g->cred_ms = 0;
 	credit_ink(g, 0);
@@ -2586,8 +2581,8 @@ clouds_draw(struct game *g)
 					if (f->pixels[y * f->w + x] != 0 &&
 					    px >= 0 && px < FB_W && py >= 0 &&
 					    py < FB_H)
-						g->fb.px[py * FB_W + px] =
-						    shade[g->fb.px[py * FB_W + px]];
+						fb_put(&g->fb, py * FB_W + px,
+						    shade[g->fb.px[py * FB_W + px]]);
 				}
 		for (y = 0; y < f->h; y++)
 			for (x = 0; x < f->w; x++) {
@@ -2595,8 +2590,8 @@ clouds_draw(struct game *g)
 				py = sy + y;
 				if (f->pixels[y * f->w + x] != 0 && px >= 0 &&
 				    px < FB_W && py >= 0 && py < FB_H)
-					g->fb.px[py * FB_W + px] =
-					    f->pixels[y * f->w + x];
+					fb_put(&g->fb, py * FB_W + px,
+					    f->pixels[y * f->w + x]);
 			}
 	}
 }
@@ -2756,6 +2751,7 @@ sail_draw(struct game *g)
 			tile.w = tile.h = WORLD_TILE;
 			tile.pixels = (uint8_t *)t;
 			tile.has_palette = 0;
+			tile.rgba = NULL;
 			fb_image(&g->fb, &tile, cx * WORLD_TILE, cy * WORLD_TILE,
 			    0);
 		}
@@ -3360,7 +3356,7 @@ battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 
 				if (c != 0 && sx + x >= 0 && sx + x < AREA &&
 				    sy + y >= 0 && sy + y < AREA)
-					g->fb.px[(sy + y) * FB_W + sx + x] = c;
+					fb_put(&g->fb, (sy + y) * FB_W + sx + x, c);
 			}
 	}
 }
@@ -3444,6 +3440,7 @@ battle_draw(struct game *g)
 				    g->world->battle_screens[bt->screen][cy *
 				    BATTLE_SCREEN + cx];
 				t.has_palette = 0;
+				t.rgba = NULL;
 				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
 			}
 	battle_ship_draw(g, 0, &bt->you);
@@ -6808,6 +6805,7 @@ land_draw(struct game *g)
 				    g->world->land_screens[l->screen][cy *
 				    BATTLE_SCREEN + cx];
 				t.has_palette = 0;
+				t.rgba = NULL;
 				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
 			}
 	nation = g->sim.towns[l->town].nation & 7;
@@ -6932,11 +6930,9 @@ tmap_compose(struct game *g)
 	game_portrait(g, NULL);
 	if (g->bg.pixels == NULL || g->bg.w != FB_W || g->bg.h != FB_H)
 		return;
-	if (packs_load(g->packs, "pic/mapframe", &b) == 0) {
-		if (pcx_decode(b.data, b.len, &frame) != 0)
-			memset(&frame, 0, sizeof(frame));
-		blob_free(&b);
-	}
+	/* The map is composed on the indices. */
+	image_drop_rgba(&g->bg);
+	pic_load(g->packs, "pic/mapframe", &frame);
 	if (frame.pixels != NULL && frame.w == FB_W && frame.h == FB_H)
 		for (k = 0; k < 4; k++) {
 			if (!(held & (1 << k)))

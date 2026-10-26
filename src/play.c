@@ -108,12 +108,12 @@ play_run(struct packs *packs, const char *lang, const char *saves,
     const char *shot, int shot_frames, int crt_on)
 {
 	static struct game g;
-	static uint8_t rgb[FB_W * FB_H * 3];
+	uint8_t *rgb;
 	Vector2 last_mouse = { -1, -1 };
 	Texture2D tex;
 	Image im, screen;
 	char dir[512];
-	int frames = 0, rc = 0, k, big_k;
+	int frames = 0, rc = 0, k, big_k, tw, th;
 	RenderTexture2D big;
 	struct crt crt = { 0 };
 	Rectangle box;
@@ -124,13 +124,20 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		game_free(&g);
 		return (1);
 	}
+	tw = g.fb.out_w;	/* the frame, at the art's resolution */
+	th = g.fb.out_h;
+	if ((rgb = malloc((size_t)tw * th * 3)) == NULL) {
+		fprintf(stderr, "out of memory\n");
+		game_free(&g);
+		return (1);
+	}
 	SetTraceLogLevel(getenv("STMALO_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
 	InitWindow(FB_W * WINDOW_SCALE, FB_H * WINDOW_SCALE, "stmalo");
 	SetExitKey(KEY_NULL);	/* Escape is a game key */
 	HideCursor();		/* the game draws its own sword pointer */
 	SetTargetFPS(60);
-	im = (Image){ rgb, FB_W, FB_H, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
+	im = (Image){ rgb, tw, th, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
 	tex = LoadTextureFromImage(im);
 	SetTextureFilter(tex, TEXTURE_FILTER_POINT);
 	/*
@@ -159,26 +166,26 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 			EndDrawing();
 			goto shown;
 		}
-		k = (int)(box.width / FB_W);
+		k = (int)(box.width / tw);
 		if (k < 1)
 			k = 1;
 		if (k != big_k) {
 			if (big_k > 0)
 				UnloadRenderTexture(big);
-			big = LoadRenderTexture(FB_W * k, FB_H * k);
+			big = LoadRenderTexture(tw * k, th * k);
 			SetTextureFilter(big.texture, TEXTURE_FILTER_BILINEAR);
 			big_k = k;
 		}
 		BeginTextureMode(big);
-		DrawTexturePro(tex, (Rectangle){ 0, 0, FB_W, FB_H },
-		    (Rectangle){ 0, 0, FB_W * k, FB_H * k }, (Vector2){ 0, 0 },
+		DrawTexturePro(tex, (Rectangle){ 0, 0, tw, th },
+		    (Rectangle){ 0, 0, tw * k, th * k }, (Vector2){ 0, 0 },
 		    0, WHITE);
 		EndTextureMode();
 		BeginDrawing();
 		ClearBackground(BLACK);
 		/* Render textures are stored upside down: flip the source. */
-		DrawTexturePro(big.texture, (Rectangle){ 0, 0, FB_W * k,
-		    -FB_H * k }, box, (Vector2){ 0, 0 }, 0, WHITE);
+		DrawTexturePro(big.texture, (Rectangle){ 0, 0, tw * k,
+		    -th * k }, box, (Vector2){ 0, 0 }, 0, WHITE);
 		EndDrawing();
 shown:
 		if (shot != NULL && ++frames >= shot_frames) {
@@ -194,6 +201,7 @@ shown:
 	crt_unload(&crt);
 	UnloadTexture(tex);
 	CloseWindow();
+	free(rgb);
 	game_free(&g);
 	return (rc);
 }
@@ -203,7 +211,7 @@ play_headless(struct packs *packs, const char *lang, const char *saves,
     const char *script, const char *out)
 {
 	static struct game g;
-	static uint8_t rgb[FB_W * FB_H * 3];
+	uint8_t *rgb;
 	char dir[512];
 	Image im;
 	int rc = 0;
@@ -215,11 +223,18 @@ play_headless(struct packs *packs, const char *lang, const char *saves,
 		game_free(&g);
 		return (1);
 	}
+	if ((rgb = malloc((size_t)g.fb.out_w * g.fb.out_h * 3)) == NULL) {
+		fprintf(stderr, "out of memory\n");
+		game_free(&g);
+		return (1);
+	}
 	fb_to_rgb(&g.fb, g.brightness, rgb);
-	im = (Image){ rgb, FB_W, FB_H, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
+	im = (Image){ rgb, g.fb.out_w, g.fb.out_h, 1,
+	    PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
 	SetTraceLogLevel(getenv("STMALO_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
 	if (out != NULL && !ExportImage(im, out))
 		rc = 1;
+	free(rgb);
 	printf("screen: %s\n", g.screen != NULL ? "shown" : "quit");
 	game_free(&g);
 	return (rc);

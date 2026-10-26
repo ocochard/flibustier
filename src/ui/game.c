@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "assets/pcx.h"
+#include "assets/pic.h"
 #include "assets/scenario.h"
 #include "assets/towns.h"
 #include "assets/world.h"
@@ -132,6 +132,11 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 
 	memset(g, 0, sizeof(*g));
 	g->packs = packs;
+	if (fb_init(&g->fb, packs_art_height(packs)) != 0) {
+		snprintf(g->err, sizeof(g->err), "cannot set up a %d pixel "
+		    "high screen", packs_art_height(packs));
+		return (-1);
+	}
 	if (save_dir != NULL)
 		snprintf(g->save_dir, sizeof(g->save_dir), "%s", save_dir);
 	snprintf(g->lang, sizeof(g->lang), "%s", lang);
@@ -216,6 +221,7 @@ game_free(struct game *g)
 	image_free(&g->sw_weapons);
 	free(g->world);
 	free(g->exe);
+	fb_free(&g->fb);
 }
 
 void
@@ -240,7 +246,6 @@ game_goto(struct game *g, const struct screen *s)
 int
 game_background(struct game *g, const char *pic)
 {
-	struct blob b;
 	int rc;
 
 	image_free(&g->bg);
@@ -252,11 +257,7 @@ game_background(struct game *g, const char *pic)
 	g->highlight[0] = 170;
 	g->highlight[1] = 20;
 	g->highlight[2] = 10;
-	if (packs_load(g->packs, pic, &b) != 0)
-		return (-1);
-	rc = pcx_decode(b.data, b.len, &g->bg);
-	blob_free(&b);
-	if (rc == 0)
+	if ((rc = pic_load(g->packs, pic, &g->bg)) == 0)
 		memcpy(g->fb.pal, g->bg.palette, sizeof(g->fb.pal));
 	return (rc);
 }

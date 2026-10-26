@@ -24,6 +24,8 @@ add_library(stmalo_core STATIC
 	src/assets/image.c
 	src/assets/img.c
 	src/assets/pcx.c
+	src/assets/pic.c
+	src/assets/png.c
 	src/assets/rsd.c
 	src/assets/sprite.c
 	src/assets/text.c
@@ -54,6 +56,8 @@ add_library(stmalo_core STATIC
 	src/view/view.c)
 target_include_directories(stmalo_core PUBLIC src)
 target_compile_options(stmalo_core PRIVATE ${STMALO_WARNINGS})
+# The vendored stb_image is not ours to keep warning-free.
+set_source_files_properties(src/assets/png.c PROPERTIES COMPILE_OPTIONS -w)
 
 # Use a system raylib 5.5 or later when available (CMake config or
 # pkg-config), otherwise fetch a pinned release.

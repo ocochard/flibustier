@@ -30,6 +30,7 @@ struct blob {
 	size_t		 len;
 	char		 ext[8];	/* lowercase source extension: "pcx" */
 	const char	*pack;		/* name of the pack that provided it */
+	int		 art_height;	/* screen height its art is drawn for */
 };
 
 struct packs	*packs_new(void);
@@ -45,6 +46,14 @@ int		 packs_load(struct packs *packs, const char *id,
 void		 blob_free(struct blob *blob);
 
 /*
+ * The same, from the highest-priority pack whose file for "id" has
+ * extension "ext" ("pcx"): for example the original picture behind a
+ * replacement, for its palette.
+ */
+int		 packs_load_ext(struct packs *packs, const char *id,
+		    const char *ext, struct blob *out);
+
+/*
  * List every ID provided by at least one pack, sorted and unique.  On
  * success *ids is a malloc'ed array to release with packs_list_free().
  */
@@ -55,6 +64,12 @@ void		 packs_list_free(char **ids, size_t count);
 size_t		 packs_count(const struct packs *packs);
 const char	*packs_name(const struct packs *packs, size_t i);
 const char	*packs_license(const struct packs *packs, size_t i);
+
+/*
+ * The largest art height of all packs (480 for the original art): the
+ * resolution to render at.
+ */
+int		 packs_art_height(const struct packs *packs);
 
 const char	*packs_error(const struct packs *packs);
 

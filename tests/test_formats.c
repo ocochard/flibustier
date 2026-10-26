@@ -19,11 +19,14 @@
 #include "assets/font.h"
 #include "assets/img.h"
 #include "assets/pcx.h"
+#include "assets/pic.h"
+#include "assets/png.h"
 #include "assets/rsd.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
+#include "gfx/fb.h"
 
 static int failures;
 
@@ -187,6 +190,231 @@ test_packs(void)
 	unlink(path);
 	rmdir(low);
 	rmdir(high);
+}
+
+/* 6x4 RGBA, each 2x2 block one colour: red, green, blue, then white,
+ * black, near red. */
+static const uint8_t png_6x4[] = {
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x04,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0xad, 0x04, 0x4e, 0x43, 0x00, 0x00, 0x00,
+	0x22, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0xf8, 0xcf, 0xc0, 0xf0,
+	0x1f, 0x84, 0xe1, 0x10, 0xc2, 0x45, 0xb0, 0x30, 0x25, 0xa0, 0x80, 0x01,
+	0x24, 0x09, 0xc4, 0xbf, 0xb8, 0x58, 0xc1, 0x18, 0xa7, 0x04, 0x00, 0xeb,
+	0x8d, 0x33, 0xf5, 0x48, 0x32, 0x5b, 0x98, 0x00, 0x00, 0x00, 0x00, 0x49,
+	0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+};
+
+static int
+write_bytes(const char *dir, const char *name, const uint8_t *data,
+    size_t len)
+{
+	char path[1024];
+	FILE *fp;
+
+	snprintf(path, sizeof(path), "%s/%s", dir, name);
+	if ((fp = fopen(path, "wb")) == NULL)
+		return (-1);
+	if (fwrite(data, 1, len, fp) != len) {
+		fclose(fp);
+		return (-1);
+	}
+	return (fclose(fp));
+}
+
+static void
+remove_files(const char *dir, const char *const *names)
+{
+	char path[1024];
+
+	for (; *names != NULL; names++) {
+		snprintf(path, sizeof(path), "%s/%s", dir, *names);
+		unlink(path);
+	}
+	rmdir(dir);
+}
+
+static void
+test_png(void)
+{
+	struct image img;
+
+	/* Drawn for a 960 pixel high screen: half size in 640x480. */
+	CHECK(png_decode(png_6x4, sizeof(png_6x4), 960, &img) == 0);
+	CHECK(img.w == 3 && img.h == 2);
+	CHECK(img.rgba_w == 6 && img.rgba_h == 4);
+	CHECK(img.pixels == NULL && img.rgba != NULL);
+	CHECK(img.rgba != NULL && img.rgba[0] == 255 && img.rgba[1] == 0 &&
+	    img.rgba[3] == 255);
+	/* Art pixel (4, 2): the near red block. */
+	CHECK(img.rgba != NULL && img.rgba[4 * (2 * 6 + 4)] == 250 &&
+	    img.rgba[4 * (2 * 6 + 4) + 1] == 10);
+	image_free(&img);
+	/* For 1080p, 6x4 art covers 2.67x1.78 pixels: rounded. */
+	CHECK(png_decode(png_6x4, sizeof(png_6x4), 1080, &img) == 0);
+	CHECK(img.w == 3 && img.h == 2);
+	image_free(&img);
+	CHECK(png_decode(png_6x4, sizeof(png_6x4) - 20, 960, &img) == -1);
+	CHECK(png_decode(png_6x4, sizeof(png_6x4), 0, &img) == -1);
+	CHECK(png_decode(png_6x4, sizeof(png_6x4), 4000, &img) == -1);
+}
+
+/*
+ * Replacement art: true colours at the pack's art height, with the
+ * original picture's palette and pixels when it is there, else a fixed
+ * palette.
+ */
+static void
+test_pic(void)
+{
+	static const char *const low_files[] = { "pack.ini", "town.pcx", NULL };
+	static const char *const high_files[] = { "pack.ini", "town.png",
+	    NULL };
+	static const uint8_t want_orig[] = { 7, 7, 7, 7, 0xC5, 2 };
+	/* Cube indices of red, green, blue, white, black and near red. */
+	static const uint8_t want_fixed[] = { 180, 30, 5, 215, 0, 180 };
+	char low[] = "/tmp/stmalo-test-XXXXXX";
+	char high[] = "/tmp/stmalo-test-XXXXXX";
+	uint8_t pcx[1024];
+	struct packs *packs;
+	struct image img;
+	struct blob b;
+	size_t len;
+
+	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	len = make_pcx(pcx);
+	CHECK(write_text(low, "pack.ini", "[assets]\npic/town = town.pcx\n")
+	    == 0);
+	CHECK(write_bytes(low, "town.pcx", pcx, len) == 0);
+	CHECK(write_text(high, "pack.ini", "[pack]\nart_height = 960\n"
+	    "[assets]\npic/town = town.png\n") == 0);
+	CHECK(write_bytes(high, "town.png", png_6x4, sizeof(png_6x4)) == 0);
+
+	/* Over the original: its palette and pixels. */
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, low) == 0);
+	CHECK(packs_add_dir(packs, high) == 0);
+	CHECK(packs_art_height(packs) == 960);
+	CHECK(packs_load(packs, "pic/town", &b) == 0);
+	CHECK(b.art_height == 960 && strcmp(b.ext, "png") == 0);
+	blob_free(&b);
+	CHECK(packs_load_ext(packs, "pic/town", "pcx", &b) == 0);
+	CHECK(b.art_height == 480 && strcmp(b.ext, "pcx") == 0);
+	blob_free(&b);
+	CHECK(packs_load_ext(packs, "pic/town", "img", &b) == -1);
+	CHECK(pic_load(packs, "pic/town", &img) == 0);
+	CHECK(img.w == 3 && img.h == 2 && img.rgba != NULL);
+	CHECK(img.pixels != NULL &&
+	    memcmp(img.pixels, want_orig, sizeof(want_orig)) == 0);
+	CHECK(img.palette[0] == 0x12);
+	image_free(&img);
+	packs_free(packs);
+
+	/* Alone: reduced to the fixed palette. */
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, high) == 0);
+	CHECK(pic_load(packs, "pic/town", &img) == 0);
+	CHECK(img.pixels != NULL &&
+	    memcmp(img.pixels, want_fixed, sizeof(want_fixed)) == 0);
+	CHECK(img.has_palette && img.palette[3 * 180] == 255 &&
+	    img.palette[3 * 180 + 1] == 0);
+	image_free(&img);
+	packs_free(packs);
+
+	/* An art height is a whole number from 240 to 4320. */
+	packs = packs_new();
+	CHECK(write_text(high, "pack.ini", "[pack]\nart_height = 100\n") == 0);
+	CHECK(packs_add_dir(packs, high) == -1);
+	CHECK(write_text(high, "pack.ini", "[pack]\nart_height = 1080p\n")
+	    == 0);
+	CHECK(packs_add_dir(packs, high) == -1);
+	CHECK(packs_art_height(packs) == 480);
+	packs_free(packs);
+
+	remove_files(low, low_files);
+	remove_files(high, high_files);
+}
+
+/* Canvas pixel (x, y) of a converted frame "w" pixels wide. */
+static const uint8_t *
+at(const uint8_t *rgb, int w, int x, int y)
+{
+	return (rgb + 3 * ((size_t)y * w + x));
+}
+
+/*
+ * The canvas: true-colour art sampled at the output resolution, palette
+ * colours enlarged, by a whole or a fractional factor.
+ */
+static void
+test_fb(void)
+{
+	static struct fb fb;
+	struct image img;
+	uint8_t *rgb;
+	const uint8_t *p;
+
+	CHECK(fb_init(&fb, 100) == -1);
+	CHECK(fb_init(&fb, 5000) == -1);
+	CHECK(fb_init(&fb, 1081) == 0);		/* rounded to 4:3 */
+	CHECK(fb.out_w == 1440 && fb.out_h == 1080);
+	if ((rgb = malloc((size_t)1440 * 1080 * 3)) == NULL) {
+		CHECK(!"malloc");
+		fb_free(&fb);
+		return;
+	}
+	CHECK(png_decode(png_6x4, sizeof(png_6x4), 960, &img) == 0);
+	image_fixed_palette(&img);
+	CHECK(image_quantize(&img) == 0);
+
+	/* 2x: the 6x4 art fills the 3x2 picture's 6x4 canvas pixels. */
+	CHECK(fb_init(&fb, 960) == 0);
+	CHECK(fb.out_w == 1280 && fb.out_h == 960);
+	fb_clear(&fb, 0);
+	fb_image(&fb, &img, 0, 0, 1);
+	fb_rect(&fb, 1, 0, 1, 1, 9);		/* over the green block */
+	fb_put(&fb, 2 * FB_W + 2, 5);		/* past the picture */
+	CHECK(fb.px[1] == 9 && fb.px[0] == 180);	/* 640x480 indices */
+	fb_to_rgb(&fb, 256, rgb);
+	p = at(rgb, 1280, 0, 0);		/* red art */
+	CHECK(p[0] == 255 && p[1] == 0 && p[2] == 0);
+	p = at(rgb, 1280, 3, 1);		/* palette entry 9 */
+	CHECK(p[0] == 0 && p[1] == 51 && p[2] == 153);
+	p = at(rgb, 1280, 5, 3);		/* near red art */
+	CHECK(p[0] == 250 && p[1] == 10 && p[2] == 5);
+	p = at(rgb, 1280, 4, 4);		/* entry 5 */
+	CHECK(p[0] == 0 && p[1] == 0 && p[2] == 255);
+	/* Fades dim the art as well. */
+	fb_to_rgb(&fb, 128, rgb);
+	CHECK(rgb[0] == 127);
+
+	/* 2.25x: 640x480 pixels cover 2 or 3 canvas pixels each way. */
+	CHECK(fb_init(&fb, 1080) == 0);
+	fb_clear(&fb, 0);
+	fb_image(&fb, &img, 0, 0, 1);		/* canvas 0..5 x 0..3 */
+	fb_rect(&fb, 3, 0, 1, 1, 9);		/* canvas 6..8 x 0..1 */
+	fb_to_rgb(&fb, 256, rgb);
+	p = at(rgb, 1440, 5, 3);		/* near red art, 1:1 */
+	CHECK(p[0] == 250 && p[1] == 10 && p[2] == 5);
+	p = at(rgb, 1440, 8, 1);
+	CHECK(p[0] == 0 && p[1] == 51 && p[2] == 153);
+	p = at(rgb, 1440, 9, 0);		/* entry 0, black */
+	CHECK(p[0] == 0 && p[1] == 0 && p[2] == 0);
+
+	/* Without true colours, the picture's indices are enlarged. */
+	image_drop_rgba(&img);
+	fb_image(&fb, &img, 0, 0, 0);
+	fb_to_rgb(&fb, 256, rgb);
+	p = at(rgb, 1440, 1, 1);		/* entry 180 */
+	CHECK(p[0] == 255 && p[1] == 0 && p[2] == 0);
+	p = at(rgb, 1440, 2, 1);		/* entry 30, green */
+	CHECK(p[0] == 0 && p[1] == 255 && p[2] == 0);
+	image_free(&img);
+	fb_free(&fb);
+	free(rgb);
 }
 
 static void
@@ -474,6 +702,9 @@ main(void)
 	test_sha256();
 	test_towns();
 	test_packs();
+	test_png();
+	test_pic();
+	test_fb();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

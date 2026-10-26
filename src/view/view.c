@@ -11,7 +11,7 @@
 #include "data/exe.h"
 #include "assets/font.h"
 #include "assets/img.h"
-#include "assets/pcx.h"
+#include "assets/pic.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/tileset.h"
@@ -250,18 +250,26 @@ draw_text(struct rgb *o, const struct font *f, int x, int y, int maxw,
 	return (y + lay.height);
 }
 
+/* True-colour art at its full resolution. */
+static int
+render_rgba(struct view *v)
+{
+	int w = v->img.rgba_w, h = v->img.rgba_h;
+	size_t i;
+
+	if (alloc_out(v, w, h) != 0)
+		return (-1);
+	for (i = 0; i < (size_t)w * h; i++)
+		memcpy(v->out.px + 3 * i, v->img.rgba + 4 * i, 3);
+	return (0);
+}
+
 static int
 load_palette(struct view *v, const char *pic)
 {
-	struct blob b;
 	struct image img;
-	int rc;
 
-	if (packs_load(v->packs, pic, &b) != 0)
-		return (-1);
-	rc = pcx_decode(b.data, b.len, &img);
-	blob_free(&b);
-	if (rc != 0)
+	if (pic_load(v->packs, pic, &img) != 0)
 		return (-1);
 	memcpy(v->pal, img.palette, sizeof(v->pal));
 	image_free(&img);
@@ -491,7 +499,7 @@ open_decoded(struct view *v, const struct blob *b, char *err, size_t errlen)
 
 	if (starts(id, "pic/")) {
 		v->kind = K_PICTURE;
-		rc = pcx_decode(b->data, b->len, &v->img);
+		rc = pic_decode(v->packs, id, b, &v->img);
 		memcpy(v->pal, v->img.palette, sizeof(v->pal));
 		snprintf(v->pal_id, sizeof(v->pal_id), "own");
 		v->nframes = 1;
@@ -554,8 +562,14 @@ describe(struct view *v, const char *pack)
 {
 	switch (v->kind) {
 	case K_PICTURE:
-		snprintf(v->info, sizeof(v->info), "picture %dx%d, palette %s,"
-		    " from %s", v->img.w, v->img.h, v->pal_id, pack);
+		if (v->img.rgba != NULL)
+			snprintf(v->info, sizeof(v->info), "picture %dx%d, true "
+			    "colour %dx%d, from %s", v->img.w, v->img.h,
+			    v->img.rgba_w, v->img.rgba_h, pack);
+		else
+			snprintf(v->info, sizeof(v->info), "picture %dx%d, "
+			    "palette %s, from %s", v->img.w, v->img.h,
+			    v->pal_id, pack);
 		break;
 	case K_BANK:
 	case K_GROUP:
@@ -719,6 +733,10 @@ view_render(struct view *v, size_t frame, unsigned tick,
 		frame = v->nframes > 0 ? v->nframes - 1 : 0;
 	switch (v->kind) {
 	case K_PICTURE:
+		if (v->img.rgba != NULL) {
+			rc = render_rgba(v);
+			break;
+		}
 		if ((rc = alloc_out(v, v->img.w, v->img.h)) == 0)
 			blit(&v->out, 0, 0, v->img.w, v->img.h, v->img.pixels,
 			    NULL, v->pal);

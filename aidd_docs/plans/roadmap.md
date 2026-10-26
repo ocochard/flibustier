@@ -65,19 +65,31 @@ The engine runs from asset packs:
 2. **Identify the executable by its SHA-256.** Data offsets in
    `PIRATESG.EXE` are per build, so they live in a per-hash table. Refuse
    unknown builds with a clear message.
-3. **Logical 640x480 screen, with an indexed mode and a true-colour mode.**
-   - Indexed: an 8-bit framebuffer plus a 256-colour palette, as on the
-     original. Palette cycling and fades are just palette changes.
-     - It is converted to RGB on the CPU (`fb_to_rgb`), which is cheap
-       at 640x480 and lets the same frame go to a window, a PNG or a
-       test without a GPU.
-     - A palette shader stays possible if profiling ever asks for it.
-   - True colour: RGBA textures, which replacement art needs. These packs
-     may be higher resolution: a pack declares its scale (1x, 2x, ...),
-     and the layout stays in 640x480 logical coordinates.
+3. **Logical 640x480 screen, rendered natively up to 4K on the CPU.**
+   - Game code draws in 640x480 coordinates, so layouts and hotspots
+     follow the original. The output is 4:3, pillarboxed on wide screens
+     (maintainer, 2026-10-26).
+   - The screen (`src/gfx/fb.c`) keeps the 640x480 palette indices that
+     game code reads, plus a canvas at the output resolution (1440x1080
+     for 1080p, 2880x2160 for 4K). Each canvas pixel holds a palette
+     index or a true colour:
+     - original assets are enlarged as indices, so palette cycling and
+       fades still work on them;
+     - replacement art is sampled at the canvas resolution.
+   - The output height is the largest `art_height` of the packs
+     (`asset-packs.md`).
+   - `fb_to_rgb` converts on the CPU, so the same frame goes to a window,
+     a PNG or a test without a GPU (maintainer's choice over a GPU
+     renderer, 2026-10-26).
+     - Cost per frame (Ryzen 7 7735HS, Release): 0.5 ms at 640x480,
+       3.7 ms at 1080p, 14.7 ms at 4K. 4K needs dirty regions or threads
+       before it holds 60 fps with uploads.
    - Effects that depend on the palette, such as sea animation, are
      expressed as an engine effect (palette cycle or animated texture), so
      a new pack can supply its own version.
+   - Still original resolution: sprites, fonts and tiles. They need
+     replacement formats (RGBA sprite sheets, scalable fonts) drawn at
+     canvas resolution.
 4. **Separate simulation from presentation.** Game rules live in a module
    with no raylib dependency (pure C99, deterministic, seeded RNG), so they
    can be unit tested and compared against traces of the original.
@@ -94,9 +106,8 @@ The engine runs from asset packs:
      replays (seed plus command log, reproduced exactly) make bugs
      reproducible. Comparing a state against an expected state gives
      regression tests.
-   - Optional headless screenshots: in indexed mode the framebuffer is
-     drawn on the CPU, so it can be written to PNG without a GPU. True
-     colour mode still needs a GL context.
+   - Optional headless screenshots: the screen is drawn on the CPU at
+     any resolution, so it can be written to PNG without a GPU.
    - Debug cheats exist only in the sim API: teleport, set gold, force an
      encounter.
 6. **Audio through licence-compatible emulators only.** Use ymfm
@@ -111,8 +122,8 @@ Each phase ends with something visible and a test.
 
 ### Phase 1: data access and asset viewer
 
-Status (2026-10-25): done, apart from native-format loaders (PNG, OGG)
-for packs.
+Status (2026-10-26): done, apart from native-format loaders for packs.
+PNG pictures load (`pic/`); OGG and PNG sprites do not yet.
 
 
 - `src/data/`: the pack system (manifest parser, priority stack, logical
