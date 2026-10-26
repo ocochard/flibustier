@@ -36,6 +36,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCREEN_W, SCREEN_H = 640, 480
 
 MODELS = {
+    # DiffSynth's Canny patch: lighter than the InstantX Union ControlNet,
+    # which with the model exhausts framework2's shared-memory GPU.
+    "controlnet": "qwen_image_canny_diffsynth_controlnet.safetensors",
     "unet": "qwen_image_2512_fp8_e4m3fn.safetensors",
     "clip": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
     "vae": "qwen_image_vae.safetensors",
@@ -50,10 +53,10 @@ PROFILES = {
 SHIFT = 3.1
 
 
-def generation_size(w, h):
-    """Qwen-Image works best near 1.6 megapixels: keep the aspect, use
-    multiples of 16."""
-    scale = (1472 * 1104 / (w * h)) ** 0.5
+def generation_size(w, h, area=1.0):
+    """Qwen-Image works best near 1.6 megapixels ("area" times that):
+    keep the aspect, use multiples of 16."""
+    scale = (area * 1472 * 1104 / (w * h)) ** 0.5
     return (max(16, round(w * scale / 16) * 16),
             max(16, round(h * scale / 16) * 16))
 
@@ -74,8 +77,12 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
         rw, rh = out_w, out_h
     if spec["pack"].get("style"):
         prompt = prompt.strip() + " " + spec["pack"]["style"].strip()
-    gw, gh = generation_size(rw, rh)
+    # A ControlNet encodes its sketch in one piece at the render's size,
+    # which the shared-memory GPU may refuse: such assets render smaller.
+    gw, gh = generation_size(rw, rh, asset.get("gen_area", 1.0))
     grade = spec.get("grade") if asset.get("grade", True) else None
+    trim = asset.get("trim", spec["pack"].get("frame_trim", 0.0)
+                     if frame else 0.0)
     g = {
         "unet": {"class_type": "UNETLoader", "inputs": {
             "unet_name": MODELS["unet"], "weight_dtype": "fp8_e4m3fn"}},
@@ -97,11 +104,19 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "tile_size": 512, "overlap": 64, "temporal_size": 64,
             "temporal_overlap": 8}},
         "resize": {"class_type": "ImageScale", "inputs": {
-            "image": ["decode", 0], "upscale_method": "lanczos",
+            "image": ["trim", 0] if trim else ["decode", 0],
+            "upscale_method": "lanczos",
             "width": rw, "height": rh, "crop": "center"}},
         "save": {"class_type": "SaveImage", "inputs": {
             "images": ["resize", 0], "filename_prefix": prefix}},
     }
+    if trim:
+        # The model may leave some wall or table around the subject: cut
+        # into the render so the subject reaches the edges.
+        cx, cy = round(gw * trim), round(gh * trim)
+        g["trim"] = {"class_type": "ImageCrop", "inputs": {
+            "image": ["decode", 0], "width": gw - 2 * cx,
+            "height": gh - 2 * cy, "x": cx, "y": cy}}
     picture = ["resize", 0]
     if grade and grade.get("uploaded"):
         # One colour grade for the series: match the colours of the
@@ -127,6 +142,21 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "x": fx, "y": fy, "resize_source": False}}
         g["save"]["inputs"]["images"] = ["place", 0]
     model = ["unet", 0]
+    if asset.get("uploaded_control"):
+        # A line sketch of the composition, drawn for this pack: the
+        # model follows it early, then renders freely.
+        g["cpatch"] = {"class_type": "ModelPatchLoader", "inputs": {
+            "name": MODELS["controlnet"]}}
+        g["sketch"] = {"class_type": "LoadImage", "inputs": {
+            "image": asset["uploaded_control"]}}
+        g["control"] = {"class_type": "QwenImageDiffsynthControlnet",
+                        "inputs": {
+                            "model": model, "model_patch": ["cpatch", 0],
+                            "vae": ["vae", 0], "image": ["sketch", 0],
+                            "strength": asset.get("control_strength", 0.7),
+                            "start_percent": 0.0,
+                            "end_percent": asset.get("control_end", 0.6)}}
+        model = ["control", 0]
     if p["lora"]:
         g["lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
             "model": model, "lora_name": MODELS["lightning"],
@@ -134,10 +164,11 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
         model = ["lora", 0]
     g["shift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {
         "model": model, "shift": SHIFT}}
+    positive, negative = ["pos", 0], ["neg", 0]
     g["sample"] = {"class_type": "KSampler", "inputs": {
         "model": ["shift", 0], "seed": seed, "steps": p["steps"],
         "cfg": p["cfg"], "sampler_name": "euler", "scheduler": "simple",
-        "positive": ["pos", 0], "negative": ["neg", 0],
+        "positive": positive, "negative": negative,
         "latent_image": ["latent", 0], "denoise": 1.0}}
     return g
 
@@ -293,6 +324,10 @@ def main():
         ow = round(lw * height / SCREEN_H)
         oh = round(lh * height / SCREEN_H)
         seed = args.seed if args.seed is not None else a["seed"]
+        if a.get("control"):
+            a["uploaded_control"] = upload(
+                args.server, os.path.join(HERE, a["control"]),
+                "stmalo-control-" + os.path.basename(a["control"]))
         name = os.path.splitext(a["file"])[0]
         graph = workflow(a, profile, seed, ow, oh, "stmalo/" +
                          name.replace("/", "-"), spec)
@@ -312,13 +347,20 @@ def main():
             "profile": profile, "seed": seed,
             "prompt": graph["pos"]["inputs"]["text"],
             "frame": a.get("frame"), "field": a.get("field"),
+            "control": {"sketch": a["control"],
+                        "sha256": hashlib.sha256(open(os.path.join(
+                            HERE, a["control"]), "rb").read()).hexdigest(),
+                        "strength": a.get("control_strength", 0.7),
+                        "end": a.get("control_end", 0.6)}
+            if a.get("control") else None,
             "grade": {k: v for k, v in grade.items() if k != "uploaded"}
             if grade and grade.get("uploaded") and a.get("grade", True)
             else None,
             "source": a.get("source", "text"),
             "negative": a.get("negative", DEFAULT_NEGATIVE),
-            "models": MODELS if PROFILES[profile]["lora"] else
-            {k: v for k, v in MODELS.items() if k != "lightning"},
+            "models": {k: v for k, v in MODELS.items()
+                       if (k != "lightning" or PROFILES[profile]["lora"])
+                       and (k != "controlnet" or a.get("control"))},
             "workflow_sha256": hashlib.sha256(json.dumps(
                 graph, sort_keys=True).encode()).hexdigest(),
             "comfyui": system.get("comfyui_version"),

@@ -20,6 +20,10 @@ period film still of the 1660s Caribbean, natural warm light, gentle
 film grain, muted rich colours with warm amber and deep teal tones,
 moderate contrast, shallow depth of field, realistic textures, no text.
 """
+# Framed renders are cut by this share of their size on every side, as
+# the model tends to leave some wall around the frame; an asset's own
+# "trim" overrides it, framed or not.
+frame_trim = 0.04
 # Appended to the prompt of every framed asset.
 framed = """
 The photograph is mounted in an ornate antique gilded wooden picture
@@ -138,11 +142,13 @@ Long exposure marine photography, sharp focus, realistic.
 id = "pic/textback"
 file = "art/textback.png"
 seed = 1660
+trim = 0.10		# the render leaves a border
 source = "layout described from the original screen"
 prompt = """
 Photograph, straight on and evenly lit, of a sheet of old cream parchment
-filling the whole frame, with faint, barely visible embossed lines of a
-ship's rigging radiating from a point near the centre right, like a
+that fills the entire image edge to edge, with no table, background or
+border visible anywhere. Faint, barely visible embossed lines of a
+ship's rigging radiate from a point near the centre right, like a
 watermark. No writing, no marks, soft uniform light, very low contrast,
 realistic paper texture.
 """
@@ -151,15 +157,31 @@ realistic paper texture.
 id = "pic/trescave"
 file = "art/trescave.png"
 seed = 1660
+# The model keeps chaining the skull: a sketch fixes the pose.
+control = "layouts/trescave.png"
+control_strength = 0.7
+control_end = 0.6
 source = "layout described from the original screen"
 prompt = """
 Photograph from deep inside a dark sea cave. Through a jagged opening in
 the upper centre, a bright glimpse of the sea and a distant sailing
-ship. On the right, an old human skeleton in rotten clothes hangs by its
-wrists, bound together with an iron chain fixed to the cave ceiling,
-its arms raised above its skull, its feet dangling above the rocks. The
-rest of the cave, especially the left half and the bottom, is rock in
-deep darkness. Dramatic chiaroscuro, realistic textures, sharp focus.
+ship. On the right, the skeleton of a long-dead pirate hangs from the
+cave ceiling by its wrists: two iron rings are set in the rock above it,
+a hand's width apart, and from each ring its own short iron chain runs
+down to an iron shackle locked around one wrist bone, so each raised arm
+hangs from its own chain. Between the two raised arms there is only
+empty dark air; the skull hangs low below the arms, bare, nothing
+touching it. It is dressed in a ragged shirt and long ragged trousers
+that cover its leg bones down to the ankles; only the bony feet show
+below the trouser hems, dangling above the rocks. The rest of the cave,
+especially the left half and the bottom, is rock in deep darkness.
+Dramatic chiaroscuro, realistic textures, sharp focus.
+"""
+negative = """
+chain attached to the skull, chain on the head, chain around the neck,
+noose, rope around the neck, hanged by the neck, loose shackles, bare
+leg bones, text, watermark, frame, border, cartoon, illustration,
+painting, 3d render, lowres, blurry, deformed
 """
 
 [[asset]]
@@ -248,10 +270,11 @@ gilded = false		# a shop sign, not a framed picture
 prompt = """
 Photograph of an old weathered wooden shop signboard hanging from two
 iron rings, seen straight on and filling the whole image. On its flat
-wooden boards, a faded hand-painted picture of three bulging money
-sacks spilling gold coins, the paint cracked and peeling with the wood
-grain showing through. Only the flat painted signboard, nothing in
-front of it. Soft daylight.
+wooden boards, a faded hand-painted picture of three bulging plain
+canvas money sacks spilling gold coins; the sacks are plain, with no
+letters, no symbols and no marks on them. The paint is cracked and
+peeling with the wood grain showing through. Only the flat painted
+signboard, nothing in front of it. Soft daylight.
 """
 
 [[asset]]
@@ -286,6 +309,7 @@ seen from slightly below.
 id = "pic/crew"
 file = "art/crew.png"
 seed = 1660
+trim = 0.08		# the render leaves a border
 source = "layout described from the original screen"
 frame = [65, 13, 510, 249]
 field = "#411010"
@@ -401,6 +425,7 @@ photography.
 id = "pic/maroon"
 file = "art/maroon.png"
 seed = 1660
+trim = 0.08		# the render leaves a border
 source = "layout described from the original screen"
 frame = [141, 50, 362, 223]
 field = "#081831"
@@ -418,8 +443,9 @@ source = "layout described from the original screen"
 frame = [209, 5, 241, 248]
 field = "#000000"
 prompt = """
-Museum photograph of a Maya treasure: a carved green jade plaque with
-intricate glyphs and a stylised face, on dark cloth, dramatic spot
+Museum photograph of a Maya treasure: a flat, upright, rectangular
+plaque of carved green jade, taller than wide, with a stylised face and
+rows of glyphs in low relief, standing on dark cloth, dramatic spot
 light.
 """
 
@@ -501,10 +527,12 @@ source = "layout described from the original screen"
 frame = [57, 55, 238, 358]
 field = "#203152"
 prompt = """
-Photograph in the doorway of a white colonial house of the 1660s: a
-young man in a sailor's waistcoat embracing a young woman in a pale
-blue dress, a joyful reunion, warm sunlight, historical reenactment
-photography.
+Photograph of a rescue in the 1660s: in a dark, bare stone room, a young
+woman in a torn pale blue dress has been held captive, her wrists tied
+with rope; a young sailor in a waistcoat kneels before her and cuts the
+rope from her wrists with his knife, while she looks at him with tears
+of relief. Behind them, the open door of the room lets in bright
+daylight. Historical reenactment photography.
 """
 
 [[asset]]
@@ -558,9 +586,13 @@ source = "layout described from the original screen"
 frame = [155, 9, 335, 232]
 field = "#000000"
 prompt = """
-Photograph of a naval battle of the 1660s: on the left a burning ship
-sinking in smoke and flames, on the right a victorious galleon under
-full sail, cannon smoke over the sea.
+Photograph of a naval battle of the 1660s. On the left, a defeated ship
+is a wreck: its masts are broken and fallen, its sails torn to rags and
+burning, its hull shattered with gaping holes, listing heavily and half
+under water, its stern sinking, with flames, thick black smoke and
+floating wreckage, broken spars and barrels all around it. On the
+right, a victorious galleon under full sail, cannon smoke drifting over
+the sea.
 """
 
 [[asset]]
