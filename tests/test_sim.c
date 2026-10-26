@@ -2980,6 +2980,38 @@ test_daughter(void)
 	CHECK(sim_daughter_meet(&s, &d) == 0);
 }
 
+/* The merchant's daughter: met now and then, wed for his debt. */
+static void
+test_merchant_daughter(void)
+{
+	struct sim s;
+	int k, met = 0;
+
+	sea_game(&s, 300, 300, 0);
+	s.player_town = 0;
+	s.towns[0].family = 0;
+	s.married = 0;
+	s.player.ability = ABILITY_FENCING;
+	for (k = 0; k < 200; k++)
+		met += sim_merchant_after(&s) == 1;
+	CHECK(met > 5 && met < 50);		/* one time in ten */
+	s.fortune = 399;
+	CHECK(sim_merchant_propose(&s) == 297);
+	s.player.ability = ABILITY_CHARM;
+	CHECK(sim_merchant_propose(&s) == 298);	/* 200 with charm */
+	s.fleet.gold = 499;
+	CHECK(sim_merchant_pay_debt(&s) == 300 && s.married == 0);
+	s.fleet.gold = 600;
+	CHECK(sim_merchant_pay_debt(&s) == 299 && s.married == 1 &&
+	    s.fleet.gold == 100 && (s.towns[0].family & 0x40));
+	/* Family now: dinner every visit; no other daughter elsewhere. */
+	CHECK(sim_merchant_after(&s) == 2);
+	s.player_town = 1;
+	s.towns[1].family = 0;
+	for (k = 0; k < 50; k++)
+		CHECK(sim_merchant_after(&s) == 0);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3083,6 +3115,7 @@ main(void)
 	test_prisoners();
 	test_convoys();
 	test_daughter();
+	test_merchant_daughter();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

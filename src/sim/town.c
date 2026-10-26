@@ -922,3 +922,39 @@ sim_take_all(struct sim *s, int good)
 	}
 	return (n);
 }
+
+int
+sim_merchant_after(struct sim *s)
+{
+	const struct sim_town *t = current(s);
+
+	if (t == NULL)
+		return (0);
+	if (family(t))
+		return (2);
+	if (s->married != 0 || rng_below(&s->rng, 10) != 0)
+		return (0);
+	return (1);
+}
+
+int
+sim_merchant_propose(const struct sim *s)
+{
+	long need = s->player.ability == ABILITY_CHARM ? 200 : 400;
+
+	return (s->fortune < need ? 297 : 298);
+}
+
+int
+sim_merchant_pay_debt(struct sim *s)
+{
+	struct sim_town *t = current(s);
+
+	/* "His 5,000 gold piece debt", says the text; 500 is taken. */
+	if (t == NULL || s->fleet.gold < 500)
+		return (300);
+	s->fleet.gold -= 500;
+	s->married = 1;
+	t->family |= 0x40;
+	return (299);
+}

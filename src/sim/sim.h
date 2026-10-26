@@ -699,6 +699,19 @@ enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
 void	sim_imprison(struct sim *s, int cause, int town);
 
 /*
+ * The merchant's daughter (VA 0x21e56), after trading but not looting:
+ * sim_merchant_after returns 2 when married into the merchant's family
+ * (town field 12 bit 0x40: dinner with the wife, CSTR 295), 1 when his
+ * daughter enters (one time in ten, while single; CSTR 296), else 0.
+ * sim_merchant_propose: 297 (the fortune below 400, 200 with charm),
+ * else 298 (his debt); sim_merchant_pay_debt: 300 short of 500 gold,
+ * else 299, married (1), the family's bit set.
+ */
+int	sim_merchant_after(struct sim *s);
+int	sim_merchant_propose(const struct sim *s);
+int	sim_merchant_pay_debt(struct sim *s);
+
+/*
  * The governor's daughter (VA 0x128c1), met instead of his offer from
  * standing 2.  Town field 11 holds her: bit 0 a niece rather than a
  * daughter, 0x80 the player's informant, 0x40 his wife.

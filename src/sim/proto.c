@@ -1874,6 +1874,13 @@ cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
 		sim_merchant_open(s);
 	} else if (strcmp(action, "close") == 0) {
 		sim_merchant_close(s);
+		/* After the business: 2 dinner with the wife, 1 his
+		 * daughter, 0 nobody. */
+		done = sim_merchant_after(s);
+	} else if (strcmp(action, "propose") == 0) {
+		done = sim_merchant_propose(s);
+	} else if (strcmp(action, "pay_debt") == 0) {
+		done = sim_merchant_pay_debt(s);
 	} else if (strcmp(action, "buy") == 0 || strcmp(action, "sell") == 0) {
 		for (i = 0; good != NULL && i < GOODS; i++)
 			if (strcmp(good, goods[i]) == 0)

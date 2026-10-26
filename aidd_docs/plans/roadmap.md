@@ -280,8 +280,8 @@ Status (2026-10-26): first slice.
 - **Treasure fleet and silver train.**
 - **The governor's daughter:** courtship, the suitor's duel, marriage,
   the informant.
-- **Next:** the merchant's daughter and the father-in-law, the villains'
-  moves.
+- **The merchant's daughter:** the debt, the wedding, the family.
+- **Next:** the villains' moves.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

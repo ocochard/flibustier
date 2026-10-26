@@ -399,8 +399,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 - **Later visits** (0xE0 set): "After dinner, you visit your %s..."
   (CSTN 26.0, "informant" or "wife"), then where the treasure fleet and
   the silver train are (VA `0x1e953`, `0x1ea24`), as a hostage tells.
-- A merchant's daughter (CSTR 296, married 1) and the father-in-law's
-  visits (CSTR 291-295) are not done yet.
+- The merchant's daughter: see "Merchant".
 
 ### Named captains (VA `0xd1fc`, `0xdb7b`, `0x127da`)
 
@@ -1611,8 +1610,20 @@ sign, the texts at (40, 280) up to x 620.
   - The gold changes hands; the merchant's stock rises and falls.
 - **Closing:** if the player's gold moved by more than 20, the town's
   wealth becomes `wealth x 19 / 20 + 12`, at most 255.
-- **The daughter:** then comes CSTR 295-301 (meeting the merchant's
-  daughter, marriage for 5,000 gold); not done yet.
+- **After the business** (not when looting a sack), on `merdaugh.pcx`
+  (picture 0x2e) at (320, 150) up to x 620:
+  - The family: "That evening, you enjoy a delicious meal with your
+    lovely wife" (CSTR 295).
+  - Otherwise, single, one time in ten (`rand(10) = 0`): "...The
+    merchant introduces you to his daughter..." (296). Conversation
+    ends it. A proposal: a fortune below 400 (200 with charm) brings
+    "...my father will not let me wed anyone who is not wealthy..."
+    (297); otherwise his debt (298, at (320, 50)): pay it or withdraw.
+    Paying needs 500 gold (the text says 5,000): short of it, on
+    `merchant.pcx` at (160, 40) up to x 480, "The merchant sneers at
+    your offer of help..." (300); paid, on `wedding.pcx` at (360, 150),
+    "Amid great merriment, you are married... I'll give it to you
+    wholesale." (299): married (VA `0x45e86` = 1), town word 12 | 0x40.
 - **The board (VA `0x20229`):**
   - Layout records at VA `0x348c4`: frame, highlighted frame, x, y.
   - The merchant's column is on the left and the player's (the skull)

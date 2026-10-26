@@ -775,9 +775,25 @@ test_merchant(void)
 	CHECK(game_script(g, "click:360,112") == 0 &&
 	    (sim_hold_space(&g->sim) == 0 || g->sim.market.stock[1] == 0 ||
 	    g->sim.fleet.gold <= g->sim.market.price[1]));
-	/* O.K.: back in town, the shop closed. */
+	/* O.K.: back in town, the shop closed (his daughter may come in
+	 * first, one time in ten: talking ends it). */
 	CHECK(game_script(g, "click:320,440 wait:40") == 0);
+	if (g->screen == &screen_merdaugh)
+		CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->screen == &screen_town && !g->sim.market.open);
+	/* His daughter: a proposal, the debt paid, married. */
+	g->sim.married = 0;
+	g->sim.fortune = 1000;
+	g->sim.fleet.gold = 1000;
+	g->sim.towns[g->sim.player_town].family = 0;
+	g->merdaugh = 296;
+	game_goto(g, &screen_merdaugh);
+	CHECK(game_script(g, "wait:40 down enter") == 0 &&
+	    g->merdaugh == 298);
+	CHECK(game_script(g, "enter") == 0 && g->merdaugh == 299 &&
+	    g->sim.married == 1 && g->sim.fleet.gold == 500);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_town);
 	game_free(g);
 }
 

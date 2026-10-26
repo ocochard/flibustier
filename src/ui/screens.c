@@ -4618,7 +4618,21 @@ merchant_leave(struct game *g)
 		return;
 	}
 	sim_merchant_close(&g->sim);
-	game_goto(g, &screen_town);
+	/* After the business: dinner with the wife, or his daughter
+	 * (VA 0x21e56). */
+	switch (sim_merchant_after(&g->sim)) {
+	case 2:
+		g->merdaugh = 295;
+		break;
+	case 1:
+		g->merdaugh = 296;
+		break;
+	default:
+		g->merdaugh = 0;
+		break;
+	}
+	g->selected = 0;
+	game_goto(g, g->merdaugh != 0 ? &screen_merdaugh : &screen_town);
 }
 
 static void
@@ -7817,4 +7831,85 @@ hostage_draw(struct game *g)
 
 const struct screen screen_hostage = {
 	"hostage", hostage_enter, hostage_event, NULL, hostage_draw,
+};
+
+/*
+ * The merchant's daughter (VA 0x21e56), on merdaugh.pcx at (320, 150) up
+ * to x 620: "That evening, you enjoy a delicious meal with your lovely
+ * wife" (CSTR 295) when married into the family; else "...The merchant
+ * introduces you to his daughter..." (296): conversation (nothing more)
+ * or a proposal: "...my father will not let me wed anyone who is not
+ * wealthy" (297), or his debt (298, at (320, 50)): pay it or withdraw.
+ * Short of 500 gold, on merchant.pcx at (160, 40) up to x 480, "The
+ * merchant sneers at your offer of help..." (300); paid, on
+ * wedding.pcx at (360, 150), "Amid great merriment, you are married..."
+ * (299).
+ */
+static void
+merdaugh_page(struct game *g)
+{
+	game_background(g, g->merdaugh == 300 ? "pic/merchant" :
+	    g->merdaugh == 299 ? "pic/wedding" : "pic/merdaugh");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+	g->selected = 0;
+}
+
+static void
+merdaugh_enter(struct game *g)
+{
+	merdaugh_page(g);
+}
+
+static void
+merdaugh_choose(struct game *g, int i)
+{
+	if (g->merdaugh == 296) {
+		if (i == 0) {			/* conversation: no more */
+			game_goto(g, &screen_town);
+			return;
+		}
+		g->merdaugh = sim_merchant_propose(&g->sim);
+	} else {				/* 298: the debt */
+		if (i != 0) {
+			game_goto(g, &screen_town);
+			return;
+		}
+		g->merdaugh = sim_merchant_pay_debt(&g->sim);
+	}
+	merdaugh_page(g);
+}
+
+static void
+merdaugh_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->merdaugh == 296 || g->merdaugh == 298) {
+		menu_event(g, ev, 2, NULL, merdaugh_choose, NULL);
+		return;
+	}
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_town);
+}
+
+static void
+merdaugh_draw(struct game *g)
+{
+	int menu = g->merdaugh == 296 || g->merdaugh == 298;
+
+	if (g->merdaugh == 300)
+		draw(g, FONT_BODY, 160, 40, 320, game_str(g, 300), 0);
+	else if (g->merdaugh == 299)
+		draw(g, FONT_BODY, 360, 150, 260, game_str(g, 299), 0);
+	else
+		draw(g, FONT_BODY, 320, g->merdaugh == 298 ? 50 : 150, 300,
+		    game_str(g, g->merdaugh), menu);
+	if (!menu)
+		continue_prompt(g);
+}
+
+const struct screen screen_merdaugh = {
+	"merchant's daughter", merdaugh_enter, merdaugh_event, NULL,
+	merdaugh_draw,
 };

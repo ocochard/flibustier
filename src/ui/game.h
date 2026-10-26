@@ -240,6 +240,7 @@ struct game {
 	struct daughter		 daughter;	/* the governor's, met */
 	int			 gov_said;	/* her answer: a CSTR */
 	int			 sw_suitor;	/* the duel with her suitor */
+	int			 merdaugh;	/* her page: a CSTR, 0 none */
 	int			 hostage_said;	/* the hostage's news, or -1 */
 	int			 escape_page;	/* the roll call's second page */
 	int			 deserted_town;	/* the town just left */
