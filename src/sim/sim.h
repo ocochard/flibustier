@@ -64,6 +64,9 @@ struct sim_town {
 	uint16_t	ship_heading;	/* field 21 */
 	uint16_t	sea_heading;	/* field 28: leaving, x 32 */
 	uint16_t	barmaid;	/* field 13: her fondness, 0..11 */
+	uint16_t	garrison;	/* field 10: more defenders, x 128 */
+	uint16_t	land_x, land_y;	/* fields 15, 16: its land battle cell */
+	uint16_t	party_x, party_y;	/* fields 22, 23: the attackers' */
 	uint16_t	sea_x, sea_y;	/* fields 26, 27: water outside the
 					 * harbour, 0 for inland towns */
 };
@@ -292,6 +295,37 @@ struct sim_battle {
 	struct battle_ship you, foe;
 };
 
+/* Land battles (VA 0x5a80): units 1-3 the player's, 4-7 the town's. */
+#define LAND_UNITS	8
+#define LAND_PLAYER	1	/* unit types (flags & 7) */
+#define LAND_SOLDIERS	2
+#define LAND_FORT	3
+#define LAND_HORSE	4
+#define LAND_EXPOSED	0x80	/* off cover, or just engaged */
+struct land_unit {
+	int		x, y;		/* field pixels */
+	int		men;
+	int		flags;		/* type, merge target << 4, exposed */
+	int		muskets;
+	int		morale;		/* 0..79 */
+	int		tx, ty;		/* where it heads; tx 0: nowhere */
+};
+struct sim_land {
+	int		active;
+	int		town;
+	int		screen;		/* LBTL screen: town field 14 */
+	uint32_t	pass;
+	int		idle;		/* passes since the last fire */
+	int		selected;	/* the player's unit (1-3) */
+	int		shown;		/* the enemy unit on the panel */
+	int		fort;		/* the fort's unit, or 0 */
+	int		rally_x, rally_y, rally_unit;
+	int		ahead;		/* the town outnumbers the open party */
+	int		held;		/* the button is held */
+	int		result;		/* 0, 2 won, 3 lost */
+	struct land_unit u[LAND_UNITS];
+};
+
 struct sim_encounter {
 	int		stage;		/* enum encounter_stage */
 	int		type;		/* 0 pinnace .. 8 fast galleon */
@@ -314,6 +348,7 @@ struct sim {
 	int		heat_town;	/* nearest town it counts for */
 	struct sim_encounter encounter;
 	struct sim_battle battle;
+	struct sim_land	land;
 	struct sim_sword sword;
 	int		practice;	/* fencing practice, 0..30 */
 	const struct world *world;	/* not saved; NULL: no sailing */
@@ -581,6 +616,23 @@ struct sack {
 	int	conquest;	/* 1: the player may install a governor */
 };
 void	sim_sack(struct sim *s, int town, struct sack *out);
+/*
+ * The land battle before an assault on foot (VA 0x18c90): when the crew
+ * is at most soldiers x 15, the town has forts and more than 9 soldiers.
+ */
+int	sim_land_battle_needed(const struct sim *s, int town);
+void	sim_land_start(struct sim *s, int town);
+/* A pass: dx, dy (-1..1) move the selected unit; "button" held moves
+ * every unit without a goal, pressed anew selects the next.  Returns
+ * LEV_* bits; land.result ends it. */
+#define LEV_FIRE	0x01
+#define LEV_SELECTED	0x02
+int	sim_land_tick(struct sim *s, int dx, int dy, int button);
+/* After it: the crew and the garrison as they stand; 1 won. */
+int	sim_land_end(struct sim *s);
+/* The log's "Failed to capture %s" (CSTN 20.23). */
+void	sim_log_failure(struct sim *s, int town);
+
 /* The plunder's goods on the trading board, for nothing; and done. */
 void	sim_plunder_open(struct sim *s, const int goods[3]);
 void	sim_plunder_close(struct sim *s);

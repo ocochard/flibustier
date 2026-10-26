@@ -538,9 +538,10 @@ test_sword_screen(void)
 		CHECK(g->screen == &screen_battle && g->btl_stage == 2);
 		CHECK(game_script(g, "enter wait:30") == 0);	/* keep her */
 		CHECK(g->sim.fleet.nships == 2);
-	} else {
-		CHECK(g->screen == &screen_sword && g->sw_stage == 3);
-		CHECK(game_script(g, "enter wait:30") == 0);
+	} else if (g->sim.sword.result == SWORD_LOST) {
+		/* Prison, "in the ship", then the battle's end. */
+		CHECK(g->screen == &screen_prison && g->prison_at_sea);
+		CHECK(game_script(g, "enter enter wait:30") == 0);
 	}
 	CHECK(g->screen == &screen_sail && !g->sim.battle.active &&
 	    !g->sim.sword.active);
@@ -885,6 +886,49 @@ test_story(void)
 	game_free(g);
 }
 
+/* On foot against a strong garrison: the land battle, then the assault
+ * or the failure. */
+static void
+test_land_battle(void)
+{
+	struct game *g;
+	struct sim_town *t;
+	int town;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter "
+	    "click:60,300 wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	town = g->sim.fleet.leaving;
+	t = &g->sim.towns[town];
+	t->soldiers = 20;
+	t->forts = 2;
+	g->sim.fleet.crew = 120;
+	g->sim.fleet.ashore = 1;
+	g->arrive_stage = 0;
+	game_goto(g, &screen_arrive);
+	CHECK(game_script(g, "wait:40 down enter wait:40") == 0 &&
+	    g->screen == &screen_land && g->sim.land.active);
+	CHECK(g->sim.land.u[1].men == 60 && g->sim.land.u[2].men == 60);
+	/* A pass every 36 frames. */
+	CHECK(game_script(g, "wait:36") == 0 && g->sim.land.pass >= 1);
+	/* Won: on to the assault. */
+	g->sim.land.result = 2;
+	CHECK(game_script(g, "wait:80") == 0 && g->screen == &screen_assault);
+	/* Lost: the failure, then to sea. */
+	g->sim.fleet.crew = 120;
+	sim_land_start(&g->sim, town);
+	game_goto(g, &screen_land);
+	CHECK(game_script(g, "wait:40") == 0);
+	g->sim.land.result = 3;
+	CHECK(game_script(g, "wait:40") == 0 && g->land_stage == 1);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sail);
+	game_free(g);
+}
+
 /* Ashore: the question, Y, walking, the shipwright closed in town. */
 static void
 test_landing(void)
@@ -1187,8 +1231,7 @@ test_arrival(void)
 		    g->sim.sword.active && g->sim.sword.kind == SWORD_DUEL);
 		/* Thrown back: a disgrace. */
 		g->sim.sword.result = SWORD_REPELLED;
-		g->sw_stage = 3;
-		CHECK(game_script(g, "enter wait:40") == 0 &&
+		CHECK(game_script(g, "wait:40") == 0 &&
 		    g->screen == &screen_disgrace && g->sim.reputation == -1);
 		CHECK(game_script(g, "enter wait:40") == 0 &&
 		    g->screen == &screen_sail);
@@ -1297,6 +1340,7 @@ main(void)
 	test_assault();
 	test_tavern_people();
 	test_landing();
+	test_land_battle();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

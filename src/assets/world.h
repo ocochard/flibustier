@@ -62,6 +62,7 @@ struct sword_tables {
 #define BATTLE_SCREEN	15
 #define BATTLE_SETS	5	/* coast north, east, south, west; open */
 #define BATTLE_PIECES	5	/* four along the coast; open sea */
+#define LAND_SCREENS	61	/* LBTL.BMP: land battle screens */
 
 /* Terrain classes of map pixel colours. */
 enum terrain {
@@ -88,6 +89,11 @@ struct world {
 	uint8_t		battle_screens[BATTLE_SCREENS][BATTLE_SCREEN *
 			    BATTLE_SCREEN];
 	uint8_t		battle_sets[BATTLE_SETS][BATTLE_PIECES];
+	/* Land battles: their screens, and each tile's terrain code (VA
+	 * 0x3235c, grouped by VA 0x7197). */
+	uint8_t		land_screens[LAND_SCREENS][BATTLE_SCREEN *
+			    BATTLE_SCREEN];
+	uint8_t		land_class[256];
 	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];

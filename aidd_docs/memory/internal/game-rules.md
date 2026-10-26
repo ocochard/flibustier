@@ -227,10 +227,63 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   fort may fire but sinks no ship. In town the ship is not in port: no
   harbour picture, no shipwright. Leaving puts the party on the town's
   own cell (VA `0x19bd0`).
-- **Attacking on foot:** the original fights a land battle first (VA
-  `0x5a80`) when the crew is at most `soldiers x 15`, the town has
-  forts and more than 9 soldiers; not done yet, the engine goes
-  straight to the assault.
+- **Attacking on foot:** a land battle first (see below) when the crew
+  is at most `soldiers x 15`, the town has forts and more than 9
+  soldiers; otherwise straight to the assault. No fort battle on foot.
+
+### Land battles (VA `0x5a80`, `0x72ac`, `0x5d40`)
+
+- **The field:** the town's LBTL screen (town field 14, the same index
+  as its sea battle screen), 15 x 15 cells of 32 pixels; `lbat.pcx`'s
+  panel on the right. Terrain per tile (table at VA `0x3235c`, grouped
+  by VA `0x7197`): code above 7 water, 5-7 clear, 4 swamp, below 4
+  cover (CSTN 32: clear, cover, swamp, water).
+- **Units (16 bytes at VA `0x45f10`):** position, men, flags (type in
+  the low bits: 1 party, 2 soldiers, 3 the fort, 4 horsemen; a unit to
+  join `<< 4`; 0x80 exposed), muskets, morale (0..79), goal.
+  - The party, units 1-3: half the crew, then the rest, halved again
+    above 100; around town fields 22, 23 (`x 32`), the second a cell
+    up and left, the third down and right; muskets `rand(6) + 10`.
+  - The town, units 7 down to 4: `field 10 x 128 + soldiers x 10 + 5`
+    men in halves (the last takes the rest, as does any half below
+    50). With forts the first is the fort, at the town's cell (fields
+    15, 16) and half strength; without, unit 4 is horsemen without
+    muskets. The others take the clear cells nearest the town. Muskets
+    `(difficulty + 1) x 2 + rand(6)`.
+- **A pass, every 0.6 s (VA `0x8ac`, 600 ms of DOS time):**
+  - Every 4 passes the men are counted: no defenders, won; fewer than
+    2 attackers, lost. Every 64 passes the town is "ahead" when its men
+    outnumber half the exposed attackers; after 1000 passes without a
+    fight the attack fails.
+  - The button (Space, Enter, a click), pressed anew, selects the next
+    unit of the party; held, every unit without a goal follows the
+    arrows. The selected unit follows them anyway.
+  - The selected unit within 32 pixels of the fort wins (VA `0x7885`).
+  - Each unit: exposed unless in cover; speed `(9 / (terrain + 3)) x
+    2` (water counts as clear for the town), +4 for horsemen on clear
+    ground, half again with morale above 16; with a goal it walks to it
+    (and joins its unit there), otherwise it follows the arrows at half
+    speed. Off the field it is gone. Every 8 passes, staggered, its
+    morale rises by 3 and the exposure clears.
+  - Every 16 passes, staggered, each unit faces the nearest foe it can
+    see (a foe in cover only within 31 pixels; distance: the longer
+    side plus half the shorter). Within 32 pixels they fight (VA
+    `0x6295`): `men x morale / 80` (x 4 for horsemen) x 32, halved for
+    a target in cover, doubled in water, quartered against the fort
+    (which ends the battle, won). The target loses `rand((v + 16) / 31)
+    / 2 + 1` men and `kills x 128 / men` morale; at 0 morale an eighth
+    of its men flee.
+  - The town's units then choose: the fort rallies the others; any
+    other advances on the foe, holds, or falls back to the fort (and
+    joins it) by comparing strengths (see VA `0x66f0`). A unit below 16
+    morale near a foe backs away.
+- **Afterwards:** the crew is the party's men (at least 1), the town's
+  soldiers a tenth of its men; heat rises by `passes / 99`. Won: the
+  assault follows. Lost: "Your men are scattered and exhausted. The
+  attack on %s has failed." (CSTR 191, log 23), then prison for a lone
+  captain.
+- **Not done:** the original also checks, after losses, that the crew
+  can still sail the fleet (VA `0x1f65f`).
 - **The cabin:** Save game only in town, Search only on foot outside a
   town (the spots' flags are set from the arrival mode, VA `0xa060`).
   Dividing and joining parties are not done yet.
@@ -595,7 +648,9 @@ After a landing by the fort, or straight away at a town without forts:
   and the sack follows.
 - **Repelled:** the fallen leave the crew; reputation -1 and an attack
   of -1 on the town's nation.
-- **Defeated:** the same, then prison (VA `0x16647`): on `prison.pcx`,
+- **Defeated:** the same, then prison (VA `0x16647`, also after a
+  boarding party is beaten, "imprisoned in the ship", CSTN 77.4): on
+  `prison.pcx`,
   CSTR 175 with the town, a stay not traced yet (VA `0x1f803`), and CSTR
   190. Back at sea afterwards.
 - **Not modelled:** the treasure fleet and silver train (10 more

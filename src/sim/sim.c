@@ -175,6 +175,11 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->towns[i].sea_y = t->raw[27];
 		s->towns[i].sea_heading = t->raw[28];
 		s->towns[i].barmaid = t->raw[13];
+		s->towns[i].garrison = t->raw[10];
+		s->towns[i].land_x = t->raw[15];
+		s->towns[i].land_y = t->raw[16];
+		s->towns[i].party_x = t->raw[22];
+		s->towns[i].party_y = t->raw[23];
 	}
 	/* The start position is in a town; the voyage starts on the water
 	 * outside its harbour. */

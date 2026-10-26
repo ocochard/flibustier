@@ -37,7 +37,8 @@ static const struct {
 	FIELD(standing), FIELD(governor), FIELD(family), FIELD(id),
 	FIELD(sea_x), FIELD(sea_y), FIELD(fort_x), FIELD(fort_y),
 	FIELD(ship_x), FIELD(ship_y), FIELD(ship_heading), FIELD(sea_heading),
-	FIELD(barmaid),
+	FIELD(barmaid), FIELD(garrison), FIELD(land_x), FIELD(land_y),
+	FIELD(party_x), FIELD(party_y),
 };
 #define NFIELDS	(sizeof(town_fields) / sizeof(town_fields[0]))
 
@@ -1638,6 +1639,63 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* The land battle at the town reached: "start", "tick" (dx, dy,
+ * button, ticks), "end". */
+static void
+cmd_land(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	struct sim_land *l = &s->land;
+	int64_t i, n = json_get_int(cmd, "ticks", 1);
+	int won = -1;
+
+	if (action == NULL) {
+		reply_error(out, "land needs \"action\": start, tick or end");
+		return;
+	}
+	if (strcmp(action, "start") == 0)
+		sim_land_start(s, s->fleet.leaving);
+	else if (strcmp(action, "tick") == 0) {
+		if (n < 1 || n > 10000) {
+			reply_error(out, "land tick needs \"ticks\" 1..10000");
+			return;
+		}
+		for (i = 0; i < n && l->result == 0; i++)
+			sim_land_tick(s, (int)json_get_int(cmd, "dx", 0),
+			    (int)json_get_int(cmd, "dy", 0),
+			    (int)json_get_int(cmd, "button", 0));
+	} else if (strcmp(action, "end") == 0)
+		won = sim_land_end(s);
+	else {
+		reply_error(out, "land needs \"action\": start, tick or end");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"active\":");
+	jb_int(out, l->active);
+	jb_raw(out, ",\"pass\":");
+	jb_int(out, l->pass);
+	jb_raw(out, ",\"result\":");
+	jb_int(out, l->result);
+	jb_raw(out, ",\"won\":");
+	jb_int(out, won);
+	jb_raw(out, ",\"units\":[");
+	for (i = 1; i < LAND_UNITS; i++) {
+		jb_raw(out, i > 1 ? ",[" : "[");
+		jb_int(out, l->u[i].x);
+		jb_raw(out, ",");
+		jb_int(out, l->u[i].y);
+		jb_raw(out, ",");
+		jb_int(out, l->u[i].men);
+		jb_raw(out, ",");
+		jb_int(out, l->u[i].flags);
+		jb_raw(out, ",");
+		jb_int(out, l->u[i].morale);
+		jb_raw(out, "]");
+	}
+	jb_raw(out, "]}");
+}
+
 /* After "land": "ashore" 1 goes ashore, 0 turns the ship about. */
 static void
 cmd_shore(struct session *ss, const struct json *cmd, struct jbuf *out)
@@ -1891,6 +1949,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_tavern(ss, cmd, out);
 	else if (strcmp(name, "governor") == 0)
 		cmd_governor(ss, cmd, out);
+	else if (strcmp(name, "land") == 0)
+		cmd_land(ss, cmd, out);
 	else if (strcmp(name, "shore") == 0)
 		cmd_shore(ss, cmd, out);
 	else if (strcmp(name, "march") == 0)

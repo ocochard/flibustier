@@ -34,29 +34,40 @@ world_terrain(const struct world *w, int x, int y)
  * header and 225 battle tile numbers, row by row (VA 0x2a9e8).
  */
 static int
-load_screens(struct world *w, struct packs *packs, char *err, size_t errlen)
+load_screen_file(struct packs *packs, const char *id, uint8_t *out,
+    size_t count, char *err, size_t errlen)
 {
 	struct blob b;
 	size_t i, off, n = BATTLE_SCREEN * BATTLE_SCREEN;
 
-	if (packs_load(packs, "tiles15/sbtl", &b) != 0) {
-		snprintf(err, errlen, "cannot load tiles15/sbtl");
+	if (packs_load(packs, id, &b) != 0) {
+		snprintf(err, errlen, "cannot load %s", id);
 		return (-1);
 	}
-	for (i = 0; i < BATTLE_SCREENS; i++) {
+	for (i = 0; i < count; i++) {
 		if (2 * i + 1 >= b.len)
 			break;
 		off = (size_t)(b.data[2 * i] | b.data[2 * i + 1] << 8);
 		if (off + 6 + n > b.len)
 			break;
-		memcpy(w->battle_screens[i], b.data + off + 6, n);
+		memcpy(out + i * n, b.data + off + 6, n);
 	}
 	blob_free(&b);
-	if (i < BATTLE_SCREENS) {
-		snprintf(err, errlen, "bad tiles15/sbtl");
+	if (i < count) {
+		snprintf(err, errlen, "bad %s", id);
 		return (-1);
 	}
 	return (0);
+}
+
+static int
+load_screens(struct world *w, struct packs *packs, char *err, size_t errlen)
+{
+	if (load_screen_file(packs, "tiles15/sbtl", &w->battle_screens[0][0],
+	    BATTLE_SCREENS, err, errlen) != 0)
+		return (-1);
+	return (load_screen_file(packs, "tiles15/lbtl", &w->land_screens[0][0],
+	    LAND_SCREENS, err, errlen));
 }
 
 static int
@@ -231,6 +242,12 @@ world_load(struct world *w, struct packs *packs,
 	for (i = 0; i < BATTLE_SETS * BATTLE_PIECES; i++)
 		w->battle_sets[i / BATTLE_PIECES][i % BATTLE_PIECES] =
 		    (uint8_t)(p[2 * i] < BATTLE_SCREENS ? p[2 * i] : 0);
+	if ((p = exe_at(layout, exe, len, layout->land_class_va, 256)) ==
+	    NULL) {
+		snprintf(err, errlen, "no land battle terrain");
+		return (-1);
+	}
+	memcpy(w->land_class, p, 256);
 	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
 	    NULL)
 		goto bad;

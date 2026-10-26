@@ -186,6 +186,12 @@ struct game {
 	int			 ashore_prompt;	/* "go ashore?" waits for Y or N */
 	int			 march_held;	/* bits 1 W, 2 E, 4 N, 8 S */
 	struct sprite_bank	 party_spr;	/* sailmisc.spr */
+	struct sprite_bank	 land_spr[5];	/* lbtlmisc, urlbtl, hsilbtl,
+						 * hsclbtl, fortbtl */
+	int			 land_button;	/* Space, Enter or a click */
+	int			 land_wait;
+	int			 land_stage;	/* 0 fighting, 1 the failure */
+	int			 prison_at_sea;	/* beaten boarding: "the ship" */
 	int			 panel_cursor;	/* the fleet panel: 0-7 a ship, 8 done */
 	unsigned		 panel_marked;	/* ships selected, bit by bit */
 	struct sprite_bank	 panel_spr[8];

@@ -1902,6 +1902,70 @@ test_command(void)
 	CHECK(s.fleet.ships[0] == 5);
 }
 
+/* The land battle: the forces, moving, the fort reached, the count. */
+static void
+test_land_battle(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	struct sim_land *l = &s.land;
+	int i, x, ev = 0;
+
+	memset(test_world.land_class, 5, sizeof(test_world.land_class));
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->id = 0;
+	t->forts = 1;
+	t->soldiers = 10;
+	t->garrison = 0;
+	t->land_x = 7;
+	t->land_y = 2;
+	t->party_x = 7;
+	t->party_y = 12;
+	s.fleet.crew = 100;
+	CHECK(sim_land_battle_needed(&s, 1));
+	s.fleet.crew = 151;
+	CHECK(!sim_land_battle_needed(&s, 1));
+	s.fleet.crew = 100;
+	sim_land_start(&s, 1);
+	/* 100 men: 50 and 50; 105 defenders: the fort's 26, then 79. */
+	CHECK(l->active && l->u[1].men == 50 && l->u[2].men == 50 &&
+	    l->u[3].flags == 0);
+	CHECK(l->u[1].x == 7 * 32 && l->u[1].y == 12 * 32 &&
+	    l->u[2].x == 6 * 32 && l->u[2].y == 11 * 32);
+	CHECK(l->u[7].flags == LAND_FORT && l->u[7].men == 26 &&
+	    l->u[7].x == 7 * 32 && l->fort == 7);
+	CHECK(l->u[6].flags == LAND_SOLDIERS && l->u[6].men == 79 &&
+	    l->u[5].flags == 0 && l->u[4].flags == 0);
+	CHECK(l->u[1].muskets >= 10 && l->u[1].muskets < 16 &&
+	    l->u[1].morale == 79);
+	/* Clear ground at full morale: 3 x 2 + 3 = 9, half a step a pass:
+	 * 4 pixels. */
+	x = l->u[1].x;
+	sim_land_tick(&s, 1, 0, 0);
+	CHECK(l->selected == 1 && l->u[1].x == x + 4);
+	/* The button selects the next unit. */
+	CHECK(sim_land_tick(&s, 0, 0, 1) & LEV_SELECTED);
+	CHECK(l->selected == 2);
+	sim_land_tick(&s, 0, 0, 0);
+	/* Fights happen when close; marching on the fort wins. */
+	l->u[2].x = l->u[7].x;
+	l->u[2].y = l->u[7].y + 40;
+	for (i = 0; i < 200 && l->result == 0; i++)
+		ev |= sim_land_tick(&s, 0, -1, 0);
+	CHECK(l->result == 2);
+	CHECK(sim_land_end(&s) == 1 && !l->active);
+	CHECK(s.fleet.crew >= 1 && s.fleet.crew <= 100 &&
+	    t->soldiers <= 10);
+	/* Without men the attack fails. */
+	sim_land_start(&s, 1);
+	for (i = 1; i < 4; i++)
+		l->u[i].men = 0;
+	sim_land_tick(&s, 0, 0, 0);
+	CHECK(l->result == 3 && sim_land_end(&s) == 0 && s.fleet.crew == 1);
+	(void)ev;
+}
+
 /* A landing party: ashore, walking, stopped by water, back aboard. */
 static void
 test_landing(void)
@@ -2316,6 +2380,7 @@ main(void)
 	test_assault();
 	test_tavern_people();
 	test_landing();
+	test_land_battle();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

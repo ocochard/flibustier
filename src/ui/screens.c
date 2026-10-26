@@ -70,6 +70,7 @@
 #define S_STRUCK		170
 #define S_YOU_ESCAPED		197
 #define S_COMMAND		286
+#define W_THE_SHIP		77	/* 4: "the ship" */
 #define W_PLUNDERED		10	/* 6: " gold pieces plundered!" */
 #define PLUNDERED_WORD		6
 #define S_FORT_SUNSET		317
@@ -3331,8 +3332,12 @@ sword_outcome_done(struct game *g)
 	}
 	if (g->sim.sword.result == SWORD_WON)
 		game_goto(g, &screen_battle);	/* the prize */
-	else
-		battle_finish(g, 0);
+	else if (g->sim.sword.result == SWORD_LOST) {
+		/* Beaten: prison, "in the ship" at sea (VA 0x16647). */
+		g->prison_at_sea = 1;
+		game_goto(g, &screen_prison);
+	} else
+		battle_finish(g, 0);		/* driven back */
 }
 
 static void
@@ -3445,11 +3450,7 @@ sword_tick(struct game *g)
 		g->sw_wait = 1;
 	sim_sword_tick(&g->sim);
 	if (g->sim.sword.result != SWORD_NONE) {
-		if (g->sim.sword.result == SWORD_WON || g->sw_story ||
-		    g->sw_practice || g->sw_assault)
-			sword_outcome_done(g);
-		else
-			g->sw_stage = 3;
+		sword_outcome_done(g);
 	}
 }
 
@@ -3579,28 +3580,6 @@ sword_draw(struct game *g)
 		draw(g, FONT_BODY, 420, 380, 140, text, 0);
 	}
 
-	if (g->sw_stage != 3)
-		return;
-	text_band(g, 160, 290);
-	if (sw->result == SWORD_LOST) {
-		snprintf(text, sizeof(text), "%s", "(Your men are beaten. "
-		    "Prison is not implemented yet: the enemy takes your "
-		    "ship.)");
-		if (g->sim.fleet.nships == 1) {
-			char more[400], all[600];
-
-			fill(more, sizeof(more), game_str(g, S_PICKED_UP),
-			    game_word(g, W_CAPTAIN,
-			    (size_t)g->sim.player.difficulty), NULL);
-			snprintf(all, sizeof(all), "%s\r%s\r%s", text,
-			    game_str(g, S_ASHORE), more);
-			snprintf(text, sizeof(text), "%s", all);
-		}
-	} else
-		snprintf(text, sizeof(text), "%s", "(Your boarding party is "
-		    "driven back to your ship.)");
-	draw(g, FONT_BODY, 80, 170, 400, text, 0);
-	continue_prompt(g);
 }
 
 const struct screen screen_sword = {
@@ -5185,9 +5164,17 @@ arrive_choose(struct game *g, int i)
 	case 1:
 		/* From the sea, a fort first fights the fleet (VA 0x18b3f);
 		 * a town without forts goes straight to the assault. */
-		if (g->sim.towns[town].forts > 0) {
+		if (g->sim.towns[town].forts > 0 && !g->sim.fleet.ashore) {
 			sim_fort_battle_start(&g->sim, town);
 			game_goto(g, &screen_battle);
+		} else if (g->sim.fleet.ashore &&
+		    sim_land_battle_needed(&g->sim, town)) {
+			/* On foot against a strong garrison: a land battle
+			 * first (VA 0x18c90). */
+			g->assault_town = town;
+			g->assault_aboard = 0;
+			sim_land_start(&g->sim, town);
+			game_goto(g, &screen_land);
 		} else {
 			g->assault_town = town;
 			g->assault_aboard = 0;
@@ -5495,7 +5482,12 @@ prison_event(struct game *g, const struct ui_event *ev)
 	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
 		return;
-	if (g->sack_stage++ > 0)
+	if (g->sack_stage++ == 0)
+		return;
+	if (g->prison_at_sea) {
+		g->prison_at_sea = 0;
+		battle_finish(g, 0);	/* the enemy keeps the flagship */
+	} else
 		game_goto(g, &screen_sail);
 }
 
@@ -5506,6 +5498,7 @@ prison_draw(struct game *g)
 
 	if (g->sack_stage == 0)
 		fill(text, sizeof(text), game_str(g, S_IMPRISONED),
+		    g->prison_at_sea ? game_word(g, W_THE_SHIP, 4) :
 		    g->sim.towns[g->assault_town].name, NULL);
 	else
 		fill(text, sizeof(text), game_str(g, S_TRADED_BACK),
@@ -5915,4 +5908,208 @@ panel_draw(struct game *g)
 
 const struct screen screen_fleet_panel = {
 	"fleet panel", panel_enter, panel_event, NULL, panel_draw,
+};
+
+/*
+ * The land battle (VA 0x5a80): the town's LBTL screen on the left,
+ * lbat.pcx's panel on the right.  A pass every 0.6 seconds (VA 0x8ac,
+ * 600 ms): 36 frames.  The arrows move the selected unit; the button
+ * (Space, Enter, a click) selects the next one, and held, moves every
+ * unit without a goal.  The panel (VA 0x5c35, 0x6c9a, 0x7787): the
+ * party's and the defenders' names, each side's morale (CSTN 69), men
+ * and muskets, and the terrain (CSTN 32) with its picture.
+ */
+#define LAND_FRAMES		36
+#define W_LAND			32	/* clear... "Terrain:", "Morale:" */
+#define W_MORALE		69
+#define W_POSSESSIVE		92	/* 0: "'s " */
+#define S_ATTACK_FAILED		191
+
+static const char *land_banks[5] = {
+	"cur/lbtlmisc", "cur/urlbtl", "cur/hsilbtl", "cur/hsclbtl",
+	"cur/fortbtl",
+};
+
+static void
+land_enter(struct game *g)
+{
+	struct blob b;
+	int i;
+
+	game_background(g, "pic/lbat");
+	game_portrait(g, NULL);
+	for (i = 0; i < 5; i++)
+		load_bank(g, land_banks[i], 1, &g->land_spr[i]);
+	if (g->btl_tiles.tile_w != 32 && packs_load(g->packs, "tiles/battle",
+	    &b) == 0) {
+		tileset_decode(b.data, b.len, &g->btl_tiles);
+		blob_free(&b);
+	}
+	g->march_held = 0;
+	g->land_button = 0;
+	g->land_wait = 0;
+	g->land_stage = 0;
+}
+
+static void
+land_over(struct game *g)
+{
+	int won = sim_land_end(&g->sim);
+
+	if (won) {
+		game_goto(g, &screen_assault);
+		return;
+	}
+	/* "Your men are scattered and exhausted..." (CSTR 191), then
+	 * prison for a lone captain (VA 0x18cd0). */
+	sim_log_failure(&g->sim, g->assault_town);
+	g->land_stage = 1;
+}
+
+static void
+land_event(struct game *g, const struct ui_event *ev)
+{
+	static const struct {
+		int	key, bits;
+	} walk[] = {
+		{ UI_KEY_LEFT, 1 }, { UI_KEY_RIGHT, 2 }, { UI_KEY_UP, 4 },
+		{ UI_KEY_DOWN, 8 }, { UI_KEY_UP_LEFT, 5 }, { UI_KEY_UP_RIGHT, 6 },
+		{ UI_KEY_DOWN_LEFT, 9 }, { UI_KEY_DOWN_RIGHT, 10 },
+	};
+	size_t i;
+
+	if (g->land_stage == 1) {
+		if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+		    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+			game_goto(g, g->sim.fleet.crew < 2 ? &screen_prison :
+			    &screen_sail);
+		return;
+	}
+	if (ev->type == EV_CLICK || (ev->type == EV_CHAR && ev->ch == ' ') ||
+	    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)) {
+		g->land_button = 2;	/* a press, held until the next pass */
+		return;
+	}
+	if (ev->type != EV_KEY && ev->type != EV_KEYUP)
+		return;
+	for (i = 0; i < sizeof(walk) / sizeof(walk[0]); i++)
+		if (walk[i].key == ev->key) {
+			if (ev->type == EV_KEY)
+				g->march_held |= walk[i].bits;
+			else
+				g->march_held &= ~walk[i].bits;
+		}
+}
+
+static void
+land_tick(struct game *g)
+{
+	if (g->fading != 0 || g->land_stage != 0)
+		return;
+	if (++g->land_wait < LAND_FRAMES)
+		return;
+	g->land_wait = 0;
+	sim_land_tick(&g->sim, g->march_held & 1 ? -1 : g->march_held & 2 ?
+	    1 : 0, g->march_held & 4 ? -1 : g->march_held & 8 ? 1 : 0,
+	    g->land_button > 0);
+	if (g->land_button > 0)
+		g->land_button--;
+	if (g->sim.land.result != 0)
+		land_over(g);
+}
+
+/* A side's lines on the panel: morale, men and muskets, terrain. */
+static void
+land_side(struct game *g, const struct land_unit *u, int y_morale,
+    int y_men, int y_terrain, int bank)
+{
+	const struct sim_land *l = &g->sim.land;
+	char buf[32];
+	int t, c, m;
+
+	if (u->flags == 0 && (u->flags & 7) != LAND_FORT)
+		return;
+	m = u->morale >> 4;
+	draw(g, FONT_SMALL, 496, y_morale, 80, game_word(g, W_LAND, 9), 0);
+	draw(g, FONT_SMALL, 570, y_morale, 70,
+	    game_word(g, W_MORALE, (size_t)(m > 5 ? 5 : m)), 0);
+	snprintf(buf, sizeof(buf), "%d", u->men);
+	draw(g, FONT_SMALL, 512, y_men, 60, buf, 0);
+	snprintf(buf, sizeof(buf), "%d", u->muskets);
+	draw(g, FONT_SMALL, 590, y_men, 40, buf, 0);
+	c = g->world->land_class[g->world->land_screens[l->screen][((u->y /
+	    32) % 15) * 15 + (u->x / 32) % 15]];
+	t = c > 7 ? 3 : c > 4 ? 0 : c < 4 ? 1 : 2;
+	draw(g, FONT_SMALL, 496, y_terrain, 80, game_word(g, W_LAND, 8), 0);
+	draw(g, FONT_SMALL, 570, y_terrain, 70, game_word(g, W_LAND,
+	    (size_t)t), 0);
+	if ((size_t)t < g->land_spr[bank].count)
+		fb_frame(&g->fb, &g->land_spr[bank].frames[t], 489,
+		    bank == 1 ? 260 : 137);
+}
+
+static void
+land_draw(struct game *g)
+{
+	const struct sim_land *l = &g->sim.land;
+	const struct land_unit *u;
+	char name[96];
+	int cx, cy, i, k, w, nation;
+
+	if (g->btl_tiles.tile_w == 32)
+		for (cy = 0; cy < BATTLE_SCREEN; cy++)
+			for (cx = 0; cx < BATTLE_SCREEN; cx++) {
+				struct image t;
+
+				t.w = t.h = 32;
+				t.pixels = g->btl_tiles.pixels + 32 * 32 *
+				    g->world->land_screens[l->screen][cy *
+				    BATTLE_SCREEN + cx];
+				t.has_palette = 0;
+				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
+			}
+	nation = g->sim.towns[l->town].nation & 7;
+	for (i = 1; i < LAND_UNITS; i++) {
+		u = &l->u[i];
+		if (u->flags == 0 || (u->flags & 7) == LAND_FORT)
+			continue;
+		/* The party 1 (0 selected); the town nation + 2, horsemen
+		 * nation + 6 (VA 0x6034). */
+		k = i < 4 ? (i == l->selected ? 0 : 1) :
+		    (u->flags & 4) ? nation + 6 : nation + 2;
+		if ((size_t)k < g->land_spr[0].count)
+			fb_frame(&g->fb, &g->land_spr[0].frames[k], u->x, u->y);
+	}
+	g->ink[0] = g->ink[1] = g->ink[2] = 0;
+	snprintf(name, sizeof(name), "%s%s", g->sim.player.name,
+	    game_word(g, W_POSSESSIVE, 0));
+	w = text_width(&g->font[FONT_SMALL], name);
+	draw(g, FONT_SMALL, 560 - w / 2, 354, FB_W, name, 0);
+	w = text_width(&g->font[FONT_SMALL], game_word(g, W_LAND, 6));
+	draw(g, FONT_SMALL, 560 - w / 2, 370, FB_W, game_word(g, W_LAND, 6), 0);
+	snprintf(name, sizeof(name), "%s", game_word(g, W_NATION,
+	    (size_t)(nation & 3)));
+	w = text_width(&g->font[FONT_SMALL], name);
+	draw(g, FONT_SMALL, 560 - w / 2, 9, FB_W, name, 0);
+	w = text_width(&g->font[FONT_SMALL], game_word(g, W_LAND, 7));
+	draw(g, FONT_SMALL, 560 - w / 2, 25, FB_W, game_word(g, W_LAND, 7), 0);
+	land_side(g, &l->u[l->selected], 400, 429, 457, 1);
+	u = &l->u[l->shown];
+	land_side(g, u, 55, 85, 113, (u->flags & 7) == LAND_HORSE ? 3 :
+	    (u->flags & 7) == LAND_FORT ? 4 : 2);
+	if (g->land_stage == 1) {
+		char text[300];
+
+		g->ink[0] = 240;
+		g->ink[1] = 220;
+		g->ink[2] = 170;
+		fill(text, sizeof(text), game_str(g, S_ATTACK_FAILED),
+		    g->sim.towns[l->town].name, NULL);
+		draw(g, FONT_BODY, 100, 200, 520, text, 0);
+		continue_prompt(g);
+	}
+}
+
+const struct screen screen_land = {
+	"land battle", land_enter, land_event, land_tick, land_draw,
 };
