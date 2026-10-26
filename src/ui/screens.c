@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "assets/img.h"
+#include "assets/pcx.h"
 #include "sim/hof.h"
 #include "sim/save.h"
 #include "screen.h"
@@ -85,6 +86,7 @@
 #define FONT_TITLE		0
 #define FONT_BODY		1
 #define FONT_SMALL		2	/* PIRATE3, 14 px */
+#define FONT_PIRATE4		3
 
 /* Era of each famous expedition, from its year. */
 static const int expedition_era[6] = { 0, 0, 2, 4, 4, 5 };
@@ -376,7 +378,7 @@ intro_leave(struct game *g)
 	free(g->intro_title);
 	free(g->intro_shown);
 	g->intro_title = g->intro_shown = NULL;
-	game_goto(g, &screen_welcome);
+	game_goto(g, &screen_credits);
 }
 
 static void
@@ -499,6 +501,135 @@ const struct screen screen_intro = {
 	"intro", intro_enter, intro_event, intro_tick, intro_draw,
 };
 
+/*
+ * Credits (VA 0x1fe91): on the ship picture, six blocks of the credits
+ * picture appear one at a time on the right.  Each fades in as its ink
+ * (palette entry 0x20) steps from the parchment colour to black, stays
+ * 1.6 s and fades out.  A key skips to the last block; another ends it.
+ */
+#define CRED_BLOCKS		6
+#define CRED_INK		0x20
+#define CRED_STEPS		20
+#define CRED_STEP_MS		40
+#define CRED_HOLD_MS		1600
+#define CRED_CX			508	/* the blocks' centre */
+#define CRED_CY			240
+
+static const char *
+credits_picture(const struct game *g)
+{
+	if (strcmp(g->lang, "fre") == 0)
+		return ("pic/credtxtf");
+	if (strcmp(g->lang, "ger") == 0)
+		return ("pic/credtxtg");
+	return ("pic/credtext");
+}
+
+/* Block "i": its rectangle in the credits picture. */
+static int
+credit_rect(const struct game *g, int i, int r[4])
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->credits_va + (uint32_t)i * 8, 8);
+	int k;
+
+	if (p == NULL)
+		return (-1);
+	for (k = 0; k < 4; k++)
+		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+	return (0);
+}
+
+/* Ink step 0 (parchment) .. 19 (black). */
+static void
+credit_ink(struct game *g, int step)
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->credits_va + CRED_BLOCKS * 8 +
+	    (uint32_t)step * 3, 3);
+
+	if (p != NULL)
+		memcpy(&g->fb.pal[CRED_INK * 3], p, 3);
+}
+
+static void
+credits_enter(struct game *g)
+{
+	struct blob b;
+
+	game_background(g, "pic/credpic");
+	image_free(&g->credits);
+	if (packs_load(g->packs, credits_picture(g), &b) == 0) {
+		pcx_decode(b.data, b.len, &g->credits);
+		blob_free(&b);
+	}
+	g->cred_block = 0;
+	g->cred_ms = 0;
+	credit_ink(g, 0);
+}
+
+static void
+credits_done(struct game *g)
+{
+	image_free(&g->credits);
+	game_goto(g, &screen_welcome);
+}
+
+static void
+credits_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type != EV_KEY && ev->type != EV_CLICK)
+		return;
+	if (g->cred_block < CRED_BLOCKS - 1) {
+		g->cred_block = CRED_BLOCKS - 1;
+		g->cred_ms = 0;
+		credit_ink(g, 0);
+	} else
+		credits_done(g);
+}
+
+static void
+credits_tick(struct game *g)
+{
+	int t, fade = CRED_STEPS * CRED_STEP_MS;
+
+	if (g->fading != 0)
+		return;
+	g->cred_ms += 1000 / 60;
+	t = g->cred_ms;
+	if (t < fade)
+		credit_ink(g, t / CRED_STEP_MS);
+	else if (t < fade + CRED_HOLD_MS)
+		credit_ink(g, CRED_STEPS - 1);
+	else if (t < 2 * fade + CRED_HOLD_MS)
+		credit_ink(g, CRED_STEPS - 1 - (t - fade - CRED_HOLD_MS) /
+		    CRED_STEP_MS);
+	else if (++g->cred_block < CRED_BLOCKS) {
+		g->cred_ms = 0;
+		credit_ink(g, 0);
+	} else
+		credits_done(g);
+}
+
+static void
+credits_draw(struct game *g)
+{
+	int r[4], w, h, x, y;
+
+	if (g->credits.pixels == NULL || g->cred_block >= CRED_BLOCKS ||
+	    credit_rect(g, g->cred_block, r) != 0)
+		return;
+	w = r[2] - r[0] + 1;
+	h = r[3] - r[1];
+	x = (CRED_CX - w / 2) & ~7;
+	y = CRED_CY - h / 2;
+	fb_image_part(&g->fb, &g->credits, r[0], r[1], w, h + 1, x, y, -1);
+}
+
+const struct screen screen_credits = {
+	"credits", credits_enter, credits_event, credits_tick, credits_draw,
+};
+
 /* Welcome menu. */
 
 enum { WELCOME_NEW, WELCOME_LOAD, WELCOME_FAMOUS, WELCOME_QUIT };
@@ -506,7 +637,7 @@ enum { WELCOME_NEW, WELCOME_LOAD, WELCOME_FAMOUS, WELCOME_QUIT };
 static void
 welcome_enter(struct game *g)
 {
-	game_background(g, "pic/credpic");
+	game_background(g, "pic/textback");
 	game_portrait(g, NULL);
 }
 
@@ -546,19 +677,35 @@ welcome_event(struct game *g, const struct ui_event *ev)
 static void
 welcome_draw(struct game *g)
 {
-	char buf[512], opt[512];
-	int i, y = 40;
+	/* VA 0x1443e: every line centred; the heading in PIRATE4, the
+	 * options in PIRATE1 with full-width rows for the mouse. */
+	static const int line_y[WELCOME_HEADING + 4] = { 70, 120, 145, 170,
+	    195, 250, 300, 330, 360, 390 };
+	struct text_target t = { plot, &g->fb };
+	struct text_style st;
+	char opt[256];
+	const char *text;
+	int i, w;
 
-	for (i = 0; i < WELCOME_HEADING; i++)
-		y += draw(g, i < 5 ? FONT_TITLE : FONT_BODY, 400, y, 230,
-		    game_word(g, W_WELCOME, (size_t)i), 0) + (i == 4 ? 16 : 0);
-	buf[0] = '\0';
-	for (i = 0; i < 4; i++) {
-		snprintf(opt, sizeof(opt), "%s~%s", i > 0 ? "\r" : "",
-		    game_word(g, W_WELCOME, (size_t)(WELCOME_HEADING + i)));
-		strncat(buf, opt, sizeof(buf) - strlen(buf) - 1);
+	for (i = 0; i < WELCOME_HEADING + 4; i++) {
+		text = game_word(g, W_WELCOME, (size_t)i);
+		if (i < WELCOME_HEADING) {
+			w = text_width(&g->font[FONT_PIRATE4], text);
+			draw(g, FONT_PIRATE4, FB_W / 2 - w / 2, line_y[i],
+			    FB_W, text, 0);
+			continue;
+		}
+		snprintf(opt, sizeof(opt), "~%s", text);
+		w = text_width(&g->font[FONT_TITLE], text);
+		style(g, FONT_TITLE, 1, &st);
+		text_draw(&t, &st, FB_W / 2 - w / 2, line_y[i], FB_W, opt,
+		    g->selected == i - WELCOME_HEADING ? 0 : -1, NULL);
+		g->options.option[i - WELCOME_HEADING].x = 0;
+		g->options.option[i - WELCOME_HEADING].y = line_y[i];
+		g->options.option[i - WELCOME_HEADING].w = FB_W;
+		g->options.option[i - WELCOME_HEADING].h = 30;
 	}
-	draw(g, FONT_BODY, 410, y + 10, 220, buf, 1);
+	g->options.noptions = 4;
 }
 
 const struct screen screen_welcome = {

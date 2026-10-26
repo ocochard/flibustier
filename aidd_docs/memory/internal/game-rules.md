@@ -662,6 +662,26 @@ move) and `0x38a1a` to `0x38b99`.
      picture fades out.
 4. A key at any wait ends the intro.
 
+Then the credits (VA `0x1fe91`):
+- **Picture:** `credpic.pcx`, with the language's credits picture
+  (`credtext`, `credtxtf`, `credtxtg`) as the source.
+- **Blocks:** six rectangles of the credits picture (table at VA
+  `0x34668`), shown one at a time. Each is centred at (508, 240), with x
+  rounded down to a multiple of 8.
+- **Fades:** the text is palette entry 0x20. Its colour steps through
+  20 entries (table at VA `0x34698`) from the parchment colour to black,
+  40 ms each. It then holds 1.6 s and steps back.
+- **Keys:** a key during blocks 0-4 jumps to block 5; a key during
+  block 5 ends the credits.
+
+The welcome menu (VA `0x1443e`) is full screen on `textback.pcx`:
+- the 10 lines of CSTN group 100 are centred at x 320, at heights 70,
+  120, 145, 170, 195, 250, 300, 330, 360 and 390;
+- the 6 heading lines use PIRATE4, and the 4 options PIRATE1. The game
+  loads its fonts in the order PIRATE1, PIRATE2, CAPS, PIRATE3,
+  PIRATE4;
+- each option's mouse area is a full-width row 30 pixels high.
+
 The title screen's passes wait 1/10 of a 10 ms tick, which is 0. So
 their speed is the CPU's. The engine runs 167 passes per 1/60 s frame,
 about 0.1 ms each, and starts the dissolve at cell 0.

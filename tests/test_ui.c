@@ -48,7 +48,15 @@ static struct game *
 play_in(const char *saves, const char *lang, const char *script)
 {
 	static struct game g;
+	static char full[2048];
 
+	/* A leading "enter" means "skip to the menu": one key ends the
+	 * intro, one jumps to the last credits block, one ends them. */
+	if (strncmp(script, "enter", 5) == 0 && strlen(script) + 16 <
+	    sizeof(full)) {
+		snprintf(full, sizeof(full), "enter enter %s", script);
+		script = full;
+	}
 	memset(&g, 0, sizeof(g));
 	if (game_init(&g, packs, lang, saves) != 0) {
 		fprintf(stderr, "game_init: %s\n", g.err);
@@ -448,6 +456,10 @@ test_pointer(void)
 				drawn += g->fb.px[(250 + y) * FB_W + 300 + x] ==
 				    g->cursor.pixels[y * g->cursor.w + x];
 	CHECK(drawn > 50);
+	/* The menu's rows span the screen, as in the original. */
+	CHECK(g->screen == &screen_welcome);
+	CHECK(game_script(g, "move:20,365 wait:1") == 0 && g->selected == 2);
+	CHECK(game_script(g, "move:620,395 wait:1") == 0 && g->selected == 3);
 	game_free(g);
 }
 
@@ -473,12 +485,31 @@ test_intro(void)
 	}
 	CHECK(seen == 5 && dissolved);
 	CHECK(game_script(g, "wait:40") == 0);
-	CHECK(g->screen == &screen_welcome && g->intro_title == NULL);
+	CHECK(g->screen == &screen_credits && g->intro_title == NULL);
+	/* The credits: six blocks, each about 3.2 s, then the menu. */
+	for (i = 0, last = -1, seen = 0; i < 2000 &&
+	    g->screen == &screen_credits; i++) {
+		if (g->cred_block != last && g->cred_block < 6) {
+			CHECK(g->cred_block == last + 1);
+			last = g->cred_block;
+			seen++;
+		}
+		CHECK(game_script(g, "wait:1") == 0);
+	}
+	CHECK(seen == 6 && i > 6 * 180);
+	CHECK(game_script(g, "wait:40") == 0);
+	CHECK(g->screen == &screen_welcome && g->credits.pixels == NULL);
 	game_free(g);
 
+	/* Keys: the intro ends; the credits jump to the last block, then
+	 * end. */
 	g = play("eng", "wait:200 enter wait:40");
 	if (g == NULL)
 		return;
+	CHECK(g->screen == &screen_credits && g->cred_block == 0);
+	CHECK(game_script(g, "wait:20 enter wait:5") == 0);
+	CHECK(g->cred_block == 5);
+	CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->screen == &screen_welcome);
 	game_free(g);
 }

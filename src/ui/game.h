@@ -136,6 +136,9 @@ struct game {
 	int			 intro_timer[4];	/* palette cycle counters */
 	int			 intro_cycles;	/* steps of the 0xd3 cycle */
 	int			 intro_pause;
+	struct image		 credits;	/* the credits' text picture */
+	int			 cred_block;	/* 0..5 */
+	int			 cred_ms;	/* time into the block */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

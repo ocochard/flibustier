@@ -173,6 +173,7 @@ game_free(struct game *g)
 	bank_free(&g->intro_spr[1]);
 	free(g->intro_title);
 	free(g->intro_shown);
+	image_free(&g->credits);
 	for (i = 0; i < 2; i++)
 		for (j = 0; j < 6; j++)
 			group_free(&g->sw_parts[i][j]);

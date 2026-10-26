@@ -19,6 +19,7 @@ struct screen {
 };
 
 extern const struct screen screen_intro;
+extern const struct screen screen_credits;
 extern const struct screen screen_welcome;
 extern const struct screen screen_era;
 extern const struct screen screen_expedition;
