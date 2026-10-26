@@ -1,0 +1,53 @@
+# The open pack's art, rendered by artgen.py from these prompts alone.
+#
+# Each [[asset]] is one pack ID: its file in the pack, a seed and a
+# prompt.  "size" is in 640x480 pixels (default the full screen); the
+# art is rendered at that size times art_height / 480.  Prompts describe
+# the layout the game's screen needs: where its text and sprites go.
+
+[pack]
+name = "stmalo open pack (photographic, draft)"
+license = "undecided: draft art, not for release"
+art_height = 1080
+
+# The governor's audience: his text is drawn at x 320-620 from y 150 in
+# a light ink, so the right half must be dark and plain.
+[[asset]]
+id = "pic/governor"
+file = "art/governor.png"
+seed = 1660
+prompt = """
+A single continuous photograph of one room: a colonial governor's study
+in the Caribbean in the 1660s, seen from the doorway. A stern governor
+in period dress, a long dark wig, a brocade coat with lace cravat, sits
+behind a heavy carved wooden desk with papers, a quill and a brass
+candlestick, placed in the left third of the picture. The candle on the
+desk is the only light: it lights the governor warmly, and the same
+wood-panelled wall continues to the right, fading gradually into deep
+shadow, plain and empty, filling the right half of the picture.
+Historical reenactment photography, 35mm lens, natural textures, sharp
+focus, realistic.
+"""
+negative = """
+split screen, diptych, two panels, collage, vertical dividing line,
+text, letters, watermark, signature, frame, border, cartoon,
+illustration, painting, 3d render, lowres, blurry, deformed
+"""
+
+# The log book: text over x 140-560, y 20-400 in a dark ink, so the
+# pages must reach the top of the picture (the date is at y 20); page-turn
+# arrows at (200-240, 420-450) and (380-420, 420-450) and a bookmark at
+# (0-100, 360-479) are parts of the picture.
+[[asset]]
+id = "pic/shiplog"
+file = "art/shiplog.png"
+seed = 1660
+prompt = """
+Close-up photograph from straight above of an old open leather-bound
+ship's log book. The two blank pages of cream laid paper fill the whole
+picture from the very top edge down to near the bottom, completely
+empty, with no writing at all; only a thin strip of dark weathered
+wooden table shows at the bottom. A faded red ribbon bookmark hangs out
+of the book at the bottom left corner. Warm even candlelight, realistic
+paper grain and leather texture, sharp focus, realistic.
+"""
