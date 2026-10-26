@@ -980,6 +980,30 @@ test_landing(void)
 	CHECK(game_script(g, "esc wait:40") == 0 && g->screen == &screen_cabin);
 	CHECK(game_script(g, "click:560,170") == 0 &&
 	    g->screen == &screen_cabin);
+	/* A whole map whose spot is right here: the maps' spot shows it,
+	 * the search digs it up and returns to the march. */
+	g->sim.maps[MAP_PIRATE].pieces = MAP_WHOLE | MAP_SHOWN;
+	g->sim.maps[MAP_PIRATE].x = (int16_t)(g->sim.fleet.x / 16);
+	g->sim.maps[MAP_PIRATE].y = (int16_t)(g->sim.fleet.y / 16);
+	g->sim.maps[MAP_PIRATE].town = 2;
+	CHECK(game_script(g, "click:400,280 wait:40") == 0 &&
+	    g->screen == &screen_tmap && g->tmap_n == 1);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_cabin);
+	{
+		long gold = g->sim.fleet.gold;
+
+		CHECK(game_script(g, "click:280,200 wait:40") == 0 &&
+		    g->screen == &screen_dig && g->dig_n == 1 &&
+		    g->sim.fleet.gold >= gold + 5000 &&
+		    g->sim.maps[MAP_PIRATE].pieces == 0);
+	}
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sail && g->sim.fleet.ashore);
+	/* Nothing left: the maps' spot is closed again. */
+	CHECK(game_script(g, "esc wait:40") == 0 && g->screen == &screen_cabin);
+	CHECK(game_script(g, "click:400,280") == 0 &&
+	    g->screen == &screen_cabin);
 	/* A town reached on foot: marching in, no ship in port. */
 	g->sim.fleet.leaving = 1;
 	g->sim.towns[1].forts = 0;
@@ -1028,7 +1052,7 @@ test_tavern_people(void)
 	    g->screen == &screen_mapman);
 	gold = g->sim.fleet.gold;
 	CHECK(game_script(g, "enter") == 0 && g->sim.fleet.gold == gold - 50 &&
-	    g->sim.fleet.map_pieces == 1);
+	    (g->sim.maps[MAP_PIRATE].pieces & MAP_SHOWN));
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_tavern);
 	/* The barmaid: some company. */

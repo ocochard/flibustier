@@ -15,6 +15,7 @@
 #define WORLD_CELLS_W	640
 #define WORLD_CELLS_H	480
 #define WORLD_TILE	16
+#define TREASURE_SPOTS	256	/* where treasure is buried */
 #define WORLD_PX_W	(WORLD_CELLS_W * WORLD_TILE)
 #define WORLD_PX_H	(WORLD_CELLS_H * WORLD_TILE)
 #define SHIP_CLASSES	8
@@ -94,6 +95,7 @@ struct world {
 	uint8_t		land_screens[LAND_SCREENS][BATTLE_SCREEN *
 			    BATTLE_SCREEN];
 	uint8_t		land_class[256];
+	int16_t		treasure[TREASURE_SPOTS][2];	/* x, y cells */
 	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];

@@ -49,6 +49,8 @@ struct exe_layout {
 	uint32_t	 story_va;		/* career stories: byte scripts */
 	uint32_t	 credits_va;		/* 6 x 4 i16 rects in the credits
 						 * picture, 20 RGB ink steps */
+	uint32_t	 treasure_va;		/* 256 x {i16 x, y}: treasure
+						 * spots, in map cells */
 };
 
 /* Returns the layout of a known build, or NULL. */

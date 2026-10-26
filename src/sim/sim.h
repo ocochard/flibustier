@@ -23,12 +23,15 @@
  * aidd_docs/memory/internal/game-rules.md.
  */
 
+#define SIM_MAPS	3	/* treasure maps */
 #define SIM_NEWS_MAX	256	/* most recent news kept in the state */
 #define SIM_NO_TOWN	(-1)
 
 /* News codes: the entries of the game's news list (CSTN group 20). */
 enum news_code {
 	NEWS_PLUNDERED = 3,	/* a: town, sacked by the player */
+	NEWS_LOST_TREASURE = 7,	/* a: the civilisation (CSTN 93) */
+	NEWS_TREASURE = 8,	/* buried treasure dug up */
 	NEWS_AMNESTY = 10,	/* a: nation */
 	NEWS_INDIANS = 11,	/* a: town */
 	NEWS_GOLD_MINE = 12,
@@ -40,7 +43,8 @@ enum news_code {
 	NEWS_ALLIANCE = 18,
 	NEWS_CAPTURE = 19,	/* a: nation, b: town */
 	NEWS_TAKEN = 22,	/* a: town, b: nation it was taken for */
-	NEWS_NOT_TAKEN = 23	/* a: town */
+	NEWS_NOT_TAKEN = 23,	/* a: town */
+	NEWS_RESCUED = 26	/* a: the relative (CSTN 37) */
 };
 
 struct sim_town {
@@ -116,7 +120,6 @@ struct sim_fleet {
 	int		speed;		/* 4..12 once under way */
 	uint32_t	ticks;		/* sailing ticks, 64 per day */
 	int		leaving;	/* town just left, or -1 */
-	int		map_pieces;	/* treasure map pieces bought */
 	/* A landing party (VA 0x231b8): on foot at x, y while the ship
 	 * waits at ship_x, ship_y; land_x, land_y where it went ashore
 	 * (or, at sea, the land the ship last ran into). */
@@ -370,7 +373,16 @@ struct sim {
 	int		recruits;
 	int		news_town;	/* the traveller's town, and price */
 	int		news_price;
-	int		barmaid_mood;	/* rand(6) on meeting her */	/* men offering to sign on */
+	int		barmaid_mood;	/* rand(6) on meeting her */
+	/* Treasure maps (VA 0x47186): the pirate's, the lost relative's,
+	 * the lost treasure's. */
+	struct sim_map {
+		uint16_t	pieces;	/* MAP_* quarters, MAP_SHOWN */
+		int16_t		x, y;	/* the spot, in map cells */
+		int16_t		value;	/* the lost treasure's people */
+		int16_t		town;	/* the town it is near */
+	} maps[SIM_MAPS];
+	int		relative;	/* the next lost relative, 0..4 */
 	struct sim_market {
 		int	open;
 		int	stock[3];	/* food, goods, sugar */
@@ -513,6 +525,26 @@ void	sim_merchant_close(struct sim *s);
 #define TAVERN_MAID	(1u << 4)
 #define TAVERN_MYSTERY	(1u << 5)
 #define MAP_PRICE	50	/* the map seller's text says 500 */
+
+/*
+ * Treasure maps.  sim_map_piece (VA 0x1f08a) gives a quarter of map
+ * "map": the first piece draws the spot, one of the world's 256, kept
+ * away from the town the player is in and the other maps' towns; on the
+ * easiest level the whole map comes at once.  sim_search (VA 0xa801),
+ * ashore, takes 3 days and digs at every map's spot within a cell, held
+ * pieces or not; it fills "found" (one per map dug up) and returns how
+ * many.
+ */
+enum { MAP_PIRATE, MAP_RELATIVE, MAP_LOST };
+#define MAP_WHOLE	0x0F	/* the four quarters: TL, TR, BL, BR */
+#define MAP_SHOWN	0x10
+struct sim_find {
+	int	map;
+	long	gold;
+	int	value;		/* the relative, or the treasure's people */
+};
+void	sim_map_piece(struct sim *s, int map);
+int	sim_search(struct sim *s, struct sim_find found[SIM_MAPS]);
 
 /* Entering the tavern: count the men who would sign on. */
 void	sim_tavern_open(struct sim *s);

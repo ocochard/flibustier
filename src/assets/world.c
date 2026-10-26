@@ -248,6 +248,11 @@ world_load(struct world *w, struct packs *packs,
 		return (-1);
 	}
 	memcpy(w->land_class, p, 256);
+	if (read_words(layout, exe, len, layout->treasure_va,
+	    &w->treasure[0][0], 2 * TREASURE_SPOTS) != 0) {
+		snprintf(err, errlen, "no treasure spots");
+		return (-1);
+	}
 	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
 	    NULL)
 		goto bad;

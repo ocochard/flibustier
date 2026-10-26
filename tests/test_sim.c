@@ -507,6 +507,14 @@ make_world(struct world *w)
 	w->era = 4;
 	memset(w->colour_class, TERRAIN_SEA, sizeof(w->colour_class));
 	w->colour_class[99] = TERRAIN_LAND;
+	/* Treasure spots: three cells east of each town in turn. */
+	for (i = 0; i < TREASURE_SPOTS; i++) {
+		static const int16_t town[4][2] = { { 100, 100 },
+		    { 120, 110 }, { 110, 130 }, { 600, 400 } };
+
+		w->treasure[i][0] = (int16_t)(town[i % 4][0] + 3);
+		w->treasure[i][1] = town[i % 4][1];
+	}
 	memset(w->tiles + 1 * WORLD_TILE * WORLD_TILE, 99,
 	    WORLD_TILE * WORLD_TILE);	/* tile 1: land */
 	for (y = 40; y < 50; y++)
@@ -2027,6 +2035,14 @@ test_landing(void)
 	CHECK(s.day == i + 1);
 }
 
+/* How many quarters of a treasure map are held. */
+static int
+quarters(unsigned pieces)
+{
+	return ((pieces & 1) + (pieces >> 1 & 1) + (pieces >> 2 & 1) +
+	    (pieces >> 3 & 1));
+}
+
 /* The tavern's people: the traveller, the map seller, the barmaid. */
 static void
 test_tavern_people(void)
@@ -2061,8 +2077,10 @@ test_tavern_people(void)
 	    (s.towns[2].flags & 0x80) && !(s.tavern_spots & TAVERN_NEWS));
 	CHECK(sim_buy_map(&s) == 0 && s.fleet.gold == 20);
 	s.fleet.gold = 60;
+	s.player.difficulty = 1;
 	CHECK(sim_buy_map(&s) == 1 && s.fleet.gold == 10 &&
-	    s.fleet.map_pieces == 1);
+	    quarters(s.maps[MAP_PIRATE].pieces) == 1 &&
+	    (s.maps[MAP_PIRATE].pieces & MAP_SHOWN));
 	/* The barmaid: company for 5, her heart at 10, then reports. */
 	s.towns[1].barmaid = 9;
 	s.fleet.gold = 7;
@@ -2077,7 +2095,8 @@ test_tavern_people(void)
 	CHECK(sim_barmaid_report(&s, &town) == 1 && town == 3 &&
 	    (s.towns[3].flags & 0x80) && !(s.tavern_spots & TAVERN_MAID));
 	s.tavern_spots |= TAVERN_MAPS;
-	CHECK(sim_barmaid_report(&s, &town) == 2 && s.fleet.map_pieces == 2);
+	CHECK(sim_barmaid_report(&s, &town) == 2 &&
+	    quarters(s.maps[MAP_PIRATE].pieces) == 2);
 }
 
 /* The assault on a town, the sack, a new governor. */
@@ -2377,6 +2396,70 @@ test_bank(void)
 	CHECK(s.player.difficulty == 3);
 }
 
+/* Treasure maps: pieces, the spot, and digging. */
+static void
+test_treasure(void)
+{
+	struct sim s;
+	struct sim_find found[SIM_MAPS];
+	const struct sim_map *m = &s.maps[MAP_PIRATE];
+	int k, day;
+	long gold;
+
+	sea_game(&s, 300, 300, 0);
+	s.player_town = 1;
+	s.player.difficulty = 1;
+	/* Pieces one at a time; the spot is drawn once, away from the
+	 * player's town (Beta) and the empty maps' town (Alpha). */
+	sim_map_piece(&s, MAP_PIRATE);
+	CHECK(quarters(m->pieces) == 1 && (m->pieces & MAP_SHOWN));
+	CHECK(m->town == 2 || m->town == 3);
+	CHECK(m->x == s.towns[m->town].x + 3 && m->y == s.towns[m->town].y);
+	k = m->x;
+	for (day = 0; day < 4; day++)
+		sim_map_piece(&s, MAP_PIRATE);
+	CHECK(m->pieces == (MAP_WHOLE | MAP_SHOWN) && m->x == k);
+	/* The easiest level gets the whole map at once. */
+	s.player.difficulty = 0;
+	sim_map_piece(&s, MAP_RELATIVE);
+	CHECK(s.maps[MAP_RELATIVE].pieces == (MAP_WHOLE | MAP_SHOWN));
+	CHECK(s.maps[MAP_RELATIVE].town != m->town);
+	/* Digging away from any spot: three days, nothing. */
+	s.fleet.ashore = 1;
+	day = s.day;
+	gold = s.fleet.gold;
+	CHECK(sim_search(&s, found) == 0 && s.day == day + 3 &&
+	    s.fleet.gold == gold);
+	/* At the pirate's spot (a cell off counts): 5000-13000 gold. */
+	s.fleet.x = (m->x + 1) * WORLD_TILE + 8;
+	s.fleet.y = (m->y - 1) * WORLD_TILE + 8;
+	CHECK(sim_search(&s, found) == 1 && found[0].map == MAP_PIRATE &&
+	    found[0].gold >= 5000 && found[0].gold <= 13000 &&
+	    found[0].gold % 1000 == 0 && s.fleet.gold == gold +
+	    found[0].gold && m->pieces == 0);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_TREASURE);
+	/* The relative rescued tells of a lost treasure. */
+	s.fleet.x = s.maps[MAP_RELATIVE].x * WORLD_TILE + 8;
+	s.fleet.y = s.maps[MAP_RELATIVE].y * WORLD_TILE + 8;
+	CHECK(sim_search(&s, found) == 1 && found[0].map == MAP_RELATIVE &&
+	    found[0].value == 0 && s.relative == 1);
+	CHECK(s.maps[MAP_LOST].pieces != 0 && s.maps[MAP_LOST].value == 0);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_RESCUED);
+	gold = s.fleet.gold;
+	s.fleet.x = s.maps[MAP_LOST].x * WORLD_TILE + 8;
+	s.fleet.y = s.maps[MAP_LOST].y * WORLD_TILE + 8;
+	CHECK(sim_search(&s, found) == 1 && found[0].map == MAP_LOST &&
+	    found[0].gold == 100000 && s.fleet.gold == gold + 100000);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_LOST_TREASURE);
+	/* The map seller stays away once the map is whole. */
+	s.maps[MAP_PIRATE].pieces = MAP_WHOLE | MAP_SHOWN;
+	for (k = 0; k < 20; k++) {
+		s.tavern_spots = TAVERN_MAPS;
+		sim_tavern_open(&s);
+		CHECK(!(s.tavern_spots & TAVERN_MAPS));
+	}
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -2414,7 +2497,7 @@ test_old_state(void)
 	sim_to_json(&s, &st);
 	for (i = 0; i < sizeof(later) / sizeof(later[0]); i++)
 		strip_key(st.s, later[i]);
-	CHECK((v = strstr(st.s, "\"version\":18")) != NULL);
+	CHECK((v = strstr(st.s, "\"version\":19")) != NULL);
 	if (v != NULL)
 		memcpy(v, "\"version\":14", 12);
 	j = json_parse(st.s, err, sizeof(err));
@@ -2469,6 +2552,7 @@ main(void)
 	test_landing();
 	test_land_battle();
 	test_old_state();
+	test_treasure();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

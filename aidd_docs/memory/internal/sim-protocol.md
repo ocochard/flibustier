@@ -31,6 +31,7 @@ with a message. Numbers are integers only.
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
 | `shore` | after a `sail` stop at `land`: `ashore` 1 goes ashore, 0 turns the ship about | `ashore` |
+| `search` | on foot: digs at the treasure maps' spots (3 days) | `found` (`[{map: pirate, relative or lost, gold, value}]`) |
 | `march` | on foot: `dx`, `dy` (-1..1), `ticks` (1..23360) | `stop` (`ticks`, `town`, `boarded`), `town`, `x`, `y`, `day` |
 | `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
 | `bank` | `action`: `divide` (the plunder), or `continue` (another expedition; `advance`: 0 or 1) | `share`, `mood` (0-3), `yours`, `fortune`, `gold`, `crew`, `difficulty` |
@@ -55,7 +56,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 18,
+  "version": 19,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -188,6 +189,11 @@ A saved game is one file per slot, `save0.json` to `save9.json`
 - **Location:** the directory comes from `--saves DIR`, else
   `$STMALO_SAVES`, else `$XDG_DATA_HOME/stmalo/saves`, else
   `~/.local/share/stmalo/saves`. It is created when missing.
+- **Treasure maps:** `maps` holds the three maps (pirate, relative,
+  lost), each `pieces` (bits 1-8 the quarters, 16 shown), `x`, `y`
+  (cells), `value` (the lost treasure's people) and `town`; `relative`
+  is the next lost relative (0-3, 4 all found). Both are absent before
+  version 19 and then read as none.
 - **Older states:** states from version 14 on still load. The town
   fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
   `party_x`, `party_y`) then read as 65535 until the player's program

@@ -181,6 +181,13 @@ struct game {
 	const struct screen	*info_back;	/* where it returns */
 	int			 talk;		/* a tavern talk's stage */
 	int			 talk_town;
+	/* The treasure maps shown one after another, then "tmap_back". */
+	int			 tmap_maps[SIM_MAPS];
+	int			 tmap_n, tmap_i;
+	const struct screen	*tmap_back;
+	/* What the dig turned up, page by page. */
+	struct sim_find		 dig[SIM_MAPS];
+	int			 dig_n, dig_i, dig_page;
 	int			 tavern_spot;	/* pointed at, or -1 */
 	int			 btl_chosen;	/* the ship to command is chosen */
 	int			 ashore_prompt;	/* "go ashore?" waits for Y or N */

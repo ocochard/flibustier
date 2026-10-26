@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	18
+#define STATE_VERSION	19
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -28,6 +28,8 @@ static const struct {
 	{ "alliance", NEWS_ALLIANCE }, { "capture", NEWS_CAPTURE },
 	{ "plundered", NEWS_PLUNDERED }, { "taken", NEWS_TAKEN },
 	{ "not_taken", NEWS_NOT_TAKEN },
+	{ "lost_treasure", NEWS_LOST_TREASURE }, { "treasure", NEWS_TREASURE },
+	{ "rescued", NEWS_RESCUED },
 };
 
 /* Town fields addressable by name in state and "set" commands. */
@@ -545,8 +547,6 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.ticks);
 	jb_raw(b, ",\"leaving\":");
 	jb_int(b, s->fleet.leaving);
-	jb_raw(b, ",\"map_pieces\":");
-	jb_int(b, s->fleet.map_pieces);
 	jb_raw(b, ",\"ashore\":");
 	jb_int(b, s->fleet.ashore);
 	jb_raw(b, ",\"ship_x\":");
@@ -620,6 +620,23 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->news_price);
 	jb_raw(b, ",\"barmaid_mood\":");
 	jb_int(b, s->barmaid_mood);
+	jb_raw(b, ",\"relative\":");
+	jb_int(b, s->relative);
+	for (i = 0; i < SIM_MAPS; i++) {
+		jb_raw(b, i == 0 ? ",\"maps\":[{\"pieces\":" :
+		    ",{\"pieces\":");
+		jb_int(b, s->maps[i].pieces);
+		jb_raw(b, ",\"x\":");
+		jb_int(b, s->maps[i].x);
+		jb_raw(b, ",\"y\":");
+		jb_int(b, s->maps[i].y);
+		jb_raw(b, ",\"value\":");
+		jb_int(b, s->maps[i].value);
+		jb_raw(b, ",\"town\":");
+		jb_int(b, s->maps[i].town);
+		jb_raw(b, "}");
+	}
+	jb_raw(b, "]");
 	jb_raw(b, ",\"market\":{\"open\":");
 	jb_int(b, s->market.open);
 	for (i = 0; i < GOODS; i++) {
@@ -784,7 +801,6 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	f->speed = (int)json_get_int(j, "speed", 0);
 	f->ticks = (uint32_t)json_get_int(j, "ticks", 0);
 	f->leaving = (int)json_get_int(j, "leaving", -1);
-	f->map_pieces = (int)json_get_int(j, "map_pieces", 0);
 	f->ashore = json_get_int(j, "ashore", 0) != 0;
 	f->ship_x = (int32_t)json_get_int(j, "ship_x", 0);
 	f->ship_y = (int32_t)json_get_int(j, "ship_y", 0);
@@ -880,6 +896,33 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		tmp.news_town = 0;
 	tmp.news_price = (int)json_get_int(j, "news_price", 0);
 	tmp.barmaid_mood = (int)json_get_int(j, "barmaid_mood", 0);
+	tmp.relative = (int)json_get_int(j, "relative", 0);
+	{
+		/* Absent before version 19: no maps. */
+		const struct json *maps = json_get(j, "maps"), *m;
+		int k;
+
+		if (maps != NULL && (maps->type != JSON_ARRAY ||
+		    maps->count != SIM_MAPS)) {
+			snprintf(err, errlen, "bad maps");
+			return (-1);
+		}
+		for (k = 0; maps != NULL && k < SIM_MAPS; k++) {
+			m = maps->items[k];
+			tmp.maps[k].pieces = (uint16_t)(json_get_int(m,
+			    "pieces", 0) & 0x1F);
+			tmp.maps[k].x = (int16_t)json_get_int(m, "x", 0);
+			tmp.maps[k].y = (int16_t)json_get_int(m, "y", 0);
+			tmp.maps[k].value = (int16_t)(json_get_int(m, "value",
+			    0) & 3);
+			tmp.maps[k].town = (int16_t)json_get_int(m, "town", 0);
+			if (tmp.maps[k].town < 0 ||
+			    tmp.maps[k].town >= TOWN_MAX)
+				tmp.maps[k].town = 0;
+		}
+		if (tmp.relative < 0 || tmp.relative > 4)
+			tmp.relative = 0;
+	}
 	{
 		const struct json *mk = json_get(j, "market");
 		const struct json *st = json_get(mk, "stock");
@@ -1726,6 +1769,32 @@ cmd_shore(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* Ashore: dig at the treasure maps' spots (3 days). */
+static void
+cmd_search(struct session *ss, struct jbuf *out)
+{
+	static const char *maps[SIM_MAPS] = { "pirate", "relative", "lost" };
+	struct sim_find found[SIM_MAPS];
+	int i, n;
+
+	if (!ss->sim.fleet.ashore) {
+		reply_error(out, "search needs a party ashore");
+		return;
+	}
+	n = sim_search(&ss->sim, found);
+	jb_raw(out, "{\"ok\":true,\"found\":[");
+	for (i = 0; i < n; i++) {
+		jb_raw(out, i == 0 ? "{\"map\":" : ",{\"map\":");
+		jb_str(out, maps[found[i].map]);
+		jb_raw(out, ",\"gold\":");
+		jb_int(out, found[i].gold);
+		jb_raw(out, ",\"value\":");
+		jb_int(out, found[i].value);
+		jb_raw(out, "}");
+	}
+	jb_raw(out, "]}");
+}
+
 /* On foot: "dx", "dy" (-1..1) for "ticks". */
 static void
 cmd_march(struct session *ss, const struct json *cmd, struct jbuf *out)
@@ -1970,6 +2039,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_land(ss, cmd, out);
 	else if (strcmp(name, "shore") == 0)
 		cmd_shore(ss, cmd, out);
+	else if (strcmp(name, "search") == 0)
+		cmd_search(ss, out);
 	else if (strcmp(name, "march") == 0)
 		cmd_march(ss, cmd, out);
 	else if (strcmp(name, "assault") == 0)

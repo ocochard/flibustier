@@ -352,7 +352,7 @@ The first 512 bytes of the matching PCX, presumably a backup for the
 | 0x124 | `0x45e6e` | player standing per nation at `+0x0c`; relations 4x4 at `+0x44` |
 | 0x30 | `0x45f92` | player values, initialised from the start scenario (VA `0x1386c`) |
 | 0x90 | `0x45fc2` | |
-| 0x24 | `0x47186` | |
+| 0x24 | `0x47186` | 3 treasure maps of 12 bytes: pieces, spot x, y, people, town |
 | 0x0c | `0x471aa` | `+0`: player in town flag; `+2`: town index |
 | 0x24 | `0x471b6` | |
 | 0x30 | `0x471da` | 4 fleets of 12 bytes (targeting at VA `0xcba7`) |

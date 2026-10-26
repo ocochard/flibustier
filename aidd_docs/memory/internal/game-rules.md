@@ -249,6 +249,83 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   is at most `soldiers x 15`, the town has forts and more than 9
   soldiers; otherwise straight to the assault. No fort battle on foot.
 
+### Treasure maps (VA `0x1f08a`, `0x29ece`, `0xa801`)
+
+- **Three maps (VA `0x47186`, 12 bytes each):** the pirate's (0), the
+  lost relative's (1), the lost treasure's (2). Each holds the pieces
+  (+0: bits 1, 2, 4, 8 for the top-left, top-right, bottom-left and
+  bottom-right quarters, 0x10 once shown), the spot (+2, +4, in map
+  cells), the lost treasure's people (+6, map 2 only) and the town near
+  the spot (+8). A new game clears the pieces.
+- **A piece (VA `0x1f08a`):**
+  - Map 2 first takes the next lost relative's number as its people
+    (VA `0x45e78`: 0 sister, 1 father, 2 niece, 3 uncle; CSTN 37).
+  - With no piece yet, the spot is drawn: one of the 256 cells at VA
+    `0x34228`, again while the nearest town (VA `0x1adfc`, by
+    `|dx| + |dy|`) is the one the player is in or any map's town (an
+    empty map keeps its last town, 0 at first). The original draws for
+    ever if none qualifies; the engine takes the 2048th draw.
+  - Unless the map is whole, a missing quarter is added: `8 >> rand(4)`,
+    drawn again while held.
+  - On the easiest level the map is whole at once. The map is then
+    shown (VA `0x29ece`).
+  - Givers: the map seller and the barmaid (map 0), the mystery man
+    (map 1, VA `0x18913`, not modelled), and a rescued relative (map 2).
+- **The page (VA `0x29ece`), in `tmap.imb`'s palette (`tmap16.imb` in
+  16 colours):**
+  - `wood.pcx`, then each held quarter of `mapframe.pcx` over it,
+    rectangles (0, 0)-(318, 251), (319, 0)-(639, 251), (0, 252)-(318,
+    479), (319, 252)-(639, 479) (VA `0x41438`).
+  - Torn edges along the missing quarters, `treasmap.spr` frames 5-16,
+    one set per combination of quarters (frame, x, y):
+
+    | Held | Edges |
+    |---|---|
+    | 1 | 5 (319, 30), 6 (28, 252), 13 (318, 252) |
+    | 2 | 7 (306, 34), 8 (318, 252), 14 (307, 252) |
+    | 3 | 6 (28, 252), 8 (318, 252) |
+    | 4 | 9 (319, 252), 10 (28, 238), 15 (319, 244) |
+    | 5 | 5 (319, 30), 9 (319, 252) |
+    | 6 | 9 (319, 252), 10 (28, 238), 7 (306, 34), 8 (318, 252) |
+    | 7 | 9 (319, 252), 8 (318, 252) |
+    | 8 | 11 (309, 252), 12 (319, 240), 16 (311, 241) |
+    | 9 | 5 (319, 30), 6 (28, 252), 11 (309, 252), 12 (319, 240) |
+    | 10 | 11 (309, 252), 7 (306, 34) |
+    | 11 | 11 (309, 252), 6 (28, 252) |
+    | 12 | 10 (28, 238), 12 (319, 240) |
+    | 13 | 5 (319, 30), 12 (319, 240) |
+    | 14 | 7 (306, 34), 10 (28, 238) |
+
+  - The world in `tmap.imb`'s parchment tiles, 40 x 30 cells from the
+    spot less (20, 15), shows through colour 6 (2 in 16 colours).
+  - The mark at the centre: map 1 draws frame 0 at (312, 230) when the
+    relative is 1 (frame 0 looks female, though 1 is the father), else
+    frame 1 at (313, 225); the others the cross, frame 2 at (312, 229).
+  - The title, centred at the top in font 0 and ink entry 1: CSTN 31.0
+    "Pirate treasure map", 31.1 "Map to lost %s" (the relative), 31.2
+    "Map to lost treasure". Then CSTN 31.4 "Somewhere near %s" (the
+    spot's town), centred at y 460 in font 1. A click or Enter ends it.
+- **Searching (cabin spot 6, VA `0xa801`):** 3 days pass (VA `0x1e018`).
+  Every map with pieces whose spot is within a cell of the party (`|dx|
+  < 2` and `|dy| < 2`, in cells) is dug up, whole or not, and cleared;
+  texts in ink entry 1:
+  - Map 0: `find-t.pcx`, "Your digging uncovers a chest of solid oak!
+    ... %s gleaming pieces" (CSTR 183 at (100, 300) up to x 560), gold
+    `(rand(9) + 5) x 1000`; log code 8.
+  - Map 1: the relative's picture (`reunionf.pcx` for 0 and 2,
+    `reunionm.pcx` for 1 and 3), CSTR 184 ("Your %s is rescued!") at
+    (340, 150), (320, 150) for the men, up to x 620; then CSTR 188, the
+    tale of the lost treasure of the people CSTN 93 (Incan, Aztec,
+    Olmec, Mayan) numbered as the relative; then map 2's piece (and its
+    page); log code 26 with the relative, who becomes the next one. The
+    original also clears the 4 fleets at VA `0x471da` (not modelled).
+  - Map 2: the people's picture (`inca`, `aztec`, `olmec`, `maya.pcx`),
+    "You have found the lost %s treasure!" (CSTR 185 at (100, 320) up
+    to x 560), 100000 gold; log code 7.
+  - Nothing: `search.pcx`, "After three days of fruitless digging..."
+    (CSTR 189 at (100, 300) up to x 560).
+  - Then the march goes on.
+
 ### Land battles (VA `0x5a80`, `0x72ac`, `0x5d40`)
 
 - **The field:** the town's LBTL screen (town field 14, the same index
@@ -1041,11 +1118,12 @@ same town only bits 1 and 2 are kept.
   | Spot | Label | Engine |
   |---|---|---|
   | 1 | Continue travels | back to the town or the sea |
-  | 2 | Treasure maps | not yet |
+  | 2 | Treasure maps | the maps held, one after another; on while one is |
   | 3 | Treasure cave | the cave, back to the cabin |
   | 4 | Logbook | the latest news on `shiplog.pcx` (layout not traced) |
   | 5 | Map of the Caribbean | not yet |
-  | 6-8 | Search, Divide party, Join party | off unless a party is ashore |
+  | 6 | Search | digging, on foot only (see "Treasure maps") |
+  | 7-8 | Divide party, Join party | off; not done |
   | 9 | Save game | the save slots |
   | 10 | Exit game | the retirement question |
   | 11 | Practice fencing | below |
@@ -1257,7 +1335,8 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
     and the price is not 50. He stays away when the price is 50 or the
     town is the one the player is in. Drawing sets visit flag 2.
   - The map seller (VA `0x112b1`) is there one time in five, and never
-    once all the map pieces are held.
+    once the pirate's map is whole (its slot reads `0x1f`; another
+    condition, the flag at VA `0x44ae2`, is not identified).
   - The mystery man comes with a personal enemy (VA `0x18913`) or a
     mission (VA `0x1f8f7`); neither is modelled, so he stays away.
 - **Labels:** pointing at someone writes their name on the scroll
@@ -1265,8 +1344,8 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   Barmaid, Mystery Man, Exit).
 - **The map seller (VA `0x112ef`), on `mapman.pcx`:** "…part of an old
   treasure map for 500 gold pieces" (CSTR 153, at (340, 150) up to x
-  620), but the code takes 50. Without the gold: CSTR 94. The piece
-  (VA `0x1f08a`) waits for the treasure maps; the engine counts it.
+  620), but the code takes 50. Without the gold: CSTR 94. Paying gives
+  a piece of the pirate's map and shows it (see "Treasure maps").
 - **The traveller (VA `0x1116f`), on `infoman.pcx`:** "A traveller from
   %s offers to sell you information for %s gold pieces" (CSTR 152, at
   (20, 150) up to x 280). Paying makes that town's information current,

@@ -1842,6 +1842,19 @@ cabin_rect(const struct game *g, int i, int r[5])
 	return (0);
 }
 
+static void	tmap_show(struct game *, int, const struct screen *);
+
+static int
+any_map(const struct game *g)
+{
+	int i;
+
+	for (i = 0; i < SIM_MAPS; i++)
+		if (g->sim.maps[i].pieces != 0)
+			return (1);
+	return (0);
+}
+
 static int
 cabin_open(const struct game *g, int i)
 {
@@ -1855,6 +1868,8 @@ cabin_open(const struct game *g, int i)
 		return (g->sim.player_town >= 0 && g->save_dir[0] != '\0');
 	if (i == CABIN_SEARCH)
 		return (g->sim.fleet.ashore && g->sim.player_town < 0);
+	if (i == CABIN_MAPS)
+		return (any_map(g));
 	return (r[4] != 0);
 }
 
@@ -1897,6 +1912,13 @@ cabin_choose(struct game *g, int i)
 		break;
 	case CABIN_LOG:
 		game_goto(g, &screen_logbook);
+		break;
+	case CABIN_MAPS:
+		tmap_show(g, -1, &screen_cabin);
+		break;
+	case CABIN_SEARCH:
+		g->dig_i = g->dig_page = 0;
+		game_goto(g, &screen_dig);
 		break;
 	case CABIN_SAVE:
 		g->saving = 1;
@@ -1965,7 +1987,9 @@ cabin_draw(struct game *g)
 	const char *label;
 	int w;
 
-	if (g->cabin_spr.count > 0)
+	/* The chart on the table covers the maps' spot while there are
+	 * none (VA 0xa060). */
+	if (g->cabin_spr.count > 0 && !any_map(g))
 		fb_frame(&g->fb, &g->cabin_spr.frames[0], 325, 229);
 	label = g->cabin_spot >= 0 ?
 	    game_word(g, W_CABIN, (size_t)g->cabin_spot) :
@@ -5636,7 +5660,10 @@ mapman_choose(struct game *g, int i)
 		game_goto(g, &screen_tavern);
 		return;
 	}
-	g->talk = sim_buy_map(&g->sim) ? 1 : 2;
+	if (sim_buy_map(&g->sim))
+		tmap_show(g, MAP_PIRATE, &screen_tavern);  /* VA 0x1f08a */
+	else
+		g->talk = 2;
 }
 
 static void
@@ -5656,11 +5683,7 @@ mapman_draw(struct game *g)
 		    1);
 		return;
 	}
-	/* The piece itself (VA 0x1f08a) waits for the treasure maps. */
-	draw(g, FONT_BODY, 340, 150, 280, g->talk == 2 ?
-	    game_str(g, S_NO_FUNDS) :
-	    "(A piece of a treasure map is yours. Treasure maps are not "
-	    "implemented yet.)", 0);
+	draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_NO_FUNDS), 0);
 	continue_prompt(g);
 }
 
@@ -5797,6 +5820,8 @@ barmaid_event(struct game *g, const struct ui_event *ev)
 			g->talk = MAID_MAP;
 			break;
 		}
+	} else if (g->talk == MAID_MAP) {
+		tmap_show(g, MAP_PIRATE, &screen_tavern);	/* VA 0x1f08a */
 	} else if (g->talk == MAID_GOSSIP) {
 		/* The town's information (VA 0x196d0). */
 		g->info_town = g->talk_town;
@@ -6181,4 +6206,326 @@ land_draw(struct game *g)
 
 const struct screen screen_land = {
 	"land battle", land_enter, land_event, land_tick, land_draw,
+};
+
+/*
+ * A treasure map (VA 0x29ece): wood.pcx, the held quarters of
+ * mapframe.pcx over it, torn edges along the missing ones (treasmap.spr
+ * frames 5-16), and the world drawn in tmap.imb's parchment tiles, the
+ * spot at the centre, through the frame's colour 6.  The mark (frame 0
+ * or 1 for the relative's map, 2 for the others) sits on the spot; the
+ * title (CSTN 31) is centred at the top, "Somewhere near %s" at the
+ * bottom.  The whole page takes tmap.imb's palette.
+ */
+#define TMAP_HOLE		6	/* the frame's see-through colour */
+#define TMAP_INK		2
+#define W_MAP_TITLE		31
+#define MAP_TITLE_NEAR		4
+#define W_RELATIVE		37
+#define W_PEOPLE		93
+
+/* Each quarter's rectangle in the frame (VA 0x41438). */
+static const int tmap_quarter[4][4] = {
+	{ 0, 0, 318, 251 }, { 319, 0, 639, 251 },
+	{ 0, 252, 318, 479 }, { 319, 252, 639, 479 },
+};
+
+/* The torn edges for each set of quarters held: frame, x, y. */
+static const struct {
+	int	n;
+	int	edge[4][3];
+} tmap_torn[16] = {
+	[1] = { 3, { { 5, 319, 30 }, { 6, 28, 252 }, { 13, 318, 252 } } },
+	[2] = { 3, { { 7, 306, 34 }, { 8, 318, 252 }, { 14, 307, 252 } } },
+	[3] = { 2, { { 6, 28, 252 }, { 8, 318, 252 } } },
+	[4] = { 3, { { 9, 319, 252 }, { 10, 28, 238 }, { 15, 319, 244 } } },
+	[5] = { 2, { { 5, 319, 30 }, { 9, 319, 252 } } },
+	[6] = { 4, { { 9, 319, 252 }, { 10, 28, 238 }, { 7, 306, 34 },
+	    { 8, 318, 252 } } },
+	[7] = { 2, { { 9, 319, 252 }, { 8, 318, 252 } } },
+	[8] = { 3, { { 11, 309, 252 }, { 12, 319, 240 }, { 16, 311, 241 } } },
+	[9] = { 4, { { 5, 319, 30 }, { 6, 28, 252 }, { 11, 309, 252 },
+	    { 12, 319, 240 } } },
+	[10] = { 2, { { 11, 309, 252 }, { 7, 306, 34 } } },
+	[11] = { 2, { { 11, 309, 252 }, { 6, 28, 252 } } },
+	[12] = { 2, { { 10, 28, 238 }, { 12, 319, 240 } } },
+	[13] = { 2, { { 5, 319, 30 }, { 12, 319, 240 } } },
+	[14] = { 2, { { 7, 306, 34 }, { 10, 28, 238 } } },
+};
+
+/* A sprite frame into a picture, clipped. */
+static void
+image_frame(struct image *img, const struct frame *f, int x, int y)
+{
+	int fx, fy, px, py;
+
+	for (fy = 0; fy < f->h; fy++)
+		for (fx = 0; fx < f->w; fx++) {
+			px = x + fx;
+			py = y + fy;
+			if (px < 0 || py < 0 || px >= img->w || py >= img->h ||
+			    (f->mask != NULL && !f->mask[fy * f->w + fx]))
+				continue;
+			img->pixels[py * img->w + px] = f->pixels[fy * f->w + fx];
+		}
+}
+
+static void
+tmap_compose(struct game *g)
+{
+	const struct sim_map *m = &g->sim.maps[g->tmap_maps[g->tmap_i]];
+	struct image frame = { 0 };
+	struct sprite_bank spr = { 0 };
+	struct tileset ts = { 0 };
+	struct blob b;
+	int k, x, y, cx, cy, held = m->pieces & MAP_WHOLE, mark, mx, my;
+
+	game_background(g, "pic/wood");
+	game_portrait(g, NULL);
+	if (g->bg.pixels == NULL || g->bg.w != FB_W || g->bg.h != FB_H)
+		return;
+	if (packs_load(g->packs, "pic/mapframe", &b) == 0) {
+		if (pcx_decode(b.data, b.len, &frame) != 0)
+			memset(&frame, 0, sizeof(frame));
+		blob_free(&b);
+	}
+	if (frame.pixels != NULL && frame.w == FB_W && frame.h == FB_H)
+		for (k = 0; k < 4; k++) {
+			if (!(held & (1 << k)))
+				continue;
+			for (y = tmap_quarter[k][1]; y <= tmap_quarter[k][3];
+			    y++)
+				memcpy(&g->bg.pixels[y * FB_W +
+				    tmap_quarter[k][0]],
+				    &frame.pixels[y * FB_W + tmap_quarter[k][0]],
+				    (size_t)(tmap_quarter[k][2] -
+				    tmap_quarter[k][0] + 1));
+		}
+	image_free(&frame);
+	load_bank(g, "spr/treasmap", 0, &spr);
+	for (k = 0; k < tmap_torn[held].n; k++)
+		if ((size_t)tmap_torn[held].edge[k][0] < spr.count)
+			image_frame(&g->bg, &spr.frames[tmap_torn[held].edge[k][0]],
+			    tmap_torn[held].edge[k][1],
+			    tmap_torn[held].edge[k][2]);
+	/* The world, 40 x 30 cells around the spot, under the holes. */
+	if (packs_load(g->packs, "tiles/tmap", &b) == 0) {
+		if (tileset_decode(b.data, b.len, &ts) != 0)
+			memset(&ts, 0, sizeof(ts));
+		blob_free(&b);
+	}
+	if (ts.pixels != NULL && ts.tile_w == WORLD_TILE && g->world != NULL) {
+		for (y = 0; y < FB_H; y++)
+			for (x = 0; x < FB_W; x++) {
+				if (g->bg.pixels[y * FB_W + x] != TMAP_HOLE)
+					continue;
+				cx = m->x - 20 + x / WORLD_TILE;
+				cy = m->y - 15 + y / WORLD_TILE;
+				if (cx < 0 || cy < 0 || cx >= WORLD_CELLS_W ||
+				    cy >= WORLD_CELLS_H)
+					continue;
+				k = g->world->map[cy * WORLD_CELLS_W + cx];
+				if ((size_t)k >= ts.count)
+					continue;
+				g->bg.pixels[y * FB_W + x] = ts.pixels[(size_t)k *
+				    WORLD_TILE * WORLD_TILE + (y % WORLD_TILE) *
+				    WORLD_TILE + x % WORLD_TILE];
+			}
+		if (ts.has_palette) {
+			memcpy(g->bg.palette, ts.palette, sizeof(g->bg.palette));
+			memcpy(g->fb.pal, ts.palette, sizeof(g->fb.pal));
+		}
+	}
+	tileset_free(&ts);
+	/* The mark: the relative's (frame 0 when the relative is 1, else
+	 * 1), the cross for the others. */
+	if (g->tmap_maps[g->tmap_i] == MAP_RELATIVE) {
+		mark = g->sim.relative == 1 ? 0 : 1;
+		mx = mark == 0 ? -8 : -7;
+		my = mark == 0 ? -10 : -15;
+	} else {
+		mark = 2;
+		mx = -8;
+		my = -11;
+	}
+	if ((size_t)mark < spr.count)
+		image_frame(&g->bg, &spr.frames[mark], FB_W / 2 + mx,
+		    FB_H / 2 + my);
+	bank_free(&spr);
+	memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+tmap_enter(struct game *g)
+{
+	g->tmap_i = 0;
+	tmap_compose(g);
+}
+
+static void
+tmap_event(struct game *g, const struct ui_event *ev)
+{
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (++g->tmap_i < g->tmap_n)
+		tmap_compose(g);
+	else
+		game_goto(g, g->tmap_back);
+}
+
+static void
+tmap_draw(struct game *g)
+{
+	int map = g->tmap_maps[g->tmap_i];
+	const struct sim_map *m = &g->sim.maps[map];
+	char text[160];
+
+	if (map == MAP_RELATIVE)
+		fill(text, sizeof(text), game_word(g, W_MAP_TITLE, 1),
+		    game_word(g, W_RELATIVE, (size_t)(g->sim.relative & 3)),
+		    NULL);
+	else
+		snprintf(text, sizeof(text), "%s",
+		    game_word(g, W_MAP_TITLE, (size_t)map));
+	draw_centered(g, FONT_TITLE, 0, text);
+	if (m->pieces & MAP_SHOWN && (size_t)m->town < g->sim.ntowns) {
+		fill(text, sizeof(text), game_word(g, W_MAP_TITLE,
+		    MAP_TITLE_NEAR), g->sim.towns[m->town].name, NULL);
+		draw_centered(g, FONT_BODY, 460, text);
+	}
+}
+
+const struct screen screen_tmap = {
+	"treasure map", tmap_enter, tmap_event, NULL, tmap_draw,
+};
+
+/* Show one map ("map" >= 0) or all those held, then go to "back". */
+static void
+tmap_show(struct game *g, int map, const struct screen *back)
+{
+	int i;
+
+	g->tmap_n = 0;
+	for (i = 0; i < SIM_MAPS; i++)
+		if ((map < 0 || i == map) && g->sim.maps[i].pieces != 0)
+			g->tmap_maps[g->tmap_n++] = i;
+	if (g->tmap_n == 0) {
+		game_goto(g, back);
+		return;
+	}
+	g->tmap_back = back;
+	game_goto(g, &screen_tmap);
+}
+
+/*
+ * Digging (VA 0xa801), after the 3 days: nothing (search.pcx, CSTR 189
+ * at (100, 300) up to x 560); the pirate's chest (find-t.pcx, CSTR 183);
+ * the relative (reunionf/reunionm.pcx, CSTR 184 then the lost treasure's
+ * tale, CSTR 188, at (340, 150) - (320, 150) for the men - up to x 620,
+ * then the lost treasure's map); the lost treasure (inca, aztec, olmec,
+ * maya.pcx, CSTR 185 at (100, 320) up to x 560).  Texts in ink entry 1.
+ */
+#define S_CHEST			183
+#define S_REUNION		184
+#define S_LOST_FOUND		185
+#define S_LOST_TALE		188
+#define S_NO_TREASURE		189
+
+static const char *const dig_people_pic[4] = {
+	"pic/inca", "pic/aztec", "pic/olmec", "pic/maya",
+};
+
+static void
+dig_page(struct game *g)
+{
+	const struct sim_find *f = &g->dig[g->dig_i];
+	const char *pic;
+
+	if (g->dig_n == 0)
+		pic = "pic/search";
+	else if (f->map == MAP_PIRATE)
+		pic = "pic/find-t";
+	else if (f->map == MAP_RELATIVE)
+		pic = f->value & 1 ? "pic/reunionm" : "pic/reunionf";
+	else
+		pic = dig_people_pic[f->value & 3];
+	game_background(g, pic);
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+dig_enter(struct game *g)
+{
+	if (g->dig_i == 0 && g->dig_page == 0)
+		g->dig_n = sim_search(&g->sim, g->dig);
+	dig_page(g);
+}
+
+static void
+dig_event(struct game *g, const struct ui_event *ev)
+{
+	const struct sim_find *f = &g->dig[g->dig_i];
+
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (g->dig_n > 0 && f->map == MAP_RELATIVE && g->dig_page == 0) {
+		g->dig_page = 1;		/* the tale */
+		return;
+	}
+	g->dig_page = 0;
+	if (++g->dig_i < g->dig_n) {
+		if (f->map == MAP_RELATIVE) {
+			/* The lost treasure's map, then the next find. */
+			tmap_show(g, MAP_LOST, &screen_dig);
+			return;
+		}
+		dig_page(g);
+		return;
+	}
+	g->dig_i = 0;
+	if (g->dig_n > 0 && f->map == MAP_RELATIVE)
+		tmap_show(g, MAP_LOST, &screen_sail);
+	else
+		game_goto(g, &screen_sail);
+}
+
+static void
+dig_draw(struct game *g)
+{
+	const struct sim_find *f = &g->dig[g->dig_i];
+	char text[640], num[24];
+	const char *who;
+
+	if (g->dig_n == 0) {
+		draw(g, FONT_BODY, 100, 300, 460, game_str(g, S_NO_TREASURE),
+		    0);
+	} else if (f->map == MAP_PIRATE) {
+		snprintf(num, sizeof(num), "%ld", f->gold);
+		fill(text, sizeof(text), game_str(g, S_CHEST), num, NULL);
+		draw(g, FONT_BODY, 100, 300, 460, text, 0);
+	} else if (f->map == MAP_RELATIVE) {
+		who = game_word(g, W_RELATIVE, (size_t)(f->value & 3));
+		if (g->dig_page == 0)
+			fill(text, sizeof(text), game_str(g, S_REUNION), who,
+			    who);
+		else
+			fill(text, sizeof(text), game_str(g, S_LOST_TALE),
+			    game_word(g, W_PEOPLE, (size_t)(f->value & 3)),
+			    NULL);
+		draw(g, FONT_BODY, f->value & 1 ? 320 : 340, 150,
+		    f->value & 1 ? 300 : 280, text, 0);
+	} else {
+		fill(text, sizeof(text), game_str(g, S_LOST_FOUND),
+		    game_word(g, W_PEOPLE, (size_t)(f->value & 3)), NULL);
+		draw(g, FONT_BODY, 100, 320, 460, text, 0);
+	}
+	continue_prompt(g);
+}
+
+const struct screen screen_dig = {
+	"dig", dig_enter, dig_event, NULL, dig_draw,
 };

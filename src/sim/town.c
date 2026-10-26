@@ -336,8 +336,11 @@ people:
 		if (s->news_price == 50 || s->news_town == s->player_town)
 			s->tavern_spots &= ~TAVERN_NEWS;
 	}
-	/* The map seller (VA 0x112b1): one time in five. */
-	if ((s->tavern_spots & TAVERN_MAPS) && rng_below(&s->rng, 5) != 0)
+	/* The map seller (VA 0x112b1): one time in five, and never once
+	 * the pirate's map is whole. */
+	if ((s->tavern_spots & TAVERN_MAPS) &&
+	    (s->maps[MAP_PIRATE].pieces == (MAP_WHOLE | MAP_SHOWN) ||
+	    rng_below(&s->rng, 5) != 0))
 		s->tavern_spots &= ~TAVERN_MAPS;
 }
 
@@ -347,7 +350,7 @@ sim_buy_map(struct sim *s)
 	if (s->fleet.gold < MAP_PRICE)
 		return (0);
 	s->fleet.gold -= MAP_PRICE;
-	s->fleet.map_pieces++;
+	sim_map_piece(s, MAP_PIRATE);
 	s->tavern_spots &= ~TAVERN_MAPS;
 	return (1);
 }
@@ -420,7 +423,7 @@ sim_barmaid_report(struct sim *s, int *town)
 		s->tavern_spots &= ~TAVERN_NEWS;
 		r = 1;
 	} else if (s->tavern_spots & TAVERN_MAPS) {
-		s->fleet.map_pieces++;
+		sim_map_piece(s, MAP_PIRATE);
 		s->tavern_spots &= ~TAVERN_MAPS;
 		r = 2;
 	}

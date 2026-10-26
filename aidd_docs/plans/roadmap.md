@@ -252,8 +252,10 @@ Status (2026-10-26): first slice.
   governor, prison after a defeat.
 - **Landing parties:** going ashore, walking, inland towns, back aboard.
 - **Tavern:** the traveller, the map seller and the barmaid.
-- **Next:** the land battle (attacking on foot), dividing parties, the
-  crew's mood, prison, treasure maps.
+- **Land battle:** attacking on foot.
+- **Treasure maps:** pieces, the map page, digging; the relative's
+  quest waits for the mystery man.
+- **Next:** dividing parties, the crew's mood, prison.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.
