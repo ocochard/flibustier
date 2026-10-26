@@ -702,6 +702,44 @@ same town only bits 1 and 2 are kept.
   - Otherwise CSTN 23.1 ("no info"), or 23.4 when the information is
     obsolete.
 
+### Shipwright (VA `0x218c2`)
+
+- **Refusals, before anything else:**
+  - "We do not trade with pirates!" (CSTR 256) in a Spanish town when
+    `rank with Spain x 25 + high byte of the diplomacy range` (VA
+    `0x45e7f`, `0x4707f`) is below the town's wealth (word 8). The same
+    test guards the merchant (VA `0x21424`).
+  - "You have nothing of worth" (CSTR 278) when the arrival mode (VA
+    `0x47aca`) is 3, probably a party on foot.
+- **His gold (once per stay, VA `0x45f08`):**
+  - `x = trunc((|6 - month| + 6) x wealth / 6)`, with the month 0-11;
+  - `gold = ((citizens + 10) x x / 150) x 600`, at most 50,000.
+  - It is kept for the stay, and reset in another town.
+- **Menu (CSTR 277):** parting company, repairing a ship, selling a
+  ship, selling some cannon.
+- **Prices (VA `0xffae`):** with class `c` (type `& 0xF`) and damage
+  level `d = min(damage / 16, 3)`:
+  - a repair costs `50 x (c + 1) x d`;
+  - a ship sells for `50 x (c + 1) x (10 - d)`.
+- **Repairing:**
+  - "I see nothing wrong" (CSTR 282) when no ship is damaged.
+  - The chosen ships' total must be below the player's gold, or he
+    cannot afford it (CSTR 283).
+  - The gold goes to the shipwright, and the ships' damage is cleared.
+- **Selling:**
+  - Not the only ship (CSTR 279), and at most all but one.
+  - Ships go in fleet order while the shipwright's gold covers the
+    price; otherwise he lacks the funds (CSTR 319).
+  - A sold ship keeps its cargo in the fleet (VA `0x1f2a1` with keep 1).
+- **Cannon:** "not the only one" (CSTR 284) under 2 guns. Otherwise a
+  trading screen at 50 gold a gun (VA `0x22c76`), shared with the
+  merchant's; not traced yet.
+- **Engine choices:**
+  - Ranks are not modelled yet, so they count as 0: Spanish shipwrights
+    refuse wealthy towns' customers.
+  - The original picks several ships at once on a fleet panel; the
+    engine takes one ship per choice and shows the list again.
+
 ## Intro (VA `0x3325`)
 
 1. `micro.pcx`: fade in, 2 s (20 x 100 ms), fade out.

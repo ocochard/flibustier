@@ -1375,6 +1375,83 @@ test_towns(void)
 	session_free(&ss);
 }
 
+/* The shipwright: his gold, the refusal, prices, repairs and sales. */
+static void
+test_shipwright(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	long gold;
+
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->nation = NATION_ENGLAND;
+	t->wealth = 120;
+	t->citizens = 20;
+	s.month = 0;				/* January: |6 - 0| = 6 */
+	sim_enter_town(&s, 1);
+	CHECK(!sim_shipwright_refuses(&s));
+	/* ((6 + 6) x 120 / 6) = 240; (30 x 240 / 150) x 600 = 28800. */
+	CHECK(sim_shipwright_gold(&s) == 28800);
+	s.month = 6;				/* set once per stay */
+	CHECK(sim_shipwright_gold(&s) == 28800);
+	sim_leave_town(&s);
+	sim_enter_town(&s, 0);
+	sim_leave_town(&s);
+	sim_enter_town(&s, 1);			/* a new stay: July */
+	CHECK(sim_shipwright_gold(&s) == ((30 * (6 * 120 / 6)) / 150) * 600);
+	t->wealth = 255;
+	t->citizens = 200;
+	sim_enter_town(&s, 0);
+	sim_enter_town(&s, 1);
+	CHECK(sim_shipwright_gold(&s) == 50000);	/* the cap */
+	/* Spanish towns refuse while the rank falls short of the wealth. */
+	t->nation = NATION_SPAIN;
+	CHECK(sim_shipwright_refuses(&s));
+	t->wealth = 0;
+	CHECK(!sim_shipwright_refuses(&s));
+	t->nation = NATION_ENGLAND;
+
+	/* Prices: 50 x (class + 1) x level, and x (10 - level). */
+	s.fleet.nships = 3;
+	s.fleet.ships[0] = 1;			/* sloop, undamaged */
+	s.fleet.damage[0] = 0;
+	s.fleet.ships[1] = 4;			/* merchantman, level 2 */
+	s.fleet.damage[1] = 40;
+	s.fleet.ships[2] = 0;			/* pinnace, level 3 (capped) */
+	s.fleet.damage[2] = 63;
+	CHECK(sim_repair_cost(&s, 0) == 0 && sim_ship_price(&s, 0) == 1000);
+	CHECK(sim_repair_cost(&s, 1) == 500 && sim_ship_price(&s, 1) == 2000);
+	CHECK(sim_repair_cost(&s, 2) == 150 && sim_ship_price(&s, 2) == 350);
+
+	/* Repairs: nothing to do, too dear (strictly less than the gold),
+	 * then paid to the shipwright. */
+	CHECK(sim_repair(&s, 1u) == REPAIR_NOTHING);
+	s.fleet.gold = 650;
+	CHECK(sim_repair(&s, 6u) == REPAIR_TOO_DEAR && s.fleet.damage[1] == 40);
+	s.fleet.gold = 651;
+	gold = sim_shipwright_gold(&s);
+	CHECK(sim_repair(&s, 6u) == REPAIR_DONE);
+	CHECK(s.fleet.gold == 1 && s.fleet.damage[1] == 0 &&
+	    s.fleet.damage[2] == 0 && sim_shipwright_gold(&s) == gold + 650);
+
+	/* Sales: in fleet order, one ship stays, his gold may run out. */
+	CHECK(sim_sell_ships(&s, 7u) == SELL_DONE);
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0);	/* kept */
+	CHECK(s.fleet.gold == 1 + 1000 + 2500);
+	CHECK(sim_sell_ships(&s, 1u) == SELL_ONLY_SHIP);
+	s.fleet.nships = 2;
+	s.fleet.ships[1] = 8;
+	s.fleet.damage[1] = 0;
+	s.wright_gold = 4499;			/* a fast galleon: 4500 */
+	CHECK(sim_sell_ships(&s, 2u) == SELL_SHORT && s.fleet.nships == 2);
+	s.wright_gold = 4500;
+	CHECK(sim_sell_ships(&s, 2u) == SELL_DONE && s.wright_gold == 0);
+	/* Levels stop at 3, as the game's damage nibble is read. */
+	s.fleet.damage[0] = 200;
+	CHECK(sim_repair_cost(&s, 0) == 50 * 1 * 3);
+}
+
 int
 main(void)
 {
@@ -1392,6 +1469,7 @@ main(void)
 	test_sword();
 	test_sword_protocol();
 	test_towns();
+	test_shipwright();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

@@ -564,6 +564,53 @@ test_town(void)
 	game_free(g);
 }
 
+/* The shipwright: repair one ship, sell another, the refusals. */
+static void
+test_shipwright(void)
+{
+	struct game *g;
+	const struct sim_town *t;
+	long gold;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Lo enter enter enter enter enter wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	t = &g->sim.towns[g->sim.fleet.leaving];
+	CHECK(t->nation != NATION_SPAIN);
+	g->sim.fleet.x = t->sea_x * 16 + 8;
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;
+	g->sim.fleet.nships = 2;
+	g->sim.fleet.ships[1] = 4;
+	g->sim.fleet.damage[1] = 0;
+	g->sim.fleet.damage[0] = 40;	/* the sloop: level 2 */
+	CHECK(game_script(g, "wait:40 click:60,400 wait:40") == 0);
+	CHECK(g->screen == &screen_shipwright && g->wright_stage == 0);
+	/* Repair: the list, the sloop, paid. */
+	gold = g->sim.fleet.gold;
+	CHECK(game_script(g, "down enter") == 0 && g->wright_stage == 1);
+	CHECK(game_script(g, "enter") == 0);
+	CHECK(g->sim.fleet.damage[0] == 0 && g->sim.fleet.gold == gold - 200);
+	CHECK(g->wright_stage == 0);	/* nothing left to repair */
+	/* Repairing again: "nothing wrong". */
+	CHECK(game_script(g, "down enter") == 0 && g->wright_stage == 3);
+	CHECK(game_script(g, "enter") == 0 && g->wright_stage == 0);
+	/* Sell the merchantman: 50 x 5 x 10 gold. */
+	gold = g->sim.fleet.gold;
+	CHECK(game_script(g, "down down enter") == 0 && g->wright_stage == 2);
+	CHECK(game_script(g, "down enter") == 0);
+	CHECK(g->sim.fleet.nships == 1 && g->sim.fleet.gold == gold + 2500);
+	/* The only ship is not for sale. */
+	CHECK(game_script(g, "down down enter") == 0 && g->wright_stage == 3);
+	CHECK(game_script(g, "enter") == 0);
+	/* Parting company: back in town. */
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_town);
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -590,6 +637,7 @@ main(void)
 	test_pointer();
 	test_intro();
 	test_town();
+	test_shipwright();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

@@ -142,6 +142,8 @@ struct game {
 	struct sprite_bank	 town_spr;	/* harbour and closed gate */
 	int			 town_spot;	/* building under the cursor, -1 */
 	int			 town_key;	/* keyboard selection, -1 */
+	int			 wright_stage;	/* 0 menu, 1 repair, 2 sell, 3 note */
+	int			 wright_note;	/* CSTR shown at stage 3 */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

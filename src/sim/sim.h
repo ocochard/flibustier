@@ -288,6 +288,7 @@ struct sim {
 	int		player_town;	/* town the player is in, or -1 */
 	int		visit_town;	/* town of the visit flags, or -1 */
 	int		visit_flags;	/* VISIT_* for the current visit */
+	int		wright_gold;	/* the shipwright's, -1 until known */
 	int8_t		relations[4][4];
 	int8_t		standing[5];	/* player standing per nation, and
 					 * pirates (always -1 so far) */
@@ -331,6 +332,23 @@ enum encounter_result sim_encounter_act(struct sim *s,
 /* Enter a town (arriving or returning to it), and leave it. */
 void	sim_enter_town(struct sim *s, int town);
 void	sim_leave_town(struct sim *s);
+
+/* The shipwright (VA 0x218c2). */
+enum repair_result { REPAIR_DONE, REPAIR_NOTHING, REPAIR_TOO_DEAR };
+enum sell_result { SELL_DONE, SELL_NOTHING, SELL_ONLY_SHIP, SELL_SHORT };
+
+/* "We do not trade with pirates!" */
+int	sim_shipwright_refuses(const struct sim *s);
+/* The shipwright's gold this stay. */
+int	sim_shipwright_gold(struct sim *s);
+/* Ship "i": the cost of its repair, and its price. */
+int	sim_repair_cost(const struct sim *s, int i);
+int	sim_ship_price(const struct sim *s, int i);
+/* Repair the ships in "mask" (bit i: ship i), paying for them. */
+int	sim_repair(struct sim *s, unsigned mask);
+/* Sell the ships in "mask", in fleet order, while his gold lasts; one
+ * ship always stays. */
+int	sim_sell_ships(struct sim *s, unsigned mask);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);

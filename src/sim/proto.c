@@ -530,6 +530,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->visit_town);
 	jb_raw(b, ",\"visit_flags\":");
 	jb_int(b, s->visit_flags);
+	jb_raw(b, ",\"wright_gold\":");
+	jb_int(b, s->wright_gold);
 	jb_raw(b, ",\"relations\":[");
 	for (a = 0; a < 4; a++) {
 		jb_raw(b, a > 0 ? ",[" : "[");
@@ -741,6 +743,7 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.player_town = (int)json_get_int(j, "player_town", -2);
 	tmp.visit_town = (int)json_get_int(j, "visit_town", -1);
 	tmp.visit_flags = (int)json_get_int(j, "visit_flags", 0);
+	tmp.wright_gold = (int)json_get_int(j, "wright_gold", -1);
 	if (tmp.day < 0 || tmp.day_of_year < 0 || tmp.day_of_year >= 360 ||
 	    tmp.month < 0 || tmp.month > 12 || tmp.diplomacy_range <= 0) {
 		snprintf(err, errlen, "bad calendar or diplomacy_range");
@@ -1212,6 +1215,80 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * The shipwright: "prices" lists each ship's repair cost and price;
+ * "repair" and "sell" take "ships", a list of fleet indices.
+ */
+static void
+cmd_shipwright(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *repairs[] = { "done", "nothing", "too_dear" };
+	static const char *sales[] = { "done", "nothing", "only_ship",
+	    "short" };
+	const char *action = json_get_str(cmd, "action");
+	const struct json *ships = json_get(cmd, "ships");
+	struct sim *s = &ss->sim;
+	unsigned mask = 0;
+	size_t i;
+	int r;
+
+	if (s->player_town < 0) {
+		reply_error(out, "not in a town");
+		return;
+	}
+	if (sim_shipwright_refuses(s)) {
+		reply_error(out, "we do not trade with pirates");
+		return;
+	}
+	if (ships != NULL) {
+		if (ships->type != JSON_ARRAY) {
+			reply_error(out, "\"ships\" is a list of indices");
+			return;
+		}
+		for (i = 0; i < ships->count; i++) {
+			if (ships->items[i]->type != JSON_INT ||
+			    ships->items[i]->num < 0 ||
+			    ships->items[i]->num >= s->fleet.nships) {
+				reply_error(out, "bad ship index");
+				return;
+			}
+			mask |= 1u << ships->items[i]->num;
+		}
+	}
+	if (action != NULL && strcmp(action, "repair") == 0) {
+		r = sim_repair(s, mask);
+		jb_raw(out, "{\"ok\":true,\"result\":");
+		jb_str(out, repairs[r]);
+	} else if (action != NULL && strcmp(action, "sell") == 0) {
+		r = sim_sell_ships(s, mask);
+		jb_raw(out, "{\"ok\":true,\"result\":");
+		jb_str(out, sales[r]);
+	} else if (action != NULL && strcmp(action, "prices") == 0) {
+		jb_raw(out, "{\"ok\":true,\"repair\":[");
+		for (r = 0; r < s->fleet.nships; r++) {
+			if (r > 0)
+				jb_raw(out, ",");
+			jb_int(out, sim_repair_cost(s, r));
+		}
+		jb_raw(out, "],\"price\":[");
+		for (r = 0; r < s->fleet.nships; r++) {
+			if (r > 0)
+				jb_raw(out, ",");
+			jb_int(out, sim_ship_price(s, r));
+		}
+		jb_raw(out, "]");
+	} else {
+		reply_error(out, "shipwright needs \"action\": prices, repair "
+		    "or sell");
+		return;
+	}
+	jb_raw(out, ",\"gold\":");
+	jb_int(out, s->fleet.gold);
+	jb_raw(out, ",\"shipwright_gold\":");
+	jb_int(out, sim_shipwright_gold(s));
+	jb_raw(out, "}");
+}
+
 static void
 cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1310,6 +1387,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_finish(ss, cmd, out);
 	else if (strcmp(name, "town") == 0)
 		cmd_town(ss, cmd, out);
+	else if (strcmp(name, "shipwright") == 0)
+		cmd_shipwright(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

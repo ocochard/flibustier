@@ -105,6 +105,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->diplomacy_range = SIM_DIPLOMACY_RANGE;
 	s->player_town = SIM_NO_TOWN;
 	s->visit_town = SIM_NO_TOWN;
+	s->wright_gold = -1;
 	s->player.expedition = -1;
 	snprintf(s->player.title, sizeof(s->player.title), "%s", scn->name);
 	memcpy(s->relations, scn->relations, sizeof(s->relations));
@@ -702,9 +703,10 @@ sim_enter_town(struct sim *s, int town)
 
 	if (town < 0 || (size_t)town >= s->ntowns)
 		return;
-	if (town != s->visit_town)
+	if (town != s->visit_town) {
 		s->visit_flags = 0;
-	else
+		s->wright_gold = -1;
+	} else
 		s->visit_flags &= VISIT_GOVERNOR | VISIT_KEPT;
 	s->visit_town = town;
 	s->player_town = town;

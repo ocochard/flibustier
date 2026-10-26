@@ -2440,6 +2440,9 @@ town_choose(struct game *g, int i)
 	case SPOT_INFO:
 		game_goto(g, &screen_cityinfo);
 		break;
+	case SPOT_SHIPWRIGHT:
+		game_goto(g, &screen_shipwright);
+		break;
 	case SPOT_LEAVE:
 		sim_leave_town(&g->sim);
 		bank_free(&g->town_spr);
@@ -2617,4 +2620,203 @@ cityinfo_draw(struct game *g)
 
 const struct screen screen_cityinfo = {
 	"cityinfo", cityinfo_enter, cityinfo_event, NULL, cityinfo_draw,
+};
+
+/*
+ * Shipwright (VA 0x218c2): repair ships, sell ships, sell cannon.  The
+ * original picks several ships at once on a fleet panel; here each
+ * choice is one ship, and the list comes back until "None, thanks".
+ */
+#define S_NO_PIRATES		256
+#define S_WRIGHT_MENU		277
+#define S_ONLY_SHIP		279
+#define S_NOTHING_WRONG		282
+#define S_CANT_AFFORD		283
+#define S_ONLY_CANNON		284
+#define S_SHORT_FUNDS		319
+#define W_WRIGHT		28	/* lists: titles, lines, "None" */
+#define WRIGHT_TEXT_X		40
+#define WRIGHT_TEXT_Y		300
+#define WRIGHT_TEXT_W		540
+
+static void
+wright_note(struct game *g, int cstr)
+{
+	g->wright_note = cstr;
+	g->wright_stage = 3;
+}
+
+static void
+shipwright_enter(struct game *g)
+{
+	game_background(g, "pic/swright");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;	/* light, on the dark blue */
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	g->highlight[0] = 255;
+	g->highlight[1] = 200;
+	g->highlight[2] = 60;
+	g->wright_stage = 0;
+	if (sim_shipwright_refuses(&g->sim))
+		wright_note(g, S_NO_PIRATES);
+}
+
+static int
+any_damage(const struct game *g)
+{
+	int i;
+
+	for (i = 0; i < g->sim.fleet.nships; i++)
+		if (sim_repair_cost(&g->sim, i) > 0)
+			return (1);
+	return (0);
+}
+
+static void
+wright_menu_choose(struct game *g, int i)
+{
+	switch (i) {
+	case 0:		/* "Parting company" */
+		game_goto(g, &screen_town);
+		break;
+	case 1:
+		if (!any_damage(g))
+			wright_note(g, S_NOTHING_WRONG);
+		else
+			g->wright_stage = 1;
+		break;
+	case 2:
+		if (g->sim.fleet.nships < 2)
+			wright_note(g, S_ONLY_SHIP);
+		else
+			g->wright_stage = 2;
+		break;
+	case 3:
+		if (g->sim.fleet.guns < 2)
+			wright_note(g, S_ONLY_CANNON);
+		else
+			snprintf(g->msg, sizeof(g->msg),
+			    "(Selling cannon: not implemented yet.)");
+		break;
+	}
+	g->selected = 0;
+}
+
+static void
+wright_list_choose(struct game *g, int i)
+{
+	int r;
+
+	if (i >= g->sim.fleet.nships) {		/* "None, thanks" */
+		g->wright_stage = 0;
+		g->selected = 0;
+		return;
+	}
+	if (g->wright_stage == 1) {
+		if (sim_repair_cost(&g->sim, i) == 0)
+			return;
+		r = sim_repair(&g->sim, 1u << i);
+		if (r == REPAIR_TOO_DEAR)
+			wright_note(g, S_CANT_AFFORD);
+		else if (!any_damage(g))
+			g->wright_stage = 0;
+	} else {
+		r = sim_sell_ships(&g->sim, 1u << i);
+		if (r == SELL_SHORT)
+			wright_note(g, S_SHORT_FUNDS);
+		else if (g->sim.fleet.nships < 2)
+			g->wright_stage = 0;
+	}
+	g->selected = 0;
+}
+
+static void
+shipwright_event(struct game *g, const struct ui_event *ev)
+{
+	g->msg[0] = ev->type == EV_KEY || ev->type == EV_CLICK ? '\0' :
+	    g->msg[0];
+	switch (g->wright_stage) {
+	case 0:
+		menu_event(g, ev, 4, NULL, wright_menu_choose, NULL);
+		break;
+	case 1:
+	case 2:
+		menu_event(g, ev, g->sim.fleet.nships + 1, NULL,
+		    wright_list_choose, NULL);
+		break;
+	default:
+		if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+		    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+			if (g->wright_note == S_NO_PIRATES)
+				game_goto(g, &screen_town);
+			g->wright_stage = 0;
+			g->selected = 0;
+		}
+		break;
+	}
+}
+
+/* The ship list: "~%s%s: %s gold pieces", or "(no damage)". */
+static void
+wright_list(struct game *g, char *out, size_t len)
+{
+	const char *arg[3];
+	char line[160], price[16];
+	int i, cost;
+
+	snprintf(out, len, "%s", game_word(g, W_WRIGHT,
+	    g->wright_stage == 1 ? 1 : 0));
+	for (i = 0; i < g->sim.fleet.nships; i++) {
+		cost = g->wright_stage == 1 ? sim_repair_cost(&g->sim, i) :
+		    sim_ship_price(&g->sim, i);
+		arg[0] = game_word(g, W_SHIP_TYPE,
+		    (size_t)(g->sim.fleet.ships[i] % 9));
+		if (g->wright_stage == 1 && cost == 0) {
+			fill(line, sizeof(line), game_word(g, W_WRIGHT, 4),
+			    arg[0], NULL);
+		} else {
+			snprintf(price, sizeof(price), "%d", cost);
+			arg[1] = g->sim.fleet.damage[i] >= 16 ?
+			    game_word(g, W_SHIP_TYPE, 10) : "";
+			arg[2] = price;
+			fill_args(line, sizeof(line),
+			    game_word(g, W_WRIGHT, 3), arg, 3);
+		}
+		strncat(out, "\r", len - strlen(out) - 1);
+		strncat(out, line, len - strlen(out) - 1);
+	}
+	strncat(out, "\r", len - strlen(out) - 1);
+	strncat(out, game_word(g, W_WRIGHT, 2), len - strlen(out) - 1);
+}
+
+static void
+shipwright_draw(struct game *g)
+{
+	char text[1200];
+
+	switch (g->wright_stage) {
+	case 0:
+		draw(g, FONT_BODY, WRIGHT_TEXT_X, WRIGHT_TEXT_Y, WRIGHT_TEXT_W,
+		    game_str(g, S_WRIGHT_MENU), 1);
+		break;
+	case 1:
+	case 2:
+		wright_list(g, text, sizeof(text));
+		draw(g, FONT_BODY, WRIGHT_TEXT_X, WRIGHT_TEXT_Y, WRIGHT_TEXT_W,
+		    text, 1);
+		break;
+	default:
+		draw(g, FONT_BODY, WRIGHT_TEXT_X, WRIGHT_TEXT_Y, WRIGHT_TEXT_W,
+		    game_str(g, g->wright_note), 0);
+		draw_centered(g, FONT_BODY, 440, game_str(g, S_CONTINUE));
+		return;
+	}
+	if (g->msg[0] != '\0')
+		draw_centered(g, FONT_BODY, 450, g->msg);
+}
+
+const struct screen screen_shipwright = {
+	"shipwright", shipwright_enter, shipwright_event, NULL,
+	shipwright_draw,
 };

@@ -230,8 +230,10 @@ Status (2026-10-26): first slice.
   open), city information, leaving, and the captain's cabin (our travel
   menu for now). In the simulation: entering and leaving a town, and the
   visit flags.
-- **Next:** the buildings one by one (shipwright, merchant, tavern,
-  governor, bank), and the arrival choices (attack, sneak in).
+- **Shipwright:** repairs and ship sales, with his gold per stay.
+  Selling cannon waits for the merchant's trading screen.
+- **Next:** the merchant (with cargo), tavern, governor, bank, and the
+  arrival choices (attack, sneak in).
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.
