@@ -325,9 +325,8 @@ field_terrain(const struct sim *s, int x, int y)
 		return (TERRAIN_SEA);
 	tile = s->world->battle_screens[bt->screen][(y / BATTLE_TILE) *
 	    BATTLE_SCREEN + x / BATTLE_TILE];
-	return (s->world->colour_class[s->world->battle_tiles[tile *
-	    BATTLE_TILE * BATTLE_TILE + (y % BATTLE_TILE) * BATTLE_TILE +
-	    x % BATTLE_TILE]]);
+	return (s->world->battle_terrain[tile * BATTLE_TILE * BATTLE_TILE +
+	    (y % BATTLE_TILE) * BATTLE_TILE + x % BATTLE_TILE]);
 }
 
 /*

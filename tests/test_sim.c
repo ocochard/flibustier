@@ -506,8 +506,8 @@ make_world(struct world *w)
 
 	memset(w, 0, sizeof(*w));
 	w->era = 4;
-	memset(w->colour_class, TERRAIN_SEA, sizeof(w->colour_class));
-	w->colour_class[99] = TERRAIN_LAND;
+	memset(w->map_terrain, TERRAIN_SEA, sizeof(w->map_terrain));
+	memset(w->battle_terrain, TERRAIN_SEA, sizeof(w->battle_terrain));
 	/* Every land tile reads as a shore with the sea to its west. */
 	memset(w->coast, 0x80, sizeof(w->coast));
 	w->coast[1] = 0x33;
@@ -519,18 +519,17 @@ make_world(struct world *w)
 		w->treasure[i][0] = (int16_t)(town[i % 4][0] + 3);
 		w->treasure[i][1] = town[i % 4][1];
 	}
-	memset(w->tiles + 1 * WORLD_TILE * WORLD_TILE, 99,
+	memset(w->map_terrain + 1 * WORLD_TILE * WORLD_TILE, TERRAIN_LAND,
 	    WORLD_TILE * WORLD_TILE);	/* tile 1: land */
 	for (y = 40; y < 50; y++)
 		for (x = 110; x < 130; x++)
 			w->map[y * WORLD_CELLS_W + x] = 1;
 	/* Battle tiles: 1 land as on the map, 2 shallows, on the row under
 	 * the land (tile 2 looks like sea when sailing). */
-	w->colour_class[98] = TERRAIN_SHALLOWS;
-	memset(w->battle_tiles + 1 * BATTLE_TILE * BATTLE_TILE, 99,
-	    BATTLE_TILE * BATTLE_TILE);
-	memset(w->battle_tiles + 2 * BATTLE_TILE * BATTLE_TILE, 98,
-	    BATTLE_TILE * BATTLE_TILE);
+	memset(w->battle_terrain + 1 * BATTLE_TILE * BATTLE_TILE,
+	    TERRAIN_LAND, BATTLE_TILE * BATTLE_TILE);
+	memset(w->battle_terrain + 2 * BATTLE_TILE * BATTLE_TILE,
+	    TERRAIN_SHALLOWS, BATTLE_TILE * BATTLE_TILE);
 	/* Battle screen 1: land on rows 0-4, shallows on row 5; its set
 	 * 0 (coast to the north) offers it. */
 	for (y = 0; y < BATTLE_SCREEN; y++)

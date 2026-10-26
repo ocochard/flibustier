@@ -21,8 +21,10 @@
 #include "assets/scenario.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
+#include "assets/tiles.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
+#include "assets/world.h"
 #include "view/view.h"
 
 #define SKIP	77
@@ -433,6 +435,67 @@ test_scenarios(struct packs *packs)
 	blob_free(&b);
 }
 
+/*
+ * Terrain per tile pixel: for every era, each pixel of each map and
+ * battle tile has the executable's class of its colour; in 1660, the
+ * world's terrain is that of the tile under each world pixel.
+ */
+static void
+test_terrain(struct packs *packs)
+{
+	static struct world w;
+	static const char *const ids[2] = { "tiles/map", "tiles/battle" };
+	const struct exe_layout *layout;
+	const uint8_t *classes, *terrain;
+	struct tileset ts;
+	struct blob b;
+	char err[256];
+	size_t i, bad;
+	int era, k, x, y, tile, counts[4] = { 0 };
+
+	CHECK(packs_load(packs, "program/main", &b) == 0);
+	if ((layout = exe_identify(b.data, b.len)) == NULL ||
+	    (classes = exe_at(layout, b.data, b.len, layout->colour_class_va,
+	    256)) == NULL) {
+		CHECK(!"colour classes");
+		blob_free(&b);
+		return;
+	}
+	for (era = 0; era < EXE_ERAS; era++) {
+		CHECK(world_load(&w, packs, layout, b.data, b.len, era, err,
+		    sizeof(err)) == 0);
+		for (k = 0; k < 2; k++) {
+			terrain = k == 0 ? w.map_terrain : w.battle_terrain;
+			CHECK(tileset_load(packs, ids[k], &ts) == 0);
+			bad = 0;
+			for (i = 0; i < ts.count * (size_t)ts.tile_w * ts.tile_h;
+			    i++)
+				bad += terrain[i] != classes[ts.pixels[i]];
+			CHECK(bad == 0);
+			tileset_free(&ts);
+		}
+		/* Every world pixel, in 1660; the classes seen there. */
+		if (era != 4)
+			continue;
+		bad = 0;
+		for (y = 0; y < WORLD_PX_H; y++)
+			for (x = 0; x < WORLD_PX_W; x++) {
+				tile = w.map[(y / WORLD_TILE) * WORLD_CELLS_W +
+				    x / WORLD_TILE];
+				k = world_terrain(&w, x, y);
+				bad += k != classes[w.tiles[tile * WORLD_TILE *
+				    WORLD_TILE + (y % WORLD_TILE) * WORLD_TILE +
+				    x % WORLD_TILE]];
+				if (k >= 0 && k < 4)
+					counts[k]++;
+			}
+		CHECK(bad == 0);
+	}
+	CHECK(counts[TERRAIN_SEA] > counts[TERRAIN_LAND] &&
+	    counts[TERRAIN_LAND] > 0 && counts[TERRAIN_SHALLOWS] > 0);
+	blob_free(&b);
+}
+
 int
 main(void)
 {
@@ -458,6 +521,7 @@ main(void)
 	test_towns(packs);
 	test_views(packs);
 	test_scenarios(packs);
+	test_terrain(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

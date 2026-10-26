@@ -36,6 +36,10 @@ needs them too:
 
 ### T1: terrain per tile pixel (refactor, no behaviour change)
 
+Status (2026-10-26): done. `test_original` checks every tile pixel of
+every era against the executable's colour classes, and every world
+pixel of 1660.
+
 - The world precomputes a class for every pixel of every map tile
   (256 x 16 x 16) and every battle tile (256 x 32 x 32) at load, from
   `colour_class` and the indices.
@@ -60,8 +64,8 @@ needs them too:
 
 - **Tile grids:** the map per era and the battle screens are tile-number
   grids.
-  - Either 8-bit greyscale PNGs (value = tile number), or Tiled maps
-    (JSON, integer data, readable by `sim/json.c`).
+  - Tiled maps (JSON, integer layer data, read by `sim/json.c`), with
+    the tile sheet as their tileset.
   - Six full era maps replace the base map plus `.RSD` patches.
 - **Structured data:** towns per era, treasure spots and battle sets go
   in documented text, probably JSON like the sim protocol.
@@ -96,7 +100,8 @@ roadmap decision 1, a separate plan.
 
 ## Decisions for the maintainer
 
-1. Tile grid format: greyscale PNG (simple, engine-only) or Tiled JSON
-   (an editor authors can use, ties the format to Tiled's).
+1. ~~Tile grid format?~~ Tiled JSON maps (maintainer, 2026-10-26): the
+   era maps and battle screens are authored in Tiled, read through
+   `sim/json.c`.
 2. Should open data values be tuned to match the original's balance, or
    are they free to differ?

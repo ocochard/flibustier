@@ -82,9 +82,14 @@ struct world {
 	uint8_t		map[WORLD_CELLS_W * WORLD_CELLS_H];
 	uint8_t		tiles[256 * WORLD_TILE * WORLD_TILE];
 	uint8_t		palette[256 * 3];	/* the map tiles' palette */
-	/* Sea battles draw each map cell as a 32 x 32 tile; the colour
-	 * under a ship gives its terrain (VA 0x8200). */
-	uint8_t		battle_tiles[256 * BATTLE_TILE * BATTLE_TILE];
+	/*
+	 * Terrain (TERRAIN_*) of every pixel of every map tile, and of the
+	 * 32 x 32 tiles sea battles draw (the colour under a ship gives
+	 * its terrain, VA 0x8200).  For the original data, the executable's
+	 * class of each tile pixel's colour.
+	 */
+	uint8_t		map_terrain[256 * WORLD_TILE * WORLD_TILE];
+	uint8_t		battle_terrain[256 * BATTLE_TILE * BATTLE_TILE];
 	/* The battle screens, and which ones each set offers (VA
 	 * 0x33fd0). */
 	uint8_t		battle_screens[BATTLE_SCREENS][BATTLE_SCREEN *
@@ -97,7 +102,6 @@ struct world {
 	uint8_t		land_class[256];
 	int16_t		treasure[TREASURE_SPOTS][2];	/* x, y cells */
 	uint8_t		coast[256];	/* per map tile (VA 0x33b18) */
-	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];
 	/* Ships met at sea: per nation, 5 records of type, nation, crew,

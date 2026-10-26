@@ -26,8 +26,8 @@ world_terrain(const struct world *w, int x, int y)
 	if (x < 0 || y < 0 || x >= WORLD_PX_W || y >= WORLD_PX_H)
 		return (TERRAIN_LAND);
 	tile = w->map[(y / WORLD_TILE) * WORLD_CELLS_W + x / WORLD_TILE];
-	return (w->colour_class[w->tiles[tile * WORLD_TILE * WORLD_TILE +
-	    (y % WORLD_TILE) * WORLD_TILE + x % WORLD_TILE]]);
+	return (w->map_terrain[tile * WORLD_TILE * WORLD_TILE +
+	    (y % WORLD_TILE) * WORLD_TILE + x % WORLD_TILE]);
 }
 
 /*
@@ -71,9 +71,19 @@ load_screens(struct world *w, struct packs *packs, char *err, size_t errlen)
 	    LAND_SCREENS, err, errlen));
 }
 
+/* Terrain of "n" tile pixels: the class of each one's colour. */
+static void
+classify(const uint8_t *classes, const uint8_t *px, size_t n, uint8_t *out)
+{
+	size_t i;
+
+	for (i = 0; i < n; i++)
+		out[i] = classes[px[i]];
+}
+
 static int
-load_map(struct world *w, struct packs *packs, int era, char *err,
-    size_t errlen)
+load_map(struct world *w, struct packs *packs, int era,
+    const uint8_t *classes, char *err, size_t errlen)
 {
 	struct image base;
 	struct tileset ts;
@@ -116,6 +126,7 @@ load_map(struct world *w, struct packs *packs, int era, char *err,
 	}
 	memcpy(w->tiles, ts.pixels, sizeof(w->tiles));
 	memcpy(w->palette, ts.palette, sizeof(w->palette));
+	classify(classes, w->tiles, sizeof(w->tiles), w->map_terrain);
 	tileset_free(&ts);
 	rc = tileset_load(packs, "tiles/battle", &ts);
 	if (rc != 0 || ts.tile_w != BATTLE_TILE || ts.count != 256) {
@@ -123,7 +134,8 @@ load_map(struct world *w, struct packs *packs, int era, char *err,
 		snprintf(err, errlen, "bad tiles/battle");
 		return (-1);
 	}
-	memcpy(w->battle_tiles, ts.pixels, sizeof(w->battle_tiles));
+	classify(classes, ts.pixels, sizeof(w->battle_terrain),
+	    w->battle_terrain);
 	tileset_free(&ts);
 	return (load_screens(w, packs, err, errlen));
 }
@@ -220,7 +232,10 @@ world_load(struct world *w, struct packs *packs,
 		return (-1);
 	}
 	w->era = era;
-	if (load_map(w, packs, era, err, errlen) != 0)
+	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
+	    NULL)
+		goto bad;
+	if (load_map(w, packs, era, p, err, errlen) != 0)
 		return (-1);
 	/* The game numbers eras from 1 and uses block max(era, 1), so 1560
 	 * and 1600 share a block (VA 0x1361c). */
@@ -249,10 +264,6 @@ world_load(struct world *w, struct packs *packs,
 		return (-1);
 	}
 	memcpy(w->coast, p, 256);
-	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
-	    NULL)
-		goto bad;
-	memcpy(w->colour_class, p, 256);
 	if ((p = exe_at(layout, exe, len, layout->sine_va, 128)) == NULL)
 		goto bad;
 	memcpy(w->sine, p, 128);
