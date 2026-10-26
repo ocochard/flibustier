@@ -305,6 +305,8 @@ struct sim {
 		long	gold_at_open;	/* the player's */
 	} market;
 	int8_t		relations[4][4];
+	uint8_t		rank[5];	/* title per nation: CSTN 78 */
+	int		acres;		/* land granted by governors */
 	int8_t		standing[5];	/* player standing per nation, and
 					 * pirates (always -1 so far) */
 	size_t		ntowns;
@@ -390,6 +392,25 @@ void	sim_merchant_close(struct sim *s);
 void	sim_tavern_open(struct sim *s);
 /* Sign them up (or not); the crew is then gone until next time. */
 void	sim_recruit(struct sim *s, int accept);
+
+/* The governor (VA 0x13269). */
+enum governor_offer {
+	OFFER_NONE,		/* standing -4 or lower: nothing */
+	OFFER_MARQUE,		/* a Letter of Marque (CSTR 147) */
+	OFFER_PARDON,		/* forgiveness (CSTR 148) */
+	OFFER_DAUGHTER		/* standing 2 or more: his daughter */
+};
+
+/* A blow against a nation (VA 0x1eaf5): "d" to its standing, and
+ * through its alliances and wars to the others'. */
+void	sim_attack_nation(struct sim *s, int nation, int d);
+/* Promote the player if his standing earns it (VA 0x12549); returns the
+ * new rank or 0, with the acres granted in "*acres". */
+int	sim_governor_promote(struct sim *s, int *acres);
+/* What the governor offers next, and for how much gold. */
+enum governor_offer sim_governor_offer(const struct sim *s, long *price);
+/* Pay for the Letter of Marque or the pardon; 0 if short of gold. */
+int	sim_governor_pay(struct sim *s);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);

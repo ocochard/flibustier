@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	9
+#define STATE_VERSION	10
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -544,6 +544,15 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->merchant_gold);
 	jb_raw(b, ",\"reputation\":");
 	jb_int(b, s->reputation);
+	jb_raw(b, ",\"acres\":");
+	jb_int(b, s->acres);
+	jb_raw(b, ",\"rank\":[");
+	for (i = 0; i < 5; i++) {
+		if (i > 0)
+			jb_raw(b, ",");
+		jb_int(b, s->rank[i]);
+	}
+	jb_raw(b, "]");
 	jb_raw(b, ",\"tavern_spots\":");
 	jb_int(b, s->tavern_spots);
 	jb_raw(b, ",\"recruits\":");
@@ -779,6 +788,18 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.wright_gold = (int)json_get_int(j, "wright_gold", -1);
 	tmp.merchant_gold = (int)json_get_int(j, "merchant_gold", -1);
 	tmp.reputation = (int)json_get_int(j, "reputation", 0);
+	tmp.acres = (int)json_get_int(j, "acres", 0);
+	{
+		const struct json *rk = json_get(j, "rank");
+		int k;
+
+		if (rk == NULL || rk->type != JSON_ARRAY || rk->count != 5) {
+			snprintf(err, errlen, "bad rank");
+			return (-1);
+		}
+		for (k = 0; k < 5; k++)
+			tmp.rank[k] = (uint8_t)rk->items[k]->num;
+	}
 	tmp.tavern_spots = (unsigned)json_get_int(j, "tavern_spots", 0) &
 	    TAVERN_ALL;
 	tmp.recruits = (int)json_get_int(j, "recruits", 0);
@@ -1445,6 +1466,55 @@ cmd_tavern(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * The governor: "visit" (once a stay) promotes the player when earned
+ * and states his offer; "pay" buys the Letter of Marque or the pardon.
+ */
+static void
+cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *offers[] = { "none", "marque", "pardon",
+	    "daughter" };
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	int promoted = 0, acres = 0, paid = 0;
+	long price;
+	enum governor_offer o;
+
+	if (s->player_town < 0) {
+		reply_error(out, "not in a town");
+		return;
+	}
+	if (action != NULL && strcmp(action, "visit") == 0) {
+		if ((s->visit_flags & VISIT_GOVERNOR) ||
+		    s->towns[s->player_town].citizens < 6) {
+			reply_error(out, "the governor will not receive you");
+			return;
+		}
+		s->visit_flags |= VISIT_GOVERNOR;
+		promoted = sim_governor_promote(s, &acres);
+	} else if (action != NULL && strcmp(action, "pay") == 0)
+		paid = sim_governor_pay(s);
+	else {
+		reply_error(out, "governor needs \"action\": visit or pay");
+		return;
+	}
+	o = sim_governor_offer(s, &price);
+	jb_raw(out, "{\"ok\":true,\"promoted\":");
+	jb_int(out, promoted);
+	jb_raw(out, ",\"acres\":");
+	jb_int(out, acres);
+	jb_raw(out, ",\"paid\":");
+	jb_int(out, paid);
+	jb_raw(out, ",\"offer\":");
+	jb_str(out, offers[o]);
+	jb_raw(out, ",\"price\":");
+	jb_int(out, price);
+	jb_raw(out, ",\"gold\":");
+	jb_int(out, s->fleet.gold);
+	jb_raw(out, "}");
+}
+
 static void
 cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1549,6 +1619,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_merchant(ss, cmd, out);
 	else if (strcmp(name, "tavern") == 0)
 		cmd_tavern(ss, cmd, out);
+	else if (strcmp(name, "governor") == 0)
+		cmd_governor(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

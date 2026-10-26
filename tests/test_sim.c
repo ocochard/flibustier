@@ -1622,6 +1622,84 @@ test_tavern(void)
 	CHECK(s.reputation == -2);	/* a fresh game: 0 - 2 */
 }
 
+/* The governor: standing, promotions, the Letter of Marque. */
+static void
+test_governor(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	long price;
+	int acres;
+
+	sea_game(&s, 300, 300, 0);
+	memset(s.standing, 0, 4);
+	memset(s.relations, 0, sizeof(s.relations));
+	s.relations[NATION_SPAIN][NATION_ENGLAND] = -1;	/* war */
+	s.relations[NATION_SPAIN][NATION_FRANCE] = 1;	/* alliance */
+	/* Attacking Spain: Spain -1, its ally France -1, its enemy England
+	 * +1, but no higher than 1 through others. */
+	sim_attack_nation(&s, NATION_SPAIN, -1);
+	CHECK(s.standing[NATION_SPAIN] == -1 && s.standing[NATION_FRANCE] == -1);
+	CHECK(s.standing[NATION_ENGLAND] == 1 && s.standing[NATION_HOLLAND] == 0);
+	sim_attack_nation(&s, NATION_SPAIN, -1);
+	CHECK(s.standing[NATION_ENGLAND] == 1);		/* capped */
+	s.standing[NATION_ENGLAND] = 2;			/* above 1: free */
+	sim_attack_nation(&s, NATION_SPAIN, -1);
+	CHECK(s.standing[NATION_ENGLAND] == 3);
+	s.standing[NATION_FRANCE] = 3;			/* not below 2 */
+	sim_attack_nation(&s, NATION_SPAIN, -2);
+	CHECK(s.standing[NATION_FRANCE] == 2);
+	sim_attack_nation(&s, NATION_PIRATE, -1);	/* ignored */
+
+	/* Offers: price (4 - s^3) x 200; at 2 and over, the daughter. */
+	t = &s.towns[1];
+	t->nation = NATION_ENGLAND;
+	sim_enter_town(&s, 1);
+	s.standing[NATION_ENGLAND] = 0;
+	CHECK(sim_governor_offer(&s, &price) == OFFER_MARQUE && price == 800);
+	s.standing[NATION_ENGLAND] = 1;
+	CHECK(sim_governor_offer(&s, &price) == OFFER_MARQUE && price == 600);
+	s.standing[NATION_ENGLAND] = -2;
+	CHECK(sim_governor_offer(&s, &price) == OFFER_PARDON && price == 2400);
+	s.standing[NATION_ENGLAND] = -4;
+	CHECK(sim_governor_offer(&s, &price) == OFFER_NONE);
+	s.standing[NATION_ENGLAND] = 2;
+	CHECK(sim_governor_offer(&s, &price) == OFFER_DAUGHTER);
+	/* Paying: +2, no higher than 2; the town's favour is spent. */
+	s.standing[NATION_ENGLAND] = 1;
+	t->standing = 5;
+	s.fleet.gold = 599;
+	CHECK(!sim_governor_pay(&s));
+	s.fleet.gold = 600;
+	CHECK(sim_governor_pay(&s) && s.fleet.gold == 0);
+	CHECK(s.standing[NATION_ENGLAND] == 2 && t->standing == 0);
+
+	/* Promotion: rank r + 1 needs (r + 1)^2 + 2; the surplus and the
+	 * town's favour become acres (x 50). */
+	s.rank[NATION_ENGLAND] = 0;
+	s.standing[NATION_ENGLAND] = 2;
+	CHECK(sim_governor_promote(&s, &acres) == 0);	/* 3 needed */
+	s.standing[NATION_ENGLAND] = 5;
+	t->standing = 1;
+	CHECK(sim_governor_promote(&s, &acres) == 1);
+	CHECK(s.rank[NATION_ENGLAND] == 1 && s.standing[NATION_ENGLAND] == 3);
+	CHECK(acres == (2 + 1) * 50 && s.acres == 3);
+	s.standing[NATION_ENGLAND] = 6;			/* rank 2: 6 */
+	t->standing = 0;
+	CHECK(sim_governor_promote(&s, &acres) == 2 && acres == 0);
+	s.rank[NATION_ENGLAND] = 9;			/* the top */
+	s.standing[NATION_ENGLAND] = 120;
+	CHECK(sim_governor_promote(&s, &acres) == 0 &&
+	    s.rank[NATION_ENGLAND] == 9);
+	/* Ranks open Spanish doors: rank x 25 against the wealth. */
+	t->nation = NATION_SPAIN;
+	t->wealth = 50;
+	s.rank[NATION_SPAIN] = 1;
+	CHECK(sim_shipwright_refuses(&s));
+	s.rank[NATION_SPAIN] = 2;
+	CHECK(!sim_shipwright_refuses(&s));
+}
+
 int
 main(void)
 {
@@ -1642,6 +1720,7 @@ main(void)
 	test_shipwright();
 	test_merchant();
 	test_tavern();
+	test_governor();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

@@ -84,7 +84,7 @@ test_career(void)
 	/* Intro, welcome, era 1660 (5th), the English flag, ability 3
 	 * (gunnery), difficulty 2, name, summary. */
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right right right right enter right enter type:Blackbeard enter");
+	    "right right right right enter right enter type:Blackbeard enter enter");
 	if (g == NULL)
 		return;
 	CHECK(g->started);
@@ -106,7 +106,7 @@ test_menus(void)
 	/* "Continue a saved game" is disabled: one down skips to the famous
 	 * expeditions; the first expedition is in 1560. */
 	g = play("eng", "enter down enter enter wait:40 right enter enter "
-	    "type:Hawkins enter");
+	    "type:Hawkins enter enter");
 	if (g != NULL) {
 		CHECK(g->started && g->career.expedition == 0);
 		CHECK(strcmp(g->career.title, "John Hawkins") == 0);
@@ -135,16 +135,42 @@ test_menus(void)
 		    g->screen == &screen_name && g->career.difficulty == 2);
 		game_free(g);
 	}
+	/* "Are ye satisfied?": Nay starts over from the flags. */
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter enter right");
+	if (g != NULL) {
+		CHECK(g->screen == &screen_confirm && g->id_key == 1);
+		CHECK(game_script(g, "enter") == 0 && g->screen == &screen_nation);
+		CHECK(game_script(g, "down down enter right enter enter enter "
+		    "click:210,380 wait:40") == 0);
+		CHECK(g->started && g->career.nation == NATION_FRANCE);
+		game_free(g);
+	}
 	/* Escape goes back, the name needs a letter, Backspace erases. */
 	g = play("eng", "enter enter esc");
 	if (g != NULL) {
 		CHECK(!g->started && g->career.era == 0);
 		game_free(g);
 	}
-	g = play("eng", "enter enter enter left enter right enter enter enter "
+	g = play("eng", "enter enter enter left enter right enter enter "
 	    "type:Ab bs enter");
 	if (g != NULL) {
 		CHECK(strcmp(g->career.name, "A") == 0);
+		game_free(g);
+	}
+	/* The name starts as "Incognito": Enter keeps it, Backspace does
+	 * nothing until a letter replaces it; 11 letters at most. */
+	g = play("eng", "enter enter enter left enter right enter enter bs");
+	if (g != NULL) {
+		CHECK(strcmp(g->career.name, "Incognito") == 0);
+		CHECK(game_script(g, "type:ABCDEFGHIJKLM") == 0 &&
+		    strcmp(g->career.name, "ABCDEFGHIJK") == 0);
+		game_free(g);
+	}
+	g = play("eng", "enter enter enter left enter right enter enter enter "
+	    "enter");
+	if (g != NULL) {
+		CHECK(g->started && strcmp(g->sim.player.name, "Incognito") == 0);
 		game_free(g);
 	}
 	/* Return to DOS. */
@@ -176,7 +202,7 @@ test_languages(void)
 	struct game *g;
 
 	g = play("fre", "enter enter down down down down enter left enter "
-	    "right enter enter type:Surcouf enter");
+	    "right enter enter type:Surcouf enter enter");
 	if (g != NULL) {
 		CHECK(g->started && g->sim.era_year == 1660);
 		game_free(g);
@@ -200,7 +226,7 @@ test_saves(void)
 
 	/* Sail for a while, back to the menu, then save in slot 4. */
 	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
-	    "down enter right enter enter type:Kidd enter enter enter wait:100 esc "
+	    "down enter right enter enter type:Kidd enter enter enter enter wait:100 esc "
 	    "down enter down down down enter");
 	if (g == NULL)
 		return;
@@ -250,7 +276,7 @@ test_hall_of_fame(void)
 	struct hof h;
 	char path[600], err[256];
 	static const char *career = "enter enter down down down down enter "
-	    "down enter right enter enter type:Anne enter enter ";
+	    "down enter right enter enter type:Anne enter enter enter ";
 
 	hof_path(saves_tmp, path, sizeof(path));
 	remove(path);
@@ -285,7 +311,7 @@ test_sailing(void)
 	int y0, h0;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Low enter enter");	/* at Port Royale */
+	    "right enter enter type:Low enter enter enter");	/* at Port Royale */
 	if (g == NULL)
 		return;
 	CHECK(g->started && g->world != NULL && g->sim.world == g->world);
@@ -314,7 +340,7 @@ test_encounter_screens(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter hold:right:16");
+	    "right enter enter type:Lo enter enter enter enter hold:right:16");
 	if (g == NULL)
 		return;
 	/* Sail until a sail is sighted. */
@@ -348,7 +374,7 @@ test_battle_screen(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter hold:right:16");
+	    "right enter enter type:Lo enter enter enter enter hold:right:16");
 	if (g == NULL)
 		return;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
@@ -404,7 +430,7 @@ test_sword_screen(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter hold:right:16");
+	    "right enter enter type:Lo enter enter enter enter hold:right:16");
 	if (g == NULL)
 		return;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
@@ -540,7 +566,7 @@ test_town(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter wait:30");
+	    "right enter enter type:Lo enter enter enter enter wait:30");
 	if (g == NULL)
 		return;
 	CHECK(g->screen == &screen_sail);
@@ -570,8 +596,8 @@ test_town(void)
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_town);
 	/* A building not done yet says so. */
-	CHECK(game_script(g, "click:580,220 wait:2") == 0 &&
-	    strstr(g->msg, "Governor") != NULL);
+	CHECK(game_script(g, "click:540,320 wait:2") == 0 &&
+	    strstr(g->msg, "Bank") != NULL);
 	/* Leave: back at sea, out of the town. */
 	CHECK(game_script(g, "click:60,300 wait:40") == 0);
 	CHECK(g->screen == &screen_sail && g->sim.player_town == -1);
@@ -590,7 +616,7 @@ test_shipwright(void)
 	long gold;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter wait:30");
+	    "right enter enter type:Lo enter enter enter enter wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -638,7 +664,7 @@ test_merchant(void)
 	int price, food;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter wait:30");
+	    "right enter enter type:Lo enter enter enter enter wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -679,7 +705,7 @@ test_tavern(void)
 	int crew, men;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter enter wait:30");
+	    "right enter enter type:Lo enter enter enter enter wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -708,6 +734,39 @@ test_tavern(void)
 	g->tavern_key = 1;
 	CHECK(game_script(g, "right") == 0 && g->tavern_key == 3);
 	CHECK(game_script(g, "click:610,300 wait:40") == 0 &&
+	    g->screen == &screen_town);
+	game_free(g);
+}
+
+/* The governor: the news, the Letter of Marque, once a stay. */
+static void
+test_governor(void)
+{
+	struct game *g;
+	const struct sim_town *t;
+	long gold;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter enter enter wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	t = &g->sim.towns[g->sim.fleet.leaving];
+	g->sim.fleet.x = t->sea_x * 16 + 8;
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;
+	CHECK(game_script(g, "wait:40 click:580,220 wait:40") == 0);
+	CHECK(g->screen == &screen_governor && g->gov_stage == 0);
+	CHECK(g->sim.visit_flags & VISIT_GOVERNOR);
+	/* Standing 0 with England: a Letter of Marque for 800. */
+	gold = g->sim.fleet.gold;
+	CHECK(game_script(g, "enter") == 0 && g->gov_stage == 3);
+	CHECK(game_script(g, "enter wait:40") == 0);
+	CHECK(g->sim.fleet.gold == gold - 800 &&
+	    g->sim.standing[NATION_ENGLAND] == 2);
+	CHECK(g->screen == &screen_town);
+	/* He will not receive the player again this stay. */
+	CHECK(game_script(g, "click:580,220 wait:5") == 0 &&
 	    g->screen == &screen_town);
 	game_free(g);
 }
@@ -741,6 +800,7 @@ main(void)
 	test_shipwright();
 	test_merchant();
 	test_tavern();
+	test_governor();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

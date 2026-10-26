@@ -735,8 +735,8 @@ same town only bits 1 and 2 are kept.
   trading screen at 50 gold a gun (VA `0x22c76`), shared with the
   merchant's; not traced yet.
 - **Engine choices:**
-  - Ranks are not modelled yet, so they count as 0: Spanish shipwrights
-    refuse wealthy towns' customers.
+  - Ranks come from governors' promotions; standing rises only through
+    captures and Letters of Marque so far.
   - The original picks several ships at once on a fleet panel; the
     engine takes one ship per choice and shows the list again.
 
@@ -842,6 +842,47 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
 - **Not done yet:** the map seller, the information seller, the barmaid
   and the stranger.
 
+### Standing and ranks
+
+- **Layout:** the player's standing per nation is a signed byte array at
+  VA `0x45e7a` (index 4: pirates). The rank per nation (CSTN 78:
+  Mr. ... Count) follows at VA `0x45e7f`.
+- **Attacking a nation N by d (VA `0x1eaf5`):**
+  - N's standing changes by d;
+  - every other nation's by `d x relation(N, k)` (+1 alliance, -1 war);
+  - but such changes cannot lift a standing above 1, nor drop one that
+    is above 1 below 2.
+- **Capturing a ship** of a nation (not pirates) is an attack with d =
+  -1 (VA `0xdb7b`). Other callers (town attacks) are not traced yet.
+
+### Governor (VA `0x13269`)
+
+He receives the player once a stay, in towns of 6 citizens or more. In
+order:
+
+1. **The news (VA `0x11d64`):** "My dear <rank> <name>," with the
+   nations his own is allied with and at war with (CSTN 25, names from
+   CSTN 81). It ends with a charge to fight them when at war and the
+   standing is 2 or more. With neither allies nor enemies: CSTR 149.
+2. The family quest (VA `0x18913`), missions and captured pirates (VA
+   `0x12e88`), and prisoners and ransoms (VA `0x12432`, `0x127da`): not
+   done yet.
+3. **Promotion (VA `0x12549`):**
+   - With `r` the next rank, when `standing >= r^2 + 2` and `r <= 9`:
+     the rank rises, and the standing drops to `r^2 + 2`.
+   - CSTR 134 is shown with the proclamation (`gov.spr` frames at
+     (140, 35) and (113, 262)).
+   - When the surplus plus the town's word 9 is positive, that many
+     times 50 acres are granted (CSTR 135, total at VA `0x45f02`).
+4. **His offer, by standing s:**
+   - With `s > -4`, the price is `(4 - s^3) x 200` gold.
+   - From s = 2 the price is negative and his daughter is met instead
+     (VA `0x128c1`, not done yet).
+   - Otherwise (VA `0x12d6d`): a Letter of Marque for `s >= 0` (CSTR
+     147), a pardon for `s < 0` (CSTR 148).
+   - Paying raises the standing by 2, to at most 2, and resets the
+     town's word 9. Without the gold: CSTR 94.
+
 ## Intro (VA `0x3325`)
 
 1. `micro.pcx`: fade in, 2 s (20 x 100 ms), fade out.
@@ -916,7 +957,16 @@ the oval at (237, 66).
    - Pointing at one selects it: it is highlighted, described below
      (CSTN 101, centred at (320, 380)), and the portrait becomes
      `bigman0`-`3` for that level. A click or Enter confirms.
-4. **Name (VA `0x155fa`),** then confirmation (VA `0x15498`).
+4. **Name (VA `0x155fa`, editor VA `0x157f4`, CSTR 65):**
+   - The field starts as "Incognito" (CSTN 92.4); Enter or a click
+     accepts it.
+   - The first letter typed replaces it; Backspace only erases what was
+     typed.
+   - At most 11 characters.
+5. **Confirmation (VA `0x15498`):** "Are ye satisfied with your choices,
+   Captain?" (CSTR 273), with "Yes" (CSTR 274) at (208, 368) and "Nay"
+   (275) at (390, 368) (click areas at VA `0x33470`). "Nay" starts the
+   identity over from the nationality, keeping the era.
 
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 

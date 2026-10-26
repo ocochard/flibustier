@@ -43,6 +43,8 @@ extern const struct screen screen_merchant;
 extern const struct screen screen_tavern;
 extern const struct screen screen_recruit;
 extern const struct screen screen_rumours;
+extern const struct screen screen_governor;
+extern const struct screen screen_confirm;
 
 /* Fade to another screen; NULL quits. */
 void	game_goto(struct game *g, const struct screen *s);

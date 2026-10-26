@@ -32,10 +32,11 @@ sim_shipwright_refuses(const struct sim *s)
 	if (s->player_town < 0 || (size_t)s->player_town >= s->ntowns)
 		return (1);
 	t = &s->towns[s->player_town];
-	/* Spanish towns, unless the Spanish rank (not modelled: 0) and
-	 * the high byte of the diplomacy range reach the town's wealth. */
+	/* Spanish towns, unless the Spanish rank and the high byte of
+	 * the diplomacy range reach the town's wealth. */
 	return (t->nation == NATION_SPAIN &&
-	    0 * 25 + ((s->diplomacy_range >> 8) & 0xFF) < t->wealth);
+	    s->rank[NATION_SPAIN] * 25 + ((s->diplomacy_range >> 8) & 0xFF) <
+	    t->wealth);
 }
 
 /* The shipwright's gold, set once per stay: seasonal, by wealth and
@@ -323,4 +324,96 @@ sim_recruit(struct sim *s, int accept)
 		s->fleet.crew += s->recruits;
 	s->recruits = 0;
 	s->tavern_spots &= ~TAVERN_CREW;
+}
+
+void
+sim_attack_nation(struct sim *s, int nation, int d)
+{
+	int k, v;
+
+	if (nation < 0 || nation > 3)
+		return;
+	v = s->standing[nation] + d;
+	s->standing[nation] = (int8_t)(v < -128 ? -128 : v > 127 ? 127 : v);
+	for (k = 0; k < 4; k++) {
+		if (k == nation)
+			continue;
+		v = s->standing[k] + d * s->relations[nation][k];
+		/* Through others, standing rises no higher than 1, and does
+		 * not fall below 2 once above 1. */
+		if (v >= 2 && s->standing[k] <= 1)
+			v = 1;
+		else if (v < 2 && s->standing[k] > 1)
+			v = 2;
+		s->standing[k] = (int8_t)v;
+	}
+}
+
+#define RANK_MAX	9
+#define ACRE_STEP	50
+
+int
+sim_governor_promote(struct sim *s, int *acres)
+{
+	struct sim_town *t = current(s);
+	int n, r, surplus, land;
+
+	*acres = 0;
+	if (t == NULL || t->nation > 3)
+		return (0);
+	n = t->nation;
+	r = s->rank[n] + 1;
+	surplus = s->standing[n] - (r * r + 2);
+	if (surplus < 0 || r > RANK_MAX)
+		return (0);
+	s->rank[n] = (uint8_t)r;
+	s->standing[n] = (int8_t)(s->standing[n] - surplus);
+	/* The game also logs it (code 2) in the personal log, which the
+	 * engine does not keep yet. */
+	land = surplus + t->standing;
+	if (land > 0) {
+		s->acres += land;
+		*acres = land * ACRE_STEP;
+	}
+	return (r);
+}
+
+enum governor_offer
+sim_governor_offer(const struct sim *s, long *price)
+{
+	const struct sim_town *t;
+	int st;
+
+	*price = 0;
+	if (s->player_town < 0 || (size_t)s->player_town >= s->ntowns)
+		return (OFFER_NONE);
+	t = &s->towns[s->player_town];
+	if (t->nation > 3)
+		return (OFFER_NONE);
+	st = s->standing[t->nation];
+	if (st <= -4)
+		return (OFFER_NONE);
+	*price = (long)(4 - st * st * st) * 20 * 10;
+	if (*price < 100)
+		return (OFFER_DAUGHTER);
+	return (st < 0 ? OFFER_PARDON : OFFER_MARQUE);
+}
+
+int
+sim_governor_pay(struct sim *s)
+{
+	struct sim_town *t = current(s);
+	long price;
+	enum governor_offer o = sim_governor_offer(s, &price);
+	int n;
+
+	if (t == NULL || (o != OFFER_MARQUE && o != OFFER_PARDON) ||
+	    price > s->fleet.gold)
+		return (0);
+	s->fleet.gold -= price;
+	t->standing = 0;
+	n = t->nation;
+	s->standing[n] = (int8_t)(s->standing[n] + 2 > 2 ? 2 :
+	    s->standing[n] + 2);
+	return (1);
 }

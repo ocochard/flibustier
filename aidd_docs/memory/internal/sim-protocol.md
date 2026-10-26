@@ -30,6 +30,7 @@ with a message. Numbers are integers only.
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`) or `close` | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
 | `tavern` | `action`: `open` (counts the recruits) or `recruit` (`accept`: 0 or 1) | `recruits`, `crew`, `tavern_spots` |
+| `governor` | `action`: `visit` (once a stay: promotion, then his offer) or `pay` | `promoted`, `acres`, `paid`, `offer` (none, marque, pardon, daughter), `price`, `gold` |
 | `board` | `weapon` (0 rapier, 1 longsword, 2 cutlass; default 2), after a `boarding` outcome | `sword` |
 | `sword` | `ticks` (1..10000; default 1), `input` (0..11, optional: the move to take next) | `events` (bits, below), `sword` |
 | `set` | `town` (name or index), `field`, `value` | none |
@@ -48,7 +49,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 9,
+  "version": 10,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -85,6 +86,7 @@ with a message. Numbers are integers only.
   "player_town": -1, "visit_town": -1, "visit_flags": 0,
   "wright_gold": -1, "merchant_gold": -1,
   "reputation": 0, "tavern_spots": 1023, "recruits": 0,
+  "acres": 0, "rank": [0, 0, 0, 0, 0],
   "market": {"open": 0, "stock": [0, 0, 0], "price": [0, 0, 0],
              "gold_at_open": 0},
   "relations": [[0,-1,0,0], [-1,0,0,-1], [0,0,0,0], [0,-1,0,0]],

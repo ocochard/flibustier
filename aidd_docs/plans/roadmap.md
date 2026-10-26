@@ -237,8 +237,11 @@ Status (2026-10-26): first slice.
 - **Tavern:** the people, recruiting crew, the bartender's rumours, and
   the reputation. The map and information sellers, the barmaid and the
   stranger wait.
-- **Next:** governor, bank, selling cannon (the same board), and the
-  arrival choices (attack, sneak in).
+- **Governor:** the political news, standing changes from captures,
+  promotions with land, Letters of Marque and pardons. Missions, the
+  family quest, prisoners and his daughter wait.
+- **Next:** bank, selling cannon (the same board), and the arrival
+  choices (attack, sneak in).
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

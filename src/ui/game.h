@@ -152,6 +152,11 @@ struct game {
 	struct sprite_bank	 id_spr[5];	/* small flags, small skills,
 						 * portrait, big flag, big skill */
 	int			 id_key;	/* keyboard selection, or -1 */
+	int			 name_default;	/* the name is still the default */
+	struct sprite_bank	 gov_spr;	/* the proclamation */
+	int			 gov_stage;	/* greeting, promotion, land, offer,
+						 * short of gold */
+	int			 gov_rank, gov_acres;
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

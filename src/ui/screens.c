@@ -1117,12 +1117,21 @@ const struct screen screen_difficulty = {
 	difficulty_draw,
 };
 
-/* Name entry, last, under the chosen portrait. */
+/*
+ * Name entry, last, under the chosen portrait (VA 0x155fa, 0x157f4): the
+ * field starts as "Incognito" (CSTN 92.4), which Enter or a click
+ * accepts; the first letter typed replaces it.  At most 11 characters.
+ */
+#define W_NAMES			92
+#define NAME_DEFAULT		4
+#define NAME_CHARS		11
 
 static void
 name_enter(struct game *g)
 {
-	g->career.name[0] = '\0';
+	snprintf(g->career.name, sizeof(g->career.name), "%s",
+	    game_word(g, W_NAMES, NAME_DEFAULT));
+	g->name_default = 1;
 }
 
 static void
@@ -1130,15 +1139,22 @@ name_event(struct game *g, const struct ui_event *ev)
 {
 	size_t len = strlen(g->career.name);
 
-	if (ev->type == EV_CHAR && ev->ch >= 0x20 && ev->ch < 0x7F &&
-	    len < NAME_MAX_LEN) {
-		g->career.name[len] = (char)ev->ch;
-		g->career.name[len + 1] = '\0';
+	if (ev->type == EV_CHAR && ev->ch >= 0x20 && ev->ch < 0x7F) {
+		if (g->name_default) {
+			g->career.name[0] = '\0';
+			g->name_default = 0;
+			len = 0;
+		}
+		if (len < NAME_CHARS && len < NAME_MAX_LEN) {
+			g->career.name[len] = (char)ev->ch;
+			g->career.name[len + 1] = '\0';
+		}
 	} else if (ev->type == EV_KEY && ev->key == UI_KEY_BACKSPACE &&
-	    len > 0)
+	    !g->name_default && len > 0)
 		g->career.name[len - 1] = '\0';
-	else if (ev->type == EV_KEY && ev->key == UI_KEY_ENTER && len > 0)
-		game_goto(g, &screen_summary);
+	else if ((ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    ev->key == UI_KEY_ENTER)) && len > 0)
+		game_switch(g, &screen_confirm);
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)
 		game_switch(g, &screen_difficulty);
 }
@@ -1152,12 +1168,103 @@ name_draw(struct game *g)
 	id_label(g, 320, 322, game_str(g, S_NAME_PROMPT));
 	/* A blinking cursor after the name typed so far. */
 	snprintf(buf, sizeof(buf), "%s%s", g->career.name,
-	    (g->ticks / 30) % 2 ? "_" : "");
+	    !g->name_default && (g->ticks / 30) % 2 ? "_" : "");
 	id_label(g, 320, 352, buf);
 }
 
 const struct screen screen_name = {
 	"name", name_enter, name_event, NULL, name_draw,
+};
+
+/*
+ * Confirmation (VA 0x15498): "Are ye satisfied with your choices,
+ * Captain?" (CSTR 273), "Yes" or "Nay" on the scroll.  Nay starts the
+ * identity over from the nationality (an expedition: the ability).
+ */
+#define S_SATISFIED		273
+#define S_YES			274
+#define S_NAY			275
+
+static const struct { int x0, y0, x1, y1; } confirm_rect[2] = {
+	{ 200, 368, 240, 399 }, { 380, 368, 440, 399 },
+};
+
+static void
+confirm_enter(struct game *g)
+{
+	g->id_key = 0;
+}
+
+static void
+confirm_choose(struct game *g, int i)
+{
+	if (i == 0) {
+		game_goto(g, &screen_summary);
+		return;
+	}
+	bank_free(&g->id_spr[4]);
+	if (g->career.expedition >= 0)
+		game_switch(g, &screen_ability);
+	else {
+		bank_free(&g->id_spr[3]);
+		load_bank(g, captain_portrait[0], 0, &g->id_spr[2]);
+		game_switch(g, &screen_nation);
+	}
+}
+
+static void
+confirm_event(struct game *g, const struct ui_event *ev)
+{
+	int i;
+
+	switch (ev->type) {
+	case EV_MOVE:
+	case EV_CLICK:
+		for (i = 0; i < 2; i++)
+			if (ev->x >= confirm_rect[i].x0 &&
+			    ev->x <= confirm_rect[i].x1 &&
+			    ev->y >= confirm_rect[i].y0 &&
+			    ev->y <= confirm_rect[i].y1) {
+				g->id_key = i;
+				if (ev->type == EV_CLICK)
+					confirm_choose(g, i);
+				break;
+			}
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT ||
+		    ev->key == UI_KEY_UP || ev->key == UI_KEY_DOWN)
+			g->id_key ^= 1;
+		else if (ev->key == UI_KEY_ENTER)
+			confirm_choose(g, g->id_key);
+		else if (ev->key == UI_KEY_ESCAPE)
+			game_switch(g, &screen_name);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+confirm_draw(struct game *g)
+{
+	uint8_t keep[3];
+
+	identity_draw_base(g, 1, 1);
+	draw(g, FONT_BODY, 180, 316, 280, game_str(g, S_SATISFIED), 0);
+	memcpy(keep, g->ink, 3);
+	if (g->id_key == 0)
+		memcpy(g->ink, g->highlight, 3);
+	draw(g, FONT_BODY, 208, 368, 100, game_str(g, S_YES), 0);
+	memcpy(g->ink, keep, 3);
+	if (g->id_key == 1)
+		memcpy(g->ink, g->highlight, 3);
+	draw(g, FONT_BODY, 390, 368, 100, game_str(g, S_NAY), 0);
+	memcpy(g->ink, keep, 3);
+}
+
+const struct screen screen_confirm = {
+	"confirm", confirm_enter, confirm_event, NULL, confirm_draw,
 };
 
 /* Summary: the career is created; the voyage itself is the next phase. */
@@ -2655,6 +2762,9 @@ town_choose(struct game *g, int i)
 	case SPOT_MERCHANT:
 		game_goto(g, &screen_merchant);
 		break;
+	case SPOT_GOVERNOR:
+		game_goto(g, &screen_governor);
+		break;
 	case SPOT_TAVERN:
 		sim_tavern_open(&g->sim);
 		g->tavern_key = 6;
@@ -3504,4 +3614,209 @@ rumours_draw(struct game *g)
 
 const struct screen screen_rumours = {
 	"rumours", rumours_enter, rumours_event, NULL, rumours_draw,
+};
+
+/*
+ * Governor (VA 0x13269): the political news (VA 0x11d64), a promotion
+ * when earned (VA 0x12549), then a Letter of Marque or a pardon for
+ * gold (VA 0x12d6d).  He receives the player once a stay.  His
+ * missions, prisoners, ransoms, the family quest and his daughter are
+ * not done yet.
+ */
+#define W_GOV			25	/* the greeting's pieces */
+#define W_COUNTRY		81	/* Spain, England, France, Holland */
+#define W_NATION_A		104	/* "a Spanish", "an English"... */
+#define S_GOV_CHAT		149
+#define S_PROMOTION		134
+#define S_LAND			135
+#define S_MARQUE		147
+#define S_PARDON		148
+#define S_NO_FUNDS		94
+#define GOV_TEXT_X		320
+#define GOV_TEXT_Y		150
+#define GOV_TEXT_W		300
+enum { GOV_GREET, GOV_PROMOTED, GOV_LAND, GOV_OFFER, GOV_SHORT, GOV_DONE };
+
+static void
+governor_enter(struct game *g)
+{
+	game_background(g, "pic/governor");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	g->highlight[0] = 255;
+	g->highlight[1] = 200;
+	g->highlight[2] = 60;
+	g->sim.visit_flags |= VISIT_GOVERNOR;
+	g->gov_rank = sim_governor_promote(&g->sim, &g->gov_acres);
+	g->gov_stage = GOV_GREET;
+	if (g->gov_rank > 0)
+		load_bank(g, "spr/gov", 0, &g->gov_spr);
+}
+
+/* The stage after "from", skipping those with nothing to say. */
+static void
+governor_next(struct game *g)
+{
+	long price;
+	enum governor_offer o = sim_governor_offer(&g->sim, &price);
+
+	switch (g->gov_stage) {
+	case GOV_GREET:
+		if (g->gov_rank > 0) {
+			g->gov_stage = GOV_PROMOTED;
+			break;
+		}
+		/* FALLTHROUGH */
+	case GOV_PROMOTED:
+		if (g->gov_stage == GOV_PROMOTED && g->gov_acres > 0) {
+			g->gov_stage = GOV_LAND;
+			break;
+		}
+		/* FALLTHROUGH */
+	case GOV_LAND:
+		if (o == OFFER_MARQUE || o == OFFER_PARDON) {
+			g->gov_stage = GOV_OFFER;
+			g->selected = 0;
+			break;
+		}
+		/* FALLTHROUGH */
+	default:
+		bank_free(&g->gov_spr);
+		g->gov_stage = GOV_DONE;
+		game_goto(g, &screen_town);
+		break;
+	}
+}
+
+static void
+governor_offer_choose(struct game *g, int i)
+{
+	if (i == 0 && !sim_governor_pay(&g->sim)) {
+		g->gov_stage = GOV_SHORT;
+		return;
+	}
+	g->gov_stage = GOV_SHORT;	/* past the offer */
+	governor_next(g);
+}
+
+static void
+governor_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->gov_stage == GOV_DONE)
+		return;
+	if (g->gov_stage == GOV_OFFER) {
+		menu_event(g, ev, 2, NULL, governor_offer_choose, NULL);
+		return;
+	}
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		governor_next(g);
+}
+
+/* "We are allied with X, Y and Z": CSTN 25.3-25.5 over the names. */
+static void
+nation_list(struct game *g, const int *n, int count, char *out,
+    size_t len)
+{
+	const char *arg[3];
+	int i;
+
+	for (i = 0; i < count && i < 3; i++)
+		arg[i] = game_word(g, W_COUNTRY, (size_t)n[i]);
+	fill_args(out, len, game_word(g, W_GOV, (size_t)(count + 2)), arg,
+	    count);
+}
+
+/* The greeting with the political situation (VA 0x11d64). */
+static void
+governor_greeting(struct game *g, char *out, size_t len)
+{
+	const struct sim_town *t = here(g);
+	int nat = t != NULL ? t->nation & 3 : 0, allies[4], enemies[4];
+	int na = 0, ne = 0, k;
+	char part[256], list[160];
+
+	for (k = 0; k < 4; k++) {
+		if (k == nat)
+			continue;
+		if (g->sim.relations[nat][k] == 1)
+			allies[na++] = k;
+		else if (g->sim.relations[nat][k] == -1)
+			enemies[ne++] = k;
+	}
+	if (na + ne == 0) {
+		snprintf(out, len, "%s", game_str(g, S_GOV_CHAT));
+		return;
+	}
+	fill(out, len, game_word(g, W_GOV, 0),
+	    game_word(g, W_RANK, g->sim.rank[nat]), g->sim.player.name);
+	if (na > 0) {
+		nation_list(g, allies, na, list, sizeof(list));
+		snprintf(part, sizeof(part), "%s%s", game_word(g, W_GOV, 1),
+		    list);
+		strncat(out, part, len - strlen(out) - 1);
+	}
+	if (ne > 0) {
+		nation_list(g, enemies, ne, list, sizeof(list));
+		fill(part, sizeof(part), game_word(g, W_GOV, 2),
+		    na > 0 ? game_word(g, W_GOV, 7) : "", NULL);
+		strncat(out, part, len - strlen(out) - 1);
+		strncat(out, list, len - strlen(out) - 1);
+	}
+	strncat(out, game_word(g, W_GOV, ne == 0 || g->sim.standing[nat] < 2 ?
+	    8 : 6), len - strlen(out) - 1);
+}
+
+static void
+governor_draw(struct game *g)
+{
+	const struct sim_town *t = here(g);
+	int nat = t != NULL ? t->nation & 3 : 0;
+	char text[1024], num[32];
+	long price;
+	enum governor_offer o;
+
+	switch (g->gov_stage) {
+	case GOV_GREET:
+		governor_greeting(g, text, sizeof(text));
+		break;
+	case GOV_PROMOTED:
+	case GOV_LAND:
+		if (g->gov_spr.count >= 2) {
+			fb_frame(&g->fb, &g->gov_spr.frames[0], 140, 35);
+			fb_frame(&g->fb, &g->gov_spr.frames[1], 113, 262);
+		}
+		if (g->gov_stage == GOV_PROMOTED)
+			fill(text, sizeof(text), game_str(g, S_PROMOTION),
+			    game_word(g, W_NATION, (size_t)nat),
+			    game_word(g, W_RANK, (size_t)g->gov_rank));
+		else {
+			snprintf(num, sizeof(num), "%d", g->gov_acres);
+			fill(text, sizeof(text), game_str(g, S_LAND), num,
+			    NULL);
+		}
+		break;
+	case GOV_OFFER:
+		o = sim_governor_offer(&g->sim, &price);
+		snprintf(num, sizeof(num), "%ld", price);
+		fill(text, sizeof(text), game_str(g, o == OFFER_PARDON ?
+		    S_PARDON : S_MARQUE), game_word(g, o == OFFER_PARDON ?
+		    W_NATION : W_NATION_A, (size_t)nat), num);
+		draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W, text, 1);
+		return;
+	case GOV_SHORT:
+		snprintf(text, sizeof(text), "%s", game_str(g, S_NO_FUNDS));
+		break;
+	default:
+		return;
+	}
+	draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W, text, 0);
+	draw(g, FONT_BODY, GOV_TEXT_X, 430, GOV_TEXT_W,
+	    game_str(g, S_CONTINUE), 0);
+}
+
+const struct screen screen_governor = {
+	"governor", governor_enter, governor_event, NULL, governor_draw,
 };
