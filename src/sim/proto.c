@@ -1063,7 +1063,7 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.relative = (int)json_get_int(j, "relative", 0);
 	tmp.months = (int)json_get_int(j, "months", 0);
 	tmp.crew_event = (int)json_get_int(j, "crew_event", CREW_NONE);
-	if (tmp.crew_event < CREW_NONE || tmp.crew_event > CREW_STARVING)
+	if (tmp.crew_event < CREW_NONE || tmp.crew_event > CREW_WRECKED)
 		tmp.crew_event = CREW_NONE;
 	tmp.food_days = (int)json_get_int(j, "food_days", 0);
 	tmp.deserted = (int)json_get_int(j, "deserted", 0);
@@ -1824,7 +1824,7 @@ static void
 cmd_crew(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	static const char *events[] = { "none", "restless", "anxious",
-	    "mutiny", "hungry", "starving" };
+	    "mutiny", "hungry", "starving", "wrecked" };
 	const char *action = json_get_str(cmd, "action");
 	struct sim *s = &ss->sim;
 

@@ -287,6 +287,7 @@ Status (2026-10-26): first slice.
   overboard; a prize replacing a ship when eight sail.
 - **Food:** eating at sea and on foot, the master's warning,
   starvation.
+- **Reefs:** big ships lost on the shallows.
 - **A capture's plunder:** gold, the loot board with cannon, the
   volunteers.
 - **Near a town:** the hunted pirate off his town; a battle's heat, a

@@ -132,6 +132,7 @@ struct sim_fleet {
 	long		gold;
 	int		food, goods, sugar;	/* cargo, tons */
 	int		food_frac;	/* food eaten into, in 256ths */
+	int		reef_wait;	/* passes before a reef can strike */
 	int		capacity;	/* hold, tens of tons: 2 x class + 2
 					 * per ship */
 	int		mood;		/* the crew's (VA 0x45faa): see
@@ -170,8 +171,9 @@ enum crew_event {
 			 * player (CSTR 139) */
 	CREW_HUNGRY,	/* under 21 days of food: "...only %s days food
 			 * left!" (CSTR 124, food_days) */
-	CREW_STARVING	/* none left: a third deserted with their share,
+	CREW_STARVING,	/* none left: a third deserted with their share,
 			 * food 5 (CSTR 180, on foot 181) */
+	CREW_WRECKED	/* a ship lost on a reef (CSTR 182) */
 };
 
 #define NATION_PIRATE	4	/* in encounter records */

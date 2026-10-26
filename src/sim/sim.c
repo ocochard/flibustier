@@ -797,6 +797,40 @@ eat(struct sim *s)
 	return (1);
 }
 
+/*
+ * Reefs (VA 0x231b8, 0x2849c): on the shallows, with a ship bigger
+ * than a sloop in the fleet and the 100-pass wait over, the last such
+ * ship grinds onto a reef and is lost with her share of the cargo
+ * (CSTR 182); the crew is cut to what the rest can carry.  The original
+ * sizes the fleet once a voyage from every other slot; the engine looks
+ * at every ship.
+ */
+static int
+reef(struct sim *s, int terrain)
+{
+	struct sim_fleet *f = &s->fleet;
+	int k, victim = -1, room;
+
+	if (f->reef_wait > 0)
+		f->reef_wait--;
+	if (terrain != TERRAIN_SHALLOWS || f->reef_wait > 0 ||
+	    s->crew_event != CREW_NONE)
+		return (0);
+	for (k = 0; k < f->nships; k++)
+		if ((f->ships[k] & 7) > 1)
+			victim = k;
+	if (victim < 0)
+		return (0);
+	f->reef_wait = 100;
+	sim_drop_ship(s, victim, 0);
+	for (k = 0, room = 0; k < f->nships; k++)
+		room += ((f->ships[k] & 0xF) + 2) * 32;
+	if (f->crew > room)
+		f->crew = room;
+	s->crew_event = CREW_WRECKED;
+	return (1);
+}
+
 enum sail_stop
 sim_sail(struct sim *s, int turn, int ticks, int *town)
 {
@@ -858,6 +892,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		f->y = ny;
 		f->fx = (uint8_t)(x8 & 7);
 		f->fy = (uint8_t)(y8 & 7);
+		if (reef(s, world_terrain(s->world, nx, ny)))
+			return (SAIL_CREW);
 		if ((t = town_at(s)) >= 0) {
 			*town = t;
 			f->speed = 0;

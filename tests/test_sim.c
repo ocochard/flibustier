@@ -3441,6 +3441,43 @@ test_food(void)
 	    s.fleet.food == 5 && s.fleet.gold == 30000 - 3 * 3000);
 }
 
+/* Shallows sink the last ship bigger than a sloop, then wait 100
+ * passes; a fleet of sloops crosses them safely. */
+static void
+test_reef(void)
+{
+	struct sim s;
+	int town, x, y, stop;
+
+	memset(test_world.map_terrain + 3 * WORLD_TILE * WORLD_TILE,
+	    TERRAIN_SHALLOWS, WORLD_TILE * WORLD_TILE);	/* tile 3 */
+	for (y = 280; y < 320; y++)
+		for (x = 280; x < 320; x++)
+			test_world.map[y * WORLD_CELLS_W + x] = 3;
+	sea_game(&s, 300, 300, 0x00);
+	s.encounters = 0;
+	s.fleet.food = 1000;
+	s.fleet.nships = 3;
+	s.fleet.ships[0] = 1;
+	s.fleet.ships[1] = 4;
+	s.fleet.ships[2] = 1;
+	s.fleet.capacity = 4 + 10 + 4;
+	s.fleet.crew = 300;
+	stop = sim_sail(&s, 0, 1, &town);
+	CHECK(stop == SAIL_CREW && s.crew_event == CREW_WRECKED &&
+	    s.fleet.nships == 2 && s.fleet.ships[1] == 1 &&
+	    s.fleet.crew == 2 * 3 * 32 && s.fleet.reef_wait == 100);
+	/* Only sloops left: safe. */
+	s.crew_event = CREW_NONE;
+	s.fleet.reef_wait = 0;
+	CHECK(sim_sail(&s, 0, 64, &town) != SAIL_CREW);
+	for (y = 280; y < 320; y++)
+		for (x = 280; x < 320; x++)
+			test_world.map[y * WORLD_CELLS_W + x] = 0;
+	memset(test_world.map_terrain + 3 * WORLD_TILE * WORLD_TILE,
+	    TERRAIN_SEA, WORLD_TILE * WORLD_TILE);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3556,6 +3593,7 @@ main(void)
 	test_capture_plunder();
 	test_fleet_calendar();
 	test_food();
+	test_reef();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

@@ -7721,6 +7721,7 @@ const struct screen screen_contact = {
 #define S_ANXIOUS		210
 #define S_FOOD_LEFT		124	/* "...only %s days food left!" */
 #define S_STARVING		180	/* 181 on foot */
+#define S_WRECKED		182	/* "...a shallow reef..." */
 
 static void
 crew_enter(struct game *g)
@@ -7760,7 +7761,9 @@ crew_draw(struct game *g)
 		snprintf(days, sizeof(days), "%d", g->sim.food_days);
 		fill(text, sizeof(text), game_str(g, S_FOOD_LEFT), days, NULL);
 		draw(g, FONT_BODY, 340, 150, 280, text, 0);
-	} else if (g->sim.crew_event == CREW_STARVING)
+	} else if (g->sim.crew_event == CREW_WRECKED)
+		draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_WRECKED), 0);
+	else if (g->sim.crew_event == CREW_STARVING)
 		draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_STARVING +
 		    (g->sim.fleet.ashore ? 1 : 0)), 0);
 	else

@@ -690,6 +690,22 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   on foot CSTR 181, without the boat); a third of the crew leave with
   their share of the gold (VA `0x1f044`), and food becomes 5 tons.
 
+### Reefs (VA `0x231b8`, `0x2849c`)
+
+- At sea, not on foot, on a shallows pixel, when the fleet's largest
+  class is above 1 (bigger than a sloop) and a wait of 100 passes has
+  run out: the wait restarts, and the last ship bigger than a sloop
+  grinds onto a reef, on `smaster.pcx` at (340, 150) up to x 620: "With
+  a jarring crash, one of your ships grinds onto a shallow reef and
+  rapidly fills with water!" (CSTR 182). She is lost with her share of
+  the cargo and gold (VA `0x1f2a1`), and the crew is cut to the rest's
+  `(class + 2) x 32`.
+- Sails and speed play no part; small ships are safe only because
+  they never count.
+- The original sizes the fleet once a voyage (VA `0x24523`), reading
+  every other slot up to twice the count (a quirk); the engine looks at
+  every ship.
+
 ### Manning the fleet (VA `0x1f65f`)
 
 Run at each start of sailing (VA `0x28789`), after leaving a town (VA

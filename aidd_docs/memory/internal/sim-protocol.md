@@ -31,7 +31,7 @@ with a message. Numbers are integers only.
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
 | `shore` | after a `sail` stop at `land`: `ashore` 1 goes ashore, 0 turns the ship about | `ashore` |
-| `crew` | after a `sail` stop at `crew`: `action` `heard` (a warning), or for a mutiny `duel` (`weapon`), `sword` ticks, then `end`; `check` (can the crew sail the fleet: `ok`, `abandon`, `last`, `hold`), `abandon` (`ship`), `abandon_last` | `event` (none, restless, anxious, mutiny, hungry with `food_days`, starving), `mood`, `months`, `crew`, `reputation` |
+| `crew` | after a `sail` stop at `crew`: `action` `heard` (a warning), or for a mutiny `duel` (`weapon`), `sword` ticks, then `end`; `check` (can the crew sail the fleet: `ok`, `abandon`, `last`, `hold`), `abandon` (`ship`), `abandon_last` | `event` (none, restless, anxious, mutiny, hungry with `food_days`, starving, wrecked), `mood`, `months`, `crew`, `reputation` |
 | `villain` | `action`: `duel` (`weapon`) against the villain hiding in the town, run with `sword` ticks, then `end`; `news` (`town`): who is known there; `ask` (`villain`, `town`): where he is | `villain`; `won`, `reputation`; `villains`; `said` (108 here, 107 left), `where` |
 | `mission` | `action`: `accept` (the governor's offer) or `deliver` (to the contact in this town) | `type`, `dest` |
 | `captain` | `action`: `hostage` (`answer` 0 treasure fleet, 1 silver train, 2 hold him), `offer` (in town: a visit's 4 tries at a ransom) or `take` (the offer) | `ransom_slot`, `ransom_gold`, `prisoners`, `gold` |
@@ -165,7 +165,7 @@ with a message. Numbers are integers only.
     crew's mood (`gunnery` before version 21). `months` counts the
     months since the plunder was divided; `crew_event` is the crew's
     word waiting to be heard (0 none, 1 restless, 2 anxious, 3 mutiny,
-    4 hungry, 5 starving), `food_days` for 4; the fleet's `food_frac`,
+    4 hungry, 5 starving, 6 wrecked), `food_days` for 4; the fleet's `food_frac`,
     food eaten into in 256ths (version 30);
     `deserted` the men lost at the last roll call.
 - `rng` holds the generator's two 64-bit words. Loading a state
