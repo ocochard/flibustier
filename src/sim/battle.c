@@ -395,10 +395,13 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	return (ev);
 }
 
-/* Remove ship "i" from the fleet. */
+/* Remove ship "i" from the fleet, and its room in the hold. */
 static void
 drop_ship(struct sim_fleet *f, int i)
 {
+	f->capacity -= sim_ship_room(f->ships[i]);
+	if (f->capacity < 0)
+		f->capacity = 0;
 	for (; i + 1 < f->nships; i++) {
 		f->ships[i] = f->ships[i + 1];
 		f->damage[i] = f->damage[i + 1];
@@ -416,6 +419,7 @@ capture(struct sim *s, int keep)
 	f->gold += (long)s->encounter.gold * 10;
 	if (keep && f->nships < MAX_SHIPS) {
 		f->ships[f->nships] = (uint8_t)bt->foe.type;
+		f->capacity += sim_ship_room(bt->foe.type);
 		f->damage[f->nships] = (uint8_t)clampi(bt->foe.damage, 0, 63);
 		f->nships++;
 		f->guns += bt->foe.guns;
@@ -457,6 +461,7 @@ sim_battle_finish(struct sim *s, int keep)
 			f->nships = 1;
 			f->ships[0] = 0;
 			f->damage[0] = 0;
+			f->capacity = sim_ship_room(0);
 			if (f->crew < 8)
 				f->crew = 8;
 		}

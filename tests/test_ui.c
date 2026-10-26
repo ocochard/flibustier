@@ -553,8 +553,8 @@ test_town(void)
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_town);
 	/* A building not done yet says so. */
-	CHECK(game_script(g, "click:400,320 wait:2") == 0 &&
-	    strstr(g->msg, "Merchant") != NULL);
+	CHECK(game_script(g, "click:580,220 wait:2") == 0 &&
+	    strstr(g->msg, "Governor") != NULL);
 	/* Leave: back at sea, out of the town. */
 	CHECK(game_script(g, "click:60,300 wait:40") == 0);
 	CHECK(g->screen == &screen_sail && g->sim.player_town == -1);
@@ -611,6 +611,48 @@ test_shipwright(void)
 	game_free(g);
 }
 
+/* The merchant: the greeting, the board, buying and selling, leaving. */
+static void
+test_merchant(void)
+{
+	struct game *g;
+	const struct sim_town *t;
+	long gold;
+	int price, food;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "type:Lo enter enter enter enter enter wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	t = &g->sim.towns[g->sim.fleet.leaving];
+	g->sim.fleet.x = t->sea_x * 16 + 8;
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;
+	CHECK(game_script(g, "wait:40 click:400,320 wait:40") == 0);
+	CHECK(g->screen == &screen_merchant && g->shop_stage == 0);
+	CHECK(g->sim.market.open && g->shop_spr[0].count == 93);
+	CHECK(game_script(g, "enter") == 0 && g->shop_stage == 1);
+	/* Right buys a unit of the selected good; Left sells it back. */
+	gold = g->sim.fleet.gold;
+	food = g->sim.fleet.food;
+	price = g->sim.market.price[0];
+	CHECK(game_script(g, "right right") == 0);
+	CHECK(g->sim.fleet.food == food + 2 &&
+	    g->sim.fleet.gold == gold - 2 * price && g->shop_buying);
+	CHECK(game_script(g, "left") == 0 && g->sim.fleet.food == food + 1 &&
+	    !g->shop_buying);
+	/* Down selects goods; a click on the right of its row sells (none
+	 * held), on the left buys. */
+	CHECK(game_script(g, "down") == 0 && g->selected == 1);
+	CHECK(game_script(g, "click:500,175") == 0 && g->sim.fleet.goods == 0);
+	CHECK(game_script(g, "click:100,175") == 0 && g->sim.fleet.goods == 1);
+	/* O.K.: back in town, the shop closed. */
+	CHECK(game_script(g, "click:320,440 wait:40") == 0);
+	CHECK(g->screen == &screen_town && !g->sim.market.open);
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -638,6 +680,7 @@ main(void)
 	test_intro();
 	test_town();
 	test_shipwright();
+	test_merchant();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	7
+#define STATE_VERSION	8
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -34,8 +34,8 @@ static const struct {
 } town_fields[] = {
 	FIELD(flags), FIELD(x), FIELD(y), FIELD(nation), FIELD(forts),
 	FIELD(soldiers), FIELD(citizens), FIELD(gold), FIELD(wealth),
-	FIELD(standing), FIELD(governor), FIELD(id), FIELD(sea_x),
-	FIELD(sea_y),
+	FIELD(standing), FIELD(governor), FIELD(family), FIELD(id),
+	FIELD(sea_x), FIELD(sea_y),
 };
 #define NFIELDS	(sizeof(town_fields) / sizeof(town_fields[0]))
 
@@ -474,6 +474,14 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	}
 	jb_raw(b, "],\"gunnery\":");
 	jb_int(b, s->fleet.gunnery);
+	jb_raw(b, ",\"food\":");
+	jb_int(b, s->fleet.food);
+	jb_raw(b, ",\"goods\":");
+	jb_int(b, s->fleet.goods);
+	jb_raw(b, ",\"sugar\":");
+	jb_int(b, s->fleet.sugar);
+	jb_raw(b, ",\"capacity\":");
+	jb_int(b, s->fleet.capacity);
 	jb_raw(b, ",\"crew\":");
 	jb_int(b, s->fleet.crew);
 	jb_raw(b, ",\"guns\":");
@@ -532,6 +540,21 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->visit_flags);
 	jb_raw(b, ",\"wright_gold\":");
 	jb_int(b, s->wright_gold);
+	jb_raw(b, ",\"merchant_gold\":");
+	jb_int(b, s->merchant_gold);
+	jb_raw(b, ",\"market\":{\"open\":");
+	jb_int(b, s->market.open);
+	for (i = 0; i < GOODS; i++) {
+		jb_raw(b, i == 0 ? ",\"stock\":[" : ",");
+		jb_int(b, s->market.stock[i]);
+	}
+	for (i = 0; i < GOODS; i++) {
+		jb_raw(b, i == 0 ? "],\"price\":[" : ",");
+		jb_int(b, s->market.price[i]);
+	}
+	jb_raw(b, "],\"gold_at_open\":");
+	jb_int(b, s->market.gold_at_open);
+	jb_raw(b, "}");
 	jb_raw(b, ",\"relations\":[");
 	for (a = 0; a < 4; a++) {
 		jb_raw(b, a > 0 ? ",[" : "[");
@@ -668,6 +691,10 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 		}
 	}
 	f->gunnery = (int)json_get_int(j, "gunnery", 0);
+	f->food = (int)json_get_int(j, "food", 0);
+	f->goods = (int)json_get_int(j, "goods", 0);
+	f->sugar = (int)json_get_int(j, "sugar", 0);
+	f->capacity = (int)json_get_int(j, "capacity", 0);
 	f->crew = (int)json_get_int(j, "crew", -1);
 	f->guns = (int)json_get_int(j, "guns", -1);
 	f->gold = (long)json_get_int(j, "gold", -1);
@@ -744,6 +771,27 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.visit_town = (int)json_get_int(j, "visit_town", -1);
 	tmp.visit_flags = (int)json_get_int(j, "visit_flags", 0);
 	tmp.wright_gold = (int)json_get_int(j, "wright_gold", -1);
+	tmp.merchant_gold = (int)json_get_int(j, "merchant_gold", -1);
+	{
+		const struct json *mk = json_get(j, "market");
+		const struct json *st = json_get(mk, "stock");
+		const struct json *pr = json_get(mk, "price");
+		int k;
+
+		if (mk == NULL || st == NULL || pr == NULL ||
+		    st->type != JSON_ARRAY || pr->type != JSON_ARRAY ||
+		    st->count != GOODS || pr->count != GOODS) {
+			snprintf(err, errlen, "bad market");
+			return (-1);
+		}
+		tmp.market.open = json_get_int(mk, "open", 0) != 0;
+		for (k = 0; k < GOODS; k++) {
+			tmp.market.stock[k] = (int)st->items[k]->num;
+			tmp.market.price[k] = (int)pr->items[k]->num;
+		}
+		tmp.market.gold_at_open = (long)json_get_int(mk,
+		    "gold_at_open", 0);
+	}
 	if (tmp.day < 0 || tmp.day_of_year < 0 || tmp.day_of_year >= 360 ||
 	    tmp.month < 0 || tmp.month > 12 || tmp.diplomacy_range <= 0) {
 		snprintf(err, errlen, "bad calendar or diplomacy_range");
@@ -1289,6 +1337,72 @@ cmd_shipwright(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * The merchant: "open" rolls this visit's stock and prices; "buy" and
+ * "sell" take "good" (food, goods, sugar) and "count"; "close" ends the
+ * visit.
+ */
+static void
+cmd_merchant(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *goods[GOODS] = { "food", "goods", "sugar" };
+	const char *action = json_get_str(cmd, "action");
+	const char *good = json_get_str(cmd, "good");
+	int64_t count = json_get_int(cmd, "count", 1);
+	struct sim *s = &ss->sim;
+	int g = -1, done = 0, i;
+
+	if (s->player_town < 0) {
+		reply_error(out, "not in a town");
+		return;
+	}
+	if (action == NULL) {
+		reply_error(out, "merchant needs \"action\": open, buy, sell "
+		    "or close");
+		return;
+	}
+	if (strcmp(action, "open") == 0) {
+		if (sim_merchant_refuses(s)) {
+			reply_error(out, "we do not trade with pirates");
+			return;
+		}
+		sim_merchant_open(s);
+	} else if (strcmp(action, "close") == 0) {
+		sim_merchant_close(s);
+	} else if (strcmp(action, "buy") == 0 || strcmp(action, "sell") == 0) {
+		for (i = 0; good != NULL && i < GOODS; i++)
+			if (strcmp(good, goods[i]) == 0)
+				g = i;
+		if (!s->market.open || g < 0 || count < 1 || count > 10000) {
+			reply_error(out, "buy and sell need an open shop, "
+			    "\"good\" (food, goods, sugar) and \"count\"");
+			return;
+		}
+		done = sim_trade(s, g, action[0] == 'b' ? (int)count :
+		    -(int)count);
+	} else {
+		reply_error(out, "unknown merchant action");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"traded\":");
+	jb_int(out, done);
+	jb_raw(out, ",\"gold\":");
+	jb_int(out, s->fleet.gold);
+	jb_raw(out, ",\"merchant_gold\":");
+	jb_int(out, s->merchant_gold);
+	jb_raw(out, ",\"hold_space\":");
+	jb_int(out, sim_hold_space(s));
+	for (i = 0; i < GOODS; i++) {
+		jb_raw(out, i == 0 ? ",\"stock\":[" : ",");
+		jb_int(out, s->market.stock[i]);
+	}
+	for (i = 0; i < GOODS; i++) {
+		jb_raw(out, i == 0 ? "],\"price\":[" : ",");
+		jb_int(out, s->market.price[i]);
+	}
+	jb_raw(out, "]}");
+}
+
 static void
 cmd_board(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1389,6 +1503,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_town(ss, cmd, out);
 	else if (strcmp(name, "shipwright") == 0)
 		cmd_shipwright(ss, cmd, out);
+	else if (strcmp(name, "merchant") == 0)
+		cmd_merchant(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

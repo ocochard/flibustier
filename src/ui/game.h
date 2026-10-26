@@ -144,6 +144,9 @@ struct game {
 	int			 town_key;	/* keyboard selection, -1 */
 	int			 wright_stage;	/* 0 menu, 1 repair, 2 sell, 3 note */
 	int			 wright_note;	/* CSTR shown at stage 3 */
+	int			 shop_stage;	/* 0 greeting, 1 trading, 2 refused */
+	struct sprite_bank	 shop_spr[3];	/* board pieces, board, exit */
+	int			 shop_buying;	/* the Sell/Buy sign */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */

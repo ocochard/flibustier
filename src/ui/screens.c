@@ -2443,6 +2443,9 @@ town_choose(struct game *g, int i)
 	case SPOT_SHIPWRIGHT:
 		game_goto(g, &screen_shipwright);
 		break;
+	case SPOT_MERCHANT:
+		game_goto(g, &screen_merchant);
+		break;
 	case SPOT_LEAVE:
 		sim_leave_town(&g->sim);
 		bank_free(&g->town_spr);
@@ -2819,4 +2822,205 @@ shipwright_draw(struct game *g)
 const struct screen screen_shipwright = {
 	"shipwright", shipwright_enter, shipwright_event, NULL,
 	shipwright_draw,
+};
+
+/*
+ * Merchant (VA 0x21e56): the greeting, then the trading board (VA
+ * 0x20229): the merchant's side on the left, the player's on the
+ * right, a row per good with its price, the merchant's stock and the
+ * player's cargo, both purses and the space in the hold.  Up and Down
+ * pick a good, Right buys one, Left sells one; a click on the left of a
+ * row buys, on the right sells; Enter, Escape or the exit sign leaves.
+ */
+#define BOARD_ROWS		3	/* food, goods, sugar (cannon: row 3) */
+#define BOARD_PIECES		23	/* layout records for those rows */
+#define BOARD_ROW_Y		116
+#define BOARD_ROW_H		50
+#define BOARD_SIGN		82	/* "Sell", then "Buy" */
+#define BOARD_GAUGE		77
+#define GLYPH_BIG		0	/* 0-9, then highlighted 10-19 */
+#define GLYPH_SMALL		20	/* '/', 0-9; 31 and 42: other inks */
+
+static const char *board_files[3][3] = {
+	{ "spr/buysell", "spr/buyboard", "spr/buysell1" },
+	{ "spr/buysellf", "spr/buybrdf", "spr/buysll1f" },
+	{ "spr/buysellg", "spr/buybrdg", "spr/buysll1g" },
+};
+
+/* Layout record "i" (VA 0x348c4): frame, highlighted frame, x, y. */
+static int
+board_piece(const struct game *g, int i, int r[4])
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->board_va + (uint32_t)i * 10, 8);
+	int k;
+
+	if (p == NULL)
+		return (-1);
+	for (k = 0; k < 4; k++)
+		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+	return (0);
+}
+
+static void
+board_frame(struct game *g, int bank, int frame, int x, int y)
+{
+	const struct sprite_bank *b = &g->shop_spr[bank];
+
+	if (frame >= 0 && (size_t)frame < b->count)
+		fb_frame(&g->fb, &b->frames[frame], x, y);
+}
+
+/* A number in the board's glyphs; "right" aligns it to "digits". */
+static void
+board_number(struct game *g, long v, int x, int y, int first, int w,
+    int digits, int right)
+{
+	char buf[16];
+	int i, n = snprintf(buf, sizeof(buf), "%ld", v < 0 ? 0 : v);
+
+	if (right)
+		x += (digits - n) * w;
+	for (i = 0; i < n; i++, x += w)
+		board_frame(g, 0, first + buf[i] - '0', x, y);
+}
+
+static void
+merchant_enter(struct game *g)
+{
+	int lang = strcmp(g->lang, "fre") == 0 ? 1 :
+	    strcmp(g->lang, "ger") == 0 ? 2 : 0, i;
+
+	game_background(g, "pic/merchant");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	for (i = 0; i < 3; i++)
+		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
+	g->selected = 0;
+	g->shop_buying = 1;
+	if (sim_merchant_refuses(&g->sim))
+		g->shop_stage = 2;
+	else {
+		sim_merchant_open(&g->sim);
+		g->shop_stage = 0;
+	}
+}
+
+static void
+merchant_leave(struct game *g)
+{
+	sim_merchant_close(&g->sim);
+	game_goto(g, &screen_town);
+}
+
+static void
+merchant_trade(struct game *g, int row, int buy)
+{
+	g->selected = row;
+	g->shop_buying = buy;
+	sim_trade(&g->sim, row, buy ? 1 : -1);
+}
+
+static void
+merchant_event(struct game *g, const struct ui_event *ev)
+{
+	int go = ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE));
+	int row;
+
+	if (g->shop_stage != 1) {
+		if (go) {
+			if (g->shop_stage == 2)
+				game_goto(g, &screen_town);
+			else
+				g->shop_stage = 1;
+		}
+		return;
+	}
+	if (ev->type == EV_CLICK) {
+		row = (ev->y - BOARD_ROW_Y) / BOARD_ROW_H;
+		if (ev->y >= 420)
+			merchant_leave(g);		/* the exit sign */
+		else if (ev->y >= BOARD_ROW_Y && row < BOARD_ROWS)
+			merchant_trade(g, row, ev->x < FB_W / 2);
+		return;
+	}
+	if (ev->type != EV_KEY)
+		return;
+	switch (ev->key) {
+	case UI_KEY_UP:
+		g->selected = (g->selected + BOARD_ROWS - 1) % BOARD_ROWS;
+		break;
+	case UI_KEY_DOWN:
+		g->selected = (g->selected + 1) % BOARD_ROWS;
+		break;
+	case UI_KEY_RIGHT:
+		merchant_trade(g, g->selected, 1);
+		break;
+	case UI_KEY_LEFT:
+		merchant_trade(g, g->selected, 0);
+		break;
+	case UI_KEY_ENTER:
+	case UI_KEY_ESCAPE:
+		merchant_leave(g);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+merchant_draw(struct game *g)
+{
+	const struct sim_market *m = &g->sim.market;
+	const struct sim_fleet *f = &g->sim.fleet;
+	int i, r[4], row, sel, held, used, room;
+
+	if (g->shop_stage != 1) {
+		text_band(g, 20, 170);
+		draw(g, FONT_BODY, 80, 30, 480, game_str(g, g->shop_stage == 2 ?
+		    S_NO_PIRATES : sim_merchant_greeting(&g->sim)), 0);
+		draw_centered(g, FONT_BODY, 165, game_str(g, S_CONTINUE));
+		return;
+	}
+	board_frame(g, 1, 0, 203, 17);
+	for (i = 0; i < BOARD_PIECES; i++) {
+		if (board_piece(g, i, r) != 0)
+			continue;
+		row = i < 5 ? -1 : (i - 5) / 6;
+		board_frame(g, 0, row == g->selected ? r[1] : r[0], r[2], r[3]);
+	}
+	board_frame(g, 0, BOARD_SIGN + g->shop_buying, 235, 101);
+	board_frame(g, 2, 0, 252, 430);
+	for (i = 0; i < BOARD_ROWS; i++) {
+		sel = i == g->selected;
+		held = i == 0 ? f->food : i == 1 ? f->goods : f->sugar;
+		/* The merchant's stock, the player's cargo, the price on
+		 * both sides (VA 0x207f1, 0x20940). */
+		board_number(g, m->stock[i], 106, 117 + i * BOARD_ROW_H,
+		    GLYPH_BIG + (sel ? 10 : 0), 15, 4, 1);
+		board_number(g, held, 475, 117 + i * BOARD_ROW_H,
+		    GLYPH_BIG + (sel ? 10 : 0), 15, 4, 0);
+		board_number(g, m->price[i], 71, 119 + i * BOARD_ROW_H,
+		    GLYPH_SMALL + 1 + (sel ? 11 : 0), 7, 3, 1);
+		board_number(g, m->price[i], 534, 119 + i * BOARD_ROW_H,
+		    GLYPH_SMALL + 1 + (sel ? 11 : 0), 7, 3, 1);
+	}
+	/* The purses (VA 0x213c4) and the space in the hold (0x21612). */
+	board_number(g, g->sim.merchant_gold > 999999 ? 999999 :
+	    g->sim.merchant_gold, 20, 84, GLYPH_SMALL + 1, 8, 6, 1);
+	board_number(g, f->gold > 999999 ? 999999 : f->gold, 576, 84,
+	    GLYPH_SMALL + 1, 8, 6, 1);
+	room = sim_hold_space(&g->sim);
+	board_number(g, room, 336, 138, GLYPH_SMALL + 23, 8, 4, 1);
+	/* The hold gauge: an engine guess at the original's formula. */
+	used = f->capacity * 10 - room;
+	board_frame(g, 0, BOARD_GAUGE, 249 + (f->capacity > 0 ?
+	    used * 113 / (f->capacity * 10) : 0), 72);
+}
+
+const struct screen screen_merchant = {
+	"merchant", merchant_enter, merchant_event, NULL, merchant_draw,
 };

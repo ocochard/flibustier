@@ -52,6 +52,8 @@ struct sim_town {
 	uint16_t	wealth;
 	uint16_t	standing;	/* field 9, reset by a new governor */
 	uint16_t	governor;	/* field 11 */
+	uint16_t	family;		/* field 12: 0x40 married into the
+					 * merchant's family */
 	uint16_t	id;
 	uint16_t	sea_x, sea_y;	/* fields 26, 27: water outside the
 					 * harbour, 0 for inland towns */
@@ -90,6 +92,9 @@ struct sim_fleet {
 	int		crew;
 	int		guns;
 	long		gold;
+	int		food, goods, sugar;	/* cargo, tons */
+	int		capacity;	/* hold, tens of tons: 2 x class + 2
+					 * per ship */
 	int		gunnery;	/* player block +0x18, not identified;
 					 * sets the reload time */
 	int32_t		x, y;		/* world pixels */
@@ -289,6 +294,13 @@ struct sim {
 	int		visit_town;	/* town of the visit flags, or -1 */
 	int		visit_flags;	/* VISIT_* for the current visit */
 	int		wright_gold;	/* the shipwright's, -1 until known */
+	int		merchant_gold;	/* the merchant's, -1 until known */
+	struct sim_market {
+		int	open;
+		int	stock[3];	/* food, goods, sugar */
+		int	price[3];
+		long	gold_at_open;	/* the player's */
+	} market;
 	int8_t		relations[4][4];
 	int8_t		standing[5];	/* player standing per nation, and
 					 * pirates (always -1 so far) */
@@ -349,6 +361,22 @@ int	sim_repair(struct sim *s, unsigned mask);
 /* Sell the ships in "mask", in fleet order, while his gold lasts; one
  * ship always stays. */
 int	sim_sell_ships(struct sim *s, unsigned mask);
+
+/* The merchant (VA 0x21e56).  Goods: 0 food, 1 goods, 2 sugar. */
+#define GOODS		3
+
+/* Free space in the hold, in tons; guns take half a ton. */
+int	sim_hold_space(const struct sim *s);
+int	sim_merchant_refuses(const struct sim *s);
+/* The greeting, a CSTR number, by the player's gold. */
+int	sim_merchant_greeting(const struct sim *s);
+/* Open the shop: stock and prices are rolled for this visit. */
+void	sim_merchant_open(struct sim *s);
+/* Buy (n > 0) or sell (n < 0) units of a good, one at a time while
+ * the rules allow; returns the units traded. */
+int	sim_trade(struct sim *s, int good, int n);
+/* Close the shop: trading moves the town's wealth. */
+void	sim_merchant_close(struct sim *s);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);

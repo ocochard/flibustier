@@ -1452,6 +1452,110 @@ test_shipwright(void)
 	CHECK(sim_repair_cost(&s, 0) == 50 * 1 * 3);
 }
 
+/* The merchant: prices, stock, trading limits, the town's wealth. */
+static void
+test_merchant(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	struct sim_market *m = &s.market;
+
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->nation = NATION_ENGLAND;
+	t->wealth = 120;
+	t->citizens = 20;
+	t->flags = 0;
+	t->family = 0;
+	s.month = 0;
+	sim_enter_town(&s, 1);
+	CHECK(!sim_merchant_refuses(&s));
+	sim_merchant_open(&s);
+	CHECK(m->open);
+	/* W = 12 x 120 / 6 = 240: gold 48 x 600; food 7 -> 70, then each
+	 * good starts from the last price: goods 4 -> 40, sugar 2 -> 20;
+	 * then x 1.5, and sugar x 2. */
+	CHECK(s.merchant_gold == 28800);
+	CHECK(m->price[0] == 105 && m->price[1] == 60 && m->price[2] == 60);
+	CHECK(m->stock[0] >= 48 && m->stock[0] < 96);
+	CHECK(m->stock[1] >= 14 && m->stock[1] < 28);
+	CHECK(m->stock[2] >= 8 && m->stock[2] < 16);
+	/* A local product is cheap (bit 3: food): 7 / 2 + 1 = 4. */
+	t->flags = 0x08;
+	sim_merchant_open(&s);
+	CHECK(m->price[0] == 60);
+	/* Wanted sugar (bit 4) doubles it again. */
+	t->flags = 0x10;
+	sim_merchant_open(&s);
+	CHECK(m->price[2] == 120);
+	/* Family pays three quarters. */
+	t->flags = 0;
+	t->family = 0x40;
+	sim_merchant_open(&s);
+	CHECK(m->price[0] == 78 && m->price[1] == 45);
+	CHECK(sim_merchant_greeting(&s) == 291 + (s.fleet.gold > 2000));
+	t->family = 0;
+	/* Spanish towns: the family is welcome, others are not. */
+	t->nation = NATION_SPAIN;
+	CHECK(sim_merchant_refuses(&s));
+	t->family = 0x40;
+	CHECK(!sim_merchant_refuses(&s));
+	t->family = 0;
+	t->nation = NATION_ENGLAND;
+
+	/* Trading: one price both ways, limited by stock, gold, hold space
+	 * and the merchant's gold. */
+	sim_merchant_open(&s);
+	s.fleet.gold = 1000;
+	s.fleet.capacity = 4;
+	s.fleet.guns = 8;
+	s.fleet.food = s.fleet.goods = s.fleet.sugar = 0;
+	CHECK(sim_hold_space(&s) == 36);
+	CHECK(sim_trade(&s, 1, 5) == 5);
+	CHECK(s.fleet.goods == 5 && s.fleet.gold == 700 &&
+	    s.merchant_gold == 28800 + 300);
+	CHECK(sim_trade(&s, 1, 100) == 11);	/* 700 / 60: gold runs out */
+	CHECK(s.fleet.gold == 40);
+	s.fleet.gold = 100000;
+	CHECK(sim_trade(&s, 0, 1000) == 20);	/* the hold is full */
+	CHECK(sim_hold_space(&s) == 0);
+	CHECK(sim_trade(&s, 1, -3) == 3 && s.fleet.goods == 13);
+	s.merchant_gold = 100;
+	CHECK(sim_trade(&s, 1, -5) == 1);	/* he runs out of gold */
+	m->stock[2] = 0;
+	s.fleet.food = 0;
+	CHECK(sim_trade(&s, 2, 1) == 0);	/* no sugar to buy */
+	CHECK(sim_trade(&s, 0, -1) == 0);	/* no food to sell */
+	/* Closing: more than 20 gold moved, wealth x 19 / 20 + 12. */
+	sim_merchant_close(&s);
+	CHECK(!m->open && t->wealth == 120 * 19 / 20 + 12);
+	sim_merchant_open(&s);
+	sim_merchant_close(&s);			/* nothing traded */
+	CHECK(t->wealth == 126);
+	sim_merchant_open(&s);
+	s.fleet.gold += 20;			/* 20 is not enough */
+	sim_merchant_close(&s);
+	CHECK(t->wealth == 126);
+	/* Greetings by purse: up to 2000, 5000, 20000, then more. */
+	s.fleet.gold = 2000;
+	CHECK(sim_merchant_greeting(&s) == 257);
+	s.fleet.gold = 2001;
+	CHECK(sim_merchant_greeting(&s) == 258);
+	s.fleet.gold = 5001;
+	CHECK(sim_merchant_greeting(&s) == 259);
+	s.fleet.gold = 5000;
+	CHECK(sim_merchant_greeting(&s) == 258);
+	s.fleet.gold = 20000;
+	CHECK(sim_merchant_greeting(&s) == 259);
+	s.fleet.gold = 20001;
+	CHECK(sim_merchant_greeting(&s) == 260);
+	t->wealth = 250;
+	sim_merchant_open(&s);
+	s.fleet.gold += 21;
+	sim_merchant_close(&s);
+	CHECK(t->wealth == 249);		/* 237 + 12 */
+}
+
 int
 main(void)
 {
@@ -1470,6 +1574,7 @@ main(void)
 	test_sword_protocol();
 	test_towns();
 	test_shipwright();
+	test_merchant();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

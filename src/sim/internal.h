@@ -24,4 +24,11 @@ int	sim_div16(int a, int b);
  */
 int	sim_bearing(int dx, int dy);
 
+/* A ship's room in the hold, in tens of tons (VA 0xdb7b, 0x1f2a1). */
+static inline int
+sim_ship_room(int type)
+{
+	return ((type & 0xF) * 2 + 2);
+}
+
 #endif

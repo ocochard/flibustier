@@ -38,6 +38,8 @@ struct scenario {
 	int		 guns;
 	int		 nation;	/* town nation order */
 	long		 gold;
+	int		 food, goods, sugar;	/* tons */
+	int		 capacity;	/* hold, tens of tons */
 	int		 nships;
 	uint8_t		 ships[SCENARIO_SHIPS];	/* ship types, 0 = pinnace */
 	uint16_t	 start[SCENARIO_STARTS][2];	/* x, y in map cells */

@@ -232,8 +232,10 @@ Status (2026-10-26): first slice.
   visit flags.
 - **Shipwright:** repairs and ship sales, with his gold per stay.
   Selling cannon waits for the merchant's trading screen.
-- **Next:** the merchant (with cargo), tavern, governor, bank, and the
-  arrival choices (attack, sneak in).
+- **Merchant:** cargo (food, goods, sugar, hold capacity) and trading
+  on the original board. The daughter's subplot and "Take all" wait.
+- **Next:** tavern, governor, bank, selling cannon (the same board), and
+  the arrival choices (attack, sneak in).
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

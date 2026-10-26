@@ -13,6 +13,10 @@
 #define GUNS_OFF	0x16
 #define NATION_OFF	0x17
 #define GOLD_OFF	0x18	/* tens of gold pieces */
+#define FOOD_OFF	0x1a	/* cargo, in tons */
+#define GOODS_OFF	0x1b
+#define SUGAR_OFF	0x1c
+#define CAPACITY_OFF	0x1f	/* hold, in tens of tons */
 #define NSHIPS_OFF	0x20
 #define SHIPS_OFF	0x21
 #define RELATIONS_OFF	0x34
@@ -50,6 +54,10 @@ scenario_load(const struct exe_layout *layout, const uint8_t *exe,
 	out->guns = r[GUNS_OFF];
 	out->nation = r[NATION_OFF];
 	out->gold = (long)le16(r + GOLD_OFF) * 10;
+	out->food = r[FOOD_OFF];
+	out->goods = r[GOODS_OFF];
+	out->sugar = r[SUGAR_OFF];
+	out->capacity = r[CAPACITY_OFF];
 	out->nships = r[NSHIPS_OFF];
 	memcpy(out->ships, r + SHIPS_OFF, SCENARIO_SHIPS);
 	for (a = 0; a < SCENARIO_STARTS; a++) {

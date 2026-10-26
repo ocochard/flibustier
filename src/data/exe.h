@@ -35,6 +35,8 @@ struct exe_layout {
 						 * frames per move */
 	uint32_t	 sword_va;		/* sword fight tables block */
 	uint32_t	 cursor_va;		/* mouse pointer: u16 w, h, pixels */
+	uint32_t	 board_va;		/* trading board layout, 10-byte
+						 * records */
 	uint32_t	 town_spots_va;		/* 8 x {i16 x0, y0, x1, y1, on} */
 	uint32_t	 credits_va;		/* 6 x 4 i16 rects in the credits
 						 * picture, 20 RGB ink steps */

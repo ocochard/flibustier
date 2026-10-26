@@ -740,6 +740,62 @@ same town only bits 1 and 2 are kept.
   - The original picks several ships at once on a fleet panel; the
     engine takes one ship per choice and shows the list again.
 
+### Cargo
+
+- **Holdings:** the player block holds food (`+0x0c`), sugar (`+0x0e`),
+  a food fraction (`+0x10`), the hold capacity in tens of tons
+  (`+0x12`) and goods (`+0x2c`), besides the guns (`+0x0a`).
+- **Start values:** a start scenario sets food, goods and sugar from
+  bytes 0x1a-0x1c, the fraction from 0x1e and the capacity from 0x1f.
+- **Capacity:** a captured ship adds `2 x class + 2`; a lost or sold
+  ship removes its share.
+- **Space in the hold:**
+  `capacity x 10 - guns / 2 - food - goods - sugar` tons.
+
+### Merchant (VA `0x21e56`)
+
+- **Refusal:** as at the shipwright (CSTR 256), except for the
+  merchant's family (town word 12 `& 0xe0`, set by marrying his
+  daughter).
+- **Greeting by the player's gold:** up to 2000, 5000, 20000, then
+  more: CSTR 257-260, or 291-294 for the family.
+- **Prices and stock,** rolled at each visit, with
+  `W = (|6 - month| + 6) x wealth / 6` kept in floating point:
+  - **Merchant's gold:** `trunc(W x (citizens + 10) / 150) x 600`, at
+    most 50,000, kept for the stay.
+  - **For goods i = 0, 1, 2 (food, goods, sugar):**
+    - stock `= b + rand(b)`, with `b = trunc(W x (citizens + 10) /
+      150)`;
+    - base `= trunc(W / 50 + 3 - i / 2)`;
+    - halved plus 1 when town flag bit `3 - i` is set (a local
+      product);
+    - sugar's doubled when bit 4 is set;
+    - price `= base x 10`.
+    - **Quirk:** the code then reuses W's variable, so each later good
+      uses the previous good's price as its W, for both stock and
+      price. The engine does the same.
+  - **Then:** food and goods x 1.5, sugar x 1.5 then x 2 (truncating).
+    For the family, each price x 0.75, at least 1.
+- **Trading:**
+  - One price both ways, one unit at a time.
+  - **Buying** needs merchant stock, the price in gold and space in the
+    hold.
+  - **Selling** needs a unit and the merchant's gold.
+  - The gold changes hands; the merchant's stock rises and falls.
+- **Closing:** if the player's gold moved by more than 20, the town's
+  wealth becomes `wealth x 19 / 20 + 12`, at most 255.
+- **The daughter:** then comes CSTR 295-301 (meeting the merchant's
+  daughter, marriage for 5,000 gold); not done yet.
+- **The board (VA `0x20229`):**
+  - Layout records at VA `0x348c4`: frame, highlighted frame, x, y.
+  - The merchant's column is on the left and the player's (the skull)
+    on the right.
+  - Digits are glyphs of `buysell.spr`: big 0-19, small 20-52.
+  - Pieces are per language (`buysell`, `buyboard`, `buysell1`, with
+    `f` and `g` variants).
+  - Its "Take all" button and the slider (VA `0x20ff3`) are not traced.
+    The engine places the slider by the hold's fill, a guess.
+
 ## Intro (VA `0x3325`)
 
 1. `micro.pcx`: fade in, 2 s (20 x 100 ms), fade out.

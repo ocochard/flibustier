@@ -106,6 +106,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->player_town = SIM_NO_TOWN;
 	s->visit_town = SIM_NO_TOWN;
 	s->wright_gold = -1;
+	s->merchant_gold = -1;
 	s->player.expedition = -1;
 	snprintf(s->player.title, sizeof(s->player.title), "%s", scn->name);
 	memcpy(s->relations, scn->relations, sizeof(s->relations));
@@ -114,6 +115,10 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->fleet.crew = scn->crew;
 	s->fleet.guns = scn->guns;
 	s->fleet.gold = scn->gold;
+	s->fleet.food = scn->food;
+	s->fleet.goods = scn->goods;
+	s->fleet.sugar = scn->sugar;
+	s->fleet.capacity = scn->capacity;
 	{
 		int k = rng_below(&s->rng, SCENARIO_STARTS);
 
@@ -140,6 +145,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->towns[i].wealth = (uint16_t)t->wealth;
 		s->towns[i].standing = t->raw[9];
 		s->towns[i].governor = t->raw[11];
+		s->towns[i].family = t->raw[12];
 		s->towns[i].id = (uint16_t)t->id;
 		s->towns[i].sea_x = t->raw[26];
 		s->towns[i].sea_y = t->raw[27];
@@ -706,6 +712,7 @@ sim_enter_town(struct sim *s, int town)
 	if (town != s->visit_town) {
 		s->visit_flags = 0;
 		s->wright_gold = -1;
+		s->merchant_gold = -1;
 	} else
 		s->visit_flags &= VISIT_GOVERNOR | VISIT_KEPT;
 	s->visit_town = town;
