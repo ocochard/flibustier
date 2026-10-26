@@ -24,6 +24,14 @@ moderate contrast, shallow depth of field, realistic textures, no text.
 # the model tends to leave some wall around the frame; an asset's own
 # "trim" overrides it, framed or not.
 frame_trim = 0.04
+# The board a screen's title is written on (an asset's "plaque" =
+# [x, y, w, h] in 640x480 pixels): rendered alone and placed there.
+plaque = """
+Photograph, straight on, of a single plain plank of pale cream painted
+wood filling the whole image edge to edge, its paint smooth and slightly
+worn, with a thin darker edge along its border; no lettering, no marks,
+no nails in the middle. Even soft light.
+"""
 # Appended to the prompt of every framed asset.
 framed = """
 The photograph is mounted in an ornate antique gilded wooden picture
@@ -72,6 +80,45 @@ the edges of the other pages; along the right edge, a narrow strip of
 the red leather cover. A faded red ribbon bookmark lies across the
 bottom left corner of the page. Warm even candlelight, realistic paper
 grain, sharp focus, realistic.
+"""
+# The Ship's Log page turns its leaves at these two spots, so they show
+# page-turn arrows, placed exactly.
+[[asset.pieces]]
+rect = [200, 420, 40, 30]
+prompt = """
+Photograph, straight on, of a small engraved brass plate filling the
+whole image, with a bold arrow pointing to the left deeply engraved in
+its middle, warm worn brass, even soft light.
+"""
+[[asset.pieces]]
+rect = [380, 420, 40, 30]
+prompt = """
+Photograph, straight on, of a small engraved brass plate filling the
+whole image, with a bold arrow pointing to the right deeply engraved in
+its middle, warm worn brass, even soft light.
+"""
+
+# The people who appear in several pictures, described once: a prompt's
+# "{name}" becomes the description, word for word.
+[characters]
+bartender = """
+the tavern keeper, a tall, rough working man in his forties with short
+dark hair and a few days' stubble, a faded red shirt with sweat stains
+and rolled sleeves, a long apron of coarse linen, grimy and stained
+with wine and grease
+"""
+barmaid = """
+the barmaid, a full-figured woman in her late twenties with a generous
+bust, dark curly hair and gold hoop earrings, a low-cut white
+off-shoulder blouse, a tight black laced bodice and a long red skirt
+"""
+mapman = """
+the map seller, an old man with a long grey beard and a patterned
+headscarf, a worn yellow-brown coat
+"""
+infoman = """
+the informant, a shady man in his forties with a dark beard and a
+turban-like headscarf, a black waistcoat over a white shirt
 """
 
 # One colour grade for every picture: its colours are pulled towards the
@@ -156,26 +203,38 @@ realistic paper texture.
 [[asset]]
 id = "pic/trescave"
 file = "art/trescave.png"
-seed = 1660
+seed = 1663
 # The model keeps chaining the skull: a sketch fixes the pose.
 control = "layouts/trescave.png"
 control_strength = 0.7
 control_end = 0.6
+# Every seed draws a chain from the wrists to the skull: repaint that
+# strip (mask at the render size, 1472x1104) as empty air.
+inpaint_mask = "layouts/trescave-inpaint.png"
+# Plain cave rock from left of the skeleton covers the strip first.
+inpaint_fill = [800, 198, 940, 198, 67, 103]
+inpaint_denoise = 0.55
+# Name only what the strip shows: a named skull gets drawn there.
+inpaint_prompt = """
+Photograph detail inside a dark sea cave: empty dark air in deep shadow,
+with the dim rock wall of the cave behind it.
+"""
 source = "layout described from the original screen"
 prompt = """
 Photograph from deep inside a dark sea cave. Through a jagged opening in
 the upper centre, a bright glimpse of the sea and a distant sailing
 ship. On the right, the skeleton of a long-dead pirate hangs from the
-cave ceiling by its wrists: two iron rings are set in the rock above it,
-a hand's width apart, and from each ring its own short iron chain runs
-down to an iron shackle locked around one wrist bone, so each raised arm
-hangs from its own chain. Between the two raised arms there is only
-empty dark air; the skull hangs low below the arms, bare, nothing
-touching it. It is dressed in a ragged shirt and long ragged trousers
-that cover its leg bones down to the ankles; only the bony feet show
-below the trouser hems, dangling above the rocks. The rest of the cave,
-especially the left half and the bottom, is rock in deep darkness.
-Dramatic chiaroscuro, realistic textures, sharp focus.
+cave ceiling by its two wrists tied together: both wrist bones are
+locked side by side in one heavy iron shackle, and a very short iron
+chain of a few links joins that shackle to an iron ring in the rock
+right above it. Its long arms are stretched straight up in a narrow V
+from the shoulders to the bound wrists, and the skull hangs far below
+the hands, between the shoulders, bare, with nothing touching it. It is
+dressed in a ragged shirt and long ragged trousers that cover its leg
+bones down to the ankles; only the bony feet show below the trouser
+hems, dangling above the rocks. The rest of the cave, especially the
+left half and the bottom, is rock in deep darkness. Dramatic
+chiaroscuro, realistic textures, sharp focus.
 """
 negative = """
 chain attached to the skull, chain on the head, chain around the neck,
@@ -204,15 +263,12 @@ file = "art/bartenda.png"
 seed = 1660
 source = "layout described from the original screen"
 prompt = """
-Photograph of a 17th-century Caribbean tavern keeper standing at the far
-left of the frame, a tall, rough working man with short dark hair and a
-few days' stubble, a faded red shirt with sweat stains and rolled
-sleeves, a long apron of coarse linen, grimy and stained with wine and
-grease, arms crossed, looking at the viewer, his skin and clothes worn
-by hard work in a hot tavern. Behind him and
-across the whole rest of the frame, a plain, softly lit pale yellow-green
-plaster wall, empty and out of focus. Warm light. Historical reenactment
-photography, 50mm lens, realistic.
+Photograph of {bartender}, standing at the far left of the frame, arms
+crossed, looking at the viewer, his skin and clothes worn by hard work
+in a hot tavern. Behind him and across the whole rest of the frame, a
+plain, softly lit pale yellow-green plaster wall, empty and out of
+focus. Warm light. Historical reenactment photography, 50mm lens,
+realistic.
 """
 
 # ---------------------------------------------------------------------
@@ -285,10 +341,7 @@ source = "layout described from the original screen"
 frame = [345, 13, 266, 457]
 field = "#003100"
 prompt = """
-Portrait photograph of a Caribbean tavern barmaid of the 1660s, a
-full-figured woman in her late twenties with a generous bust, dark curly
-hair and gold hoop earrings, a low-cut white off-shoulder blouse and a
-tight black laced bodice, warm smile, warm tavern light, period
+Portrait photograph of {barmaid}, warm smile, warm tavern light, period
 costume, historical reenactment photography.
 """
 
@@ -389,10 +442,8 @@ source = "layout described from the original screen"
 frame = [332, 15, 300, 446]
 field = "#082931"
 prompt = """
-Portrait photograph of a shady tavern informant of the 1660s with a
-turban-like headscarf, a dark beard and a black waistcoat over a white
-shirt, arms crossed, a bottle on the table before him, dim tavern
-light, historical reenactment photography.
+Portrait photograph of {infoman}, arms crossed, a bottle on the table
+before him, dim tavern light, historical reenactment photography.
 """
 
 [[asset]]
@@ -415,10 +466,8 @@ source = "layout described from the original screen"
 frame = [12, 22, 306, 427]
 field = "#202018"
 prompt = """
-Portrait photograph of an old map seller of the 1660s with a grey beard
-and a patterned headscarf, a yellow-brown coat, arms crossed, sitting in
-a dim tavern corner, warm side light, historical reenactment
-photography.
+Portrait photograph of {mapman}, arms crossed, sitting in a dim tavern
+corner, warm side light, historical reenactment photography.
 """
 
 [[asset]]
@@ -623,4 +672,94 @@ elderly master shipwright, white-haired and stout, in a long brown coat
 and a black tricorn hat, holding plans; and a young apprentice with
 short blond hair, bareheaded, in a leather apron over a linen shirt,
 carrying an adze. Tools and timber at their feet, daylight.
+"""
+
+# ---------------------------------------------------------------------
+# Screens with clickable spots: each follows a line sketch that puts its
+# objects where the game expects clicks (layouts/sketch.py, from the
+# spot rectangles of the original executable).  The title is drawn in
+# dark ink at the top centre, on the light hanging signboard.
+
+[[asset]]
+id = "pic/town"
+file = "art/town.png"
+seed = 1660
+source = "layout from the game's spot rectangles"
+control = "layouts/town.png"
+control_strength = 0.85
+control_end = 0.6
+# The title board, at the "City Information" spot.
+plaque = [212, 6, 224, 69]
+prompt = """
+Photograph of the main square of a small, rough Spanish port town in the
+Caribbean in the 1650s, a frontier settlement, not a restored old town.
+Above the town, a bright blue sky with white clouds. The buildings are
+low and weathered: walls of coral stone and rubble with peeling,
+stained lime plaster, roofs of curved clay barrel tiles or of thatched
+palm fronds, small windows with heavy wooden shutters and iron bars and
+no glass, wooden balconies with turned posts, rough timber doors. On
+the far left, a muddy rutted dirt road leads down past palm trees
+towards the harbour with a sailing ship at anchor, and at the bottom
+left a small open timber shipwright's shed with planks and barrels.
+Left of centre, the tavern: a two-storey plastered house with a
+balcony, a wide open timber door and a hanging lantern. In the centre
+right, a small merchant's store with a canvas awning on wooden poles
+and sacks and crates by its door. On the right, the counting house: a
+squat building of dressed stone with a heavy iron-studded door. On the
+far right, up the hill, the governor's residence behind a stone wall
+with a gate, a Spanish flag on a pole, and a squat stone church bell
+tower behind it. The square is bare trampled earth with puddles, a few
+chickens and a goat, no people. Hot sun, dust, historical
+reenactment photography, wide lens, sharp focus, realistic.
+"""
+
+[[asset]]
+id = "pic/tavern"
+file = "art/tavern.png"
+seed = 1660
+source = "layout from the game's spot rectangles"
+control = "layouts/tavern.png"
+control_strength = 0.85
+control_end = 0.6
+# The title board, at the "City Information" spot.
+plaque = [212, 6, 224, 69]
+prompt = """
+Photograph inside a busy, smoky Caribbean harbour tavern of the 1660s,
+lit by oil lamps and daylight. Heavy dark ceiling beams run across the
+top of the picture. At the back left, a long wooden bar with shelves of
+bottles behind it, and behind the bar {bartender}, polishing a mug. In
+the centre right, {barmaid} stands holding a tray.
+At the bottom centre, a round table with two very different sailors
+drinking: a young blond man in a striped shirt and an old one-eyed man
+with a grey beard and a red cap. At the bottom right, a smaller table
+with a burly dark-skinned sailor in a green headscarf. On the far right
+edge, the open wooden door of the tavern with daylight beyond. The far
+left corner and the spaces between the tables are empty. Warm amber
+light, historical reenactment photography, sharp focus, realistic.
+"""
+
+[[asset]]
+id = "pic/cabin"
+file = "art/cabin.png"
+seed = 1660
+source = "layout from the game's spot rectangles"
+control = "layouts/cabin.png"
+control_strength = 0.85
+control_end = 0.6
+# The title board, at the "City Information" spot.
+plaque = [212, 6, 224, 69]
+prompt = """
+Photograph of a 17th-century sea captain's cabin in the stern of a
+galleon, warm and cluttered, lit by daylight from the stern windows. Low
+wooden ceiling beams run across the top of the picture. Two stern windows look out on the blue sea. On the
+upper left wall, two crossed swords; below them, on a small shelf, a
+thick leather-bound log book. On the left, an iron-bound wooden sea
+chest. A brass telescope stands on a tripod left of centre. At the back
+centre, a bed with heavy dark red curtains. In the middle, a wooden
+table with sea charts and maps spread on it. At the bottom left of
+centre, a large antique globe on a wooden stand. On the right, a tall
+dark wooden chest of drawers with a mirror above it. At the bottom
+right, a pair of tall leather sea boots standing on the floor. No
+people. Historical reenactment photography, wide lens, sharp focus,
+realistic.
 """

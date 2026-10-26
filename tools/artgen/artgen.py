@@ -61,13 +61,23 @@ def generation_size(w, h, area=1.0):
             max(16, round(h * scale / 16) * 16))
 
 
+def characters(text, spec):
+    """Put each "{name}" of [characters] into a prompt, so a person looks
+    the same in every picture they appear in."""
+    for name, desc in spec.get("characters", {}).items():
+        text = text.replace("{%s}" % name, " ".join(desc.split()))
+    if "{" in text:
+        sys.exit("unknown character in: " + text.strip()[:60])
+    return text
+
+
 def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
     """The ComfyUI API graph for one asset.  A framed asset is rendered
     at its frame's size and placed on a plain field of the full size."""
     p = PROFILES[profile]
     k = spec["pack"]["art_height"] / SCREEN_H
     frame = asset.get("frame")
-    prompt = asset["prompt"]
+    prompt = characters(asset["prompt"], spec)
     if frame:
         fx, fy, fw, fh = (round(v * k) for v in frame)
         if asset.get("gilded", True):
@@ -118,6 +128,48 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "image": ["decode", 0], "width": gw - 2 * cx,
             "height": gh - 2 * cy, "x": cx, "y": cy}}
     picture = ["resize", 0]
+    # Pieces the screen needs at exact places (the board its title is
+    # written on, page-turn arrows...), rendered on their own and placed
+    # there: the scene's model will not put them there.  "plaque" is a
+    # piece with the pack's plaque prompt.
+    pieces = list(asset.get("pieces", []))
+    if asset.get("plaque"):
+        pieces.insert(0, {"rect": asset["plaque"],
+                          "prompt": spec["pack"]["plaque"]})
+    if pieces:
+        g["pshift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {
+            "model": ["lora", 0] if p["lora"] else ["unet", 0],
+            "shift": SHIFT}}
+    for n, piece in enumerate(pieces):
+        px, py, pw, ph = (round(v * k) for v in piece["rect"])
+        pgw, pgh = generation_size(pw, ph, 0.25)
+        ptext = piece["prompt"].strip()
+        if spec["pack"].get("style"):
+            ptext += " " + spec["pack"]["style"].strip()
+        g["ppos%d" % n] = {"class_type": "CLIPTextEncode", "inputs": {
+            "text": ptext, "clip": ["clip", 0]}}
+        g["platent%d" % n] = {"class_type": "EmptySD3LatentImage",
+                              "inputs": {"width": pgw, "height": pgh,
+                                         "batch_size": 1}}
+        g["psample%d" % n] = {"class_type": "KSampler", "inputs": {
+            "model": ["pshift", 0], "seed": seed + n, "steps": p["steps"],
+            "cfg": p["cfg"], "sampler_name": "euler", "scheduler": "simple",
+            "positive": ["ppos%d" % n, 0], "negative": ["neg", 0],
+            "latent_image": ["platent%d" % n, 0], "denoise": 1.0}}
+        g["pdecode%d" % n] = {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["psample%d" % n, 0], "vae": ["vae", 0],
+            "tile_size": 512, "overlap": 64, "temporal_size": 64,
+            "temporal_overlap": 8}}
+        g["presize%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["pdecode%d" % n, 0], "upscale_method": "lanczos",
+            "width": pw, "height": ph, "crop": "center"}}
+        g["pplace%d" % n] = {"class_type": "ImageCompositeMasked",
+                             "inputs": {
+                                 "destination": picture,
+                                 "source": ["presize%d" % n, 0],
+                                 "x": px, "y": py, "resize_source": False}}
+        picture = ["pplace%d" % n, 0]
+        g["save"]["inputs"]["images"] = picture
     if grade and grade.get("uploaded"):
         # One colour grade for the series: match the colours of the
         # reference picture, then a touch of contrast.
@@ -165,6 +217,59 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
     g["shift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {
         "model": model, "shift": SHIFT}}
     positive, negative = ["pos", 0], ["neg", 0]
+    if asset.get("uploaded_inpaint"):
+        # Repaint a masked region the model keeps getting wrong, without
+        # the sketch, and keep every other pixel of the render.
+        g["ishift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {
+            "model": ["lora", 0] if p["lora"] else ["unet", 0],
+            "shift": SHIFT}}
+        g["imask"] = {"class_type": "LoadImageMask", "inputs": {
+            "image": asset["uploaded_inpaint"], "channel": "red"}}
+        base = ["decode", 0]
+        fill = asset.get("inpaint_fill")
+        if fill:
+            # Cover the region with a patch of plain background first, so
+            # a light repaint blends it in instead of redrawing what the
+            # surroundings suggest.  fill = [from_x, from_y, x, y, w, h].
+            g["patch"] = {"class_type": "ImageCrop", "inputs": {
+                "image": base, "width": fill[4], "height": fill[5],
+                "x": fill[0], "y": fill[1]}}
+            g["prefill"] = {"class_type": "ImageCompositeMasked",
+                            "inputs": {
+                                "destination": base, "source": ["patch", 0],
+                                "x": fill[2], "y": fill[3],
+                                "resize_source": False}}
+            base = ["prefill", 0]
+        g["ienc"] = {"class_type": "VAEEncodeTiled", "inputs": {
+            "pixels": base, "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}}
+        g["inoise"] = {"class_type": "SetLatentNoiseMask", "inputs": {
+            "samples": ["ienc", 0], "mask": ["imask", 0]}}
+        iprompt = asset["inpaint_prompt"].strip()
+        if spec["pack"].get("style"):
+            iprompt += " " + spec["pack"]["style"].strip()
+        g["ipos"] = {"class_type": "CLIPTextEncode", "inputs": {
+            "text": iprompt, "clip": ["clip", 0]}}
+        g["isample"] = {"class_type": "KSampler", "inputs": {
+            "model": ["ishift", 0], "seed": seed, "steps": p["steps"],
+            "cfg": p["cfg"], "sampler_name": "euler", "scheduler": "simple",
+            "positive": ["ipos", 0], "negative": ["neg", 0],
+            "latent_image": ["inoise", 0],
+            "denoise": asset.get("inpaint_denoise", 1.0)}}
+        g["idecode"] = {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["isample", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}}
+        g["repaint"] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": base, "source": ["idecode", 0],
+            "x": 0, "y": 0, "resize_source": False,
+            "mask": ["imask", 0]}}
+        rendered = ["repaint", 0]
+    else:
+        rendered = ["decode", 0]
+    if trim:
+        g["trim"]["inputs"]["image"] = rendered
+    else:
+        g["resize"]["inputs"]["image"] = rendered
     g["sample"] = {"class_type": "KSampler", "inputs": {
         "model": ["shift", 0], "seed": seed, "steps": p["steps"],
         "cfg": p["cfg"], "sampler_name": "euler", "scheduler": "simple",
@@ -289,6 +394,9 @@ def main():
     ap.add_argument("--spec", default=os.path.join(HERE, "assets.toml"))
     ap.add_argument("--draft", action="store_true")
     ap.add_argument("--seed", type=int, help="override every seed")
+    ap.add_argument("--keep-loaded", action="store_true",
+                    help="do not unload ComfyUI's models first (for runs "
+                    "back to back)")
     ap.add_argument("ids", nargs="*")
     args = ap.parse_args()
     args.server = reachable(args.server)
@@ -317,13 +425,18 @@ def main():
             print("no grade reference %s yet: rendering ungraded" % ref,
                   file=sys.stderr)
     # Other workflows' models may fill the GPU: let ComfyUI unload them.
-    call(args.server, "/free", json.dumps({"unload_models": True,
-                                           "free_memory": True}).encode())
+    if not args.keep_loaded:
+        call(args.server, "/free", json.dumps(
+            {"unload_models": True, "free_memory": True}).encode())
     for a in assets:
         lw, lh = a.get("size", [SCREEN_W, SCREEN_H])
         ow = round(lw * height / SCREEN_H)
         oh = round(lh * height / SCREEN_H)
         seed = args.seed if args.seed is not None else a["seed"]
+        if a.get("inpaint_mask"):
+            a["uploaded_inpaint"] = upload(
+                args.server, os.path.join(HERE, a["inpaint_mask"]),
+                "stmalo-inpaint-" + os.path.basename(a["inpaint_mask"]))
         if a.get("control"):
             a["uploaded_control"] = upload(
                 args.server, os.path.join(HERE, a["control"]),
@@ -353,6 +466,12 @@ def main():
                         "strength": a.get("control_strength", 0.7),
                         "end": a.get("control_end", 0.6)}
             if a.get("control") else None,
+            "inpaint": {"mask": a["inpaint_mask"],
+                        "sha256": hashlib.sha256(open(os.path.join(
+                            HERE, a["inpaint_mask"]), "rb").read())
+                        .hexdigest(),
+                        "prompt": a["inpaint_prompt"].strip()}
+            if a.get("inpaint_mask") else None,
             "grade": {k: v for k, v in grade.items() if k != "uploaded"}
             if grade and grade.get("uploaded") and a.get("grade", True)
             else None,
