@@ -11,6 +11,8 @@
 #include <stdint.h>
 
 #include "data/exe.h"
+#include "data/pack.h"
+#include "sim/json.h"
 
 #define TOWN_MAX	48	/* records per era block, used or not */
 #define TOWN_FIELDS	32
@@ -42,7 +44,18 @@ struct town {
 	int		 gold;		/* f7 */
 	int		 wealth;	/* f8: 0..255, 64 per wealth level */
 	int		 id;		/* f14: same town across eras */
-	uint16_t	 raw[TOWN_FIELDS];
+	/* The fields the game state starts from (struct sim_town). */
+	int		 standing;	/* f9 */
+	int		 garrison;	/* f10 */
+	int		 governor;	/* f11 */
+	int		 family;	/* f12 */
+	int		 barmaid;	/* f13 */
+	int		 land_x, land_y;	/* f15, f16 */
+	int		 fort_x, fort_y;	/* f17, f18 */
+	int		 ship_x, ship_y, ship_heading;	/* f19-f21 */
+	int		 party_x, party_y;	/* f22, f23 */
+	int		 sea_x, sea_y, sea_heading;	/* f26-f28 */
+	uint16_t	 raw[TOWN_FIELDS];	/* original data only */
 };
 
 /*
@@ -64,5 +77,31 @@ extern const int town_era_years[EXE_ERAS];
 /* era: 0 (1560) to 5 (1680).  Returns 0, or -1 on malformed data. */
 int	towns_load(const struct exe_layout *layout, const uint8_t *exe,
 	    size_t len, int era, struct era_towns *out);
+
+/*
+ * The towns of an era from any pack: "data/towns/<year>" when a pack
+ * gives it (JSON, see towns_decode()), else the executable's table.
+ * Returns 0, or -1 with a message in "err".
+ */
+int	towns_for_era(struct packs *packs, const struct exe_layout *layout,
+	    const uint8_t *exe, size_t len, int era, struct era_towns *out,
+	    char *err, size_t errlen);
+
+/*
+ * Open town data, one JSON file per era:
+ *
+ *	{ "towns": [ { "name": "Havana", "id": 6, "nation": "spain",
+ *	    "x": 245, "y": 179, "flags": 16, "forts": 4, "soldiers": 300,
+ *	    "citizens": 9000, "gold": 50, "wealth": 195, "standing": 0,
+ *	    "garrison": 0, "governor": 3, "family": 0, "barmaid": 0,
+ *	    "land": [x, y], "fort": [x, y], "ship": [x, y, heading],
+ *	    "party": [x, y], "sea": [x, y, heading] }, ... ] }
+ *
+ * Every member is required; numbers are 0..65535, nations "spain",
+ * "england", "france" or "holland".  towns_encode() writes that form.
+ */
+int	towns_decode(const uint8_t *data, size_t len, int era,
+	    struct era_towns *out, char *err, size_t errlen);
+void	towns_encode(const struct era_towns *era, struct jbuf *b);
 
 #endif

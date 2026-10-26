@@ -10,6 +10,7 @@
 
 #include "raylib.h"
 
+#include "assets/worldfiles.h"
 #include "data/pack.h"
 #include "play.h"
 #include "view/view.h"
@@ -39,6 +40,9 @@ usage(void)
 	    "  --viewer [--id ID] [--screenshot OUT.png [--frames N]]\n"
 	    "                browse assets\n"
 	    "  --list        print every asset ID\n"
+	    "  --export-world DIR\n"
+	    "                write the world grids as an open pack of Tiled\n"
+	    "                maps (from the original data: do not share)\n"
 	    "  --export ID OUT.png [--frame N] [--tick N]\n"
 	    "                render one asset frame to a PNG, no window\n");
 	exit(2);
@@ -96,11 +100,12 @@ main(int argc, char **argv)
 {
 	const char *data, *pack[MAX_PACKS], *id = NULL, *out = NULL;
 	const char *shot = NULL, *lang = "eng", *script = NULL, *saves = NULL;
-	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT } cmd = PLAY;
+	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT, EXPORT_WORLD } cmd = PLAY;
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
 	int shot_frames = 30, rc, a, crt = 0;
+	char err[256];
 
 	data = getenv("STMALO_DATA");
 	for (a = 1; a < argc; a++) {
@@ -124,6 +129,10 @@ main(int argc, char **argv)
 		else if (strcmp(argv[a], "--export") == 0 && a + 2 < argc) {
 			cmd = EXPORT;
 			id = argv[++a];
+			out = argv[++a];
+		} else if (strcmp(argv[a], "--export-world") == 0 &&
+		    a + 1 < argc) {
+			cmd = EXPORT_WORLD;
 			out = argv[++a];
 		} else if (strcmp(argv[a], "--id") == 0 && a + 1 < argc)
 			id = argv[++a];
@@ -175,6 +184,10 @@ main(int argc, char **argv)
 		break;
 	case EXPORT:
 		rc = export_png(packs, id, out, frame, tick);
+		break;
+	case EXPORT_WORLD:
+		if ((rc = world_export(packs, out, err, sizeof(err))) != 0)
+			fprintf(stderr, "%s\n", err);
 		break;
 	default:
 		rc = viewer_run(packs, id, shot, shot_frames);

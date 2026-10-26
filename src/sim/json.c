@@ -18,6 +18,7 @@ struct parser {
 	char		*err;
 	size_t		 errlen;
 	int		 failed;
+	int		 reals;		/* accept non-integer numbers */
 };
 
 static void
@@ -151,6 +152,31 @@ parse_string(struct parser *ps)
 
 static struct json *parse_value(struct parser *ps, int depth);
 
+/* The fraction and exponent of a number: ".5", "e-3". */
+static int
+skip_real(struct parser *ps)
+{
+	int digits;
+
+	if (*ps->p == '.') {
+		ps->p++;
+		for (digits = 0; *ps->p >= '0' && *ps->p <= '9'; ps->p++)
+			digits++;
+		if (digits == 0)
+			return (-1);
+	}
+	if (*ps->p == 'e' || *ps->p == 'E') {
+		ps->p++;
+		if (*ps->p == '+' || *ps->p == '-')
+			ps->p++;
+		for (digits = 0; *ps->p >= '0' && *ps->p <= '9'; ps->p++)
+			digits++;
+		if (digits == 0)
+			return (-1);
+	}
+	return (0);
+}
+
 static int
 append(struct json *j, char *key, struct json *item)
 {
@@ -277,13 +303,17 @@ parse_value(struct parser *ps, int depth)
 			}
 			v = v * 10 + (*ps->p - '0');
 		}
-		if (*ps->p == '.' || *ps->p == 'e' || *ps->p == 'E') {
-			fail(ps, "only integers are supported");
-			free(j);
-			return (NULL);
-		}
 		j->type = JSON_INT;
 		j->num = neg ? -v : v;
+		if (*ps->p == '.' || *ps->p == 'e' || *ps->p == 'E') {
+			if (!ps->reals || skip_real(ps) != 0) {
+				fail(ps, ps->reals ? "bad number" :
+				    "only integers are supported");
+				free(j);
+				return (NULL);
+			}
+			j->type = JSON_REAL;
+		}
 	} else {
 		fail(ps, "unexpected character");
 		free(j);
@@ -292,8 +322,8 @@ parse_value(struct parser *ps, int depth)
 	return (j);
 }
 
-struct json *
-json_parse(const char *text, char *err, size_t errlen)
+static struct json *
+parse(const char *text, int reals, char *err, size_t errlen)
 {
 	struct parser ps;
 	struct json *j;
@@ -302,6 +332,7 @@ json_parse(const char *text, char *err, size_t errlen)
 	ps.err = err;
 	ps.errlen = errlen;
 	ps.failed = 0;
+	ps.reals = reals;
 	if ((j = parse_value(&ps, 0)) == NULL)
 		return (NULL);
 	skip_ws(&ps);
@@ -311,6 +342,18 @@ json_parse(const char *text, char *err, size_t errlen)
 		return (NULL);
 	}
 	return (j);
+}
+
+struct json *
+json_parse(const char *text, char *err, size_t errlen)
+{
+	return (parse(text, 0, err, errlen));
+}
+
+struct json *
+json_parse_reals(const char *text, char *err, size_t errlen)
+{
+	return (parse(text, 1, err, errlen));
 }
 
 const struct json *
@@ -446,6 +489,7 @@ pretty(const struct json *j, struct jbuf *b, int level)
 		jb_raw(b, j->num ? "true" : "false");
 		break;
 	case JSON_INT:
+	case JSON_REAL:		/* only its integer part is kept */
 		jb_int(b, j->num);
 		break;
 	case JSON_STRING:

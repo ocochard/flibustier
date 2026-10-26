@@ -165,8 +165,6 @@ terrain = map-terrain.png
   frame `pass / period % frames`, counted in sailing passes (12.2 a
   second). Battles draw frame 0.
 - Limits:
-  - The map grid, battle screens, towns and treasure spots still come
-    from the original (`plans/open-terrain.md`, T3).
   - The treasure map's tiles are composed on indices (original
     resolution).
   - The shimmer pause while the ship touches land is not reproduced.
@@ -202,4 +200,30 @@ baseline = 19
   the text colour. The 640x480 screen gets 1-bit glyphs (coverage at
   least half), so code reading it still works.
 - No kerning yet.
+
+## Open world data
+
+The world's layout and towns, when a pack gives them; otherwise the
+original files and executable.
+
+| ID | Format | Content |
+|---|---|---|
+| `map/<year>` | Tiled map, 640 x 480 cells | the era's map (1560 ... 1680), one tile number per cell |
+| `screens/sea` | Tiled map, 15 x 15 cells, 108 tile layers | sea battle screens, in layer order |
+| `screens/land` | Tiled map, 15 x 15 cells, 61 tile layers | land battle screens |
+| `data/towns/<year>` | JSON (`towns.h`) | the era's towns: position, nation, wealth, garrison, harbour, fort and battle cells |
+| `data/treasure` | JSON (`world.h`) | 256 treasure spots, world cells |
+| `data/battle-sets` | JSON (`world.h`) | sea battle screens offered by a coast north, east, south, west, or in open sea |
+
+- Tiled maps (`src/assets/tiled.c`): orthogonal, fixed size, one
+  tileset, tile layers stored as CSV ("Tile Layer Format: CSV"), every
+  cell an unflipped tile 0-255. Object and image layers are ignored,
+  group layers refused. Files end in `.tmj` (or `.json`).
+- A pack that gives one of these must give it whole and valid: a broken
+  file is an error, never a silent fallback to the original.
+- `stmalo --export-world DIR` writes the installed world (the original's
+  unless a pack replaces it) in these formats, with Tiled tilesets
+  `map.tsj` and `battle.tsj` (images `map.png`, `battle.png` to supply)
+  and a `pack.ini`. Exported from the original data, it is for local
+  checks and as a starting point only: never distribute it.
 

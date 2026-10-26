@@ -2873,8 +2873,8 @@ test_old_state(void)
 	size_t i;
 
 	make_era(&era, &scn);
-	era.towns[0].raw[10] = 7;		/* a garrison */
-	era.towns[0].raw[22] = 9;		/* a landing cell */
+	era.towns[0].garrison = 7;
+	era.towns[0].party_x = 9;		/* a landing cell */
 	sim_new_game(&s, &era, &scn, 3);
 	CHECK(s.towns[0].garrison == 7 && s.towns[0].party_x == 9);
 	sim_to_json(&s, &st);

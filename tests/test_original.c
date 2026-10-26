@@ -25,6 +25,7 @@
 #include "assets/tileset.h"
 #include "assets/towns.h"
 #include "assets/world.h"
+#include "assets/worldfiles.h"
 #include "view/view.h"
 
 #define SKIP	77
@@ -709,6 +710,97 @@ test_sheet_terrain(struct packs *orig)
 	remove(dir);
 }
 
+/* Every field the game reads, as the town table gives it. */
+static int
+same_town(const struct town *a, const struct town *b)
+{
+	return (strcmp(a->name, b->name) == 0 && a->flags == b->flags &&
+	    a->x == b->x && a->y == b->y && a->nation == b->nation &&
+	    a->forts == b->forts && a->soldiers == b->soldiers &&
+	    a->citizens == b->citizens && a->gold == b->gold &&
+	    a->wealth == b->wealth && a->id == b->id &&
+	    a->standing == b->standing && a->garrison == b->garrison &&
+	    a->governor == b->governor && a->family == b->family &&
+	    a->barmaid == b->barmaid && a->land_x == b->land_x &&
+	    a->land_y == b->land_y && a->fort_x == b->fort_x &&
+	    a->fort_y == b->fort_y && a->ship_x == b->ship_x &&
+	    a->ship_y == b->ship_y && a->ship_heading == b->ship_heading &&
+	    a->party_x == b->party_x && a->party_y == b->party_y &&
+	    a->sea_x == b->sea_x && a->sea_y == b->sea_y &&
+	    a->sea_heading == b->sea_heading);
+}
+
+/*
+ * Open world data: the original's maps, battle screens, towns, treasure
+ * spots and battle sets exported as Tiled maps and JSON, and loaded
+ * back, give the same world and towns in every era.
+ */
+static void
+test_world_export(struct packs *orig)
+{
+	static struct world w, ref;
+	static const char *const files[] = { "pack.ini", "map.tsj",
+	    "battle.tsj", "sea-screens.tmj", "land-screens.tmj",
+	    "map-1560.tmj", "map-1600.tmj", "map-1620.tmj", "map-1640.tmj",
+	    "map-1660.tmj", "map-1680.tmj", "towns-1560.json",
+	    "towns-1600.json", "towns-1620.json", "towns-1640.json",
+	    "towns-1660.json", "towns-1680.json", "treasure.json",
+	    "battle-sets.json", NULL };
+	static struct era_towns t, tref;
+	const char *data = getenv("STMALO_DATA");
+	const struct exe_layout *layout = NULL;
+	char dir[] = "/tmp/stmalo-test-XXXXXX", path[1024], err[256];
+	struct packs *packs;
+	struct blob b;
+	size_t i;
+	int era;
+
+	if (mkdtemp(dir) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	CHECK(world_export(orig, dir, err, sizeof(err)) == 0);
+	packs = packs_new();
+	CHECK(packs_add_original(packs, data) == 0);
+	CHECK(packs_add_dir(packs, dir) == 0);
+	CHECK(packs_load(orig, "program/main", &b) == 0);
+	if ((layout = exe_identify(b.data, b.len)) != NULL)
+		for (era = 0; era < EXE_ERAS; era++) {
+			CHECK(world_load(&w, packs, layout, b.data, b.len, era,
+			    err, sizeof(err)) == 0);
+			CHECK(world_load(&ref, orig, layout, b.data, b.len, era,
+			    err, sizeof(err)) == 0);
+			CHECK(memcmp(w.map, ref.map, sizeof(w.map)) == 0);
+			CHECK(memcmp(w.battle_screens, ref.battle_screens,
+			    sizeof(w.battle_screens)) == 0);
+			CHECK(memcmp(w.land_screens, ref.land_screens,
+			    sizeof(w.land_screens)) == 0);
+			CHECK(memcmp(w.treasure, ref.treasure,
+			    sizeof(w.treasure)) == 0);
+			CHECK(memcmp(w.battle_sets, ref.battle_sets,
+			    sizeof(w.battle_sets)) == 0);
+			CHECK(towns_for_era(packs, layout, b.data, b.len, era,
+			    &t, err, sizeof(err)) == 0);
+			CHECK(towns_for_era(orig, layout, b.data, b.len, era,
+			    &tref, err, sizeof(err)) == 0);
+			CHECK(t.count == tref.count && t.count > 30);
+			for (i = 0; i < t.count && i < tref.count; i++)
+				CHECK(same_town(&t.towns[i], &tref.towns[i]));
+		}
+	/* The pack took over: a broken map is an error, not a fallback. */
+	CHECK(write_file(dir, "map-1660.tmj", "{\"layers\":[]}") == 0);
+	if (layout != NULL)
+		CHECK(world_load(&w, packs, layout, b.data, b.len, 4, err,
+		    sizeof(err)) == -1 && strstr(err, "map/1660") != NULL);
+	blob_free(&b);
+	packs_free(packs);
+	for (i = 0; files[i] != NULL; i++) {
+		snprintf(path, sizeof(path), "%s/%s", dir, files[i]);
+		remove(path);
+	}
+	remove(dir);
+}
+
 int
 main(void)
 {
@@ -736,6 +828,7 @@ main(void)
 	test_scenarios(packs);
 	test_terrain(packs);
 	test_sheet_terrain(packs);
+	test_world_export(packs);
 	packs_free(packs);
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);

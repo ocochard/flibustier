@@ -5,14 +5,21 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "pcx.h"
 #include "rsd.h"
+#include "tiled.h"
 #include "tiles.h"
 #include "tileset.h"
 #include "towns.h"
 #include "world.h"
+#include "sim/json.h"
+
+const char *const battle_set_names[BATTLE_SETS] = {
+	"north", "east", "south", "west", "open",
+};
 
 #define ERA_BLOCK_LEN	0x200
 #define ENCOUNTER_OFF	0x100	/* in the era block */
@@ -61,12 +68,49 @@ load_screen_file(struct packs *packs, const char *id, uint8_t *out,
 	return (0);
 }
 
+/*
+ * Tile grids from a Tiled map "id", when a pack provides one: 0 when
+ * read, 1 when there is none, -1 with a message in "err".
+ */
+static int
+load_tiled(struct packs *packs, const char *id, int gw, int gh,
+    size_t layers, uint8_t *out, char *err, size_t errlen)
+{
+	struct blob b;
+	char why[192];
+	int rc;
+
+	if (packs_load(packs, id, &b) != 0)
+		return (1);
+	if (strcmp(b.ext, "tmj") != 0 && strcmp(b.ext, "json") != 0) {
+		blob_free(&b);
+		snprintf(err, errlen, "%s: not a Tiled map (.tmj)", id);
+		return (-1);
+	}
+	rc = tiled_read(b.data, b.len, gw, gh, layers, out, why, sizeof(why));
+	blob_free(&b);
+	if (rc != 0)
+		snprintf(err, errlen, "%s: %s", id, why);
+	return (rc);
+}
+
 static int
 load_screens(struct world *w, struct packs *packs, char *err, size_t errlen)
 {
-	if (load_screen_file(packs, "tiles15/sbtl", &w->battle_screens[0][0],
-	    BATTLE_SCREENS, err, errlen) != 0)
+	int rc;
+
+	/* Open packs: Tiled maps, one tile layer per screen. */
+	if ((rc = load_tiled(packs, "screens/sea", BATTLE_SCREEN,
+	    BATTLE_SCREEN, BATTLE_SCREENS, &w->battle_screens[0][0], err,
+	    errlen)) < 0)
 		return (-1);
+	if (rc == 1 && load_screen_file(packs, "tiles15/sbtl",
+	    &w->battle_screens[0][0], BATTLE_SCREENS, err, errlen) != 0)
+		return (-1);
+	if ((rc = load_tiled(packs, "screens/land", BATTLE_SCREEN,
+	    BATTLE_SCREEN, LAND_SCREENS, &w->land_screens[0][0], err,
+	    errlen)) != 1)
+		return (rc);
 	return (load_screen_file(packs, "tiles15/lbtl", &w->land_screens[0][0],
 	    LAND_SCREENS, err, errlen));
 }
@@ -99,6 +143,13 @@ load_map(struct world *w, struct packs *packs, int era,
 	char id[32];
 	int rc;
 
+	/* Open packs: the era's map as a Tiled map. */
+	snprintf(id, sizeof(id), "map/%d", town_era_years[era]);
+	if ((rc = load_tiled(packs, id, WORLD_CELLS_W, WORLD_CELLS_H, 1,
+	    w->map, err, errlen)) < 0)
+		return (-1);
+	if (rc == 0)
+		goto tiles;
 	if (packs_load(packs, "pic/map1560", &b) != 0) {
 		snprintf(err, errlen, "cannot load pic/map1560");
 		return (-1);
@@ -126,6 +177,7 @@ load_map(struct world *w, struct packs *packs, int era,
 			return (-1);
 		}
 	}
+tiles:
 	rc = tileset_load(packs, "tiles/map", &ts);
 	if (rc != 0 || ts.tile_w != WORLD_TILE || ts.count != 256) {
 		tileset_free(&ts);
@@ -236,6 +288,95 @@ sword_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	return (0);
 }
 
+/* Parse JSON "id" from the packs: 1 if none, -1 if malformed, 0. */
+static int
+load_json(struct packs *packs, const char *id, struct json **out, char *err,
+    size_t errlen)
+{
+	struct blob b;
+	char *text;
+
+	*out = NULL;
+	if (packs_load(packs, id, &b) != 0)
+		return (1);
+	if ((text = malloc(b.len + 1)) == NULL) {
+		blob_free(&b);
+		snprintf(err, errlen, "out of memory");
+		return (-1);
+	}
+	memcpy(text, b.data, b.len);
+	text[b.len] = '\0';
+	blob_free(&b);
+	*out = json_parse(text, err, errlen);
+	free(text);
+	return (*out != NULL ? 0 : -1);
+}
+
+/* An array of "n" integers from lo to hi into "out". */
+static int
+int_list(const struct json *a, size_t n, int lo, int hi, int *out)
+{
+	size_t i;
+
+	if (a == NULL || a->type != JSON_ARRAY || a->count != n)
+		return (-1);
+	for (i = 0; i < n; i++) {
+		if (a->items[i]->type != JSON_INT || a->items[i]->num < lo ||
+		    a->items[i]->num > hi)
+			return (-1);
+		out[i] = (int)a->items[i]->num;
+	}
+	return (0);
+}
+
+/* data/treasure and data/battle-sets, when a pack gives them. */
+static int
+load_places(struct world *w, struct packs *packs, char *err, size_t errlen)
+{
+	const struct json *spots;
+	struct json *j;
+	int rc, xy[2], set[BATTLE_PIECES], k, i;
+
+	if ((rc = load_json(packs, "data/treasure", &j, err, errlen)) < 0)
+		return (-1);
+	if (rc == 0) {
+		spots = json_get(j, "spots");
+		rc = spots != NULL && spots->type == JSON_ARRAY &&
+		    spots->count == TREASURE_SPOTS ? 0 : -1;
+		for (i = 0; rc == 0 && i < TREASURE_SPOTS; i++) {
+			rc = int_list(spots->items[i], 2, 0, WORLD_CELLS_W - 1,
+			    xy);
+			if (rc == 0 && xy[1] >= WORLD_CELLS_H)
+				rc = -1;
+			w->treasure[i][0] = (int16_t)xy[0];
+			w->treasure[i][1] = (int16_t)xy[1];
+		}
+		json_free(j);
+		if (rc != 0) {
+			snprintf(err, errlen, "data/treasure: %d spots of "
+			    "[x, y] world cells", TREASURE_SPOTS);
+			return (-1);
+		}
+	}
+	if ((rc = load_json(packs, "data/battle-sets", &j, err, errlen)) < 0)
+		return (-1);
+	if (rc == 1)
+		return (0);
+	for (k = 0; rc == 0 && k < BATTLE_SETS; k++) {
+		rc = int_list(json_get(j, battle_set_names[k]), BATTLE_PIECES,
+		    0, BATTLE_SCREENS - 1, set);
+		for (i = 0; rc == 0 && i < BATTLE_PIECES; i++)
+			w->battle_sets[k][i] = (uint8_t)set[i];
+	}
+	json_free(j);
+	if (rc != 0) {
+		snprintf(err, errlen, "data/battle-sets: north, east, south, "
+		    "west and open, %d screens each", BATTLE_PIECES);
+		return (-1);
+	}
+	return (0);
+}
+
 int
 world_load(struct world *w, struct packs *packs,
     const struct exe_layout *layout, const uint8_t *exe, size_t len,
@@ -307,7 +448,7 @@ world_load(struct world *w, struct packs *packs,
 	    read_words(layout, exe, len, layout->hit_steps_va, w->hit_steps,
 	    BATTLE_LEVELS) != 0 || sword_load(layout, exe, len, &w->sword) != 0)
 		goto bad;
-	return (0);
+	return (load_places(w, packs, err, errlen));
 bad:
 	snprintf(err, errlen, "tables missing from the executable");
 	return (-1);

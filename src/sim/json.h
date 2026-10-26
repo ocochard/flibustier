@@ -22,7 +22,8 @@ enum json_type {
 	JSON_INT,
 	JSON_STRING,
 	JSON_ARRAY,
-	JSON_OBJECT
+	JSON_OBJECT,
+	JSON_REAL	/* json_parse_reals() only: num is the integer part */
 };
 
 struct json {
@@ -36,6 +37,12 @@ struct json {
 
 /* Returns NULL on error, with a message in "err". */
 struct json	*json_parse(const char *text, char *err, size_t errlen);
+
+/*
+ * The same, for files of other programs (Tiled maps): numbers with a
+ * fraction or an exponent are accepted, as JSON_REAL.
+ */
+struct json	*json_parse_reals(const char *text, char *err, size_t errlen);
 void		 json_free(struct json *j);
 
 /* Object member, or NULL. */

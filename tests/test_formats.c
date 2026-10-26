@@ -28,6 +28,7 @@
 #include "assets/sheet.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
+#include "assets/tiled.h"
 #include "assets/tiles.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
@@ -1268,6 +1269,183 @@ test_tile_terrain(void)
 	remove_files(dir, files);
 }
 
+/* Read a 3x2 Tiled map "text" of "layers" layers into "out". */
+static int
+read_map(const char *text, size_t layers, uint8_t *out)
+{
+	char err[256];
+
+	return (tiled_read((const uint8_t *)text, strlen(text), 3, 2, layers,
+	    out, err, sizeof(err)));
+}
+
+/*
+ * Tiled maps: what an author saves with Tiled reads back as tile
+ * numbers; what the engine cannot take is refused.
+ */
+static void
+test_tiled(void)
+{
+	static const uint8_t grid[12] = { 0, 1, 2, 3, 4, 5, 255, 7, 8, 9, 10,
+	    11 };
+	/* As Tiled writes it: reals, an object layer, firstgid 5. */
+	static const char good[] =
+	    "{\"type\":\"map\",\"version\":\"1.10\",\"orientation\":"
+	    "\"orthogonal\",\"infinite\":false,\"width\":3,\"height\":2,"
+	    "\"tilewidth\":16,\"tileheight\":16,"
+	    "\"tilesets\":[{\"firstgid\":5,\"source\":\"map.tsj\"}],"
+	    "\"layers\":[{\"type\":\"tilelayer\",\"name\":\"a\",\"width\":3,"
+	    "\"height\":2,\"opacity\":0.5,\"offsetx\":1.25e1,"
+	    "\"data\":[5,6,7,8,9,10]},"
+	    "{\"type\":\"objectgroup\",\"objects\":[{\"x\":1.5}]},"
+	    "{\"type\":\"tilelayer\",\"name\":\"b\",\"width\":3,"
+	    "\"height\":2,\"encoding\":\"csv\",\"data\":[260,5,5,5,5,5]}]}";
+	static const char *const bad[] = {
+		/* base64 data */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"tilelayer\",\"width\":3,\"height\":2,"
+		"\"encoding\":\"base64\",\"data\":\"AQAAAA==\"}]}",
+		/* a flipped tile */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"tilelayer\",\"width\":3,\"height\":2,"
+		"\"data\":[1,1,1,1,1,2147483649]}]}",
+		/* an empty cell */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"tilelayer\",\"width\":3,\"height\":2,"
+		"\"data\":[1,1,0,1,1,1]}]}",
+		/* tile 256 */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"tilelayer\",\"width\":3,\"height\":2,"
+		"\"data\":[1,1,257,1,1,1]}]}",
+		/* the wrong size */
+		"{\"width\":2,\"height\":3,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"tilelayer\",\"width\":2,\"height\":3,"
+		"\"data\":[1,1,1,1,1,1]}]}",
+		/* two tilesets */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1},"
+		"{\"firstgid\":300}],\"layers\":[{\"type\":\"tilelayer\","
+		"\"width\":3,\"height\":2,\"data\":[1,1,1,1,1,1]}]}",
+		/* a group layer */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"group\",\"layers\":[]}]}",
+		/* an infinite map */
+		"{\"width\":3,\"height\":2,\"infinite\":true,"
+		"\"tilesets\":[{\"firstgid\":1}],\"layers\":[]}",
+		/* not orthogonal */
+		"{\"width\":3,\"height\":2,\"orientation\":\"isometric\","
+		"\"tilesets\":[{\"firstgid\":1}],\"layers\":[]}",
+		/* too short a layer */
+		"{\"width\":3,\"height\":2,\"tilesets\":[{\"firstgid\":1}],"
+		"\"layers\":[{\"type\":\"tilelayer\",\"width\":3,\"height\":2,"
+		"\"data\":[1,1,1]}]}",
+		"not json",
+	};
+	struct jbuf b = { 0 };
+	uint8_t out[12];
+	size_t i;
+	char err[256];
+	struct json *j;
+
+	/* Strict JSON for the sim, reals for other programs' files. */
+	CHECK(json_parse("[1.5]", err, sizeof(err)) == NULL);
+	j = json_parse_reals("[1.5,-2e3,0.25E-1,7]", err, sizeof(err));
+	CHECK(j != NULL && j->count == 4 && j->items[0]->type == JSON_REAL &&
+	    j->items[0]->num == 1 && j->items[1]->num == -2 &&
+	    j->items[3]->type == JSON_INT);
+	json_free(j);
+	CHECK(json_parse_reals("[1.]", err, sizeof(err)) == NULL);
+	CHECK(json_parse_reals("[1e]", err, sizeof(err)) == NULL);
+
+	memset(out, 0xEE, sizeof(out));
+	CHECK(read_map(good, 2, out) == 0);
+	CHECK(out[0] == 0 && out[5] == 5 && out[6] == 255 && out[7] == 0);
+	CHECK(read_map(good, 1, out) == -1);	/* too many tile layers */
+	CHECK(read_map(good, 3, out) == -1);	/* too few */
+	for (i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+		CHECK(read_map(bad[i], 1, out) == -1);
+
+	/* What the engine writes, it reads. */
+	tiled_write(&b, 3, 2, 32, 32, 2, grid, "screen", "battle.tsj");
+	CHECK(!b.err && b.s != NULL && strstr(b.s, "\"screen 1\"") != NULL);
+	memset(out, 0, sizeof(out));
+	CHECK(b.s != NULL && read_map(b.s, 2, out) == 0 &&
+	    memcmp(out, grid, sizeof(grid)) == 0);
+	jb_free(&b);
+	tiled_write_tileset(&b, "battle", 32, 256, "battle.png", 512, 512);
+	CHECK(b.s != NULL && (j = json_parse(b.s, err, sizeof(err))) != NULL);
+	if (b.s != NULL && j != NULL) {
+		CHECK(json_get_int(j, "columns", 0) == 16 &&
+		    json_get_int(j, "tilecount", 0) == 256);
+		json_free(j);
+	}
+	jb_free(&b);
+}
+
+/* Town files: one valid record, then what is refused. */
+static void
+test_town_files(void)
+{
+	static const char one[] = "{\"towns\": [{\"name\": \"Havana\", "
+	    "\"nation\": \"spain\", \"id\": 6, \"x\": 245, \"y\": 179, "
+	    "\"flags\": 80, \"forts\": 4, \"soldiers\": 300, \"citizens\": 9, "
+	    "\"gold\": 50, \"wealth\": 195, \"standing\": 1, \"garrison\": 2, "
+	    "\"governor\": 3, \"family\": 64, \"barmaid\": 5, "
+	    "\"land\": [1, 2], \"fort\": [3, 4], \"ship\": [5, 6, 7], "
+	    "\"party\": [8, 9], \"sea\": [10, 11, 12]}]}";
+	static struct era_towns era, back;
+	struct jbuf b = { 0 };
+	char err[256], text[1024];
+	const struct town *t = &era.towns[0];
+
+	CHECK(towns_decode((const uint8_t *)one, strlen(one), 4, &era, err,
+	    sizeof(err)) == 0);
+	CHECK(era.year == 1660 && era.count == 1);
+	CHECK(strcmp(t->name, "Havana") == 0 && t->nation == NATION_SPAIN &&
+	    t->flags == 80 && t->soldiers == 300 && t->family == 64 &&
+	    t->standing == 1 && t->garrison == 2 && t->governor == 3 &&
+	    t->barmaid == 5 && t->citizens == 9 && t->gold == 50 &&
+	    t->wealth == 195 && t->forts == 4 && t->id == 6 &&
+	    t->land_x == 1 && t->fort_x == 3 && t->fort_y == 4 &&
+	    t->ship_x == 5 && t->ship_y == 6 && t->party_y == 9 &&
+	    t->sea_y == 11 &&
+	    t->land_y == 2 && t->ship_heading == 7 && t->sea_x == 10 &&
+	    t->sea_heading == 12);
+
+	/* What the engine writes, it reads. */
+	towns_encode(&era, &b);
+	CHECK(b.s != NULL && towns_decode((const uint8_t *)b.s, b.len, 4,
+	    &back, err, sizeof(err)) == 0 && back.count == 1 &&
+	    back.towns[0].party_x == 8 && back.towns[0].governor == 3);
+	jb_free(&b);
+
+	/* A missing member, a bad nation, a number out of range, a short
+	 * point, a name too long, no towns. */
+	snprintf(text, sizeof(text), "%s", one);
+	memcpy(strstr(text, "\"gold\""), "\"gilt\"", 6);
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == -1 && strstr(err, "Havana") != NULL);
+	snprintf(text, sizeof(text), "%s", one);
+	memcpy(strstr(text, "spain"), "spaim", 5);
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == -1);
+	snprintf(text, sizeof(text), "%s", one);
+	memcpy(strstr(text, "195"), "-95", 3);
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == -1);
+	snprintf(text, sizeof(text), "%s", one);
+	memcpy(strstr(text, "[1, 2]"), "[1    ]", 6);
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == -1);
+	CHECK(towns_decode((const uint8_t *)"{\"towns\": []}", 13, 4, &era,
+	    err, sizeof(err)) == -1);
+	CHECK(towns_decode((const uint8_t *)one, strlen(one), 6, &era, err,
+	    sizeof(err)) == -1);
+	snprintf(text, sizeof(text), "{\"towns\": [{\"name\": "
+	    "\"Seventeen chars!!\", \"nation\": \"spain\"}]}");
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == -1 && strstr(err, "name") != NULL);
+}
+
 int
 main(void)
 {
@@ -1288,6 +1466,8 @@ main(void)
 	test_fonts();
 	test_tiles();
 	test_tile_terrain();
+	test_tiled();
+	test_town_files();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

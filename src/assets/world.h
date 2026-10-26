@@ -126,6 +126,18 @@ struct world {
 	struct sword_tables sword;
 };
 
+/*
+ * Open world data, read when a pack gives it (JSON):
+ *	data/treasure		{ "spots": [ [x, y], ... ] }, TREASURE_SPOTS
+ *				cells of the world map
+ *	data/battle-sets	{ "north": [5 screens], "east": [...],
+ *				"south": [...], "west": [...], "open": [...] }:
+ *				the sea battle screens offered by a coast that
+ *				way, or in open sea
+ * Names of the sets, in battle_sets order.
+ */
+extern const char *const battle_set_names[BATTLE_SETS];
+
 /* Returns 0, or -1 with a message in "err". */
 int	world_load(struct world *w, struct packs *packs,
 	    const struct exe_layout *layout, const uint8_t *exe, size_t len,

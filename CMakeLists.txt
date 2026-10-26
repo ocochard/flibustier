@@ -34,6 +34,8 @@ add_library(stmalo_core STATIC
 	src/assets/tiles.c
 	src/assets/scenario.c
 	src/assets/sheet.c
+	src/assets/tiled.c
+	src/assets/worldfiles.c
 	src/assets/towns.c
 	src/assets/world.c
 	src/sim/battle.c

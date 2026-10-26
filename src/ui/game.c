@@ -350,8 +350,8 @@ game_attach_world(struct game *g)
 	{
 		struct era_towns towns;
 
-		if (towns_load(g->layout, g->exe, g->exe_len, era,
-		    &towns) != 0)
+		if (towns_for_era(g->packs, g->layout, g->exe, g->exe_len,
+		    era, &towns, g->err, sizeof(g->err)) != 0)
 			return (-1);
 		sim_restore_towns(&g->sim, &towns);
 	}
@@ -371,8 +371,8 @@ game_start_career(struct game *g)
 	    scenario_career(g->career.era, g->career.nation == NATION_SPAIN ?
 	    SCN_SPAIN : (enum scenario_nation)(g->career.nation - 1));
 	if (scenario_load(g->layout, g->exe, g->exe_len, index, &scn) != 0 ||
-	    towns_load(g->layout, g->exe, g->exe_len, g->career.era,
-	    &era) != 0)
+	    towns_for_era(g->packs, g->layout, g->exe, g->exe_len,
+	    g->career.era, &era, g->err, sizeof(g->err)) != 0)
 		return (-1);
 	snprintf(g->career.title, sizeof(g->career.title), "%s", scn.name);
 	/* A fixed seed for now; it will come from the clock or a setting. */

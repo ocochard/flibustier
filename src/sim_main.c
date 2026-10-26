@@ -16,6 +16,8 @@
 #include "data/pack.h"
 #include "sim/proto.h"
 
+#define MAX_PACKS	16	/* as many as the pack stack holds */
+
 struct game_data {
 	struct packs		*packs;
 	uint8_t			*exe;
@@ -28,9 +30,13 @@ load_era(void *arg, int era, int scenario, struct era_towns *towns,
     struct scenario *scn)
 {
 	struct game_data *gd = arg;
+	char err[256];
 
-	if (towns_load(gd->layout, gd->exe, gd->len, era, towns) != 0)
+	if (towns_for_era(gd->packs, gd->layout, gd->exe, gd->len, era, towns,
+	    err, sizeof(err)) != 0) {
+		fprintf(stderr, "%s\n", err);
 		return (-1);
+	}
 	return (scenario_load(gd->layout, gd->exe, gd->len, scenario, scn));
 }
 
@@ -85,17 +91,21 @@ main(int argc, char **argv)
 	struct packs *packs;
 	struct blob b;
 	struct jbuf out;
-	const char *data;
+	const char *data, *pack[MAX_PACKS];
 	char *line;
 	int a, quit = 0;
+	size_t npacks = 0, i;
 
 	data = getenv("STMALO_DATA");
 	for (a = 1; a < argc; a++) {
 		if (strcmp(argv[a], "--data") == 0 && a + 1 < argc)
 			data = argv[++a];
+		else if (strcmp(argv[a], "--pack") == 0 && a + 1 < argc &&
+		    npacks < MAX_PACKS)
+			pack[npacks++] = argv[++a];
 		else {
 			fprintf(stderr, "usage: stmalo-sim [--data PATH] "
-			    "< commands.jsonl\n");
+			    "[--pack DIR]... < commands.jsonl\n");
 			return (2);
 		}
 	}
@@ -104,8 +114,13 @@ main(int argc, char **argv)
 		return (1);
 	}
 	if ((packs = packs_new()) == NULL ||
-	    packs_add_original(packs, data) != 0 ||
-	    packs_load(packs, "program/main", &b) != 0) {
+	    packs_add_original(packs, data) != 0)
+		goto bad;
+	for (i = 0; i < npacks; i++)
+		if (packs_add_dir(packs, pack[i]) != 0)
+			goto bad;
+	if (packs_load(packs, "program/main", &b) != 0) {
+bad:
 		fprintf(stderr, "%s\n", packs != NULL ? packs_error(packs) :
 		    "out of memory");
 		packs_free(packs);

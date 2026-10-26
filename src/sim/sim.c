@@ -122,26 +122,26 @@ sim_harbour_mouth(struct sim *s, int town)
 void
 sim_restore_towns(struct sim *s, const struct era_towns *era)
 {
-	static const struct {
-		size_t	off;
-		int	raw;
-	} later[] = {
-		{ offsetof(struct sim_town, barmaid), 13 },
-		{ offsetof(struct sim_town, garrison), 10 },
-		{ offsetof(struct sim_town, land_x), 15 },
-		{ offsetof(struct sim_town, land_y), 16 },
-		{ offsetof(struct sim_town, party_x), 22 },
-		{ offsetof(struct sim_town, party_y), 23 },
-	};
-	uint16_t *v;
-	size_t i, k;
+	struct sim_town *st;
+	const struct town *t;
+	size_t i;
 
-	for (i = 0; i < s->ntowns && i < era->count; i++)
-		for (k = 0; k < sizeof(later) / sizeof(later[0]); k++) {
-			v = (uint16_t *)((char *)&s->towns[i] + later[k].off);
-			if (*v == TOWN_UNSET)
-				*v = (uint16_t)era->towns[i].raw[later[k].raw];
-		}
+	for (i = 0; i < s->ntowns && i < era->count; i++) {
+		st = &s->towns[i];
+		t = &era->towns[i];
+		if (st->barmaid == TOWN_UNSET)
+			st->barmaid = (uint16_t)t->barmaid;
+		if (st->garrison == TOWN_UNSET)
+			st->garrison = (uint16_t)t->garrison;
+		if (st->land_x == TOWN_UNSET)
+			st->land_x = (uint16_t)t->land_x;
+		if (st->land_y == TOWN_UNSET)
+			st->land_y = (uint16_t)t->land_y;
+		if (st->party_x == TOWN_UNSET)
+			st->party_x = (uint16_t)t->party_x;
+		if (st->party_y == TOWN_UNSET)
+			st->party_y = (uint16_t)t->party_y;
+	}
 }
 
 static void
@@ -228,18 +228,18 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->towns[i].citizens = (uint16_t)t->citizens;
 		s->towns[i].gold = (uint16_t)t->gold;
 		s->towns[i].wealth = (uint16_t)t->wealth;
-		s->towns[i].standing = t->raw[9];
-		s->towns[i].governor = t->raw[11];
-		s->towns[i].family = t->raw[12];
+		s->towns[i].standing = (uint16_t)t->standing;
+		s->towns[i].governor = (uint16_t)t->governor;
+		s->towns[i].family = (uint16_t)t->family;
 		s->towns[i].id = (uint16_t)t->id;
-		s->towns[i].fort_x = t->raw[17];
-		s->towns[i].fort_y = t->raw[18];
-		s->towns[i].ship_x = t->raw[19];
-		s->towns[i].ship_y = t->raw[20];
-		s->towns[i].ship_heading = t->raw[21];
-		s->towns[i].sea_x = t->raw[26];
-		s->towns[i].sea_y = t->raw[27];
-		s->towns[i].sea_heading = t->raw[28];
+		s->towns[i].fort_x = (uint16_t)t->fort_x;
+		s->towns[i].fort_y = (uint16_t)t->fort_y;
+		s->towns[i].ship_x = (uint16_t)t->ship_x;
+		s->towns[i].ship_y = (uint16_t)t->ship_y;
+		s->towns[i].ship_heading = (uint16_t)t->ship_heading;
+		s->towns[i].sea_x = (uint16_t)t->sea_x;
+		s->towns[i].sea_y = (uint16_t)t->sea_y;
+		s->towns[i].sea_heading = (uint16_t)t->sea_heading;
 		s->towns[i].barmaid = TOWN_UNSET;
 		s->towns[i].garrison = TOWN_UNSET;
 		s->towns[i].land_x = TOWN_UNSET;

@@ -331,7 +331,8 @@ load_world(struct view *v, int year, char *err, size_t errlen)
 	}
 	if (packs_load(v->packs, "program/main", &b) != 0 ||
 	    (layout = exe_identify(b.data, b.len)) == NULL ||
-	    towns_load(layout, b.data, b.len, era, &v->era) != 0 ||
+	    towns_for_era(v->packs, layout, b.data, b.len, era, &v->era, err,
+	    errlen) != 0 ||
 	    (classes = exe_at(layout, b.data, b.len, layout->tile_class_va,
 	    256)) == NULL) {
 		blob_free(&b);
