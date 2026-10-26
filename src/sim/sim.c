@@ -41,8 +41,10 @@ enum town_event {
 	EV_COUNT
 };
 
-static void
-log_news(struct sim *s, int code, int a, int b)
+#define log_news	sim_log_news
+
+void
+sim_log_news(struct sim *s, int code, int a, int b)
 {
 	struct sim_news *n = &s->news[s->nnews % SIM_NEWS_MAX];
 

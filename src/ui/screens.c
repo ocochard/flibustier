@@ -70,6 +70,8 @@
 #define S_STRUCK		170
 #define S_YOU_ESCAPED		197
 #define S_COMMAND		286
+#define W_PLUNDERED		10	/* 6: " gold pieces plundered!" */
+#define PLUNDERED_WORD		6
 #define S_FORT_SUNSET		317
 #define S_FORT_DRIVES_OFF	196
 #define S_BEACHED		173
@@ -2712,7 +2714,19 @@ command_choose(struct game *g, int i)
 static void
 battle_finish(struct game *g, int keep)
 {
+	int landed = g->sim.battle.fort &&
+	    g->sim.battle.outcome == BAT_LANDED;
+	int aboard = g->sim.battle.crew_ashore;
+
 	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
+	if (landed) {
+		/* The assault follows (VA 0x18c2c). */
+		g->assault_town = g->sim.encounter.town;
+		g->assault_aboard = aboard;
+		sim_fort_battle_garrison(&g->sim, g->assault_town);
+		game_goto(g, &screen_assault);
+		return;
+	}
 	game_goto(g, &screen_sail);
 }
 
@@ -2793,9 +2807,6 @@ battle_end_text(struct game *g, char *text, size_t len)
 		snprintf(text, len, "%s", game_str(g, bt->fort ?
 		    S_FORT_SUNSET : S_SUNSET));
 		break;
-	case BAT_LANDED:
-		snprintf(text, len, "(The assault: not implemented yet.)");
-		break;
 	case BAT_SURRENDER:
 		snprintf(text, len, "%s", game_str(g, S_STRUCK));
 		break;
@@ -2867,6 +2878,10 @@ battle_tick(struct game *g)
 		g->turn = 0;
 		g->btl_stage = 1;
 		game_goto(g, &screen_sword);
+	} else if (g->sim.battle.outcome == BAT_LANDED) {
+		g->turn = 0;
+		g->btl_stage = 1;
+		battle_finish(g, 0);
 	} else if (g->sim.battle.outcome != BAT_NONE) {
 		g->btl_stage = 1;
 		g->turn = 0;
@@ -3133,6 +3148,11 @@ sword_enter(struct game *g)
 		game_background(g, "pic/shipdeck");
 		g->sw_stage = 1;
 	}
+	if (g->sw_assault) {		/* the fort, or the alley */
+		game_background(g, g->sim.towns[g->assault_town].forts > 0 ?
+		    "pic/fort" : "pic/alley");
+		g->sw_stage = 1;
+	}
 	if (g->sw_story) {
 		sword_story_start(g);
 		sword_load(g);
@@ -3149,10 +3169,14 @@ sword_load(struct game *g)
 		for (i = 0; i < 6; i++)
 			load_group(g, i == 1 ? sw_weapon_layers[side][side == 0 ?
 			    g->sim.sword.you.weapon : g->sim.sword.foe.weapon] :
-			    side == 1 && i == 5 && g->sw_guard ? "grp/hehead2" :
+			    side == 1 && i == 5 && g->sim.sword.scene == 0 ?
+			    "grp/hehead2" : side == 1 && i == 5 &&
+			    (g->sim.sword.scene == 1 || g->sim.sword.scene == 2) ?
+			    "grp/hehead3" :
 			    sw_layers[side][i], &g->sw_parts[side][i]);
 	g->sw_flag_y[0] = g->sw_flag_y[1] = 0;
 	g->sw_wait = 1;
+	g->ink[0] = g->ink[1] = g->ink[2] = 240;	/* the fight's panel */
 }
 
 /* The blade under (x, y) on the weapon choice (VA 0x33628), or -1. */
@@ -3230,6 +3254,18 @@ sword_outcome_done(struct game *g)
 		game_goto(g, &screen_cabin);
 		return;
 	}
+	if (g->sw_assault) {
+		int r = sim_assault_end(&g->sim, g->assault_town);
+
+		g->sw_assault = 0;
+		if (r == 1) {
+			sim_sack(&g->sim, g->assault_town, &g->sack);
+			g->sack_stage = 0;
+			game_goto(g, &screen_sack);
+		} else
+			game_goto(g, r < 0 ? &screen_prison : &screen_sail);
+		return;
+	}
 	if (g->sw_guard) {
 		g->sw_guard = 0;
 		/* Back to sea either way (VA 0x195f5); a loss or a retreat
@@ -3293,7 +3329,12 @@ sword_event(struct game *g, const struct ui_event *ev)
 		} else if (!(ev->type == EV_KEY && (ev->key == UI_KEY_ENTER ||
 		    ev->key == UI_KEY_ESCAPE)))
 			return;
-		if (g->sw_practice) {
+		if (g->sw_assault) {
+			sim_assault_start(&g->sim, g->assault_town,
+			    g->assault_aboard, g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		} else if (g->sw_practice) {
 			sim_practice_start(&g->sim, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
@@ -3350,7 +3391,7 @@ sword_tick(struct game *g)
 	sim_sword_tick(&g->sim);
 	if (g->sim.sword.result != SWORD_NONE) {
 		if (g->sim.sword.result == SWORD_WON || g->sw_story ||
-		    g->sw_practice)
+		    g->sw_practice || g->sw_assault)
 			sword_outcome_done(g);
 		else
 			g->sw_stage = 3;
@@ -4056,7 +4097,8 @@ merchant_enter(struct game *g)
 	int lang = strcmp(g->lang, "fre") == 0 ? 1 :
 	    strcmp(g->lang, "ger") == 0 ? 2 : 0, i;
 
-	game_background(g, "pic/merchant");
+	game_background(g, g->looting ? (g->sim.towns[g->assault_town].flags &
+	    TOWN_INLAND ? "pic/arr_land" : "pic/arr_sea") : "pic/merchant");
 	game_portrait(g, NULL);
 	g->ink[0] = 240;
 	g->ink[1] = 220;
@@ -4065,7 +4107,10 @@ merchant_enter(struct game *g)
 		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
 	g->selected = 0;
 	g->shop_buying = 1;
-	if (sim_merchant_refuses(&g->sim))
+	if (g->looting) {	/* the loot, for nothing (VA 0x2264f) */
+		sim_plunder_open(&g->sim, g->sack.goods);
+		g->shop_stage = 1;
+	} else if (sim_merchant_refuses(&g->sim))
 		g->shop_stage = 2;
 	else {
 		sim_merchant_open(&g->sim);
@@ -4076,6 +4121,12 @@ merchant_enter(struct game *g)
 static void
 merchant_leave(struct game *g)
 {
+	if (g->looting) {
+		g->looting = 0;
+		sim_plunder_close(&g->sim);
+		game_goto(g, &screen_sail);
+		return;
+	}
 	sim_merchant_close(&g->sim);
 	game_goto(g, &screen_town);
 }
@@ -4159,6 +4210,13 @@ merchant_draw(struct game *g)
 		return;
 	}
 	board_frame(g, 1, 0, 203, 17);
+	if (g->looting) {	/* "... gold pieces plundered!" (CSTN 10.6) */
+		char line[96];
+
+		snprintf(line, sizeof(line), "%ld%s", g->sack.gold,
+		    game_word(g, W_PLUNDERED, PLUNDERED_WORD));
+		draw_centered(g, FONT_BODY, 400, line);
+	}
 	for (i = 0; i < BOARD_PIECES; i++) {
 		if (board_piece(g, i, r) != 0)
 			continue;
@@ -5046,9 +5104,11 @@ arrive_choose(struct game *g, int i)
 		if (g->sim.towns[town].forts > 0) {
 			sim_fort_battle_start(&g->sim, town);
 			game_goto(g, &screen_battle);
-		} else
-			snprintf(g->msg, sizeof(g->msg),
-			    "(The assault: not implemented yet.)");
+		} else {
+			g->assault_town = town;
+			g->assault_aboard = 0;
+			game_goto(g, &screen_assault);
+		}
 		break;
 	case 2:
 		if (sim_sneak_in(&g->sim, town) == ARRIVE_ENTER)
@@ -5188,4 +5248,189 @@ disgrace_draw(struct game *g)
 
 const struct screen screen_disgrace = {
 	"disgrace", disgrace_enter, disgrace_event, NULL, disgrace_draw,
+};
+
+/*
+ * The assault (VA 0x18b3f): on landpir.pcx, "Your men scale the walls of
+ * the fort..." (CSTR 192), or in a town without forts "As you and your
+ * men enter the town..." (CSTR 211), at (20, 150) up to x 250.  Then
+ * the sword fight with the commander.
+ */
+#define S_SCALE_WALLS		192
+#define S_ENTER_TOWN		211
+#define S_TOWN_AT_MERCY		193
+#define S_INSTALL		194
+#define S_GOLD_HIDDEN		195
+#define W_HIDDEN		15
+
+static void
+assault_enter(struct game *g)
+{
+	game_background(g, "pic/landpir");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+}
+
+static void
+assault_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		g->sw_assault = 1;
+		game_goto(g, &screen_sword);
+	}
+}
+
+static void
+assault_draw(struct game *g)
+{
+	draw(g, FONT_BODY, 20, 150, 230, game_str(g,
+	    g->sim.towns[g->assault_town].forts > 0 ? S_SCALE_WALLS :
+	    S_ENTER_TOWN), 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_assault = {
+	"assault", assault_enter, assault_event, NULL, assault_draw,
+};
+
+/*
+ * The sack (VA 0x22764): on the town's arrival picture, "The once-proud
+ * town of %s is at your mercy..." (CSTR 193, at (340, 150) up to x 620);
+ * when warned, "%s of their gold has been hidden away" (CSTR 195); with
+ * a crew big enough, on governor.pcx, the new governor's nation (CSTR
+ * 194); then the loot on the trading board.  The plunder's cannon join
+ * the fleet at once (an engine choice: the original offers them on the
+ * board).
+ */
+enum { SACK_MERCY, SACK_HIDDEN, SACK_INSTALL };
+
+static void
+sack_picture(struct game *g)
+{
+	const struct sim_town *t = &g->sim.towns[g->assault_town];
+
+	game_background(g, g->sack_stage == SACK_INSTALL ? "pic/governor" :
+	    t->flags & TOWN_INLAND ? "pic/arr_land" : "pic/arr_sea");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL) {
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+	}
+	g->selected = 0;
+}
+
+static void
+sack_enter(struct game *g)
+{
+	sack_picture(g);
+}
+
+static void
+sack_loot(struct game *g)
+{
+	g->sim.fleet.guns += g->sack.cannon;
+	g->looting = 1;
+	game_goto(g, &screen_merchant);
+}
+
+static void
+sack_install(struct game *g, int i)
+{
+	sim_install_governor(&g->sim, g->assault_town, i);
+	sack_loot(g);
+}
+
+static void
+sack_event(struct game *g, const struct ui_event *ev)
+{
+	int go = ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE));
+
+	if (g->sack_stage == SACK_INSTALL) {
+		menu_event(g, ev, 4, NULL, sack_install, NULL);
+		return;
+	}
+	if (!go)
+		return;
+	if (g->sack_stage == SACK_MERCY && g->sack.hidden >= 0)
+		g->sack_stage = SACK_HIDDEN;
+	else if (g->sack.conquest) {
+		g->sack_stage = SACK_INSTALL;
+		sack_picture(g);
+	} else
+		sack_loot(g);
+}
+
+static void
+sack_draw(struct game *g)
+{
+	char text[600];
+
+	switch (g->sack_stage) {
+	case SACK_MERCY:
+		fill(text, sizeof(text), game_str(g, S_TOWN_AT_MERCY),
+		    g->sim.towns[g->assault_town].name, NULL);
+		break;
+	case SACK_HIDDEN:
+		fill(text, sizeof(text), game_str(g, S_GOLD_HIDDEN),
+		    game_word(g, W_HIDDEN, (size_t)g->sack.hidden), NULL);
+		break;
+	default:
+		draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_INSTALL), 1);
+		return;
+	}
+	draw(g, FONT_BODY, 340, 150, 280, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_sack = {
+	"sack", sack_enter, sack_event, NULL, sack_draw,
+};
+
+/*
+ * Prison (VA 0x16647), after a defeat: on prison.pcx, "...You are
+ * imprisoned in %s." (CSTR 175), then "Your former comrades take pity
+ * on you..." (CSTR 190), at (300, 150) up to x 560.  What happens in
+ * prison (VA 0x1f803) is not traced yet.
+ */
+static void
+prison_enter(struct game *g)
+{
+	game_background(g, "pic/prison");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+	g->sack_stage = 0;
+}
+
+static void
+prison_event(struct game *g, const struct ui_event *ev)
+{
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (g->sack_stage++ > 0)
+		game_goto(g, &screen_sail);
+}
+
+static void
+prison_draw(struct game *g)
+{
+	char text[600];
+
+	if (g->sack_stage == 0)
+		fill(text, sizeof(text), game_str(g, S_IMPRISONED),
+		    g->sim.towns[g->assault_town].name, NULL);
+	else
+		fill(text, sizeof(text), game_str(g, S_TRADED_BACK),
+		    game_word(g, W_CAPTAIN, (size_t)g->sim.player.difficulty),
+		    NULL);
+	draw(g, FONT_BODY, 300, 150, 260, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_prison = {
+	"prison", prison_enter, prison_event, NULL, prison_draw,
 };

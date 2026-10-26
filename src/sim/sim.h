@@ -28,6 +28,7 @@
 
 /* News codes: the entries of the game's news list (CSTN group 20). */
 enum news_code {
+	NEWS_PLUNDERED = 3,	/* a: town, sacked by the player */
 	NEWS_AMNESTY = 10,	/* a: nation */
 	NEWS_INDIANS = 11,	/* a: town */
 	NEWS_GOLD_MINE = 12,
@@ -37,7 +38,9 @@ enum news_code {
 	NEWS_WAR = 16,		/* a, b: nations */
 	NEWS_PEACE = 17,
 	NEWS_ALLIANCE = 18,
-	NEWS_CAPTURE = 19	/* a: nation, b: town */
+	NEWS_CAPTURE = 19,	/* a: nation, b: town */
+	NEWS_TAKEN = 22,	/* a: town, b: nation it was taken for */
+	NEWS_NOT_TAKEN = 23	/* a: town */
 };
 
 struct sim_town {
@@ -205,6 +208,7 @@ struct sim_sword {
 	int		script, step;	/* the opponent's plan */
 	int		you_hits, foe_hits;	/* since the plan changed */
 	int		men_start;	/* the player's men at the start */
+	int		scene;		/* 0 alley, 1-2 fort, 3-4 deck */
 	struct sword_side you, foe;
 };
 
@@ -509,6 +513,34 @@ int	sim_sword_tick(struct sim *s);
  * at most 30. */
 void	sim_practice_start(struct sim *s, int weapon);
 void	sim_practice_end(struct sim *s);
+
+/*
+ * The assault on a town (VA 0x18b3f): the crew, but for "aboard" men
+ * left with the fleet, against the garrison, soldiers x 10 + 5 men; the
+ * scene is the fort, or the alley in a town without forts.  After a
+ * fort battle, the garrison was first set from it.
+ */
+void	sim_assault_start(struct sim *s, int town, int aboard, int weapon);
+/* The garrison after the fort battle (VA 0x18c2c). */
+void	sim_fort_battle_garrison(struct sim *s, int town);
+/* After the assault: 1 won (the sack follows), 0 repelled, -1 defeated
+ * (prison).  A failure costs reputation and standing. */
+int	sim_assault_end(struct sim *s, int town);
+
+/* The sack (VA 0x22764). */
+struct sack {
+	long	gold;		/* found, already counted in tens */
+	int	hidden;		/* -1, or CSTN 15: some, much, most hidden */
+	int	goods[3];	/* food, goods, sugar to take for nothing */
+	int	cannon;		/* forts x 6 */
+	int	conquest;	/* 1: the player may install a governor */
+};
+void	sim_sack(struct sim *s, int town, struct sack *out);
+/* The plunder's goods on the trading board, for nothing; and done. */
+void	sim_plunder_open(struct sim *s, const int goods[3]);
+void	sim_plunder_close(struct sim *s);
+/* Install a governor of "nation" in a sacked town (CSTR 194). */
+void	sim_install_governor(struct sim *s, int town, int nation);
 
 /* Board the enemy after BAT_BOARDING, with the player's weapon. */
 void	sim_board(struct sim *s, int weapon);

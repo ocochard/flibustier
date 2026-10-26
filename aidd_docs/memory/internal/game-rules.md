@@ -534,6 +534,56 @@ the fort.
   garrison becomes `(soldiers + 1) / 2 + fort crew / 10`, and the men
   who stayed with the fleet do not fight.
 
+### The assault (VA `0x18b3f`)
+
+After a landing by the fort, or straight away at a town without forts:
+- **Introduction:** on `landpir.pcx`, "Your men scale the walls of the
+  fort…" (CSTR 192), or "As you and your men enter the town…" (CSTR
+  211), at (20, 150) up to x 250.
+- **The fight:** a crew sword fight, the weapon chosen on the scene's
+  picture: the fort (scenes 1, 2, `fort.pcx`, head `HeHead3`), or the
+  alley without forts (scene 0).
+  - The player: the crew but for the men left with the fleet in the
+    fort battle, factor `rand(3) + 3 + mood / 2` (the crew's mood, VA
+    `0x45faa`, is not modelled yet: the engine counts 0).
+  - The garrison: `soldiers x 10 + 5` men, factor `forts + 5`, title 4,
+    the town's nation.
+- **Won:** `soldiers = (men left + 9) / 10`, the fallen leave the crew,
+  and the sack follows.
+- **Repelled:** the fallen leave the crew; reputation -1 and an attack
+  of -1 on the town's nation.
+- **Defeated:** the same, then prison (VA `0x16647`): on `prison.pcx`,
+  CSTR 175 with the town, a stay not traced yet (VA `0x1f803`), and CSTR
+  190. Back at sea afterwards.
+- **Not modelled:** the treasure fleet and silver train (10 more
+  soldiers), a personal enemy hiding in the town (VA `0x18913`), the
+  family members held there (VA `0x1eba6`), missions.
+
+### The sack (VA `0x22764`)
+
+1. The town loses 20 wealth; its information is current again.
+2. On its arrival picture, "The once-proud town of %s is at your
+   mercy…" (CSTR 193, at (340, 150) up to x 620).
+3. With heat 12 or more, "%s of their gold has been hidden away" (CSTR
+   195 with CSTN 15: some, much, most for `min((heat - 12) / 15, 2)`).
+   The formula below already accounts for it.
+4. Loot: three goods (food, goods, sugar) of `rand(wealth)` each, a
+   fourth roll unused, at price 0 on the trading board.
+5. Gold: `town gold x 1500 / (heat + 15)`; the town loses a fiftieth of
+   that, and another 20 wealth. The player receives ten times that
+   figure: "%s gold pieces plundered!" (CSTN 10.6).
+6. An attack of -1 on the town's nation; past 99 gold, another of -2
+   and reputation +2. The town's standing falls by 3.
+7. A crew below `citizens x 10 + rand(citizens x 10)` only plunders
+   (log 3, "Plundered %s"). A bigger one may install a governor (CSTR
+   194, on `governor.pcx`): the town's nation, standing 2, governor
+   `rand(16)`; for a new nation, the player's standing with it +3 and
+   an attack of -2 on the old one (log 22, "Captured %s for %s").
+8. Cannon: `forts x 6`, offered on the board. The engine gives them to
+   the fleet at once.
+
+Back to sea afterwards.
+
 ### End of battle
 
 Each ending has its own picture (VA `0xe67b`-`0xe918`), with the text in

@@ -13,6 +13,9 @@
 
 #include "internal.h"
 
+#define SCENE_ALLEY	0	/* sword fight pictures (VA 0x3361c) */
+#define SCENE_FORT	1	/* 2 inland: the same picture */
+
 #define PURSE_MAX	50000	/* the shipwright's gold */
 #define PURSE_STEP	600
 #define SHIP_PRICE	50	/* gold per class step and tenth */
@@ -572,6 +575,7 @@ sim_guard_duel(struct sim *s, int town, int weapon)
 	in.extra = 1;
 	in.weapon = weapon;
 	sim_sword_start(s, &in);
+	s->sword.scene = SCENE_ALLEY;
 }
 
 int
@@ -584,4 +588,156 @@ sim_duel_end(struct sim *s)
 	if (disgraced)
 		s->reputation = -1;		/* VA 0x16384 */
 	return (disgraced);
+}
+
+
+void
+sim_fort_battle_garrison(struct sim *s, int town)
+{
+	struct sim_town *t;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	t = &s->towns[town];
+	t->soldiers = (uint16_t)((t->soldiers + 1) / 2 +
+	    (s->battle.foe.crew > 0 ? s->battle.foe.crew : 0) / 10);
+}
+
+void
+sim_assault_start(struct sim *s, int town, int aboard, int weapon)
+{
+	const struct sim_town *t;
+	struct sword_setup in;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	t = &s->towns[town];
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_CREW;
+	in.you_men = s->fleet.crew - aboard;
+	if (in.you_men < 1)
+		in.you_men = 1;
+	/* rand(3) + 3 + the crew's mood / 2; the mood (VA 0x45faa) is not
+	 * modelled yet and counts 0. */
+	in.you_factor = rng_below(&s->rng, 3) + 3;
+	in.foe_men = t->soldiers * 10 + 5;
+	in.foe_factor = t->forts + 5;
+	in.title = 4;
+	in.nation = t->nation;
+	in.extra = 0;
+	in.weapon = weapon;
+	sim_sword_start(s, &in);
+	s->sword.scene = t->forts > 0 ? SCENE_FORT : SCENE_ALLEY;
+}
+
+int
+sim_assault_end(struct sim *s, int town)
+{
+	struct sim_sword *sw = &s->sword;
+	struct sim_town *t;
+	int r;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return (0);
+	t = &s->towns[town];
+	r = sw->result == SWORD_WON ? 1 : sw->result == SWORD_LOST ? -1 : 0;
+	sw->active = 0;
+	if (r == 1) {
+		t->soldiers = (uint16_t)((sw->foe.men + 9) / 10);
+		s->fleet.crew -= sw->men_start - sw->you.men;
+		return (1);
+	}
+	/* Repelled: the men who fell (VA 0x16384). Defeated: prison (VA
+	 * 0x16647), whose consequences are not traced yet. */
+	s->fleet.crew -= sw->men_start - sw->you.men;
+	if (s->fleet.crew < 1)
+		s->fleet.crew = 1;
+	s->reputation = s->reputation > -128 ? s->reputation - 1 : -128;
+	sim_attack_nation(s, t->nation, -1);
+	return (r);
+}
+
+void
+sim_sack(struct sim *s, int town, struct sack *out)
+{
+	struct sim_town *t;
+	long gold;
+	int i, c;
+
+	memset(out, 0, sizeof(*out));
+	out->hidden = -1;
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	t = &s->towns[town];
+	t->wealth = t->wealth < 21 ? 0 : (uint16_t)(t->wealth - 20);
+	t->flags = (uint16_t)((t->flags | 0x80) & ~0x20);
+	/* Warned: some, much or most of the gold is hidden. */
+	if (s->heat >= 12) {
+		out->hidden = (s->heat - 12) / 15;
+		if (out->hidden > 2)
+			out->hidden = 2;
+	}
+	for (i = 0; i < 4; i++) {
+		c = rng_below(&s->rng, t->wealth);
+		if (i < 3)
+			out->goods[i] = c;
+	}
+	gold = (long)t->gold * 1500 / (s->heat + 15);
+	t->gold = gold / 50 > t->gold ? 0 : (uint16_t)(t->gold - gold / 50);
+	t->wealth = t->wealth < 20 ? 0 : (uint16_t)(t->wealth - 20);
+	sim_attack_nation(s, t->nation, -1);
+	if (gold > 99) {
+		sim_attack_nation(s, t->nation, -2);
+		s->reputation = s->reputation < 126 ? s->reputation + 2 : 127;
+	}
+	t->standing = (uint16_t)((int16_t)t->standing - 3);
+	c = t->citizens * 10;
+	if (s->fleet.crew < c + rng_below(&s->rng, c))
+		sim_log_news(s, NEWS_PLUNDERED, town, 0);
+	else
+		out->conquest = 1;
+	out->cannon = t->forts * 6;
+	out->gold = gold * 10;
+	s->fleet.gold += out->gold;
+}
+
+void
+sim_install_governor(struct sim *s, int town, int nation)
+{
+	struct sim_town *t;
+
+	if (town < 0 || (size_t)town >= s->ntowns || nation < 0 ||
+	    nation > 3)
+		return;
+	t = &s->towns[town];
+	t->standing = 2;
+	t->governor = (uint16_t)rng_below(&s->rng, 16);
+	if (nation != t->nation) {
+		s->standing[nation] = (int8_t)(s->standing[nation] < 125 ?
+		    s->standing[nation] + 3 : 127);
+		sim_attack_nation(s, t->nation, -2);
+		t->nation = (uint16_t)nation;
+	}
+	sim_log_news(s, NEWS_TAKEN, town, nation);
+}
+
+void
+sim_plunder_open(struct sim *s, const int goods[3])
+{
+	int i;
+
+	for (i = 0; i < GOODS; i++) {
+		s->market.stock[i] = goods[i];
+		s->market.price[i] = 0;
+	}
+	s->market.gold_at_open = s->fleet.gold;
+	s->merchant_gold = 0;
+	s->market.open = 1;
+}
+
+void
+sim_plunder_close(struct sim *s)
+{
+	s->market.open = 0;
+	s->merchant_gold = -1;
 }

@@ -335,6 +335,7 @@ sim_board(struct sim *s, int weapon)
 	in.extra = 0;			/* named captains are not modelled */
 	in.weapon = weapon;
 	sim_sword_start(s, &in);
+	s->sword.scene = 3;			/* the deck */
 }
 
 void
@@ -350,6 +351,7 @@ sim_practice_start(struct sim *s, int weapon)
 	in.nation = 5;
 	in.weapon = weapon;
 	sim_sword_start(s, &in);
+	s->sword.scene = 3;
 }
 
 void

@@ -40,4 +40,7 @@ sim_ship_room(int type)
 	return ((type & 0xF) * 2 + 2);
 }
 
+/* Add an entry to the log (news codes as CSTN 20). */
+void	sim_log_news(struct sim *s, int code, int a, int b);
+
 #endif

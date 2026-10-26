@@ -875,6 +875,71 @@ test_story(void)
 	game_free(g);
 }
 
+/* Storming a town without forts: the assault, the sack, the loot. */
+static void
+test_assault(void)
+{
+	struct game *g;
+	struct sim_town *t;
+	long gold;
+	int town;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter "
+	    "click:60,300 wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	town = g->sim.fleet.leaving;
+	t = &g->sim.towns[town];
+	t->forts = 0;
+	t->gold = 200;
+	t->citizens = 1;
+	g->sim.fleet.crew = 100;
+	g->sim.heat = 0;
+	g->sim.fleet.x = t->sea_x * 16 + 8;
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_arrive);
+	CHECK(game_script(g, "down enter wait:40") == 0 &&
+	    g->screen == &screen_assault);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sword && g->sw_stage == 1);
+	CHECK(game_script(g, "enter wait:2") == 0 && g->sw_stage == 2 &&
+	    g->sim.sword.scene == 0 && g->sim.sword.foe.men ==
+	    t->soldiers * 10 + 5);
+	g->sim.sword.result = SWORD_WON;
+	gold = g->sim.fleet.gold;
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_sack &&
+	    g->sack.gold == 200L * 1500 / 15 * 10 &&
+	    g->sim.fleet.gold == gold + g->sack.gold);
+	/* The crew of 100 can hold a town of one citizen: a governor. */
+	CHECK(g->sack.conquest);
+	CHECK(game_script(g, "enter") == 0 && g->sack_stage == 2);
+	CHECK(game_script(g, "down down down enter wait:40") == 0 &&
+	    t->nation == 3 && g->screen == &screen_merchant && g->looting);
+	/* The loot for nothing, then away to sea. */
+	g->sack.goods[0] = 0;
+	CHECK(game_script(g, "down right wait:2") == 0);
+	CHECK(game_script(g, "esc wait:40") == 0 &&
+	    g->screen == &screen_sail && !g->looting &&
+	    g->sim.fleet.gold == gold + g->sack.gold);
+	/* With forts: the fort battle first; landing by the fort leads to
+	 * the assault, the garrison set from the battle. */
+	t->forts = 2;
+	t->soldiers = 9;
+	g->sim.fleet.x = t->sea_x * 16 + 8;
+	g->sim.fleet.y = t->sea_y * 16 + 8;
+	g->sim.fleet.leaving = -1;
+	CHECK(game_script(g, "wait:40 down enter wait:40") == 0 &&
+	    g->screen == &screen_battle && g->sim.battle.fort);
+	g->sim.battle.foe.crew = 31;
+	g->sim.battle.outcome = BAT_LANDED;
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_assault &&
+	    t->soldiers == 5 + 3 && g->assault_town == town);
+	game_free(g);
+}
+
 /* The captain's cabin: labels, the logbook, the cave, practice. */
 static void
 test_cabin(void)
@@ -1111,6 +1176,7 @@ main(void)
 	test_arrival();
 	test_pace();
 	test_cabin();
+	test_assault();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

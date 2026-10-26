@@ -29,6 +29,7 @@ with a message. Numbers are integers only.
 | `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, or `leave` | `player_town`, `visit_flags`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
+| `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
 | `bank` | `action`: `divide` (the plunder), or `continue` (another expedition; `advance`: 0 or 1) | `share`, `mood` (0-3), `yours`, `fortune`, `gold`, `crew`, `difficulty` |
 | `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`) or `close` | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
 | `tavern` | `action`: `open` (counts the recruits) or `recruit` (`accept`: 0 or 1) | `recruits`, `crew`, `tavern_spots` |
@@ -51,7 +52,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 14,
+  "version": 15,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,

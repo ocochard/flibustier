@@ -1902,6 +1902,75 @@ test_command(void)
 	CHECK(s.fleet.ships[0] == 5);
 }
 
+/* The assault on a town, the sack, a new governor. */
+static void
+test_assault(void)
+{
+	struct sim s;
+	struct sim_town *t;
+	struct sack k;
+	int n;
+
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->soldiers = 6;
+	t->forts = 2;
+	t->wealth = 100;
+	t->gold = 300;
+	t->citizens = 3;
+	t->standing = 0;
+	n = t->nation;
+	s.fleet.crew = 80;
+	s.fleet.gold = 0;
+	s.heat = 0;
+	s.reputation = 0;
+	memset(s.standing, 0, sizeof(s.standing));
+	sim_assault_start(&s, 1, 10, 2);
+	CHECK(s.sword.active && s.sword.kind == SWORD_CREW &&
+	    s.sword.you.men == 70 && s.sword.foe.men == 65 &&
+	    s.sword.title == 4 && s.sword.scene == 1);
+	/* Won with 50 men left against 12: 2 soldiers stay, 20 men lost. */
+	s.sword.result = SWORD_WON;
+	s.sword.you.men = 50;
+	s.sword.foe.men = 12;
+	CHECK(sim_assault_end(&s, 1) == 1 && t->soldiers == 2 &&
+	    s.fleet.crew == 60);
+	/* The sack: 300 x 1500 / 15 = 30000, counted as 300000 gold; the
+	 * town keeps 300 - 600 -> 0; wealth 100 - 20 - 20; standing -3;
+	 * crew 60 against 30 + rand(30): a conquest. */
+	sim_sack(&s, 1, &k);
+	CHECK(k.gold == 300000 && s.fleet.gold == 300000 && t->gold == 0);
+	CHECK(t->wealth == 60 && (int16_t)t->standing == -3 &&
+	    k.cannon == 12 && k.hidden == -1);
+	CHECK(k.goods[0] < 80 && k.goods[1] < 80 && k.goods[2] < 80);
+	CHECK(s.standing[n] == -3 && s.reputation == 2 && k.conquest);
+	sim_install_governor(&s, 1, (n + 1) & 3);
+	CHECK(t->nation == ((n + 1) & 3) && t->standing == 2 &&
+	    s.standing[(n + 1) & 3] >= 3);
+	/* Warned towns hide their gold; a small crew only plunders. */
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->citizens = 50;
+	t->gold = 10;
+	s.heat = 40;
+	s.fleet.crew = 20;
+	sim_sack(&s, 1, &k);
+	CHECK(k.hidden == 1 && !k.conquest && k.gold == 10 * 1500 / 55 * 10);
+	CHECK(s.news[(s.nnews - 1) % SIM_NEWS_MAX].code == NEWS_PLUNDERED);
+	/* Repelled: the fallen, and a blot on the record. */
+	sea_game(&s, 300, 300, 0);
+	t = &s.towns[1];
+	t->forts = 0;
+	s.fleet.crew = 50;
+	s.reputation = 4;
+	sim_assault_start(&s, 1, 0, 2);
+	CHECK(s.sword.scene == 0);
+	s.sword.result = SWORD_REPELLED;
+	s.sword.you.men = 30;
+	CHECK(sim_assault_end(&s, 1) == 0 && s.fleet.crew == 30 &&
+	    s.reputation == 3);
+}
+
 /* Leaving a town: on its water, bows away from it (field 28). */
 static void
 test_leave_heading(void)
@@ -2146,6 +2215,7 @@ main(void)
 	test_screens();
 	test_fort_battle();
 	test_leave_heading();
+	test_assault();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

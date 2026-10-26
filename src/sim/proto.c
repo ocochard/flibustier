@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	14
+#define STATE_VERSION	15
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -225,6 +225,8 @@ sword_json(const struct sim_sword *sw, struct jbuf *out)
 	jb_int(out, sw->foe_hits);
 	jb_raw(out, ",\"men_start\":");
 	jb_int(out, sw->men_start);
+	jb_raw(out, ",\"scene\":");
+	jb_int(out, sw->scene);
 	jb_raw(out, ",\"you\":");
 	sword_side_json(&sw->you, out);
 	jb_raw(out, ",\"foe\":");
@@ -257,6 +259,7 @@ sword_from_json(struct sim_sword *sw, const struct json *j)
 	sw->you_hits = (int)json_get_int(j, "you_hits", 0);
 	sw->foe_hits = (int)json_get_int(j, "foe_hits", 0);
 	sw->men_start = (int)json_get_int(j, "men_start", 0);
+	sw->scene = (int)json_get_int(j, "scene", 3);
 	if (sword_side_from_json(&sw->you, json_get(j, "you")) != 0 ||
 	    sword_side_from_json(&sw->foe, json_get(j, "foe")) != 0)
 		return (-1);
@@ -1605,6 +1608,70 @@ cmd_governor(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * Storming the town the fleet has reached: "start" (weapon, aboard),
+ * then sword ticks, "end", then "sack", and "governor" (nation) when the
+ * sack allows a conquest.
+ */
+static void
+cmd_assault(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	int town = s->fleet.leaving, r = 0;
+	struct sack k;
+
+	if (town < 0 || (size_t)town >= s->ntowns || action == NULL) {
+		reply_error(out, "assault needs a town reached and \"action\"");
+		return;
+	}
+	memset(&k, 0, sizeof(k));
+	k.hidden = -1;
+	if (strcmp(action, "start") == 0)
+		sim_assault_start(s, town, (int)json_get_int(cmd, "aboard", 0),
+		    (int)json_get_int(cmd, "weapon", 2) % SWORD_WEAPONS);
+	else if (strcmp(action, "end") == 0) {
+		if (!s->sword.active || s->sword.result == SWORD_NONE) {
+			reply_error(out, "no finished assault");
+			return;
+		}
+		r = sim_assault_end(s, town);
+	} else if (strcmp(action, "sack") == 0)
+		sim_sack(s, town, &k);
+	else if (strcmp(action, "governor") == 0) {
+		int64_t n = json_get_int(cmd, "nation", -1);
+
+		if (n < 0 || n > 3) {
+			reply_error(out, "governor needs \"nation\" 0..3");
+			return;
+		}
+		sim_install_governor(s, town, (int)n);
+	} else {
+		reply_error(out, "assault needs \"action\": start, end, sack "
+		    "or governor");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"result\":");
+	jb_int(out, r);
+	jb_raw(out, ",\"gold\":");
+	jb_int(out, k.gold);
+	jb_raw(out, ",\"hidden\":");
+	jb_int(out, k.hidden);
+	jb_raw(out, ",\"goods\":[");
+	jb_int(out, k.goods[0]);
+	jb_raw(out, ",");
+	jb_int(out, k.goods[1]);
+	jb_raw(out, ",");
+	jb_int(out, k.goods[2]);
+	jb_raw(out, "],\"cannon\":");
+	jb_int(out, k.cannon);
+	jb_raw(out, ",\"conquest\":");
+	jb_int(out, k.conquest);
+	jb_raw(out, ",\"crew\":");
+	jb_int(out, s->fleet.crew);
+	jb_raw(out, "}");
+}
+
 /* The bank: "divide" the plunder, then "continue" ("advance": 0 or 1). */
 static void
 cmd_bank(struct session *ss, const struct json *cmd, struct jbuf *out)
@@ -1749,6 +1816,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_tavern(ss, cmd, out);
 	else if (strcmp(name, "governor") == 0)
 		cmd_governor(ss, cmd, out);
+	else if (strcmp(name, "assault") == 0)
+		cmd_assault(ss, cmd, out);
 	else if (strcmp(name, "bank") == 0)
 		cmd_bank(ss, cmd, out);
 	else if (strcmp(name, "board") == 0)

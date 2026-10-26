@@ -248,8 +248,10 @@ Status (2026-10-26): first slice.
 - **Battle field:** the original's prebuilt screens chosen by the
   nearest coast, scrolling, the shallows and beaching.
 - **Fort battle:** attacking a fortified town from the sea.
-- **Next:** the assault on the town (the sword fight with the garrison)
-  and the sack.
+- **Assault and sack:** storming a town, the plunder, installing a
+  governor, prison after a defeat.
+- **Next:** the land march (arriving on foot), the crew's mood, and
+  what prison costs.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

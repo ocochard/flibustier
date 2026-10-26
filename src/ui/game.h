@@ -171,6 +171,12 @@ struct game {
 	int			 sw_guard;	/* the sword fight is the guard's duel */
 	int			 sail_fast;	/* T: a sailing pass every frame */
 	int			 sw_practice;	/* the sword fight is practice */
+	int			 sw_assault;	/* the sword fight storms a town */
+	int			 assault_town;
+	int			 assault_aboard;	/* men left with the fleet */
+	int			 sack_stage;
+	struct sack		 sack;
+	int			 looting;	/* the merchant board is the loot */
 	int			 sw_named;	/* the chosen weapon's name shows */
 	int			 cabin_spot;	/* pointed at, or -1 */
 	int			 cabin_key;	/* selected with the keys */
