@@ -25,6 +25,7 @@
 
 #define SIM_MAPS	3	/* treasure maps */
 #define SIM_VILLAINS	4
+#define SIM_PRISONERS	8
 #define SIM_NEWS_MAX	256	/* most recent news kept in the state */
 #define SIM_NO_TOWN	(-1)
 
@@ -363,6 +364,7 @@ struct sim_encounter {
 	int		hostile;	/* she chases the player */
 	int		town;		/* nearest town when sighted */
 	int		named;		/* the pirate a mission hunts */
+	int		captain;	/* a named captain's id, or 0 */
 };
 
 struct sim {
@@ -421,6 +423,16 @@ struct sim {
 		int	spells;		/* 27-day spells served */
 	} jail;
 	int		start_year;	/* the career's (VA 0x45e85) */
+	/* Captains held for ransom (VA 0x4720a): id | 0x100 for pirates,
+	 * 0 when free; "hostage" a captured Spaniard or pirate who offers
+	 * news first; "escaped" the one who jumped at the last roll call;
+	 * "surnames" those named lately (VA 0x32e06). */
+	int		prisoners[SIM_PRISONERS];
+	int		hostage;
+	int		escaped;
+	int		surnames;
+	int		ransom_slot;	/* the offer pending, or -1 */
+	long		ransom_gold;
 	/* The villains who know where the relatives are (VA 0x471da). */
 	struct sim_villain {
 		int	active;
@@ -672,6 +684,24 @@ int	sim_health(const struct sim *s);
  */
 enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
 void	sim_imprison(struct sim *s, int cause, int town);
+
+/*
+ * Named captains and their ransom.  A hostile warship or pirate
+ * (role above 5, the player's standing below 0) has a named captain
+ * (VA 0xd1fc): id = surname x 8 + rand(8) x 2 + nation x 64, the
+ * surname one of 5 not used lately, the nation the town's for pirates.
+ * His rank is CSTN 78 entry (id & 7) + 2, his level bonus (id & 7) / 3.
+ * Captured (VA 0xdb7b), a Spaniard or a pirate is a hostage first
+ * (sim.hostage): sim_hostage_answer 0 and 1 trade him for news of the
+ * treasure fleet or the silver train, 2 holds him; others are held at
+ * once.  Each governor's visit makes up to 4 tries at a random slot
+ * (VA 0x127da): sim_ransom_offer leaves the offer in ransom_slot and
+ * ransom_gold ((rank + 1) x 50 x (rand(3) + 1) x 10) and returns the
+ * slot, or -1 when the tries are spent; sim_ransom_take collects it.
+ */
+void	sim_hostage_answer(struct sim *s, int answer);
+int	sim_ransom_offer(struct sim *s, int *tries);
+void	sim_ransom_take(struct sim *s);
 
 /*
  * The relatives' villains.  After a promotion, while a relative is

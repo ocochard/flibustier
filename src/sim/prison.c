@@ -162,6 +162,7 @@ sim_imprison(struct sim *s, int cause, int town)
 		sim_advance(s, SPELL_DAYS);
 	sim_fresh_crew(s, 0);
 	s->mission.type = MISSION_NONE;
+	memset(s->prisoners, 0, sizeof(s->prisoners));
 	out->health = sim_health(s);
 	if (s->player.difficulty > 0 && s->player.difficulty < 4)
 		s->player.difficulty--;

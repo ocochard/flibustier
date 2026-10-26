@@ -261,7 +261,9 @@ Status (2026-10-26): first slice.
 - **Prison:** the stay, health, marooning, the career's ends.
 - **Map of the Caribbean.**
 - **Log book:** its menu and status pages.
-- **Next:** prisoners and ransoms.
+- **Named captains:** the hail, hostages, prisoners, ransoms.
+- **Next:** the treasure fleet and silver train, the governor's
+  daughter and marriage.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

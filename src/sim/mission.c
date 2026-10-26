@@ -218,3 +218,88 @@ sim_mission_contact(const struct sim *s, int town)
 	return (town >= 0 && (s->mission.type == MISSION_LETTER ||
 	    s->mission.type == MISSION_PAPERS) && s->mission.dest == town);
 }
+
+/* Hold a captain (VA 0xdb7b): the first free slot, pirates marked. */
+static void
+hold_captain(struct sim *s, int id, int nation)
+{
+	int k;
+
+	for (k = 0; k < SIM_PRISONERS; k++)
+		if (s->prisoners[k] == 0) {
+			s->prisoners[k] = (nation & 4) << 6 | (id & 0xFF);
+			return;
+		}
+}
+
+void
+sim_hostage_answer(struct sim *s, int answer)
+{
+	if (s->hostage == 0)
+		return;
+	if (answer == 2)
+		hold_captain(s, s->hostage, s->encounter.nation);
+	s->hostage = 0;
+}
+
+void
+sim_capture_captain(struct sim *s)
+{
+	int id = s->encounter.captain;
+
+	if (id == 0 || (id & 0x8000))
+		return;
+	if ((s->encounter.nation & 3) == 0)	/* Spaniards and pirates */
+		s->hostage = id;
+	else
+		hold_captain(s, id, s->encounter.nation);
+}
+
+int
+sim_ransom_offer(struct sim *s, int *tries)
+{
+	int k, id;
+
+	s->ransom_slot = -1;
+	while (*tries < 4) {
+		(*tries)++;
+		k = rng_below(&s->rng, SIM_PRISONERS);
+		id = s->prisoners[k] & 0xFF;
+		if (id == 0)
+			continue;
+		s->ransom_gold = (long)((id & 7) + 1) * 50 *
+		    (rng_below(&s->rng, 3) + 1) * 10;
+		s->ransom_slot = k;
+		return (k);
+	}
+	return (-1);
+}
+
+void
+sim_ransom_take(struct sim *s)
+{
+	int k = s->ransom_slot;
+
+	if (k < 0 || k >= SIM_PRISONERS || s->prisoners[k] == 0)
+		return;
+	s->fleet.gold += s->ransom_gold;
+	s->prisoners[k] = 0;
+	s->ransom_slot = -1;
+}
+
+int
+sim_name_captain(struct sim *s, int nation)
+{
+	int surname, bit, id;
+
+	do {
+		if (s->surnames == 0x1F)
+			s->surnames = 0;
+		surname = rng_below(&s->rng, 5);
+		while (s->surnames & (bit = 1 << surname))
+			surname = surname < 4 ? surname + 1 : 0;
+		s->surnames |= bit;
+		id = surname * 8 + rng_below(&s->rng, 8) * 2 + nation * 64;
+	} while (id == 0);
+	return (id);
+}

@@ -234,6 +234,9 @@ struct game {
 	/* The log book: its page (0 the menu) and the log's leaf. */
 	int			 log_page, log_leaf;
 	int			 panel_view;	/* the fleet panel only shows */
+	int			 gov_tries;	/* ransom tries this visit */
+	int			 hostage_said;	/* the hostage's news, or -1 */
+	int			 escape_page;	/* the roll call's second page */
 	int			 deserted_town;	/* the town just left */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */

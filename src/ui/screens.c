@@ -52,6 +52,7 @@
 #define S_COLOURS		122	/* "She's flying %s colors" */
 #define S_OVERTAKEN		126
 #define S_CHASING		311	/* "He's chasing us" */
+#define S_NAMED_CHASE		121	/* "Arrgh! It's the %s %s, %s!" */
 #define S_UNANSWERED		315
 #define W_A_SHIP		11	/* "a pinnace"... by ship type */
 #define W_COLOURS		106	/* "Spanish"... "pirate" */
@@ -2001,15 +2002,31 @@ logbook_draw(struct game *g)
 		}
 		return;
 	case LOG_HOSTAGES:
-		/* No prisoners are kept yet; the pirate brought in shows. */
 		text[0] = '\0';
+		for (k = 0; k < SIM_PRISONERS; k++) {
+			int p = g->sim.prisoners[k];
+			char one[160];
+
+			if (p == 0)
+				continue;
+			captain_name(g, p & 0xFF, line, sizeof(line));
+			arg[0] = line;
+			fill_args(one, sizeof(one), game_word(g, W_HOSTAGE,
+			    p & 0x100 ? 2 : 1), arg, 1);
+			strncat(text, one, sizeof(text) - strlen(text) - 2);
+			strcat(text, "\r");
+		}
 		if (g->sim.mission.type == -MISSION_PIRATE) {
+			char one[160];
+
 			captain_name(g, g->sim.mission.pirate, line,
 			    sizeof(line));
 			arg[0] = line;
-			fill_args(text, sizeof(text), game_word(g, W_HOSTAGE, 2),
+			fill_args(one, sizeof(one), game_word(g, W_HOSTAGE, 2),
 			    arg, 1);
-		} else
+			strncat(text, one, sizeof(text) - strlen(text) - 1);
+		}
+		if (text[0] == '\0')
 			snprintf(text, sizeof(text), "%s", game_word(g,
 			    W_UNKNOWN, 9));
 		draw(g, FONT_BODY, 240, 100, 320, text, 0);
@@ -2970,7 +2987,22 @@ encounter_draw(struct game *g)
 		    game_word(g, W_A_SHIP, (size_t)e->type), NULL);
 		break;
 	default:
-		if (e->hostile)
+		if (e->hostile && e->captain != 0) {
+			/* "Arrgh! It's the %s %s, %s!" (CSTR 121, VA
+			 * 0xd1fc): his repute, pirate or pirate-hunter,
+			 * his name. */
+			const char *arg[3];
+			char name[80];
+
+			captain_name(g, e->captain, name, sizeof(name));
+			arg[0] = game_word(g, 34, (size_t)(e->named ? 1 :
+			    (e->captain & 7) / 3));
+			arg[1] = game_word(g, 105, e->nation == NATION_PIRATE ?
+			    0 : 1);
+			arg[2] = name;
+			fill_args(text, sizeof(text), game_str(g, S_NAMED_CHASE),
+			    arg, 3);
+		} else if (e->hostile)
 			snprintf(text, sizeof(text), "%s", game_str(g, S_CHASING));
 		else
 			fill(text, sizeof(text), game_str(g, S_COLOURS),
@@ -3115,6 +3147,13 @@ battle_finish(struct game *g, int keep)
 	if (g->sim.jail.fresh) {
 		/* Beaten aboard, or the last ship gone (VA 0x16647). */
 		game_goto(g, &screen_prison);
+		return;
+	}
+	if (g->sim.hostage != 0) {
+		/* The captured captain speaks first (VA 0xdb7b). */
+		g->hostage_said = -1;
+		g->selected = 0;
+		game_goto(g, &screen_hostage);
 		return;
 	}
 	if (hunted && g->sim.mission.type == -MISSION_PIRATE) {
@@ -4028,8 +4067,10 @@ town_choose(struct game *g, int i)
 		sim_leave_town(&g->sim);
 		bank_free(&g->town_spr);
 		/* The roll call first (VA 0x17efb). */
-		game_goto(g, g->sim.deserted > 1 ? &screen_deserted :
-		    g->world != NULL ? &screen_sail : &screen_cabin);
+		g->escape_page = g->sim.deserted <= 1;
+		game_goto(g, g->sim.deserted > 1 || g->sim.escaped != 0 ?
+		    &screen_deserted : g->world != NULL ? &screen_sail :
+		    &screen_cabin);
 		break;
 	case SPOT_CABIN:
 		game_goto(g, &screen_cabin);
@@ -4337,8 +4378,12 @@ shipwright_event(struct game *g, const struct ui_event *ev)
 	default:
 		if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 		    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
-			if (g->wright_note == S_NO_PIRATES)
+			/* Refused: the note stays up while the town
+			 * fades in. */
+			if (g->wright_note == S_NO_PIRATES) {
 				game_goto(g, &screen_town);
+				return;
+			}
 			g->wright_stage = 0;
 			g->selected = 0;
 		}
@@ -4971,7 +5016,9 @@ const struct screen screen_rumours = {
 #define S_VILLAIN_NEWS		137
 #define S_VILLAIN_SEEN		138
 enum { GOV_GREET, GOV_MISSION, GOV_REPORT, GOV_ASK, GOV_TASK, GOV_PROMOTED, GOV_LAND,
-    GOV_VILLAIN_NEWS, GOV_VILLAIN_SEEN, GOV_OFFER, GOV_SHORT, GOV_DONE };
+    GOV_VILLAIN_NEWS, GOV_VILLAIN_SEEN, GOV_OFFER, GOV_SHORT, GOV_DONE,
+    GOV_RANSOM };
+#define S_RANSOM		136
 
 /* A captain's name from his id (VA 0x19fbb): the rank (CSTN 78, from
  * Captain), and a surname of the list CSTN 2 + (id >> 6 & 3). */
@@ -5061,6 +5108,7 @@ governor_enter(struct game *g)
 	g->sim.visit_flags |= VISIT_GOVERNOR;
 	g->gov_rank = g->gov_acres = 0;
 	g->gov_villain = -1;
+	g->gov_tries = 0;
 	g->gov_stage = GOV_GREET;
 }
 
@@ -5127,8 +5175,15 @@ governor_next(struct game *g)
 		}
 		/* FALLTHROUGH */
 	case GOV_VILLAIN_SEEN:
+	case GOV_RANSOM:
 		if (g->gov_stage == GOV_VILLAIN_SEEN)
 			governor_inks(g, "pic/governor");
+		/* Ransoms for the captains held (VA 0x127da). */
+		if (sim_ransom_offer(&g->sim, &g->gov_tries) >= 0) {
+			g->gov_stage = GOV_RANSOM;
+			g->selected = 0;
+			return;
+		}
 		o = sim_governor_offer(&g->sim, &price);
 		if (o == OFFER_MARQUE || o == OFFER_PARDON) {
 			g->gov_stage = GOV_OFFER;
@@ -5145,6 +5200,14 @@ governor_next(struct game *g)
 		g->gov_stage = GOV_VILLAIN_SEEN;
 		return;
 	}
+}
+
+static void
+governor_ransom_choose(struct game *g, int i)
+{
+	if (i == 0)
+		sim_ransom_take(&g->sim);
+	governor_next(g);
 }
 
 static void
@@ -5179,6 +5242,10 @@ governor_event(struct game *g, const struct ui_event *ev)
 	}
 	if (g->gov_stage == GOV_ASK) {
 		menu_event(g, ev, 2, NULL, governor_ask_choose, NULL);
+		return;
+	}
+	if (g->gov_stage == GOV_RANSOM) {
+		menu_event(g, ev, 2, NULL, governor_ransom_choose, NULL);
 		return;
 	}
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
@@ -5283,6 +5350,13 @@ governor_draw(struct game *g)
 	case GOV_ASK:
 		draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W,
 		    game_str(g, S_MISSION_ASK), 1);
+		return;
+	case GOV_RANSOM:
+		captain_name(g, g->sim.prisoners[g->sim.ransom_slot & 7] & 0xFF,
+		    num2, sizeof(num2));
+		snprintf(num, sizeof(num), "%ld", g->sim.ransom_gold);
+		fill(text, sizeof(text), game_str(g, S_RANSOM), num2, num);
+		draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W, text, 1);
 		return;
 	case GOV_TASK:
 		if (g->sim.mission.type == MISSION_PIRATE) {
@@ -7204,6 +7278,7 @@ const struct screen screen_crew = {
  * 109, at (340, 150) up to x 620).
  */
 #define S_DESERTED		109
+#define S_ESCAPED		110
 
 static void
 deserted_enter(struct game *g)
@@ -7221,9 +7296,14 @@ deserted_enter(struct game *g)
 static void
 deserted_event(struct game *g, const struct ui_event *ev)
 {
-	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
-	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (!g->escape_page && g->sim.escaped != 0) {
+		g->escape_page = 1;	/* "...jumps overboard" (CSTR 110) */
+		return;
+	}
+	game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
 }
 
 static void
@@ -7231,6 +7311,15 @@ deserted_draw(struct game *g)
 {
 	char text[320], num[16];
 
+	if (g->escape_page) {
+		char name[80];
+
+		captain_name(g, g->sim.escaped, name, sizeof(name));
+		fill(text, sizeof(text), game_str(g, S_ESCAPED), name, NULL);
+		draw(g, FONT_BODY, 340, 150, 280, text, 0);
+		continue_prompt(g);
+		return;
+	}
 	snprintf(num, sizeof(num), "%d", g->sim.deserted);
 	fill(text, sizeof(text), game_str(g, S_DESERTED), num, NULL);
 	draw(g, FONT_BODY, 340, 150, 280, text, 0);
@@ -7417,4 +7506,69 @@ citymap_draw(struct game *g)
 
 const struct screen screen_citymap = {
 	"caribbean map", citymap_enter, citymap_event, NULL, citymap_draw,
+};
+
+/*
+ * A captured Spaniard or pirate (VA 0xdb7b), on hostage.pcx at (340,
+ * 150) up to x 620: "I have information which may be of value to you,"
+ * %s says (CSTR 165): the treasure fleet, the silver train, or ransom.
+ * The news: "The %s is in %s." (CSTN 27.0) with "Treasure Fleet" or
+ * "Silver Train" (CSTR 46, 45) and, while the fleets are not modelled,
+ * "Spain" or "Peru" (CSTN 27.1, 27.2): they are at home.
+ */
+#define S_HOSTAGE_TALK		165
+
+static void
+hostage_enter(struct game *g)
+{
+	game_background(g, "pic/hostage");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+hostage_choose(struct game *g, int i)
+{
+	sim_hostage_answer(&g->sim, i);
+	if (i == 2)
+		game_goto(g, &screen_sail);
+	else
+		g->hostage_said = i;
+}
+
+static void
+hostage_event(struct game *g, const struct ui_event *ev)
+{
+	if (g->hostage_said < 0) {
+		menu_event(g, ev, 3, NULL, hostage_choose, NULL);
+		return;
+	}
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_sail);
+}
+
+static void
+hostage_draw(struct game *g)
+{
+	char text[512], name[80];
+	const char *arg[2];
+
+	if (g->hostage_said < 0) {
+		captain_name(g, g->sim.hostage, name, sizeof(name));
+		fill(text, sizeof(text), game_str(g, S_HOSTAGE_TALK), name,
+		    NULL);
+		draw(g, FONT_BODY, 340, 150, 280, text, 1);
+		return;
+	}
+	arg[0] = game_str(g, g->hostage_said == 0 ? 46 : 45);
+	arg[1] = game_word(g, 27, g->hostage_said == 0 ? 1 : 2);
+	fill_args(text, sizeof(text), game_word(g, 27, 0), arg, 2);
+	draw(g, FONT_BODY, 340, 150, 280, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_hostage = {
+	"hostage", hostage_enter, hostage_event, NULL, hostage_draw,
 };

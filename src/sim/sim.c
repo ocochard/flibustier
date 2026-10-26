@@ -187,6 +187,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->year = era->year;
 	s->diplomacy_range = SIM_DIPLOMACY_RANGE;
 	s->villain_duel = -1;
+	s->ransom_slot = -1;
 	s->player_town = SIM_NO_TOWN;
 	s->visit_town = SIM_NO_TOWN;
 	s->wright_gold = -1;
@@ -873,6 +874,13 @@ pick_ship(struct sim *s, int town, int dist)
 	 * hunts (VA 0xd1fc). */
 	e->named = s->mission.type == MISSION_PIRATE &&
 	    s->mission.dest == town && e->nation == NATION_PIRATE;
+	/* A hostile warship or pirate has a named captain; the hunted
+	 * pirate is the mission's (VA 0xd1fc). */
+	if (e->named)
+		e->captain = s->mission.pirate;
+	else if (e->hostile)
+		e->captain = sim_name_captain(s, e->nation == NATION_PIRATE &&
+		    town >= 0 ? s->towns[town].nation & 3 : e->nation & 3);
 }
 
 /* Every 32 ticks: maybe a sail on the horizon (game-rules.md). */
@@ -1006,6 +1014,13 @@ sim_leave_town(struct sim *s)
 	if (n > 1) {
 		sim_crew_leave(s, n);
 		s->deserted = n;
+	}
+	/* One prisoner may jump overboard when the ship is in port. */
+	s->escaped = 0;
+	n = rng_below(&s->rng, SIM_PRISONERS);
+	if (s->prisoners[n] != 0 && !s->fleet.ashore) {
+		s->escaped = s->prisoners[n] & 0xFF;
+		s->prisoners[n] = 0;
 	}
 	if (s->player_town >= 0 && (size_t)s->player_town < s->ntowns) {
 		if (s->fleet.ashore) {

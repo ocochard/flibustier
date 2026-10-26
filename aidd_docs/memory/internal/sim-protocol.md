@@ -34,6 +34,7 @@ with a message. Numbers are integers only.
 | `crew` | after a `sail` stop at `crew`: `action` `heard` (a warning), or for a mutiny `duel` (`weapon`), `sword` ticks, then `end` | `event` (none, restless, anxious, mutiny), `mood`, `months`, `crew`, `reputation` |
 | `villain` | `action`: `duel` (`weapon`) against the villain hiding in the town, run with `sword` ticks, then `end` | `villain`; `won`, `reputation` |
 | `mission` | `action`: `accept` (the governor's offer) or `deliver` (to the contact in this town) | `type`, `dest` |
+| `captain` | `action`: `hostage` (`answer` 0 treasure fleet, 1 silver train, 2 hold him), `offer` (in town: a visit's 4 tries at a ransom) or `take` (the offer) | `ransom_slot`, `ransom_gold`, `prisoners`, `gold` |
 | `search` | on foot: digs at the treasure maps' spots (3 days) | `found` (`[{map: pirate, relative or lost, gold, value}]`) |
 | `march` | on foot: `dx`, `dy` (-1..1), `ticks` (1..23360) | `stop` (`ticks`, `town`, `boarded`), `town`, `x`, `y`, `day` |
 | `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
@@ -59,7 +60,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 22,
+  "version": 23,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -211,6 +212,11 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   the player itself on the defeats above (`finish`, `town sail_in`,
   `assault end`, `land end`). Absent before version 22: no injuries,
   the career starting the current year.
+- **Captains:** the encounter's `captain` (an id, 0 none); `prisoners`
+  (8 slots, id | 256 for pirates), `hostage` (waiting for an answer),
+  `escaped` (at the last roll call), `surnames` (used lately),
+  `ransom_slot` and `ransom_gold` (an offer pending). Absent before
+  version 23: none.
 - **Older states:** states from version 14 on still load. The town
   fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
   `party_x`, `party_y`) then read as 65535 until the player's program

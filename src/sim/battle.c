@@ -67,12 +67,16 @@ heading_diff(int a, int b)
 
 /*
  * The battle's level: the difficulty, one easier with the gunnery
- * ability.  Named captains add to it; they are not modelled yet.
+ * ability; a named captain adds (rank) / 3, the hunted pirate 1 (VA
+ * 0xd1fc).
  */
 static int
 battle_level(const struct sim *s)
 {
-	return (clampi(s->player.difficulty -
+	int c = s->encounter.captain, extra = c == 0 ? 0 :
+	    s->encounter.named ? 1 : (c & 7) / 3;
+
+	return (clampi(s->player.difficulty + extra -
 	    (s->player.ability == ABILITY_GUNNERY), 0, BATTLE_LEVELS - 1));
 }
 
@@ -781,9 +785,12 @@ sim_battle_finish(struct sim *s, int keep)
 		sim_attack_nation(s, s->encounter.nation, -1);
 		/* The crew cheers a capture, a warship more (VA 0xdb7b). */
 		s->fleet.mood += (s->encounter.role > 5) + 1;
-		/* The pirate a governor wanted (VA 0xdb7b). */
+		/* The pirate a governor wanted (VA 0xdb7b), or another
+		 * named captain held. */
 		if (s->encounter.named)
 			sim_mission_done(s);
+		else
+			sim_capture_captain(s);
 	}
 	else if (o == BAT_REPELLED || o == BAT_DEFEATED)
 		sim_reputation(s, -2);

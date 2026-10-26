@@ -2769,6 +2769,80 @@ test_prison(void)
 	CHECK(s.jail.end == 2);
 }
 
+/* Named captains: held after a capture, ransomed, escaping. */
+static void
+test_prisoners(void)
+{
+	struct sim s;
+	int k, id, tries, held = 0, slot;
+	long gold;
+
+	sea_game(&s, 300, 300, 0);
+	/* Five surnames before one comes back; nation in bits 6-7. */
+	for (k = 0; k < 5; k++) {
+		id = sim_name_captain(&s, 2);
+		CHECK(id != 0 && (id >> 6) == 2);
+	}
+	CHECK(s.surnames == 0x1F);
+	/* An English captain taken: held at once. */
+	memset(&s.battle, 0, sizeof(s.battle));
+	s.battle.active = 1;
+	s.battle.outcome = BAT_SURRENDER;
+	s.battle.you.crew = 20;
+	s.encounter.nation = NATION_ENGLAND;
+	s.encounter.captain = 1 << 6 | 3 << 3 | 4;
+	s.encounter.named = 0;
+	CHECK(sim_battle_finish(&s, 0) == BAT_SURRENDER &&
+	    s.prisoners[0] == (1 << 6 | 3 << 3 | 4) && s.hostage == 0);
+	/* A pirate: a hostage first; held, marked as a pirate. */
+	s.battle.active = 1;
+	s.battle.outcome = BAT_SURRENDER;
+	s.encounter.nation = NATION_PIRATE;
+	s.encounter.captain = 2 << 6 | 1 << 3 | 2;
+	CHECK(sim_battle_finish(&s, 0) == BAT_SURRENDER &&
+	    s.hostage == (2 << 6 | 1 << 3 | 2) && s.prisoners[1] == 0);
+	sim_hostage_answer(&s, 2);
+	CHECK(s.hostage == 0 && s.prisoners[1] == (0x100 | 2 << 6 | 1 << 3 | 2));
+	/* A Spaniard traded for news is let go. */
+	s.hostage = 5 << 3;
+	sim_hostage_answer(&s, 0);
+	CHECK(s.hostage == 0 && s.prisoners[2] == 0);
+	/* Ransom: up to 4 tries a visit; (rank + 1) x 500 x 1..3. */
+	gold = s.fleet.gold;
+	for (k = 0, slot = -1; k < 50 && slot < 0; k++) {
+		tries = 0;
+		slot = sim_ransom_offer(&s, &tries);
+		CHECK(tries <= 4);
+	}
+	CHECK(slot == 0 || slot == 1);
+	id = s.prisoners[slot] & 0xFF;
+	CHECK(s.ransom_gold % ((id & 7) + 1) * 500 == 0 &&
+	    s.ransom_gold >= ((id & 7) + 1) * 500 &&
+	    s.ransom_gold <= ((id & 7) + 1) * 1500);
+	sim_ransom_take(&s);
+	CHECK(s.prisoners[slot] == 0 && s.fleet.gold == gold + s.ransom_gold);
+	/* One jumps overboard at a roll call now and then. */
+	s.prisoners[0] = s.prisoners[1] = 0;
+	for (k = 0; k < SIM_PRISONERS; k++)
+		s.prisoners[k] = 8 + k;
+	s.fleet.mood = 20;
+	for (k = 0, id = 0; k < 40 && id == 0; k++) {
+		s.player_town = 0;
+		sim_leave_town(&s);
+		id = s.escaped;
+	}
+	CHECK(id != 0);
+	for (k = 0, held = 0; k < SIM_PRISONERS; k++)
+		held += s.prisoners[k] == 0;
+	CHECK(held == 1);
+	/* Prison frees them all. */
+	s.player.expedition = -1;
+	s.start_year = s.year;
+	sim_imprison(&s, JAIL_SHIP, -1);
+	for (k = 0; k < SIM_PRISONERS; k++)
+		CHECK(s.prisoners[k] == 0);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -2869,6 +2943,7 @@ main(void)
 	test_missions();
 	test_crew_mood();
 	test_prison();
+	test_prisoners();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

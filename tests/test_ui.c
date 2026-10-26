@@ -723,6 +723,13 @@ test_shipwright(void)
 	/* Parting company: back in town. */
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_town);
+	/* Refused: the note stays up while the town fades in, no menu. */
+	game_goto(g, &screen_shipwright);
+	CHECK(game_script(g, "wait:40") == 0);
+	g->wright_stage = 3;
+	g->wright_note = 256;		/* "We do not trade with pirates!" */
+	CHECK(game_script(g, "enter wait:1") == 0 && g->wright_stage == 3);
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_town);
 	game_free(g);
 }
 
@@ -848,7 +855,7 @@ test_governor(void)
 	/* Another stay, standing 8 (no promotion at rank 2): offers come
 	 * until one is drawn; accepting shows the task. */
 	{
-		int k, offered = 0;
+		int k, n, offered = 0;
 
 		g->sim.rank[NATION_ENGLAND] = 3;
 		for (k = 0; k < 30 && !offered; k++) {
@@ -865,11 +872,52 @@ test_governor(void)
 				    g->sim.mission.giver ==
 				    g->sim.player_town);
 			}
-			while (g->screen == &screen_governor)
-				CHECK(game_script(g, "esc wait:40") == 0);
+			for (n = 0; n < 20 && g->screen == &screen_governor;
+			    n++)
+				CHECK(game_script(g, "enter wait:40") == 0);
 		}
 		CHECK(offered);
 	}
+	/* A captain held: sooner or later a visit brings a ransom. */
+	{
+		int k, ransomed = 0;
+		long before;
+
+		g->sim.prisoners[3] = 1 << 6 | 2 << 3 | 4;
+		for (k = 0; k < 30 && !ransomed; k++) {
+			g->sim.visit_flags &= ~VISIT_GOVERNOR;
+			g->sim.mission.type = MISSION_NONE;
+			g->sim.standing[NATION_ENGLAND] = 0;
+			int n;
+
+			CHECK(game_script(g, "click:580,220 wait:40") == 0);
+			for (n = 0; n < 20 && g->screen == &screen_governor &&
+			    g->gov_stage != 12; n++)
+				CHECK(game_script(g, "enter wait:2") == 0);
+			if (g->screen == &screen_governor &&
+			    g->gov_stage == 12) {
+				before = g->sim.fleet.gold;
+				CHECK(game_script(g, "enter") == 0 &&
+				    g->sim.fleet.gold == before +
+				    g->sim.ransom_gold &&
+				    g->sim.prisoners[3] == 0);
+				ransomed = 1;
+			}
+			for (n = 0; n < 20 && g->screen == &screen_governor;
+			    n++)
+				CHECK(game_script(g, "enter wait:40") == 0);
+		}
+		CHECK(ransomed);
+	}
+	/* A hostage's news, then back to sea. */
+	g->sim.hostage = 5 << 3 | 2;
+	g->hostage_said = -1;
+	g->selected = 0;
+	game_goto(g, &screen_hostage);
+	CHECK(game_script(g, "wait:40 enter") == 0 && g->hostage_said == 0 &&
+	    g->sim.hostage == 0);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sail);
 	game_free(g);
 }
 
@@ -1329,6 +1377,16 @@ test_arrival(void)
 		if (!fired) {
 			/* Sailing in under the guns. */
 			CHECK(game_script(g, "enter") == 0);
+			if (g->screen == &screen_town ||
+			    g->sim.player_town >= 0) {
+				/* A lucky draw let the ship in: out, again. */
+				CHECK(game_script(g, "wait:40 click:60,300 "
+				    "wait:40") == 0);
+				while (g->screen == &screen_deserted)
+					CHECK(game_script(g, "enter wait:40") ==
+					    0);
+				continue;
+			}
 			CHECK(g->arrive_stage == 1 && g->screen ==
 			    &screen_arrive && g->sim.player_town == -1);
 			CHECK(game_script(g, "enter wait:40") == 0);

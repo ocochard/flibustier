@@ -292,8 +292,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   15` (16-bit), at most `crew - 1`; when `n > 1` they leave with their
   share of the gold: "Roll call reveals that %s crew members have
   deserted" (CSTR 109, at (340, 150) up to x 620) on the town's arrival
-  picture. Then one of the 8 prisoners (VA `0x4720a`) may jump
-  overboard (CSTR 110, not modelled).
+  picture. Then a random one of the 8 prisoner slots (VA `0x4720a`):
+  when held and the ship is in port, he jumps overboard and escapes
+  (CSTR 110, same place).
 
 ### Prison (VA `0x16647`, `0x1f803`)
 
@@ -340,6 +341,41 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   marooned), the difficulty eases by one (not below 0), then "...take
   you back as %s captain" (CSTR 190, or 162 when marooned, with CSTN 73
   for the difficulty).
+
+### Named captains (VA `0xd1fc`, `0xdb7b`, `0x127da`)
+
+- **Who:** a ship that chases the player (role above 5, the player's
+  standing with her nation below 0) has a named captain; the mission's
+  pirate is the hunted one.
+- **The id:** `surname x 8 + rand(8) x 2 + nation x 64`. The surname is
+  `rand(5)`, moved on while used lately (a 5-bit mask at VA `0x32e06`,
+  cleared when full); the nation is the ship's, or for pirates the
+  nearest town's; an id of 0 is drawn again. Named as captains are (VA
+  `0x19fbb`): rank CSTN 78 entry `(id & 7) + 2`, surname from CSTN 2 +
+  `(id >> 6 & 3)` entry `(id >> 3) & 7`.
+- **Battle:** the level rises by `(id & 7) / 3` (1 for the hunted
+  pirate).
+- **The hail (CSTR 121):** "Arrgh! It's the %s %s, %s!": his repute
+  (CSTN 34 by the same bonus), "pirate" or "pirate-hunter" (CSTN 105),
+  his name.
+- **Captured (VA `0xdb7b`):** a Spaniard or a pirate (nation & 3 = 0)
+  first speaks on `hostage.pcx` at (340, 150) up to x 620: "I have
+  information which may be of value to you," %s says (CSTR 165): the
+  treasure fleet (VA `0x1e953`), the silver train (VA `0x1ea24`), or
+  hold him for ransom. News is "The %s is in %s." (CSTN 27.0) with
+  "Treasure Fleet" or "Silver Train" (CSTR 46, 45) and the town it is
+  in, or "Spain" / "Peru" (CSTN 27.1, 27.2) when away (VA `0x45e71`,
+  `0x45e70` at 0xFF); the engine, without the fleets, always says they
+  are away. News lets him go. Others are held at once.
+- **Held:** the first free of 8 slots (VA `0x4720a`) takes `id |
+  (nation & 4) << 6` (0x100 marks pirates; Hostage Status calls them
+  "(pirate)", others "(hunter)").
+- **Ransom (VA `0x127da`), at each governor's visit after the
+  promotion:** 4 tries, each a random slot; a held one draws `(rank +
+  1) x 50 x (rand(3) + 1) x 10`: "The family of %s will pay a ransom of
+  %s gold pieces..." (CSTR 136, Take the gold / Wait for a better
+  offer). Taken, he is freed.
+- **Lost:** prison clears the slots.
 
 ### Villains (VA `0x12178`, `0x18913`)
 
@@ -1312,8 +1348,7 @@ same town only bits 1 and 2 are kept.
   - **Hostage Status (VA `0xa450`):** each of the 8 prisoners (VA
     `0x4720a`) as "%s (hunter)" or "%s (pirate)" (CSTN 22.1, 22.2, by
     bit 0x100), the pirate brought in for a mission (CSTN 22.2), or
-    "NONE" (CSTN 92.9), at (240, 100) up to x 560. Prisoners are not
-    modelled yet.
+    "NONE" (CSTN 92.9), at (240, 100) up to x 560.
 - **Map of the Caribbean (VA `0xb464`):** on `citymap.pcx`:
   - A dot per town, `misc.crs` frame 1 at the town's fields 29, 30 (its
     map position, about its cell x 0.75) less 3.
@@ -1638,8 +1673,9 @@ order:
    CSTN 81). It ends with a charge to fight them when at war and the
    standing is 2 or more. With neither allies nor enemies: CSTR 149.
 2. A villain hiding in the town (VA `0x18913`, see "Villains"), then
-   the mission (VA `0x12e88`, see "Missions"). Prisoners and ransoms
-   (VA `0x12432`, `0x127da`) are not done yet.
+   the mission (VA `0x12e88`, see "Missions"). VA `0x12432` rewards
+   prisoners with bit 0x8000, which only the mission's pirate has and
+   who is never held: it never fires.
 3. **Promotion (VA `0x12549`):**
    - With `r` the next rank, when `standing >= r^2 + 2` and `r <= 9`:
      the rank rises, and the standing drops to `r^2 + 2`.
@@ -1650,7 +1686,8 @@ order:
    - After a promotion, while a relative is still lost (and a flag at
      VA `0x45e84` bit 0, not identified, is clear), a new villain is
      named (VA `0x12178`, see "Villains").
-4. **His offer, by standing s:**
+4. **Ransoms (VA `0x127da`, see "Named captains").**
+5. **His offer, by standing s:**
    - With `s > -4`, the price is `(4 - s^3) x 200` gold.
    - From s = 2 the price is negative and his daughter is met instead
      (VA `0x128c1`, not done yet).

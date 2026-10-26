@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	22
+#define STATE_VERSION	23
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -459,6 +459,8 @@ encounter_json(const struct sim_encounter *e, struct jbuf *b)
 	jb_int(b, e->town);
 	jb_raw(b, ",\"named\":");
 	jb_int(b, e->named);
+	jb_raw(b, ",\"captain\":");
+	jb_int(b, e->captain);
 	jb_raw(b, "}");
 }
 
@@ -484,6 +486,7 @@ encounter_from_json(struct sim_encounter *e, const struct json *j)
 	e->hostile = (int)json_get_int(j, "hostile", 0);
 	e->town = (int)json_get_int(j, "town", -1);
 	e->named = json_get_int(j, "named", 0) != 0;
+	e->captain = (int)(json_get_int(j, "captain", 0) & 0xFFFF);
 	return (e->type < 0 || e->type > 8 || e->nation < 0 ||
 	    e->nation > NATION_PIRATE ? -1 : 0);
 }
@@ -696,6 +699,20 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->deserted);
 	jb_raw(b, ",\"injuries\":");
 	jb_int(b, s->injuries);
+	for (i = 0; i < SIM_PRISONERS; i++) {
+		jb_raw(b, i == 0 ? ",\"prisoners\":[" : ",");
+		jb_int(b, s->prisoners[i]);
+	}
+	jb_raw(b, "],\"hostage\":");
+	jb_int(b, s->hostage);
+	jb_raw(b, ",\"escaped\":");
+	jb_int(b, s->escaped);
+	jb_raw(b, ",\"surnames\":");
+	jb_int(b, s->surnames);
+	jb_raw(b, ",\"ransom_slot\":");
+	jb_int(b, s->ransom_slot);
+	jb_raw(b, ",\"ransom_gold\":");
+	jb_int(b, s->ransom_gold);
 	jb_raw(b, ",\"start_year\":");
 	jb_int(b, s->start_year);
 	jb_raw(b, ",\"jail\":{\"fresh\":");
@@ -994,6 +1011,24 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		tmp.crew_event = CREW_NONE;
 	tmp.deserted = (int)json_get_int(j, "deserted", 0);
 	tmp.injuries = (int)json_get_int(j, "injuries", 0);
+	{
+		/* Absent before version 23: none held. */
+		const struct json *pr = json_get(j, "prisoners");
+		int k;
+
+		for (k = 0; pr != NULL && pr->type == JSON_ARRAY &&
+		    (size_t)k < pr->count && k < SIM_PRISONERS; k++)
+			if (pr->items[k]->type == JSON_INT)
+				tmp.prisoners[k] = (int)(pr->items[k]->num &
+				    0x1FF);
+		tmp.hostage = (int)(json_get_int(j, "hostage", 0) & 0xFFFF);
+		tmp.escaped = (int)(json_get_int(j, "escaped", 0) & 0xFF);
+		tmp.surnames = (int)(json_get_int(j, "surnames", 0) & 0x1F);
+		tmp.ransom_slot = (int)json_get_int(j, "ransom_slot", -1);
+		if (tmp.ransom_slot < -1 || tmp.ransom_slot >= SIM_PRISONERS)
+			tmp.ransom_slot = -1;
+		tmp.ransom_gold = (long)json_get_int(j, "ransom_gold", 0);
+	}
 	{
 		/* Absent before version 22: the career starts now. */
 		const struct json *jl = json_get(j, "jail");
@@ -1946,6 +1981,45 @@ cmd_villain(struct session *ss, const struct json *cmd, struct jbuf *out)
 		reply_error(out, "villain needs \"action\": duel or end");
 }
 
+/*
+ * Captains: "hostage" answers a captured Spaniard or pirate (answer 0
+ * treasure fleet, 1 silver train, 2 hold him); "offer" makes a visit's
+ * 4 tries at a ransom, "take" collects it.
+ */
+static void
+cmd_captain(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	int tries = 0, i;
+
+	if (action != NULL && strcmp(action, "hostage") == 0 &&
+	    s->hostage != 0)
+		sim_hostage_answer(s, (int)json_get_int(cmd, "answer", 2));
+	else if (action != NULL && strcmp(action, "offer") == 0 &&
+	    s->player_town >= 0)
+		sim_ransom_offer(s, &tries);
+	else if (action != NULL && strcmp(action, "take") == 0 &&
+	    s->ransom_slot >= 0)
+		sim_ransom_take(s);
+	else {
+		reply_error(out, "captain: \"hostage\" (answer), \"offer\" in "
+		    "town, or \"take\" an offer");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"ransom_slot\":");
+	jb_int(out, s->ransom_slot);
+	jb_raw(out, ",\"ransom_gold\":");
+	jb_int(out, s->ransom_slot >= 0 ? s->ransom_gold : 0);
+	for (i = 0; i < SIM_PRISONERS; i++) {
+		jb_raw(out, i == 0 ? ",\"prisoners\":[" : ",");
+		jb_int(out, s->prisoners[i]);
+	}
+	jb_raw(out, "],\"gold\":");
+	jb_int(out, s->fleet.gold);
+	jb_raw(out, "}");
+}
+
 /* The mission: "accept" the governor's offer, "deliver" to the contact
  * in the tavern of the town the player is in. */
 static void
@@ -2326,6 +2400,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_villain(ss, cmd, out);
 	else if (strcmp(name, "mission") == 0)
 		cmd_mission(ss, cmd, out);
+	else if (strcmp(name, "captain") == 0)
+		cmd_captain(ss, cmd, out);
 	else if (strcmp(name, "march") == 0)
 		cmd_march(ss, cmd, out);
 	else if (strcmp(name, "assault") == 0)
