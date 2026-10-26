@@ -388,8 +388,11 @@ test_views(struct packs *packs)
 		memcpy(a, img->px, len);
 		CHECK(view_render(v, view_start_frame(v), 3, &img) == 0);
 		CHECK(memcmp(a, img->px, len) != 0);
-		/* After 16 ticks every range is back where it started. */
+		/* After 32 passes every range is back where it started
+		 * (208-215 turn every 4); not yet after 16. */
 		CHECK(view_render(v, view_start_frame(v), 16, &img) == 0);
+		CHECK(memcmp(a, img->px, len) != 0);
+		CHECK(view_render(v, view_start_frame(v), 32, &img) == 0);
 		CHECK(memcmp(a, img->px, len) == 0);
 		free(a);
 	}

@@ -430,10 +430,10 @@ fight computes its level the same way with fencing.
 | Outcome | When | What follows |
 |---|---|---|
 | boarding | quarter-size boxes touch | CSTR 171, then a sword fight |
-| escape | the ships are more than 240 pixels apart on either axis | the encounter ends; possible loss of a slow ship (CSTR 172) |
+| escape | the ships are more than 240 pixels apart on either axis | CSTR 198 when the enemy was fleeing (decision 2, VA `0x44a20`), otherwise CSTR 197; CSTR 196 against a fort (VA `0xe82a`). The encounter ends; possible loss of a slow ship (CSTR 172) |
 | sunset | 4500 ticks | CSTR 169 |
 | surrender | as above | CSTR 170, then capture (CSTR 164: keep her or plunder and sink her) |
-| player sunk | damage level 4 | CSTR 167; the fleet loses the ship; with no ship left, marooned (CSTR 161) |
+| player sunk | damage level 4 | CSTR 167; the fleet loses the ship and its cargo share (see losing a ship); with no ship left, marooned (CSTR 161) |
 | enemy sunk | damage level 4 | CSTR 168 |
 
 Afterwards the flagship's crew and guns, and its damage (in the type
@@ -494,8 +494,18 @@ back reduced.
   - A loss (VA `0x16647`): CSTR 175, "Your men flee in panic…
     imprisoned in %s", then CSTR 190. Not traced further.
   - After a win or a repulse, the fleet loses the men who fell.
-- **Duels (VA `0x161ba`):** one man each, factors 9 and 9. A loss or
-  being driven back shows CSTR 174 (disgrace).
+- **Duels (VA `0x161ba`, `FUN_161ba(scene, title, nation, extra)`):**
+  one man each, factors 9 and 9.
+  - Scenes (table at VA `0x3361c`): 0 alley, 1 and 2 fort, 3 and 4 the
+    ship's deck. The opponent's head is `HeHead1` on the deck,
+    `HeHead2` in the alley and `HeHead3` at the fort (VA `0x15f84`).
+  - The weapon is chosen on the scene's picture.
+  - The opponent is labelled with his title alone; crew fights add the
+    nation.
+  - A loss or being driven back (VA `0x16384`): the captain's portrait
+    in its frame (VA `0x159df`), "You have disgraced yourself in
+    personal combat!" (CSTR 174, at (100, 350) up to x 560), and the
+    reputation becomes -1.
 - **Practice (VA `0xbdae`):** 200 men each, factors 32, against a
   first mate. No consequences. Afterwards a fencing practice value
   (VA `0x45e90`, 0..30) rises by 5.
@@ -644,10 +654,55 @@ move) and `0x38a1a` to `0x38b99`.
 
 ### Arrival (VA `0x18fa9`)
 
-CSTR 115 asks: sail into the harbour (with a roll first), attack the
-town (VA `0x18b3f`), sneak in (on a `rand(50)` roll a guard challenges:
-a duel), or leave. Sneaking in sets visit flags 2 and 8. Not traced in
-detail yet; the engine goes straight in.
+- **Screen:** `arr_sea.pcx`, or `arr_land.pcx` for an inland town or a
+  land arrival. CSTR 114 at (330, 40) up to x 620: "You have arrived at
+  the lovely <CSTN 29.7 seaside town / 29.6 inland village> of <name>.
+  <forts> The <nation> flag flies over the town.<extra>".
+  - Forts: none, "One fort guards the harbor entrance." (29.0), or
+    "<n> forts guard…" (29.1 with CSTN 79); 29.8 and 29.9 inland.
+  - Extra: "The treasure fleet is in the harbor!" (29.2) or "The silver
+    train is in town!" (29.3) in the towns at VA `0x45e71` and
+    `0x45e70`. Not modelled yet.
+- **Choices (CSTR 115, at (330, 260)):** sail into the harbour (29.4;
+  "March into town", 29.5, on land), attack the town (VA `0x18b3f`, not
+  traced yet), sneak in, or leave.
+- **When the menu appears:** the visit flags keep bits 1 and 2; in
+  another town than the last, they are cleared with the shipwright's
+  and merchant's gold. The tavern's people are all back.
+- **Sailing in (VA `0x19415`):**
+  `x = (standing[town nation] + town word 9 - crew / 100) x
+  rand(32767) x 2 / 65536`, in double precision.
+  - Above -0.5, or when the town has no forts: in.
+  - Otherwise "the fort opens fire!" (CSTR 116) and the fleet stays
+    out. At -1 or below, and arriving by sea (VA `0x47aca` = 2, set on
+    arrival when the player has a ship), "One of your ships is sunk!"
+    (CSTR 117): a random ship is lost with its share of the cargo (see
+    losing a ship). With the last ship, the prison path: CSTR 175 and
+    190.
+- **Sneaking in (VA `0x195f5`):** visit flags 2 and 8 are set. The
+  player is in when `town word 9 x reputation > -rand(50)`. Otherwise,
+  on `landpir.pcx`, a guard recognizes the player (CSTR 163, at (40,
+  150) up to x 240), then a duel in the alley (scene 0), with the
+  guard's title (0), the town's nation and one level more (extra 1).
+  Whatever the duel's result, the player stays out.
+- **Leaving:** back to sea.
+
+### Losing a ship (VA `0x1f2a1`)
+
+`FUN_1f2a1(ship, keep, from_fort)`:
+- With other ships, the ship is removed and the fleet's capacity
+  shrinks by its room. Unless `keep`, with `r = room / capacity before`
+  in single precision:
+  - the gold loses `trunc(gold x r)`;
+  - food (with its eaten fraction, `food x 256 + fraction`), goods,
+    sugar and guns each lose `trunc(x x r + 0.5)`.
+  - The crew is untouched.
+- The last ship: washed ashore (CSTR 161, 162) after a sea battle, or
+  imprisoned (CSTR 175 with the town, then 190) when `from_fort`. The
+  engine then gives the player a pinnace and at least 8 men, an engine
+  choice until the rest is traced.
+- Callers: a ship sold (keep 1), the flagship lost in battle (VA
+  `0xe81d`, keep 0), the fort's salvo on arrival (keep 0, from_fort 1).
 
 Every way in marks the town's information as current: flag 0x80 set,
 0x20 cleared. A random town event (see the world update) clears 0x80

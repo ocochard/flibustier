@@ -703,10 +703,8 @@ sim_encounter_act(struct sim *s, enum encounter_action action)
  * information becomes current.
  */
 void
-sim_enter_town(struct sim *s, int town)
+sim_arrive(struct sim *s, int town)
 {
-	struct sim_town *t;
-
 	if (town < 0 || (size_t)town >= s->ntowns)
 		return;
 	if (town != s->visit_town) {
@@ -717,6 +715,16 @@ sim_enter_town(struct sim *s, int town)
 	} else
 		s->visit_flags &= VISIT_GOVERNOR | VISIT_KEPT;
 	s->visit_town = town;
+}
+
+void
+sim_enter_town(struct sim *s, int town)
+{
+	struct sim_town *t;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return;
+	sim_arrive(s, town);
 	s->player_town = town;
 	s->tavern_spots = TAVERN_ALL;		/* VA 0x18fa9 */
 	t = &s->towns[town];

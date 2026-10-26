@@ -395,18 +395,49 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	return (ev);
 }
 
-/* Remove ship "i" from the fleet, and its room in the hold. */
-static void
-drop_ship(struct sim_fleet *f, int i)
+/*
+ * Lose ship "i" (VA 0x1f2a1).  The fleet loses its room in the hold
+ * and, unless "keep", the ship's share of the gold, food, goods, sugar
+ * and guns: r = its room / the fleet's, in single precision.  The last
+ * ship leaves the player castaway and picked up (CSTR 161-162, or
+ * 175 and 190 from prison): a pinnace, as an engine choice for now.
+ */
+void
+sim_drop_ship(struct sim *s, int i, int keep)
 {
-	f->capacity -= sim_ship_room(f->ships[i]);
+	struct sim_fleet *f = &s->fleet;
+	int room, k, v;
+	float r;
+
+	if (i < 0 || i >= f->nships)
+		return;
+	if (f->nships == 1) {
+		f->ships[0] = 0;
+		f->damage[0] = 0;
+		f->capacity = sim_ship_room(0);
+		if (f->crew < 8)
+			f->crew = 8;
+		return;
+	}
+	room = sim_ship_room(f->ships[i]);
+	r = f->capacity > 0 ? (float)room / (float)f->capacity : 0.0f;
+	f->capacity -= room;
 	if (f->capacity < 0)
 		f->capacity = 0;
-	for (; i + 1 < f->nships; i++) {
-		f->ships[i] = f->ships[i + 1];
-		f->damage[i] = f->damage[i + 1];
+	for (k = i; k + 1 < f->nships; k++) {
+		f->ships[k] = f->ships[k + 1];
+		f->damage[k] = f->damage[k + 1];
 	}
 	f->nships--;
+	if (keep)
+		return;
+	f->gold -= (long)((float)f->gold * r);
+	v = f->food << 8;			/* with its eaten fraction */
+	v -= (int)((double)((float)v * r) + 0.5);
+	f->food = v >> 8;
+	f->goods -= (int)((double)((float)f->goods * r) + 0.5);
+	f->sugar -= (int)((double)((float)f->sugar * r) + 0.5);
+	f->guns -= (int)((double)((float)f->guns * r) + 0.5);
 }
 
 static void
@@ -454,17 +485,7 @@ sim_battle_finish(struct sim *s, int keep)
 	case BAT_PLAYER_SUNK:
 		f->crew = bt->crew_ashore;
 		f->guns = bt->guns_ashore;
-		drop_ship(f, 0);
-		if (f->nships == 0) {
-			/* Marooned and later picked up (CSTR 161-162): a
-			 * pinnace, as an engine choice for now. */
-			f->nships = 1;
-			f->ships[0] = 0;
-			f->damage[0] = 0;
-			f->capacity = sim_ship_room(0);
-			if (f->crew < 8)
-				f->crew = 8;
-		}
+		sim_drop_ship(s, 0, 0);		/* VA 0xe81d */
 		break;
 	case BAT_SURRENDER:
 		capture(s, keep);

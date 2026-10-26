@@ -1700,6 +1700,111 @@ test_governor(void)
 	CHECK(!sim_shipwright_refuses(&s));
 }
 
+/* The arrival: the fort's welcome, a lost ship's cargo, sneaking in. */
+static void
+test_arrival(void)
+{
+	struct sim s;
+	struct rng r;
+	double x;
+	int i, n, in = 0, fired = 0, sunk = 0, caught = 0;
+	enum arrival a;
+
+	/* A ship lost with its share: rooms 10 and 4 of 14. */
+	sea_game(&s, 300, 300, 0);
+	s.fleet.nships = 2;
+	s.fleet.ships[0] = 4;
+	s.fleet.ships[1] = 1;
+	s.fleet.capacity = 14;
+	s.fleet.gold = 1400;
+	s.fleet.guns = 14;
+	s.fleet.food = 7;
+	s.fleet.goods = 20;
+	s.fleet.sugar = 0;
+	s.fleet.crew = 50;
+	sim_drop_ship(&s, 1, 0);
+	CHECK(s.fleet.nships == 1 && s.fleet.capacity == 10);
+	CHECK(s.fleet.gold == 1000 && s.fleet.guns == 10 &&
+	    s.fleet.food == 5 && s.fleet.goods == 14 && s.fleet.crew == 50);
+	/* Kept cargo stays. */
+	s.fleet.nships = 2;
+	s.fleet.capacity = 14;
+	sim_drop_ship(&s, 1, 1);
+	CHECK(s.fleet.gold == 1000 && s.fleet.goods == 14);
+	/* The last ship: the castaway's pinnace. */
+	sim_drop_ship(&s, 0, 0);
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0 &&
+	    s.fleet.gold == 1000);
+
+	/* Sailing in, replayed against the same random numbers. */
+	for (i = 0; i < 200; i++) {
+		sea_game(&s, 300, 300, 0);
+		s.towns[1].forts = 2;
+		s.towns[1].standing = (uint16_t)(int16_t)(i % 5 - 3);
+		n = s.towns[1].nation;
+		s.standing[n] = (int8_t)(i % 3 - 2);
+		s.fleet.crew = 40 + i;
+		s.fleet.nships = 2;
+		s.fleet.ships[1] = 1;
+		s.fleet.capacity = (s.fleet.ships[0] & 0xF) * 2 + 2 + 4;
+		rng_seed(&s.rng, (uint64_t)i + 1, 1);
+		r = s.rng;
+		x = (double)(s.standing[n] + (int16_t)s.towns[1].standing) -
+		    s.fleet.crew / 100.0;
+		x = x * (rng_below(&r, 0x7FFF) * 2) / 65536.0;
+		a = sim_sail_in(&s, 1);
+		if (x > -0.5) {
+			CHECK(a == ARRIVE_ENTER && s.player_town == 1);
+			in++;
+		} else if (x > -1.0) {
+			CHECK(a == ARRIVE_FIRED && s.player_town == -1 &&
+			    s.fleet.nships == 2);
+			fired++;
+		} else {
+			CHECK(a == ARRIVE_SUNK && s.player_town == -1 &&
+			    s.fleet.nships == 1);
+			sunk++;
+		}
+	}
+	CHECK(in > 0 && fired > 0 && sunk > 0);
+	/* No forts: always in. */
+	sea_game(&s, 300, 300, 0);
+	s.towns[1].forts = 0;
+	s.standing[s.towns[1].nation] = -100;
+	CHECK(sim_sail_in(&s, 1) == ARRIVE_ENTER);
+
+	/* Sneaking in: standing x reputation against -rand(50). */
+	for (i = 0; i < 100; i++) {
+		sea_game(&s, 300, 300, 0);
+		s.towns[1].standing = (uint16_t)(int16_t)-(i % 7);
+		s.reputation = i % 9;
+		rng_seed(&s.rng, (uint64_t)i + 1, 1);
+		r = s.rng;
+		n = -(int16_t)s.towns[1].standing * s.reputation;
+		a = sim_sneak_in(&s, 1);
+		CHECK(s.visit_flags & VISIT_SNEAKED);
+		if (-n > -rng_below(&r, 50)) {
+			CHECK(a == ARRIVE_ENTER && s.player_town == 1);
+		} else {
+			CHECK(a == ARRIVE_CAUGHT && s.player_town == -1);
+			caught++;
+		}
+	}
+	CHECK(caught > 0 && caught < 100);
+	/* The guard's duel: a loss disgraces. */
+	sea_game(&s, 300, 300, 0);
+	s.reputation = 6;
+	sim_guard_duel(&s, 1, 0);
+	CHECK(s.sword.active && s.sword.kind == SWORD_DUEL &&
+	    s.sword.you.men == 1 && s.sword.foe.weapon == 0 &&
+	    s.sword.title == 0);
+	s.sword.result = SWORD_WON;
+	CHECK(sim_duel_end(&s) == 0 && s.reputation == 6);
+	sim_guard_duel(&s, 1, 0);
+	s.sword.result = SWORD_REPELLED;
+	CHECK(sim_duel_end(&s) == 1 && s.reputation == -1);
+}
+
 /* Cannon at the shipwright: 50 gold each, within both purses. */
 static void
 test_cannon(void)
@@ -1815,6 +1920,7 @@ main(void)
 	test_governor();
 	test_bank();
 	test_cannon();
+	test_arrival();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

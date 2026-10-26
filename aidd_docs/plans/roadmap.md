@@ -242,7 +242,10 @@ Status (2026-10-26): first slice.
 - **Governor:** the political news, standing changes from captures,
   promotions with land, Letters of Marque and pardons. Missions, the
   family quest, prisoners and his daughter wait.
-- **Next:** the arrival choices (attack, sneak in).
+- **Arrival:** the menu, sailing in under the fort's guns, losing a
+  ship with its cargo share, sneaking in and the guard's duel in the
+  alley, and the disgrace.
+- **Next:** attacking a town (VA `0x18b3f`).
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

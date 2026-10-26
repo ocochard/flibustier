@@ -165,6 +165,10 @@ struct game {
 	unsigned		 idle;		/* ticks since the last input */
 	int			 master_page;	/* the sailing master: 0 or 1 */
 	int			 bank_stage;
+	int			 arrive_stage;	/* the arrival menu, then its result */
+	int			 arrive_result;	/* enum arrival */
+	int			 arrive_last;	/* the fort sank the only ship */
+	int			 sw_guard;	/* the sword fight is the guard's duel */
 	struct plunder		 plunder;
 	struct sprite_bank	 cave[8];	/* the treasure piles */
 	struct sprite_bank	 gov_spr;	/* the proclamation */

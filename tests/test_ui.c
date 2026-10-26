@@ -390,6 +390,23 @@ test_battle_screen(void)
 	if (g->sim.encounter.stage == ENC_COLOURS)
 		CHECK(game_script(g, "enter") == 0);	/* attack */
 	CHECK(g->screen == &screen_battle && g->sim.battle.active);
+	/* An escape writes its text in the band (CSTR 197, 198). */
+	{
+		struct sim_battle saved = g->sim.battle;
+		int x, y, inked = 0;
+		uint8_t band;
+
+		g->sim.battle.outcome = BAT_ESCAPED;
+		g->sim.battle.decision = 2;
+		CHECK(game_script(g, "wait:2") == 0 && g->btl_stage == 1);
+		band = fb_nearest(&g->fb, 20, 15, 10);
+		for (y = 170; y < 200; y++)
+			for (x = 80; x < 480; x++)
+				inked += g->fb.px[y * FB_W + x] != band;
+		CHECK(inked > 100);
+		g->sim.battle = saved;
+		g->btl_stage = 0;
+	}
 	CHECK(game_script(g, "up wait:200") == 0);	/* full sails */
 	CHECK(g->sim.battle.you.full_sails || g->sim.battle.outcome != 0);
 	/* Steer toward her and fire until it is decided. */
@@ -589,6 +606,9 @@ test_town(void)
 	g->sim.fleet.y = t->sea_y * 16 + 8;
 	g->sim.fleet.leaving = -1;	/* the home port counts again */
 	CHECK(game_script(g, "wait:40") == 0);
+	/* The arrival menu; sailing into the home port. */
+	CHECK(g->screen == &screen_arrive && g->sim.player_town == -1);
+	CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->screen == &screen_town && g->sim.player_town >= 0);
 	t = &g->sim.towns[g->sim.player_town];
 	CHECK((t->flags & 0x80) && !(t->flags & 0x20));
@@ -639,7 +659,7 @@ test_shipwright(void)
 	g->sim.fleet.ships[1] = 4;
 	g->sim.fleet.damage[1] = 0;
 	g->sim.fleet.damage[0] = 40;	/* the sloop: level 2 */
-	CHECK(game_script(g, "wait:40 click:60,400 wait:40") == 0);
+	CHECK(game_script(g, "wait:40 enter wait:40 click:60,400 wait:40") == 0);
 	CHECK(g->screen == &screen_shipwright && g->wright_stage == 0);
 	/* Repair: the list, the sloop, paid. */
 	gold = g->sim.fleet.gold;
@@ -682,7 +702,7 @@ test_merchant(void)
 	g->sim.fleet.x = t->sea_x * 16 + 8;
 	g->sim.fleet.y = t->sea_y * 16 + 8;
 	g->sim.fleet.leaving = -1;
-	CHECK(game_script(g, "wait:40 click:400,320 wait:40") == 0);
+	CHECK(game_script(g, "wait:40 enter wait:40 click:400,320 wait:40") == 0);
 	CHECK(g->screen == &screen_merchant && g->shop_stage == 0);
 	CHECK(g->sim.market.open && g->shop_spr[0].count == 93);
 	CHECK(game_script(g, "enter") == 0 && g->shop_stage == 1);
@@ -723,7 +743,7 @@ test_tavern(void)
 	g->sim.fleet.x = t->sea_x * 16 + 8;
 	g->sim.fleet.y = t->sea_y * 16 + 8;
 	g->sim.fleet.leaving = -1;
-	CHECK(game_script(g, "wait:40 click:250,350 wait:40") == 0);
+	CHECK(game_script(g, "wait:40 enter wait:40 click:250,350 wait:40") == 0);
 	CHECK(g->screen == &screen_tavern && g->tavern_spr.count == 3);
 	CHECK(g->sim.recruits > 0);
 	/* The seamen: sign them up; they are gone afterwards. */
@@ -765,7 +785,7 @@ test_governor(void)
 	g->sim.fleet.x = t->sea_x * 16 + 8;
 	g->sim.fleet.y = t->sea_y * 16 + 8;
 	g->sim.fleet.leaving = -1;
-	CHECK(game_script(g, "wait:40 click:580,220 wait:40") == 0);
+	CHECK(game_script(g, "wait:40 enter wait:40 click:580,220 wait:40") == 0);
 	CHECK(g->screen == &screen_governor && g->gov_stage == 0);
 	CHECK(g->sim.visit_flags & VISIT_GOVERNOR);
 	/* Standing 0 with England: a Letter of Marque for 800. */
@@ -823,6 +843,61 @@ test_story(void)
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_town &&
 	    g->sim.player_town == g->sim.fleet.leaving);
+	game_free(g);
+}
+
+/* Reaching a hostile port: the fort fires; sneaking in, a guard. */
+static void
+test_arrival(void)
+{
+	struct game *g;
+	struct sim_town *t;
+	int i, fired = 0, caught = 0;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter "
+	    "click:60,300 wait:30");
+	if (g == NULL)
+		return;
+	g->sim.encounters = 0;
+	t = &g->sim.towns[g->sim.fleet.leaving];
+	for (i = 0; i < 20 && (!fired || !caught); i++) {
+		g->sim.fleet.x = t->sea_x * 16 + 8;
+		g->sim.fleet.y = t->sea_y * 16 + 8;
+		g->sim.fleet.leaving = -1;
+		g->sim.player_town = -1;
+		t->forts = 2;
+		t->standing = (uint16_t)(int16_t)-20;
+		g->sim.reputation = 5;
+		CHECK(game_script(g, "wait:40") == 0 &&
+		    g->screen == &screen_arrive);
+		if (!fired) {
+			/* Sailing in under the guns. */
+			CHECK(game_script(g, "enter") == 0);
+			CHECK(g->arrive_stage == 1 && g->screen ==
+			    &screen_arrive && g->sim.player_town == -1);
+			CHECK(game_script(g, "enter wait:40") == 0 &&
+			    g->screen == &screen_sail);
+			fired = 1;
+			continue;
+		}
+		/* Sneaking in: -20 x 5 loses to -rand(50). */
+		CHECK(game_script(g, "down down enter wait:40") == 0);
+		CHECK(g->screen == &screen_arrive && g->arrive_stage == 2);
+		CHECK(game_script(g, "enter wait:40") == 0 &&
+		    g->screen == &screen_sword && g->sw_guard);
+		CHECK(game_script(g, "enter wait:2") == 0 &&
+		    g->sim.sword.active && g->sim.sword.kind == SWORD_DUEL);
+		/* Thrown back: a disgrace. */
+		g->sim.sword.result = SWORD_REPELLED;
+		g->sw_stage = 3;
+		CHECK(game_script(g, "enter wait:40") == 0 &&
+		    g->screen == &screen_disgrace && g->sim.reputation == -1);
+		CHECK(game_script(g, "enter wait:40") == 0 &&
+		    g->screen == &screen_sail);
+		caught = 1;
+	}
+	CHECK(fired && caught);
 	game_free(g);
 }
 
@@ -919,6 +994,7 @@ main(void)
 	test_story();
 	test_bank();
 	test_cannon();
+	test_arrival();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

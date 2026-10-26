@@ -1277,12 +1277,39 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 	const char *action = json_get_str(cmd, "action");
 	struct sim *s = &ss->sim;
 
-	if (action != NULL && strcmp(action, "enter") == 0) {
+	static const char *arrivals[] = { "enter", "fired", "sunk",
+	    "caught" };
+	int arrival = -1, disgraced = -1;
+
+	if (action != NULL && (strcmp(action, "enter") == 0 ||
+	    strcmp(action, "sail_in") == 0 || strcmp(action, "sneak") == 0 ||
+	    strcmp(action, "guard") == 0)) {
 		if (s->fleet.leaving < 0 || s->player_town >= 0) {
 			reply_error(out, "no town reached");
 			return;
 		}
-		sim_enter_town(s, s->fleet.leaving);
+		if (action[0] == 'e')
+			sim_enter_town(s, s->fleet.leaving);
+		else if (action[1] == 'a')
+			arrival = sim_sail_in(s, s->fleet.leaving);
+		else if (action[1] == 'n')
+			arrival = sim_sneak_in(s, s->fleet.leaving);
+		else {
+			int64_t w = json_get_int(cmd, "weapon", 2);
+
+			if (w < 0 || w >= SWORD_WEAPONS) {
+				reply_error(out, "guard needs \"weapon\" 0..2");
+				return;
+			}
+			sim_guard_duel(s, s->fleet.leaving, (int)w);
+		}
+	} else if (action != NULL && strcmp(action, "duel_end") == 0) {
+		if (!s->sword.active || s->sword.kind != SWORD_DUEL ||
+		    s->sword.result == SWORD_NONE) {
+			reply_error(out, "no finished duel");
+			return;
+		}
+		disgraced = sim_duel_end(s);
 	} else if (action != NULL && strcmp(action, "leave") == 0) {
 		if (s->player_town < 0) {
 			reply_error(out, "not in a town");
@@ -1290,13 +1317,26 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 		}
 		sim_leave_town(s);
 	} else {
-		reply_error(out, "town needs \"action\": enter or leave");
+		reply_error(out, "town needs \"action\": enter, sail_in, sneak, "
+		    "guard, duel_end or leave");
 		return;
 	}
 	jb_raw(out, "{\"ok\":true,\"player_town\":");
 	jb_int(out, s->player_town);
 	jb_raw(out, ",\"visit_flags\":");
 	jb_int(out, s->visit_flags);
+	if (arrival >= 0) {
+		jb_raw(out, ",\"arrival\":");
+		jb_str(out, arrivals[arrival]);
+		jb_raw(out, ",\"fleet_ships\":");
+		jb_int(out, s->fleet.nships);
+	}
+	if (disgraced >= 0) {
+		jb_raw(out, ",\"disgraced\":");
+		jb_int(out, disgraced);
+		jb_raw(out, ",\"reputation\":");
+		jb_int(out, s->reputation);
+	}
 	jb_raw(out, "}");
 }
 

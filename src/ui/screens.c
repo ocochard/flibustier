@@ -68,6 +68,8 @@
 #define S_FOE_SUNK		168
 #define S_SUNSET		169
 #define S_STRUCK		170
+#define S_YOU_ESCAPED		197
+#define S_FOE_ESCAPED		198
 #define S_BOARDING		171	/* "...you spot %s approaching" */
 #define SAILING_RELOADING	0
 #define SAILING_LOADED		1
@@ -2089,8 +2091,8 @@ sail_tick(struct game *g)
 		return;		/* the ship waits for the screen */
 	switch (sim_sail(&g->sim, g->turn, 1, &town)) {
 	case SAIL_TOWN:
-		sim_enter_town(&g->sim, town);
-		game_goto(g, &screen_town);
+		g->arrive_stage = 0;
+		game_goto(g, &screen_arrive);
 		break;
 	case SAIL_ENCOUNTER:
 		g->turn = 0;
@@ -2112,7 +2114,10 @@ sail_draw(struct game *g)
 	char buf[128], from[64];
 	int cx, cy, x0 = g->view_x / WORLD_TILE, y0 = g->view_y / WORLD_TILE;
 
-	sea_animate(&g->sea, g->ticks / 6, g->fb.pal);
+	/* The game's loop runs on the BIOS clock, 18.2 passes a second;
+	 * ours at 60 frames a second. */
+	sea_animate(&g->sea, (unsigned)((unsigned long)g->ticks * 182 / 600),
+	    g->fb.pal);
 	for (cy = 0; cy < FB_H / WORLD_TILE; cy++)
 		for (cx = 0; cx < FB_W / WORLD_TILE; cx++) {
 			struct image tile;
@@ -2642,7 +2647,13 @@ battle_draw(struct game *g)
 	case BAT_SURRENDER:
 		snprintf(text, sizeof(text), "%s", game_str(g, S_STRUCK));
 		break;
-	default:	/* out of range: the battle simply ends */
+	case BAT_ESCAPED:
+		/* Out of range (VA 0xe82a): the enemy pulled away when it
+		 * was fleeing (decision 2), otherwise the player did. */
+		snprintf(text, sizeof(text), "%s", game_str(g,
+		    bt->decision == 2 ? S_FOE_ESCAPED : S_YOU_ESCAPED));
+		break;
+	default:
 		text[0] = '\0';
 		break;
 	}
@@ -2738,6 +2749,11 @@ sword_enter(struct game *g)
 		blob_free(&b);
 	}
 	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);
+	if (g->sw_guard) {
+		/* The weapon is chosen on the alley itself (VA 0x16205). */
+		game_background(g, "pic/alley");
+		g->sw_stage = 1;
+	}
 	if (g->sw_story) {
 		sword_story_start(g);
 		sword_load(g);
@@ -2754,6 +2770,7 @@ sword_load(struct game *g)
 		for (i = 0; i < 6; i++)
 			load_group(g, i == 1 ? sw_weapon_layers[side][side == 0 ?
 			    g->sim.sword.you.weapon : g->sim.sword.foe.weapon] :
+			    side == 1 && i == 5 && g->sw_guard ? "grp/hehead2" :
 			    sw_layers[side][i], &g->sw_parts[side][i]);
 	g->sw_flag_y[0] = g->sw_flag_y[1] = 0;
 	g->sw_wait = 1;
@@ -2808,6 +2825,14 @@ sword_outcome_done(struct game *g)
 		game_goto(g, &screen_story);
 		return;
 	}
+	if (g->sw_guard) {
+		g->sw_guard = 0;
+		/* Back to sea either way (VA 0x195f5); a loss or a retreat
+		 * is a disgrace (VA 0x16384). */
+		game_goto(g, sim_duel_end(&g->sim) ? &screen_disgrace :
+		    &screen_sail);
+		return;
+	}
 	if (g->sim.sword.result == SWORD_WON)
 		game_goto(g, &screen_battle);	/* the prize */
 	else
@@ -2837,7 +2862,12 @@ sword_event(struct game *g, const struct ui_event *ev)
 		else if (ev->type == EV_KEY && (ev->key == UI_KEY_DOWN ||
 		    ev->key == UI_KEY_RIGHT))
 			g->selected = (g->selected + 1) % SWORD_WEAPONS;
-		else if (enter) {
+		else if (enter && g->sw_guard) {
+			sim_guard_duel(&g->sim, g->sim.fleet.leaving,
+			    g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		} else if (enter) {
 			sim_board(&g->sim, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
@@ -2996,7 +3026,9 @@ sword_draw(struct game *g)
 	draw(g, FONT_BODY, 480 - w / 2, 336, 300, g->sim.player.name, 0);
 	/* The crews are shown only for kinds 0 and up (VA 0x169b7): not
 	 * in the story's fight nor in practice. */
-	if (sw->kind >= 0) {
+	/* Crews are counted in crew fights only: a duel is one man each,
+	 * and the story's fight hides them. */
+	if (sw->kind == SWORD_CREW) {
 		snprintf(text, sizeof(text), "%s%d",
 		    game_word(g, W_SAILING, SAILING_MEN), sw->foe.men);
 		draw(g, FONT_BODY, 100, 380, 140, text, 0);
@@ -4493,4 +4525,214 @@ cannon_draw(struct game *g)
 
 const struct screen screen_cannon = {
 	"cannon", cannon_enter, cannon_event, NULL, cannon_draw,
+};
+
+/*
+ * Arrival (VA 0x18fa9): on arr_sea.pcx (arr_land.pcx inland), "You have
+ * arrived at the lovely <seaside town> of <name>. <forts> The <nation>
+ * flag flies over the town." (CSTR 114, at (330, 40) up to x 620), and
+ * the choices (CSTR 115, at (330, 260)): sail into the harbour, attack,
+ * sneak in, or leave.  The fort's answer is written in place; a guard's
+ * challenge (CSTR 163) is on landpir.pcx, before the duel.
+ */
+#define S_ARRIVED		114
+#define S_ARRIVE_MENU		115
+#define S_FORT_FIRES		116
+#define S_SHIP_SUNK		117
+#define S_RECOGNIZED		163
+#define S_IMPRISONED		175
+#define S_TRADED_BACK		190
+#define S_DISGRACE		174
+#define W_ARRIVAL		29
+#define ARR_ONE_FORT		0	/* +8 inland */
+#define ARR_FORTS		1
+#define ARR_SAIL_IN		4	/* 5: march into town */
+#define ARR_INLAND		6	/* 7: seaside town */
+#define ARR_TEXT_X		330
+enum { ARRIVE_MENU, ARRIVE_ANSWER, ARRIVE_GUARD };
+
+static const struct sim_town *
+arrive_town(const struct game *g)
+{
+	int i = g->sim.fleet.leaving;
+
+	return (i >= 0 && (size_t)i < g->sim.ntowns ? &g->sim.towns[i] :
+	    NULL);
+}
+
+static void
+arrive_enter(struct game *g)
+{
+	const struct sim_town *t = arrive_town(g);
+	int inland = t != NULL && (t->flags & TOWN_INLAND);
+
+	game_background(g, g->arrive_stage == ARRIVE_GUARD ? "pic/landpir" :
+	    inland ? "pic/arr_land" : "pic/arr_sea");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL) {
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+	}
+	g->selected = 0;
+	g->msg[0] = '\0';
+	if (g->arrive_stage == ARRIVE_MENU && t != NULL)
+		sim_arrive(&g->sim, g->sim.fleet.leaving);
+}
+
+static void
+arrive_choose(struct game *g, int i)
+{
+	int town = g->sim.fleet.leaving;
+
+	switch (i) {
+	case 0:
+		g->arrive_last = g->sim.fleet.nships == 1;
+		g->arrive_result = sim_sail_in(&g->sim, town);
+		if (g->arrive_result == ARRIVE_ENTER)
+			game_goto(g, &screen_town);
+		else
+			g->arrive_stage = ARRIVE_ANSWER;
+		break;
+	case 1:
+		snprintf(g->msg, sizeof(g->msg),
+		    "(Attacking a town: not implemented yet.)");
+		break;
+	case 2:
+		if (sim_sneak_in(&g->sim, town) == ARRIVE_ENTER)
+			game_goto(g, &screen_town);
+		else {
+			g->arrive_stage = ARRIVE_GUARD;
+			game_switch(g, &screen_arrive);
+		}
+		break;
+	default:
+		game_goto(g, &screen_sail);
+		break;
+	}
+}
+
+static void
+arrive_event(struct game *g, const struct ui_event *ev)
+{
+	int go = ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE));
+
+	switch (g->arrive_stage) {
+	case ARRIVE_MENU:
+		menu_event(g, ev, 4, NULL, arrive_choose, NULL);
+		break;
+	case ARRIVE_ANSWER:
+		if (go)
+			game_goto(g, &screen_sail);
+		break;
+	default:
+		if (go) {
+			g->sw_guard = 1;
+			game_goto(g, &screen_sword);
+		}
+		break;
+	}
+}
+
+static void
+arrive_draw(struct game *g)
+{
+	const struct sim_town *t = arrive_town(g);
+	char text[1024], forts[160], label[64];
+	const char *arg[5];
+	int inland, n;
+
+	if (t == NULL)
+		return;
+	inland = (t->flags & TOWN_INLAND) != 0;
+	if (g->arrive_stage == ARRIVE_GUARD) {
+		draw(g, FONT_BODY, 40, 150, 200, game_str(g, S_RECOGNIZED), 0);
+		continue_prompt(g);
+		return;
+	}
+	if (g->arrive_stage == ARRIVE_ANSWER) {
+		snprintf(text, sizeof(text), "%s", game_str(g, S_FORT_FIRES));
+		if (g->arrive_result == ARRIVE_SUNK)
+			snprintf(text + strlen(text), sizeof(text) -
+			    strlen(text), " %s", game_str(g, S_SHIP_SUNK));
+		if (g->arrive_result == ARRIVE_SUNK && g->arrive_last) {
+			/* The last ship (VA 0x1f2a1, from a fort): prison,
+			 * then traded back (CSTR 175, 190). */
+			char more[600];
+
+			fill(more, sizeof(more), game_str(g, S_IMPRISONED),
+			    t->name, NULL);
+			snprintf(text + strlen(text), sizeof(text) -
+			    strlen(text), "\r%s", more);
+			fill(more, sizeof(more), game_str(g, S_TRADED_BACK),
+			    game_word(g, W_CAPTAIN,
+			    (size_t)g->sim.player.difficulty), NULL);
+			snprintf(text + strlen(text), sizeof(text) -
+			    strlen(text), "\r%s", more);
+		}
+		draw(g, FONT_BODY, ARR_TEXT_X, 40, 290, text, 0);
+		continue_prompt(g);
+		return;
+	}
+	n = t->forts;
+	forts[0] = '\0';
+	if (n == 1)
+		snprintf(forts, sizeof(forts), "%s", game_word(g, W_ARRIVAL,
+		    ARR_ONE_FORT + (inland ? 8 : 0)));
+	else if (n > 1)
+		fill(forts, sizeof(forts), game_word(g, W_ARRIVAL, ARR_FORTS +
+		    (inland ? 8 : 0)), game_word(g, W_NUMBER, (size_t)n),
+		    NULL);
+	arg[0] = game_word(g, W_ARRIVAL, ARR_INLAND + (inland ? 0 : 1));
+	arg[1] = t->name;
+	arg[2] = forts;
+	arg[3] = game_word(g, W_NATION, t->nation & 3);
+	arg[4] = "";	/* the treasure fleet or silver train: not modelled */
+	fill_args(text, sizeof(text), game_str(g, S_ARRIVED), arg, 5);
+	draw(g, FONT_BODY, ARR_TEXT_X, 40, 290, text, 0);
+	snprintf(label, sizeof(label), "%s", game_word(g, W_ARRIVAL,
+	    ARR_SAIL_IN));
+	fill(text, sizeof(text), game_str(g, S_ARRIVE_MENU), label, NULL);
+	draw(g, FONT_BODY, ARR_TEXT_X, 260, 290, text, 1);
+	if (g->msg[0] != '\0')
+		draw(g, FONT_SMALL, ARR_TEXT_X, 440, 290, g->msg, 0);
+}
+
+const struct screen screen_arrive = {
+	"arrive", arrive_enter, arrive_event, NULL, arrive_draw,
+};
+
+/*
+ * Disgrace (VA 0x16384): the captain's portrait in its frame, as for the
+ * story (VA 0x159df), and CSTR 174 at (100, 350) up to x 560.
+ */
+static void
+disgrace_enter(struct game *g)
+{
+	game_background(g, "pic/frame");
+	game_portrait(g, NULL);
+	load_bank(g, captain_portrait[g->sim.player.difficulty & 3], 0,
+	    &g->id_spr[2]);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+}
+
+static void
+disgrace_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_sail);
+}
+
+static void
+disgrace_draw(struct game *g)
+{
+	id_frame(g, 2, 0, 236, 58);
+	draw(g, FONT_BODY, 100, 350, 460, game_str(g, S_DISGRACE), 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_disgrace = {
+	"disgrace", disgrace_enter, disgrace_event, NULL, disgrace_draw,
 };

@@ -165,9 +165,17 @@ Sprite bank of 15x15 frames: `u16 15, u16 15, u16 2`, then 225 pixels and
     can wrap.
   - Each frame, the animators rewrite the live palette from offset
     `counter & 7` and upload the range (VA `0x26e9f`):
-    - 208-215 rotate every frame (VA `0x2ae26`).
-    - 64-71 and 72-79 rotate on alternate frames (VA `0x2aed6`).
-    - 216-223 rotate in the opposite direction (VA `0x2b009`).
+    - In the sailing loop (VA `0x231b8`), 208-215 rotate every 4
+      passes (VA `0x2ae26`).
+    - 64-71 and 72-79 rotate every 2 passes (VA `0x2aed6`).
+    - 216-223 rotate every 2 passes in the opposite direction (VA
+      `0x2b009`), except while the ship touches land (VA `0x4d28a`).
+    - Another loop (VA `0x7db8`) turns all of them every 8 passes.
+  - **Pace:** each pass of the sailing loop waits for a clock read
+    through the DOS extender (VA `0x7c8d`) to advance by 1, or by 5
+    when VA `0x33fcc` is 0. The game does not reprogram the system
+    timer, so this is presumably the BIOS clock at 18.2 Hz; the engine
+    assumes it for the shimmer.
   - The sea tiles use 208-215, so that range is the water shimmer.
 - **Other palette cycling.** A generic "rotate range by one" (VA
   `0x35f8`) cycles 238-254, 100-163, 194-206 and 211-236 in three

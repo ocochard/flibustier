@@ -502,3 +502,86 @@ sim_trade_cannon(struct sim *s, int n)
 	}
 	return (done);
 }
+
+/*
+ * Sailing in (VA 0x19415): x = (standing with the town's nation + the
+ * town's standing - crew / 100) x rand(32767) x 2 / 65536.  Above -0.5,
+ * or without forts, the fleet is in.  Otherwise the fort fires, and at
+ * -1 or below a random ship is sunk, its cargo share lost.
+ */
+enum arrival
+sim_sail_in(struct sim *s, int town)
+{
+	const struct sim_town *t;
+	double x;
+	int n;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return (ARRIVE_FIRED);
+	t = &s->towns[town];
+	n = t->nation <= NATION_PIRATE ? t->nation : NATION_PIRATE;
+	x = (double)(s->standing[n] + (int16_t)t->standing) -
+	    s->fleet.crew / 100.0;
+	x = x * (double)(rng_below(&s->rng, 0x7FFF) * 2) / 65536.0;
+	if (x > -0.5 || t->forts == 0) {
+		sim_enter_town(s, town);
+		return (ARRIVE_ENTER);
+	}
+	if (x > -1.0)
+		return (ARRIVE_FIRED);
+	sim_drop_ship(s, rng_below(&s->rng, s->fleet.nships), 0);
+	return (ARRIVE_SUNK);
+}
+
+/*
+ * Sneaking in (VA 0x195f5): the stay is marked (visit flags 2 and 8);
+ * the player gets in when the town's standing x the reputation is above
+ * -rand(50), and is otherwise recognized by a guard.
+ */
+enum arrival
+sim_sneak_in(struct sim *s, int town)
+{
+	const struct sim_town *t;
+
+	if (town < 0 || (size_t)town >= s->ntowns)
+		return (ARRIVE_CAUGHT);
+	t = &s->towns[town];
+	sim_arrive(s, town);
+	s->visit_flags |= VISIT_KEPT | VISIT_SNEAKED;
+	if ((int16_t)t->standing * s->reputation >
+	    -(int)rng_below(&s->rng, 50)) {
+		sim_enter_town(s, town);
+		s->visit_flags |= VISIT_KEPT | VISIT_SNEAKED;
+		return (ARRIVE_ENTER);
+	}
+	return (ARRIVE_CAUGHT);
+}
+
+void
+sim_guard_duel(struct sim *s, int town, int weapon)
+{
+	struct sword_setup in;
+
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_DUEL;
+	in.you_men = in.foe_men = 1;
+	in.you_factor = in.foe_factor = 9;
+	in.title = 0;				/* a guard */
+	in.nation = town >= 0 && (size_t)town < s->ntowns ?
+	    s->towns[town].nation : NATION_PIRATE;
+	in.extra = 1;
+	in.weapon = weapon;
+	sim_sword_start(s, &in);
+}
+
+int
+sim_duel_end(struct sim *s)
+{
+	struct sim_sword *sw = &s->sword;
+	int disgraced = sw->result != SWORD_WON;
+
+	sw->active = 0;
+	if (disgraced)
+		s->reputation = -1;		/* VA 0x16384 */
+	return (disgraced);
+}

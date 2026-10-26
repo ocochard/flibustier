@@ -351,6 +351,31 @@ enum encounter_result sim_encounter_act(struct sim *s,
 
 /* Enter a town (arriving or returning to it), and leave it. */
 void	sim_enter_town(struct sim *s, int town);
+/* At the arrival menu (VA 0x18fa9): the stay's memory of the town is
+ * kept for the same town, forgotten for another. */
+void	sim_arrive(struct sim *s, int town);
+
+/* Lose fleet ship "i" (VA 0x1f2a1); "keep": its cargo stays with the
+ * fleet, otherwise its share of it is lost. */
+void	sim_drop_ship(struct sim *s, int i, int keep);
+
+/* The ways into a town from the arrival menu. */
+enum arrival {
+	ARRIVE_ENTER,		/* in */
+	ARRIVE_FIRED,		/* the fort drives the fleet off (CSTR 116) */
+	ARRIVE_SUNK,		/* ... and sinks a ship (CSTR 117) */
+	ARRIVE_CAUGHT		/* a guard recognizes the player (CSTR 163) */
+};
+/* Sail into the harbour; a sunk ship takes its share of the cargo. */
+enum arrival	sim_sail_in(struct sim *s, int town);
+/* Sneak into town; when caught, a duel with a guard follows. */
+enum arrival	sim_sneak_in(struct sim *s, int town);
+/* The duel with the town's guard (VA 0x161ba), with the player's
+ * weapon. */
+void	sim_guard_duel(struct sim *s, int town, int weapon);
+/* After a duel: a loss or a retreat disgraces the player (CSTR 174,
+ * reputation -1). Returns 1 when disgraced. */
+int	sim_duel_end(struct sim *s);
 void	sim_leave_town(struct sim *s);
 
 /* The shipwright (VA 0x218c2). */

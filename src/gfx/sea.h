@@ -12,8 +12,9 @@
 /*
  * The sailing sea's shimmer, as the game does it: four 8-colour ranges of
  * the map palette (208-215, 64-71, 72-79, 216-223) are snapshotted, then
- * rewritten every tick from a rotating offset.  208-215 and 216-223 turn
- * every tick (the latter written in reverse), 64-79 every other tick.
+ * rewritten from a rotating offset.  In the sailing loop (VA 0x231b8)
+ * 208-215 turn every 4 passes, 64-79 and 216-223 (written in reverse)
+ * every 2 passes.
  */
 struct sea {
 	uint8_t	snap[4][8][3];
@@ -21,7 +22,7 @@ struct sea {
 
 /* Snapshot the ranges from a palette (256 x RGB). */
 void	sea_init(struct sea *sea, const uint8_t *palette);
-/* Write the ranges for animation tick "tick" into "palette". */
-void	sea_animate(const struct sea *sea, unsigned tick, uint8_t *palette);
+/* Write the ranges for sailing loop pass "pass" into "palette". */
+void	sea_animate(const struct sea *sea, unsigned pass, uint8_t *palette);
 
 #endif
