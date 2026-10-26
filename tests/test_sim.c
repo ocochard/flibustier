@@ -845,7 +845,9 @@ test_battles(void)
 	CHECK(abs((signed char)(uint8_t)(bt->foe.heading - bt->you.heading))
 	    <= 40);
 
-	/* Firing: one shot, then a reload of |144 - 8 x 4| = 112 ticks. */
+	/* Firing: one shot, then a reload of |144 - 8 x (mood / 2 + 4)|
+	 * ticks: 112 with a neutral crew. */
+	s.fleet.mood = 0;
 	ev = sim_battle_tick(&s, 0, 1, 0);
 	CHECK((ev & BEV_FIRED) && bt->you.reload == 112);
 	CHECK(bt->you.shot.ticks > 0);
@@ -2580,11 +2582,88 @@ test_missions(void)
 	s.battle.you.crew = 20;
 	s.encounter.nation = NATION_PIRATE;
 	s.encounter.named = 1;
+	s.encounter.role = 7;
+	k = s.fleet.mood;
 	CHECK(sim_battle_finish(&s, 0) == BAT_SURRENDER &&
 	    s.mission.type == -MISSION_PIRATE);
+	CHECK(s.fleet.mood == k + 2);	/* a warship's capture cheers */
 	s.player_town = 0;
 	s.mission.giver = 0;
 	CHECK(sim_mission_report(&s) == 2);
+}
+
+/* The crew's mood: its formula, the monthly talk at sea, mutiny and
+ * desertion. */
+static void
+test_crew_mood(void)
+{
+	struct sim s;
+	int town, k, stop = SAIL_TICKS;
+
+	sea_game(&s, 300, 300, 0);
+	s.player_town = -1;
+	s.player.difficulty = 1;
+	/* sqrt(10000 / 10 / 25) x 2 = 12, + 4 - 1. */
+	s.fleet.gold = 10000;
+	s.fleet.crew = 25;
+	s.months = 0;
+	CHECK(sim_crew_mood(&s) == 15);
+	s.months = 3;
+	CHECK(sim_crew_mood(&s) == 12);
+	/* Leaving men take their share of the gold. */
+	s.fleet.gold = 1000;
+	s.fleet.crew = 10;
+	sim_crew_leave(&s, 3);
+	CHECK(s.fleet.gold == 700 && s.fleet.crew == 7);
+	/* Broke for 5 months: restless, and sailing stops to say so. */
+	s.fleet.gold = 0;
+	s.fleet.crew = 30;
+	s.months = 4;
+	for (k = 0; k < 40 && stop != SAIL_CREW; k++)
+		stop = sim_sail(&s, 0, 64, &town);
+	CHECK(stop == SAIL_CREW && s.crew_event == CREW_RESTLESS &&
+	    s.months == 5 && s.fleet.mood == -2);
+	/* After 12 months the master speaks of dividing the plunder. */
+	s.crew_event = CREW_NONE;
+	s.months = 11;
+	s.player.difficulty = 0;
+	s.fleet.gold = 4000;		/* 2 x sqrt(13.3) = 7: mood -1 */
+	sim_advance(&s, 30);
+	CHECK(s.crew_event == CREW_ANXIOUS && s.fleet.mood == -1);
+	/* Below -3: mutiny, a third leave, the leader duels. */
+	s.crew_event = CREW_NONE;
+	s.player.difficulty = 1;
+	s.fleet.gold = 0;
+	s.months = 7;
+	sim_advance(&s, 30);
+	CHECK(s.crew_event == CREW_MUTINY && s.fleet.crew == 20);
+	sim_mutiny_duel(&s, 2);
+	CHECK(s.sword.active && s.sword.title == 2 && s.sword.nation == 5 &&
+	    s.sword.scene == 3);
+	s.sword.result = SWORD_LOST;
+	s.reputation = 3;
+	sim_mutiny_end(&s);
+	CHECK(s.reputation == -5 && !s.sword.active);
+	/* In town the crew keeps quiet. */
+	s.crew_event = CREW_NONE;
+	s.player_town = 0;
+	sim_advance(&s, 30);
+	CHECK(s.crew_event == CREW_NONE);
+	/* Leaving town: (3 - mood) x crew / 15 desert, when more than 1. */
+	s.fleet.crew = 30;
+	s.fleet.gold = 0;
+	s.fleet.mood = -2;
+	sim_leave_town(&s);
+	CHECK(s.deserted == 10 && s.fleet.crew == 20);
+	s.player_town = 0;
+	s.fleet.crew = 30;
+	s.fleet.mood = 2;
+	sim_leave_town(&s);
+	CHECK(s.deserted == 2 && s.fleet.crew == 28);
+	s.player_town = 0;
+	s.fleet.mood = 3;
+	sim_leave_town(&s);
+	CHECK(s.deserted == 0 && s.fleet.crew == 28);
 }
 
 /* Removes every ',"key":<number>' from a JSON text. */
@@ -2685,6 +2764,7 @@ main(void)
 	test_treasure();
 	test_villains();
 	test_missions();
+	test_crew_mood();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

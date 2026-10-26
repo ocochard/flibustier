@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	20
+#define STATE_VERSION	21
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -561,8 +561,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 			jb_raw(b, ",");
 		jb_int(b, s->fleet.damage[a]);
 	}
-	jb_raw(b, "],\"gunnery\":");
-	jb_int(b, s->fleet.gunnery);
+	jb_raw(b, "],\"mood\":");
+	jb_int(b, s->fleet.mood);
 	jb_raw(b, ",\"food\":");
 	jb_int(b, s->fleet.food);
 	jb_raw(b, ",\"goods\":");
@@ -688,6 +688,12 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->barmaid_mood);
 	jb_raw(b, ",\"relative\":");
 	jb_int(b, s->relative);
+	jb_raw(b, ",\"months\":");
+	jb_int(b, s->months);
+	jb_raw(b, ",\"crew_event\":");
+	jb_int(b, s->crew_event);
+	jb_raw(b, ",\"deserted\":");
+	jb_int(b, s->deserted);
 	for (i = 0; i < SIM_MAPS; i++) {
 		jb_raw(b, i == 0 ? ",\"maps\":[{\"pieces\":" :
 		    ",{\"pieces\":");
@@ -851,7 +857,9 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 			f->damage[i] = (uint8_t)dm->items[i]->num;
 		}
 	}
-	f->gunnery = (int)json_get_int(j, "gunnery", 0);
+	/* "gunnery" before version 21. */
+	f->mood = (int)json_get_int(j, "mood", json_get_int(j, "gunnery",
+	    0));
 	f->food = (int)json_get_int(j, "food", 0);
 	f->goods = (int)json_get_int(j, "goods", 0);
 	f->sugar = (int)json_get_int(j, "sugar", 0);
@@ -963,6 +971,11 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.news_price = (int)json_get_int(j, "news_price", 0);
 	tmp.barmaid_mood = (int)json_get_int(j, "barmaid_mood", 0);
 	tmp.relative = (int)json_get_int(j, "relative", 0);
+	tmp.months = (int)json_get_int(j, "months", 0);
+	tmp.crew_event = (int)json_get_int(j, "crew_event", CREW_NONE);
+	if (tmp.crew_event < CREW_NONE || tmp.crew_event > CREW_MUTINY)
+		tmp.crew_event = CREW_NONE;
+	tmp.deserted = (int)json_get_int(j, "deserted", 0);
 	{
 		/* Absent before version 19: no maps. */
 		const struct json *maps = json_get(j, "maps"), *m;
@@ -1361,7 +1374,7 @@ static void
 cmd_sail(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	static const char *stops[] = { "ticks", "land", "town",
-	    "encounter", "boarded" };
+	    "encounter", "boarded", "crew" };
 	int64_t ticks = json_get_int(cmd, "ticks", 64);
 	int64_t turn = json_get_int(cmd, "turn", 0);
 	const struct sim_fleet *f = &ss->sim.fleet;
@@ -1559,6 +1572,54 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 		jb_raw(out, ",\"reputation\":");
 		jb_int(out, s->reputation);
 	}
+	if (s->player_town < 0) {
+		jb_raw(out, ",\"deserted\":");
+		jb_int(out, s->deserted);
+		jb_raw(out, ",\"crew\":");
+		jb_int(out, s->fleet.crew);
+	}
+	jb_raw(out, "}");
+}
+
+/*
+ * The crew's word after a "crew" stop: "heard" acknowledges a warning;
+ * for a mutiny, "duel" (weapon) fights the leader with "sword" ticks,
+ * then "end".
+ */
+static void
+cmd_crew(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	static const char *events[] = { "none", "restless", "anxious",
+	    "mutiny" };
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+
+	if (action != NULL && strcmp(action, "duel") == 0 &&
+	    s->crew_event == CREW_MUTINY)
+		sim_mutiny_duel(s, (int)(json_get_int(cmd, "weapon", 2) %
+		    SWORD_WEAPONS));
+	else if (action != NULL && strcmp(action, "end") == 0 &&
+	    s->crew_event == CREW_MUTINY && s->sword.active) {
+		sim_mutiny_end(s);
+		s->crew_event = CREW_NONE;
+	} else if (action != NULL && strcmp(action, "heard") == 0 &&
+	    s->crew_event != CREW_MUTINY)
+		s->crew_event = CREW_NONE;
+	else if (action != NULL) {
+		reply_error(out, "crew: \"heard\" a warning; \"duel\" then "
+		    "\"end\" a mutiny");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"event\":");
+	jb_str(out, events[s->crew_event]);
+	jb_raw(out, ",\"mood\":");
+	jb_int(out, s->fleet.mood);
+	jb_raw(out, ",\"months\":");
+	jb_int(out, s->months);
+	jb_raw(out, ",\"crew\":");
+	jb_int(out, s->fleet.crew);
+	jb_raw(out, ",\"reputation\":");
+	jb_int(out, s->reputation);
 	jb_raw(out, "}");
 }
 
@@ -1985,7 +2046,7 @@ static void
 cmd_march(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	static const char *stops[] = { "ticks", "land", "town",
-	    "encounter", "boarded" };
+	    "encounter", "boarded", "crew" };
 	int64_t ticks = json_get_int(cmd, "ticks", 64);
 	enum sail_stop stop;
 	int town;
@@ -2226,6 +2287,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_shore(ss, cmd, out);
 	else if (strcmp(name, "search") == 0)
 		cmd_search(ss, out);
+	else if (strcmp(name, "crew") == 0)
+		cmd_crew(ss, cmd, out);
 	else if (strcmp(name, "villain") == 0)
 		cmd_villain(ss, cmd, out);
 	else if (strcmp(name, "mission") == 0)

@@ -123,8 +123,8 @@ struct sim_fleet {
 	int		food, goods, sugar;	/* cargo, tons */
 	int		capacity;	/* hold, tens of tons: 2 x class + 2
 					 * per ship */
-	int		gunnery;	/* player block +0x18, not identified;
-					 * sets the reload time */
+	int		mood;		/* the crew's (VA 0x45faa): see
+					 * sim_crew_mood */
 	int32_t		x, y;		/* world pixels */
 	uint8_t		fx, fy;		/* 1/8 pixel remainders */
 	uint8_t		heading;	/* 0 north, 0x40 east... */
@@ -145,7 +145,18 @@ enum sail_stop {
 	SAIL_LAND,	/* the next move would run aground on land */
 	SAIL_TOWN,	/* arrived at a town: sim_sail()'s "town" says which */
 	SAIL_ENCOUNTER,	/* a sail is sighted: see sim.encounter */
-	SAIL_BOARDED	/* the landing party is back aboard */
+	SAIL_BOARDED,	/* the landing party is back aboard */
+	SAIL_CREW	/* a month passed and the crew speaks: crew_event */
+};
+
+/* What the crew says when a month passes at sea (VA 0x1dd0e). */
+enum crew_event {
+	CREW_NONE,
+	CREW_RESTLESS,	/* mood below 0: "...they'll mutiny!" (CSTR 140) */
+	CREW_ANXIOUS,	/* the same after 12 months: "...dividin' up the
+			 * plunder" (CSTR 210) */
+	CREW_MUTINY	/* below -3: a third leave, their leader duels the
+			 * player (CSTR 139) */
 };
 
 #define NATION_PIRATE	4	/* in encounter records */
@@ -395,6 +406,10 @@ struct sim {
 		int16_t		town;	/* the town it is near */
 	} maps[SIM_MAPS];
 	int		relative;	/* the next lost relative, 0..4 */
+	int		months;		/* since the plunder was divided (VA
+					 * 0x45e79) */
+	int		crew_event;	/* enum crew_event, until handled */
+	int		deserted;	/* men who left on leaving town */
 	/* The villains who know where the relatives are (VA 0x471da). */
 	struct sim_villain {
 		int	active;
@@ -614,6 +629,19 @@ int	sim_governor_promote(struct sim *s, int *acres);
 enum governor_offer sim_governor_offer(const struct sim *s, long *price);
 /* Pay for the Letter of Marque or the pardon; 0 if short of gold. */
 int	sim_governor_pay(struct sim *s);
+
+/*
+ * The crew's mood (VA 0x1da9b): (int)(sqrt(gold / 10 / crew) x 2) -
+ * months + 4 - difficulty, recomputed every month; a capture raises it
+ * by 1, 2 for a warship.  sim_crew_leave: "n" men go with their share of
+ * the gold (VA 0x1f044).  The mutineers' leader duels the player
+ * (sim_mutiny_duel); afterwards sim_mutiny_end settles the duel and
+ * lowers the reputation by 4.
+ */
+int	sim_crew_mood(const struct sim *s);
+void	sim_crew_leave(struct sim *s, int n);
+void	sim_mutiny_duel(struct sim *s, int weapon);
+void	sim_mutiny_end(struct sim *s);
 
 /*
  * The relatives' villains.  After a promotion, while a relative is

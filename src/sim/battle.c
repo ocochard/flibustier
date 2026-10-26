@@ -566,7 +566,8 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 
 	if (fire_now && y->reload == 0 && y->guns > 0 && y->shot.ticks == 0) {
 		fire(bt, y, bearing, 0);
-		y->reload = abs(144 - 8 * clampi(s->fleet.gunnery / 2 + 4, 0,
+		/* A happy crew reloads faster. */
+		y->reload = abs(144 - 8 * clampi(s->fleet.mood / 2 + 4, 0,
 		    16));
 		ev |= BEV_FIRED;
 	}
@@ -780,6 +781,8 @@ sim_battle_finish(struct sim *s, int keep)
 		/* A capture offends the ship's nation and pleases its
 		 * enemies (VA 0xdb7b); pirates do not count. */
 		sim_attack_nation(s, s->encounter.nation, -1);
+		/* The crew cheers a capture, a warship more (VA 0xdb7b). */
+		s->fleet.mood += (s->encounter.role > 5) + 1;
 		/* The pirate a governor wanted (VA 0xdb7b). */
 		if (s->encounter.named)
 			sim_mission_done(s);

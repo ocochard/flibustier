@@ -1386,6 +1386,53 @@ test_bank(void)
 	game_free(g);
 }
 
+/* The crew: the roll call on leaving town, the master's warning and a
+ * mutiny at sea. */
+static void
+test_crew(void)
+{
+	struct game *g;
+	int i, rep;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_town);
+	g->sim.encounters = 0;
+	/* A sullen crew: (3 + 2) x 30 / 15 = 10 desert on leaving. */
+	g->sim.fleet.crew = 30;
+	g->sim.fleet.mood = -2;
+	CHECK(game_script(g, "click:60,300 wait:40") == 0 &&
+	    g->screen == &screen_deserted && g->sim.deserted == 10 &&
+	    g->sim.fleet.crew == 20);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sail);
+	/* Broke for months: the master warns at the month's turn. */
+	g->sim.fleet.gold = 0;
+	g->sim.months = 4;
+	for (i = 0; i < 2000 && g->screen == &screen_sail; i++)
+		CHECK(game_script(g, "wait:4") == 0);
+	CHECK(g->screen == &screen_crew &&
+	    g->sim.crew_event == CREW_RESTLESS);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_sail && g->sim.crew_event == CREW_NONE);
+	/* Worse: mutiny, the duel on the deck, reputation -4. */
+	g->sim.months = 10;
+	sim_advance(&g->sim, 30);
+	CHECK(g->sim.crew_event == CREW_MUTINY);
+	game_goto(g, &screen_crew);
+	CHECK(game_script(g, "wait:40 enter wait:40") == 0 &&
+	    g->screen == &screen_sword && g->sw_stage == 1);
+	CHECK(game_script(g, "enter") == 0 && g->sw_stage == 2 &&
+	    g->sim.sword.title == 2);
+	rep = g->sim.reputation;
+	g->sim.sword.result = SWORD_WON;
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_sail &&
+	    g->sim.reputation == rep - 4 && g->sim.crew_event == CREW_NONE);
+	game_free(g);
+}
+
 int
 main(void)
 {
@@ -1425,6 +1472,7 @@ main(void)
 	test_assault();
 	test_tavern_people();
 	test_landing();
+	test_crew();
 	test_land_battle();
 	rmdir(saves_tmp);
 	packs_free(packs);

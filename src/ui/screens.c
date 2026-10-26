@@ -2503,6 +2503,10 @@ sail_tick(struct game *g)
 	case SAIL_BOARDED:
 		g->march_held = 0;
 		break;
+	case SAIL_CREW:
+		g->turn = 0;
+		game_goto(g, &screen_crew);
+		break;
 	case SAIL_TICKS:
 		break;
 	}
@@ -3294,6 +3298,10 @@ sword_enter(struct game *g)
 		blob_free(&b);
 	}
 	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);
+	if (g->sw_mutiny) {		/* on the deck (scene 3) */
+		game_background(g, "pic/shipdeck");
+		g->sw_stage = 1;
+	}
 	if (g->sw_guard || g->sw_villain) {
 		/* The weapon is chosen on the alley itself (VA 0x16205). */
 		game_background(g, "pic/alley");
@@ -3421,6 +3429,16 @@ sword_outcome_done(struct game *g)
 			game_goto(g, r < 0 ? &screen_prison : &screen_sail);
 		return;
 	}
+	if (g->sw_mutiny) {
+		int lost = g->sim.sword.result != SWORD_WON;
+
+		g->sw_mutiny = 0;
+		sim_mutiny_end(&g->sim);
+		g->sim.crew_event = CREW_NONE;
+		g->disgrace_back = &screen_sail;
+		game_goto(g, lost ? &screen_disgrace : &screen_sail);
+		return;
+	}
 	if (g->sw_villain) {
 		g->sw_villain = 0;
 		if (sim_villain_duel_end(&g->sim)) {
@@ -3511,6 +3529,10 @@ sword_event(struct game *g, const struct ui_event *ev)
 		} else if (g->sw_guard) {
 			sim_guard_duel(&g->sim, g->sim.fleet.leaving,
 			    g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		} else if (g->sw_mutiny) {
+			sim_mutiny_duel(&g->sim, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
 		} else if (g->sw_villain) {
@@ -3812,9 +3834,12 @@ town_choose(struct game *g, int i)
 		game_goto(g, &screen_tavern);
 		break;
 	case SPOT_LEAVE:
+		g->deserted_town = g->sim.player_town;
 		sim_leave_town(&g->sim);
 		bank_free(&g->town_spr);
-		game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
+		/* The roll call first (VA 0x17efb). */
+		game_goto(g, g->sim.deserted > 1 ? &screen_deserted :
+		    g->world != NULL ? &screen_sail : &screen_cabin);
 		break;
 	case SPOT_CABIN:
 		game_goto(g, &screen_cabin);
@@ -6886,4 +6911,98 @@ contact_draw(struct game *g)
 
 const struct screen screen_contact = {
 	"contact", contact_enter, contact_event, NULL, contact_draw,
+};
+
+/*
+ * The crew speaks when a month passes at sea (VA 0x1dd0e): the sailing
+ * master warns on smaster.pcx at (340, 150) up to x 620 (CSTR 140, or
+ * 210 after 12 months); a mutiny is told on mutiny.pcx at (50, 350) up
+ * to x 620 (CSTR 139), then the duel with the leader on the deck.
+ */
+#define S_MUTINY		139
+#define S_RESTLESS		140
+#define S_ANXIOUS		210
+
+static void
+crew_enter(struct game *g)
+{
+	game_background(g, g->sim.crew_event == CREW_MUTINY ? "pic/mutiny" :
+	    "pic/smaster");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+crew_event(struct game *g, const struct ui_event *ev)
+{
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (g->sim.crew_event == CREW_MUTINY) {
+		g->sw_mutiny = 1;
+		game_goto(g, &screen_sword);
+		return;
+	}
+	g->sim.crew_event = CREW_NONE;
+	game_goto(g, &screen_sail);
+}
+
+static void
+crew_draw(struct game *g)
+{
+	if (g->sim.crew_event == CREW_MUTINY)
+		draw(g, FONT_BODY, 50, 350, 570, game_str(g, S_MUTINY), 0);
+	else
+		draw(g, FONT_BODY, 340, 150, 280, game_str(g,
+		    g->sim.crew_event == CREW_ANXIOUS ? S_ANXIOUS :
+		    S_RESTLESS), 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_crew = {
+	"crew", crew_enter, crew_event, NULL, crew_draw,
+};
+
+/*
+ * The roll call on leaving town (VA 0x17efb): on the town's arrival
+ * picture, "Roll call reveals that %s crew members have deserted" (CSTR
+ * 109, at (340, 150) up to x 620).
+ */
+#define S_DESERTED		109
+
+static void
+deserted_enter(struct game *g)
+{
+	int t = g->deserted_town;
+
+	game_background(g, g->sim.fleet.ashore || (t >= 0 &&
+	    (size_t)t < g->sim.ntowns && (g->sim.towns[t].flags &
+	    TOWN_INLAND)) ? "pic/arr_land" : "pic/arr_sea");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+}
+
+static void
+deserted_event(struct game *g, const struct ui_event *ev)
+{
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
+}
+
+static void
+deserted_draw(struct game *g)
+{
+	char text[320], num[16];
+
+	snprintf(num, sizeof(num), "%d", g->sim.deserted);
+	fill(text, sizeof(text), game_str(g, S_DESERTED), num, NULL);
+	draw(g, FONT_BODY, 340, 150, 280, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_deserted = {
+	"deserted", deserted_enter, deserted_event, NULL, deserted_draw,
 };

@@ -584,8 +584,14 @@ sim_new_expedition(struct sim *s, int advance)
 	if (f->crew <= 0)
 		f->crew = 1;
 	s->visit_flags = 0;
+	/* The refit keeps the crew quiet; then a fresh start, months 0
+	 * (VA 0x184a8, 0x1ef87). */
+	s->months = -16;
 	for (i = 0; i < REFIT_SPELLS; i++)
 		sim_advance(s, REFIT_DAYS);
+	s->months = 0;
+	s->crew_event = CREW_NONE;
+	f->mood = sim_crew_mood(s);
 }
 
 int
@@ -729,9 +735,10 @@ sim_assault_start(struct sim *s, int town, int aboard, int weapon)
 	in.you_men = s->fleet.crew - aboard;
 	if (in.you_men < 1)
 		in.you_men = 1;
-	/* rand(3) + 3 + the crew's mood / 2; the mood (VA 0x45faa) is not
-	 * modelled yet and counts 0. */
-	in.you_factor = rng_below(&s->rng, 3) + 3;
+	/* rand(3) + 3 + the crew's mood / 2, at least 1. */
+	in.you_factor = rng_below(&s->rng, 3) + 3 + s->fleet.mood / 2;
+	if (in.you_factor < 1)
+		in.you_factor = 1;
 	in.foe_men = t->soldiers * 10 + 5;
 	in.foe_factor = t->forts + 5;
 	in.title = 4;

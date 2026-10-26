@@ -249,6 +249,43 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   is at most `soldiers x 15`, the town has forts and more than 9
   soldiers; otherwise straight to the assault. No fort battle on foot.
 
+### The crew's mood (VA `0x1da9b`, `0x1dd0e`, `0x17efb`)
+
+- **Months (VA `0x45e79`, a signed byte):** since the plunder was
+  divided. Each month (VA `0xceb8`) adds 1, or 2 with more than 32767
+  gold aboard. Careers start at 0, the famous expeditions at their
+  scenario's byte 0x58 (3, 0, 1, 3, 0, 3). A new expedition sets -16
+  while the refit's days pass, then 0 (VA `0x184a8`, `0x1ef87`); prison
+  does the same (VA `0x1f803`, not modelled).
+- **The mood (VA `0x1da9b`, player block +0x18):**
+  `(int)(sqrt((float)(gold / 10) / crew) x 2.0) - months + 4 -
+  difficulty`, recomputed after every month's update and at the start
+  (VA `0x1d8b2`). A capture adds 1, 2 when the ship's role is above 5
+  (VA `0xdb7b`), until the next month.
+- **It sets** the reload time in sea battles, the crew's fighting factor
+  when storming a fort, the bank's mood word (`clamp(mood / 4 + 1, 0,
+  3)`, VA `0x1db2c`, CSTN 72), and desertion.
+- **At sea, when months pass (VA `0x1dd0e`):** not in town nor ashore,
+  and with more than one man:
+  - Below -3, mutiny: on `mutiny.pcx`, "Your men confront you on the
+    quarterdeck..." (CSTR 139, at (50, 350) up to x 620). A third of
+    the crew leave with their share of the gold (VA `0x1f044`:
+    `gold -= n x gold / crew`), then a duel on the deck with their
+    leader (VA `0x161ba`: scene 3, title 2 "Mutineer", nation 5, extra
+    1). The duel's own rules apply (a loss disgraces); then the
+    reputation drops by 4 whatever the outcome.
+  - Below 0: on `smaster.pcx`, the sailing master warns, "The men be
+    growin' restless... they'll mutiny!" (CSTR 140), or after 12 months
+    "...anxious to be dividin' up the plunder" (CSTR 210), at (340, 150)
+    up to x 620.
+  - The engine stops sailing (`SAIL_CREW`) to show it.
+- **Roll call on leaving town (VA `0x17efb`):** `n = (3 - mood) x crew /
+  15` (16-bit), at most `crew - 1`; when `n > 1` they leave with their
+  share of the gold: "Roll call reveals that %s crew members have
+  deserted" (CSTR 109, at (340, 150) up to x 620) on the town's arrival
+  picture. Then one of the 8 prisoners (VA `0x4720a`) may jump
+  overboard (CSTR 110, not modelled).
+
 ### Villains (VA `0x12178`, `0x18913`)
 
 - **Four slots (VA `0x471da`, 12 bytes each):** +0 active, +1 6 (not
@@ -612,9 +649,9 @@ fight computes its level the same way with fencing.
 - **Player crew aboard:** `min(crew + 8 - 8 x ships, (class + 2) x 32)`.
   The rest stays with the fleet.
 - **Player guns:** `min(guns, crew aboard / 4, (class + 2) x 4)`.
-- **Gunnery `g`:** `clamp(block[0x18] / 2 + 4, 0, 16)`, from the
-  player block (field not identified). Reloading takes
-  `|144 - 8 x g|` ticks.
+- **Gunnery `g`:** `clamp(mood / 2 + 4, 0, 16)`, from the crew's mood
+  (player block +0x18, VA `0x45faa`, see "The crew's mood"). Reloading
+  takes `|144 - 8 x g|` ticks.
 - **Enemy:** from the encounter record: guns = byte 3, crew = byte 2 x
   4, class = byte 0, role = byte 4.
 - **Turn rate, both ships:** `t = 3 - (class + 2) / 4`. Small ships turn
@@ -802,8 +839,8 @@ After a landing by the fort, or straight away at a town without forts:
   picture: the fort (scenes 1, 2, `fort.pcx`, head `HeHead3`), or the
   alley without forts (scene 0).
   - The player: the crew but for the men left with the fleet in the
-    fort battle, factor `rand(3) + 3 + mood / 2` (the crew's mood, VA
-    `0x45faa`, is not modelled yet: the engine counts 0).
+    fort battle, factor `rand(3) + 3 + mood / 2` (the crew's mood, see
+    "The crew's mood"; the engine keeps it at least 1).
   - The garrison: `soldiers x 10 + 5` men, factor `forts + 5`, title 4,
     the town's nation.
 - **Won:** `soldiers = (men left + 9) / 10`, the fallen leave the crew,

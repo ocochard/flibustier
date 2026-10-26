@@ -22,15 +22,16 @@ with a message. Numbers are integers only.
 | `advance` | `days` (1..36500) | `day`, `news` (items logged by this advance) |
 | `state` | none | `state`: the full game state (below) |
 | `load` | `state`: an object as returned by `state` | none |
-| `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land` or `town`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
+| `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land`, `town`, `encounter` or `crew`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold` |
-| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, or `leave` | `player_town`, `visit_flags`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
+| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
 | `shore` | after a `sail` stop at `land`: `ashore` 1 goes ashore, 0 turns the ship about | `ashore` |
+| `crew` | after a `sail` stop at `crew`: `action` `heard` (a warning), or for a mutiny `duel` (`weapon`), `sword` ticks, then `end` | `event` (none, restless, anxious, mutiny), `mood`, `months`, `crew`, `reputation` |
 | `villain` | `action`: `duel` (`weapon`) against the villain hiding in the town, run with `sword` ticks, then `end` | `villain`; `won`, `reputation` |
 | `mission` | `action`: `accept` (the governor's offer) or `deliver` (to the contact in this town) | `type`, `dest` |
 | `search` | on foot: digs at the treasure maps' spots (3 days) | `found` (`[{map: pirate, relative or lost, gold, value}]`) |
@@ -58,12 +59,12 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 20,
+  "version": 21,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
              "expedition": -1},
-  "fleet": {"ships": [1], "damage": [0], "gunnery": 0,
+  "fleet": {"ships": [1], "damage": [0], "mood": 7,
             "food": 13, "goods": 0, "sugar": 0, "capacity": 4,
             "crew": 40, "guns": 8, "gold": 2000,
             "x": 5477, "y": 4319, "fx": 0, "fy": 0, "heading": 0,
@@ -157,8 +158,11 @@ with a message. Numbers are integers only.
   - The fight's `result` is `won`, `repelled` or `lost`. `bar` is each
     side's share of the strength bar (47 in all); `wounds` count hits
     taken high, middle and low.
-  - `fleet.damage` is the hull damage per ship; `fleet.gunnery` is the
-    unidentified player value that sets the reload time.
+  - `fleet.damage` is the hull damage per ship; `fleet.mood` is the
+    crew's mood (`gunnery` before version 21). `months` counts the
+    months since the plunder was divided; `crew_event` is the crew's
+    word waiting to be heard (0 none, 1 restless, 2 anxious, 3 mutiny);
+    `deserted` the men lost at the last roll call.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.
 - Nations are indexed 0 Spain, 1 England, 2 France, 3 Holland.

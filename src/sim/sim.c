@@ -253,6 +253,9 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	if (s->fleet.leaving >= 0)
 		harbour_mouth(s, s->fleet.leaving);
 	start_log(s);
+	/* The expeditions start months at sea (scenario byte 0x58). */
+	s->months = (int8_t)scn->raw[0x58];
+	s->fleet.mood = sim_crew_mood(s);
 }
 
 static void
@@ -412,14 +415,30 @@ static void
 advance_step(struct sim *s, int days)
 {
 	int32_t start_day = s->day;
-	int start_doy = s->day_of_year, m;
+	int start_doy = s->day_of_year, m, months = 0;
 
 	s->day_of_year += days;
 	for (m = start_doy / DAYS_PER_MONTH + 1;
 	    m <= s->day_of_year / DAYS_PER_MONTH; m++) {
 		s->month = m;
 		s->day = start_day + (m * DAYS_PER_MONTH - start_doy);
+		/* A month longer since the plunder was divided, two with
+		 * a fortune aboard (VA 0xceb8). */
+		s->months = (int8_t)(s->months + (s->fleet.gold > 0x7FFF ?
+		    2 : 1));
 		sim_world_update(s);
+		s->fleet.mood = sim_crew_mood(s);
+		months++;
+	}
+	/* At sea (not in town nor ashore), the crew speaks (VA 0x1dd0e). */
+	if (months > 0 && s->player_town < 0 && !s->fleet.ashore &&
+	    s->fleet.crew != 1 && s->crew_event == CREW_NONE) {
+		if (s->fleet.mood < -3) {
+			s->crew_event = CREW_MUTINY;
+			sim_crew_leave(s, s->fleet.crew / 3);
+		} else if (s->fleet.mood < 0)
+			s->crew_event = s->months < 12 ? CREW_RESTLESS :
+			    CREW_ANXIOUS;
 	}
 	s->day = start_day + days;
 	if (s->day_of_year >= DAYS_PER_YEAR) {
@@ -627,8 +646,11 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		/* Time passes whether or not the ship can move. */
 		if (f->ticks % WIND_TICKS == 0)
 			shift_wind(s);
-		if (f->ticks % TICKS_PER_DAY == 0)
+		if (f->ticks % TICKS_PER_DAY == 0) {
 			sim_advance(s, 1);
+			if (s->crew_event != CREW_NONE)
+				return (SAIL_CREW);
+		}
 		/* Ships never sail onto land; the player may go ashore. */
 		if (world_terrain(s->world, nx, ny) == TERRAIN_LAND) {
 			f->speed = 0;
@@ -928,6 +950,18 @@ sim_enter_town(struct sim *s, int town)
 void
 sim_leave_town(struct sim *s)
 {
+	int n;
+
+	/* Roll call (VA 0x17efb): (3 - mood) x crew / 15 men desert,
+	 * when more than one. */
+	s->deserted = 0;
+	n = (int16_t)((3 - s->fleet.mood) * s->fleet.crew) / 15;
+	if (n >= s->fleet.crew)
+		n = s->fleet.crew - 1;
+	if (n > 1) {
+		sim_crew_leave(s, n);
+		s->deserted = n;
+	}
 	if (s->player_town >= 0 && (size_t)s->player_town < s->ntowns) {
 		if (s->fleet.ashore) {
 			/* On foot: out on the town's own cell (VA 0x19bd0). */

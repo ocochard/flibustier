@@ -256,8 +256,9 @@ Status (2026-10-26): first slice.
 - **Treasure maps:** pieces, the map page, digging; the relative's
   quest waits for the mystery man.
 - **Mystery man:** the relatives' villains and the governors' missions.
-- **Next:** dividing parties, the crew's mood, prison, prisoners and
-  ransoms.
+- **Crew's mood:** warnings, mutiny, desertion; dividing parties is dead
+  in the original.
+- **Next:** prison, prisoners and ransoms.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

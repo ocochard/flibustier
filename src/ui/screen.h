@@ -21,6 +21,8 @@ struct screen {
 extern const struct screen screen_intro;
 extern const struct screen screen_tmap;
 extern const struct screen screen_villain;
+extern const struct screen screen_crew;
+extern const struct screen screen_deserted;
 extern const struct screen screen_contact;
 extern const struct screen screen_dig;
 extern const struct screen screen_credits;

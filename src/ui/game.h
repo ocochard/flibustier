@@ -228,6 +228,8 @@ struct game {
 	int			 villain, villain_stage, sw_villain;
 	const struct screen	*villain_back;
 	const struct screen	*disgrace_back;
+	int			 sw_mutiny;	/* the fight is the mutineers' */
+	int			 deserted_town;	/* the town just left */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */
 	char			 slot_desc[10][96];	/* "" when empty */
