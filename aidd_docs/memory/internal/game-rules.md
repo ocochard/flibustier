@@ -1190,11 +1190,28 @@ same town only bits 1 and 2 are kept.
   | 4 | Logbook | the latest news on `shiplog.pcx` (layout not traced) |
   | 5 | Map of the Caribbean | not yet |
   | 6 | Search | digging, on foot only (see "Treasure maps") |
-  | 7-8 | Divide party, Join party | off; not done |
+  | 7-8 | Divide party, Join party | always off, as in the original (below) |
   | 9 | Save game | the save slots |
   | 10 | Exit game | the retirement question |
   | 11 | Practice fencing | below |
 
+- **Divide and join (dead in Pirates! Gold):** each time the cabin
+  opens (VA `0x9ffc`) the flags of spots 7 and 8 (VA `0x32824`,
+  `0x3282e`) are set to 0 before the picker, and nothing else sets
+  them; their handlers are reached only through those spots. What the
+  handlers would do:
+  - Divide (VA `0xac0a`): ships picked on the fleet panel ("Select the
+    ships you want to leave behind", CSTR 128) leave as a squadron in one of three 48-byte records at
+    VA `0x45fc2` (cell, men, ship count and types, hold), taking 8 men
+    per ship plus any men the remaining ships cannot hold, a share of
+    the gold in proportion to the men, `men x 7 / 256 + 1` food, and
+    cargo moved on the trade board (mode 4), again while the main
+    holds overflow (CSTR 129).
+  - Join (VA `0xaee9`): the squadron's men, gold and ships come back
+    (beyond 8 ships the panel asks which to abandon, CSTR 130), and its
+    cargo on the trade board; with the hold over full the board asks
+    to throw goods overboard (mode 1, CSTR 113).
+  - The engine leaves both off.
 - **Practice fencing (VA `0xbdae`):** a sword fight on the deck (scene
   3) against the first mate (title 5): 200 men of factor 32 a side, the
   weapon chosen first. Afterwards the practice value (VA `0x45e90`)
