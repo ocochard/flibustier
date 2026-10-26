@@ -43,6 +43,18 @@ MODELS = {
     "clip": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
     "vae": "qwen_image_vae.safetensors",
     "lightning": "Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors",
+    # Qwen-Image-Edit-2511 puts a character from their portrait into a
+    # scene, keeping their face (the cast pass).
+    "edit": "qwen_image_edit_2511_int8_convrot.safetensors",
+    "edit_lightning":
+        "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors",
+    # BiRefNet (MIT) cuts the added person out of the edited crop.
+    "matte": "birefnet.safetensors",
+}
+# The cast pass: its model's own settings (the ComfyUI template's).
+EDIT_PROFILES = {
+    "final": {"steps": 40, "cfg": 4.0, "lora": False},
+    "draft": {"steps": 8, "cfg": 1.0, "lora": True},
 }
 
 # Sampling: the full model for finals, Lightning for drafts.
@@ -142,6 +154,18 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "shift": SHIFT}}
     for n, piece in enumerate(pieces):
         px, py, pw, ph = (round(v * k) for v in piece["rect"])
+        if "mirror" in piece:
+            # The same piece as an earlier one, flipped left to right
+            # (a pair of page-turn arrows that must match).
+            m = piece["mirror"] + (1 if asset.get("plaque") else 0)
+            g["presize%d" % n] = {"class_type": "ImageFlip", "inputs": {
+                "image": ["presize%d" % m, 0],
+                "flip_method": "y-axis: horizontally"}}
+            piece = dict(pieces[m], **piece)
+            place_piece(g, n, piece, picture, px, py, pw, ph)
+            picture = ["pplace%d" % n, 0]
+            g["save"]["inputs"]["images"] = picture
+            continue
         pgw, pgh = generation_size(pw, ph, 0.25)
         ptext = piece["prompt"].strip()
         if spec["pack"].get("style"):
@@ -163,11 +187,7 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
         g["presize%d" % n] = {"class_type": "ImageScale", "inputs": {
             "image": ["pdecode%d" % n, 0], "upscale_method": "lanczos",
             "width": pw, "height": ph, "crop": "center"}}
-        g["pplace%d" % n] = {"class_type": "ImageCompositeMasked",
-                             "inputs": {
-                                 "destination": picture,
-                                 "source": ["presize%d" % n, 0],
-                                 "x": px, "y": py, "resize_source": False}}
+        place_piece(g, n, piece, picture, px, py, pw, ph)
         picture = ["pplace%d" % n, 0]
         g["save"]["inputs"]["images"] = picture
     if grade and grade.get("uploaded"):
@@ -245,7 +265,7 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}}
         g["inoise"] = {"class_type": "SetLatentNoiseMask", "inputs": {
             "samples": ["ienc", 0], "mask": ["imask", 0]}}
-        iprompt = asset["inpaint_prompt"].strip()
+        iprompt = characters(asset["inpaint_prompt"], spec).strip()
         if spec["pack"].get("style"):
             iprompt += " " + spec["pack"]["style"].strip()
         g["ipos"] = {"class_type": "CLIPTextEncode", "inputs": {
@@ -302,6 +322,417 @@ def reachable(server):
     sys.exit("cannot reach " + server)
 
 
+def add_plate(g):
+    """Also save the picture as it was before its people were repainted
+    (node "plate"): the same finishing as the picture, from the empty
+    room.  The cast pass fills from it where a replaced person stood."""
+    after = set()
+    grew = True
+    while grew:
+        grew = False
+        for name, node in g.items():
+            if name in after:
+                continue
+            for v in node["inputs"].values():
+                if isinstance(v, list) and v and (
+                        v[0] == "repaint" or v[0] in after):
+                    after.add(name)
+                    grew = True
+                    break
+    for name in after:
+        node = json.loads(json.dumps(g[name]))
+        for key, v in node["inputs"].items():
+            if isinstance(v, list) and v and v[0] == "repaint":
+                node["inputs"][key] = ["decode", 0]
+            elif isinstance(v, list) and v and v[0] in after:
+                node["inputs"][key] = [v[0] + "_plate", v[1]]
+        if name == "save":
+            node["inputs"]["filename_prefix"] += "-plate"
+        g[name + "_plate"] = node
+    g["plate"] = g.pop("save_plate")
+
+
+def place_piece(g, n, piece, picture, px, py, pw, ph):
+    """Put piece n on the picture; with a "mask" (a shape drawn white on
+    black), only that shape of it, so a round button shows no corners."""
+    g["pplace%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+        "destination": picture, "source": ["presize%d" % n, 0],
+        "x": px, "y": py, "resize_source": False}}
+    if piece.get("uploaded_mask"):
+        g["pmask%d" % n] = {"class_type": "LoadImage", "inputs": {
+            "image": piece["uploaded_mask"]}}
+        g["pmscale%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["pmask%d" % n, 0], "upscale_method": "bilinear",
+            "width": pw, "height": ph, "crop": "disabled"}}
+        g["pmconv%d" % n] = {"class_type": "ImageToMask", "inputs": {
+            "image": ["pmscale%d" % n, 0], "channel": "red"}}
+        g["pplace%d" % n]["inputs"]["mask"] = ["pmconv%d" % n, 0]
+
+
+def cast_workflow(entry, spec, profile, seed, scene, ref, prefix):
+    """Add one character to the scene, first step: crop the scene around
+    their spot and let the edit model put the person of their portrait
+    in the middle of the crop; the edited crop is the result.  The edit
+    model redraws the whole crop, so matte_workflow() then pastes only the
+    person.  Two jobs, as the matte does not fit next to the edit model
+    on framework2's shared-memory GPU."""
+    p = EDIT_PROFILES[profile]
+    k = spec["pack"]["art_height"] / SCREEN_H
+    x, y, w, h = (round(v * k) for v in entry["rect"])
+    who = characters("{%s}" % entry["character"], spec)
+    if ref is not None:
+        rx, ry, rw, rh = (round(v * k) for v in entry["ref_crop"])
+        who = ("the person from image 2, %s: the very same person, with "
+               "the same face, hair, figure and clothes as in image 2" % who)
+        if entry.get("ref_face"):
+            who += (" (image 3 is a close-up of the same person's face: "
+                    "keep exactly that face and expression)")
+    if entry.get("mode") == "replace":
+        # The scene already has someone there, at the right size and
+        # place: give them this character's looks.
+        prompt = (
+            "Image 1 is a part of %s with one person in it. Replace that "
+            "person with %s, %s. Keep the same pose, position and size as "
+            "the person in image 1. Keep everything else of image 1 "
+            "exactly as it is, with the same light and colours. "
+            "Photograph, realistic." % (
+                entry.get("scene", "the scene"), who,
+                entry["action"].strip()))
+    else:
+        prompt = (
+            "Image 1 is a part of %s. Add to image 1 exactly one person, "
+            "%s, %s, in the middle of image 1, at the right scale for the "
+            "room. Add nobody else. Keep everything else of image 1 "
+            "exactly as it is, with the same light and colours. "
+            "Photograph, realistic." % (
+                entry.get("scene", "the scene"), who,
+                entry["action"].strip()))
+    g = {
+        "unet": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": MODELS["edit"], "weight_dtype": "default"}},
+        "clip": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": MODELS["clip"], "type": "qwen_image"}},
+        "vae": {"class_type": "VAELoader", "inputs": {
+            "vae_name": MODELS["vae"]}},
+        "shift": {"class_type": "ModelSamplingAuraFlow", "inputs": {
+            "model": ["unet", 0], "shift": SHIFT}},
+        "norm": {"class_type": "CFGNorm", "inputs": {
+            "model": ["shift", 0], "strength": 1.0}},
+        "scene": {"class_type": "LoadImage", "inputs": {"image": scene}},
+        "crop": {"class_type": "ImageCrop", "inputs": {
+            "image": ["scene", 0], "width": w, "height": h, "x": x,
+            "y": y}},
+        "scale": {"class_type": "FluxKontextImageScale", "inputs": {
+            "image": ["crop", 0]}},
+        "enc": {"class_type": "VAEEncodeTiled", "inputs": {
+            "pixels": ["scale", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}},
+        "pos": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {
+            "clip": ["clip", 0], "prompt": prompt, "vae": ["vae", 0],
+            "image1": ["scale", 0]}},
+        "neg": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {
+            "clip": ["clip", 0], "prompt": "", "vae": ["vae", 0],
+            "image1": ["scale", 0]}},
+        "posm": {"class_type": "FluxKontextMultiReferenceLatentMethod",
+                 "inputs": {"conditioning": ["pos", 0],
+                            "reference_latents_method":
+                            "index_timestep_zero"}},
+        "negm": {"class_type": "FluxKontextMultiReferenceLatentMethod",
+                 "inputs": {"conditioning": ["neg", 0],
+                            "reference_latents_method":
+                            "index_timestep_zero"}},
+        "decode": {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["sample", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}},
+        "back": {"class_type": "ImageScale", "inputs": {
+            "image": ["decode", 0], "upscale_method": "lanczos",
+            "width": w, "height": h, "crop": "center"}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["back", 0], "filename_prefix": prefix}},
+    }
+    if ref is not None:
+        g["ref"] = {"class_type": "LoadImage", "inputs": {"image": ref}}
+        g["person"] = {"class_type": "ImageCrop", "inputs": {
+            "image": ["ref", 0], "width": rw, "height": rh, "x": rx,
+            "y": ry}}
+        for side in ("pos", "neg"):
+            g[side]["inputs"]["image2"] = ["person", 0]
+        if entry.get("ref_face"):
+            fx, fy, fw, fh = (round(v * k) for v in entry["ref_face"])
+            g["face"] = {"class_type": "ImageCrop", "inputs": {
+                "image": ["ref", 0], "width": fw, "height": fh, "x": fx,
+                "y": fy}}
+            for side in ("pos", "neg"):
+                g[side]["inputs"]["image3"] = ["face", 0]
+    model = ["norm", 0]
+    if p["lora"]:
+        g["lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": model, "lora_name": MODELS["edit_lightning"],
+            "strength_model": 1.0}}
+        model = ["lora", 0]
+    g["sample"] = {"class_type": "KSampler", "inputs": {
+        "model": model, "seed": seed, "steps": p["steps"], "cfg": p["cfg"],
+        "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["posm", 0], "negative": ["negm", 0],
+        "latent_image": ["enc", 0], "denoise": 1.0}}
+    return g
+
+
+def soften(g, name, mask, soft):
+    """A mask's edge pulled in a little and blurred; returns its node."""
+    g[name + "in"] = {"class_type": "GrowMask", "inputs": {
+        "mask": mask, "expand": -soft, "tapered_corners": True}}
+    g[name + "img"] = {"class_type": "MaskToImage", "inputs": {
+        "mask": [name + "in", 0]}}
+    g[name + "blur"] = {"class_type": "ImageBlur", "inputs": {
+        "image": [name + "img", 0], "blur_radius": 2 * soft + 1,
+        "sigma": float(soft)}}
+    g[name] = {"class_type": "ImageToMask", "inputs": {
+        "image": [name + "blur", 0], "channel": "red"}}
+    return [name, 0]
+
+
+def matte_workflow(entry, spec, scene, crop, prefix):
+    """Add one character to the scene, second step: match the edited
+    crop's colours to the scene's (the edit model drifts paler and
+    bluer), cut the person out of it with a soft edge and paste only
+    them onto the scene at their spot (and over the person they
+    replace)."""
+    k = spec["pack"]["art_height"] / SCREEN_H
+    x, y, w, h = (round(v * k) for v in entry["rect"])
+    soft = max(1, round(k))
+    g = {
+        "scene": {"class_type": "LoadImage", "inputs": {"image": scene}},
+        "crop": {"class_type": "LoadImage", "inputs": {"image": crop}},
+        "old": {"class_type": "ImageCrop", "inputs": {
+            "image": ["scene", 0], "width": w, "height": h, "x": x, "y": y}},
+        "match": {"class_type": "ColorTransfer", "inputs": {
+            "image_target": ["crop", 0], "image_ref": ["old", 0],
+            "method": "reinhard_lab", "source_stats": "per_frame",
+            "strength": 1.0}},
+        "matter": {"class_type": "LoadBackgroundRemovalModel", "inputs": {
+            "bg_removal_name": MODELS["matte"]}},
+        "matte": {"class_type": "RemoveBackground", "inputs": {
+            "bg_removal_model": ["matter", 0], "image": ["crop", 0]}},
+        # Tight on the person: a pixel in, then softened, so no band of
+        # the edit's own background comes along.
+        "shrink": {"class_type": "GrowMask", "inputs": {
+            "mask": ["matte", 0], "expand": -soft,
+            "tapered_corners": True}},
+        "mimage": {"class_type": "MaskToImage", "inputs": {
+            "mask": ["shrink", 0]}},
+        "mblur": {"class_type": "ImageBlur", "inputs": {
+            "image": ["mimage", 0], "blur_radius": 2 * soft + 1,
+            "sigma": float(soft)}},
+        "edge": {"class_type": "ImageToMask", "inputs": {
+            "image": ["mblur", 0], "channel": "red"}},
+        "paste": {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["scene", 0], "source": ["match", 0],
+            "x": x, "y": y, "resize_source": False, "mask": ["edge", 0]}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["paste", 0], "filename_prefix": prefix}},
+    }
+    if entry.get("uploaded_shape"):
+        # Where the person being replaced was painted (white on black, at
+        # the generation size): paste over that shape, so none of them
+        # shows, and take the new person only near it ("reach" pixels,
+        # 640x480), so nobody else from the edited crop comes along.
+        g["shape"] = {"class_type": "LoadImage", "inputs": {
+            "image": entry["uploaded_shape"]}}
+        g["sfit"] = {"class_type": "ImageScale", "inputs": {
+            "image": ["shape", 0], "upscale_method": "bilinear",
+            "width": round(SCREEN_W * k), "height": round(SCREEN_H * k),
+            "crop": "center"}}
+        g["scrop"] = {"class_type": "ImageCrop", "inputs": {
+            "image": ["sfit", 0], "width": w, "height": h, "x": x, "y": y}}
+        g["smask"] = {"class_type": "ImageToMask", "inputs": {
+            "image": ["scrop", 0], "channel": "red"}}
+        g["near"] = {"class_type": "GrowMask", "inputs": {
+            "mask": ["smask", 0], "expand": round(entry.get("reach", 8) * k),
+            "tapered_corners": True}}
+        g["cover"] = {"class_type": "GrowMask", "inputs": {
+            "mask": ["smask", 0], "expand": round(3 * k),
+            "tapered_corners": True}}
+        g["mine"] = {"class_type": "MaskComposite", "inputs": {
+            "destination": ["matte", 0], "source": ["near", 0],
+            "x": 0, "y": 0, "operation": "and"}}
+        if entry.get("uploaded_plate"):
+            # The empty room where the old person stood, then the new
+            # person over it.
+            g["plate"] = {"class_type": "LoadImage", "inputs": {
+                "image": entry["uploaded_plate"]}}
+            g["pcrop"] = {"class_type": "ImageCrop", "inputs": {
+                "image": ["plate", 0], "width": w, "height": h, "x": x,
+                "y": y}}
+            g["under"] = {"class_type": "ImageCompositeMasked", "inputs": {
+                "destination": ["scene", 0], "source": ["pcrop", 0],
+                "x": x, "y": y, "resize_source": False,
+                "mask": soften(g, "coveredge", ["cover", 0], soft)}}
+            g["paste"]["inputs"]["destination"] = ["under", 0]
+            g["shrink"]["inputs"]["mask"] = ["mine", 0]
+        else:
+            g["both"] = {"class_type": "MaskComposite", "inputs": {
+                "destination": ["mine", 0], "source": ["cover", 0],
+                "x": 0, "y": 0, "operation": "or"}}
+            g["shrink"]["inputs"]["mask"] = ["both", 0]
+    return g
+
+
+def add_cast(args, spec, entries, scene_path, out, profile, seed, name,
+             plate=None):
+    """Add each character of "entries" to the picture at scene_path, in
+    turn, writing the result to "out".  Returns their provenance and
+    whether all went well."""
+    cast = []
+    if not entries:
+        return cast, True
+    # Another model: unload the scene's first, as both do not fit.
+    free(args.server)
+    current = scene_path
+    plate_up = upload(args.server, plate, "stmalo-cast-plate.png") \
+        if plate else None
+    for n, entry in enumerate(entries):
+        ref = ref_path = None
+        if entry.get("ref"):
+            refs = [r for r in spec["asset"] if r["id"] == entry["ref"]]
+            if not refs or not os.path.exists(
+                    os.path.join(args.pack, refs[0]["file"])):
+                print("no portrait %s for the cast" % entry["ref"],
+                      file=sys.stderr)
+                return cast, False
+            ref_path = os.path.join(args.pack, refs[0]["file"])
+            ref = upload(args.server, ref_path, "stmalo-cast-ref.png")
+        scene = upload(args.server, current, "stmalo-cast-scene.png")
+        if plate_up:
+            entry["uploaded_plate"] = plate_up
+        if entry.get("shape"):
+            entry["uploaded_shape"] = upload(
+                args.server, os.path.join(HERE, entry["shape"]),
+                "stmalo-shape-" + os.path.basename(entry["shape"]))
+        cgraph = cast_workflow(entry, spec, profile, seed + n, scene, ref,
+                               "stmalo/" + name.replace("/", "-") + "-cast")
+        try:
+            crop_png = render(args.server, cgraph)
+            crop_path = out + ".cast.png"
+            with open(crop_path, "wb") as f:
+                f.write(crop_png)
+            free(args.server)
+            crop = upload(args.server, crop_path, "stmalo-cast-crop.png")
+            os.remove(crop_path)
+            png = render(args.server, matte_workflow(
+                entry, spec, scene, crop, "stmalo/" +
+                name.replace("/", "-") + "-matte"))
+            free(args.server)
+        except RuntimeError as e:
+            print("cast %s failed: %s" % (entry["character"], e),
+                  file=sys.stderr)
+            return cast, False
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as f:
+            f.write(png)
+        current = out
+        cast.append({
+            "character": entry["character"], "portrait": entry.get("ref"),
+            "portrait_sha256": hashlib.sha256(
+                open(ref_path, "rb").read()).hexdigest()
+            if ref_path else None,
+            "ref_crop": entry.get("ref_crop"), "rect": entry["rect"],
+            "seed": seed + n,
+            "prompt": cgraph["pos"]["inputs"]["prompt"],
+            "workflow_sha256": hashlib.sha256(json.dumps(
+                cgraph, sort_keys=True).encode()).hexdigest()})
+    return cast, True
+
+
+def crop_workflow(image, rect, k, prefix):
+    """Cut rect (640x480 pixels) out of an uploaded picture."""
+    x, y, w, h = (round(v * k) for v in rect)
+    return {
+        "image": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "crop": {"class_type": "ImageCrop", "inputs": {
+            "image": ["image", 0], "width": w, "height": h, "x": x,
+            "y": y}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["crop", 0], "filename_prefix": prefix}},
+    }
+
+
+def atlas_workflow(images, sizes, prefix):
+    """Lay uploaded frames side by side, left to right, top aligned."""
+    g = {"canvas": {"class_type": "EmptyImage", "inputs": {
+        "width": sum(w for w, _ in sizes),
+        "height": max(h for _, h in sizes), "batch_size": 1, "color": 0}}}
+    last, x = ["canvas", 0], 0
+    for n, (image, (w, _)) in enumerate(zip(images, sizes)):
+        g["frame%d" % n] = {"class_type": "LoadImage", "inputs": {
+            "image": image}}
+        g["put%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": last, "source": ["frame%d" % n, 0], "x": x,
+            "y": 0, "resize_source": False}}
+        last, x = ["put%d" % n, 0], x + w
+    g["save"] = {"class_type": "SaveImage", "inputs": {
+        "images": last, "filename_prefix": prefix}}
+    return g
+
+
+def derive_sheet(args, spec, a, profile, seed):
+    """A sprite sheet whose frames are patches of another asset's picture
+    with a person added on each frame's spot (the tavern's visitors)."""
+    k = spec["pack"]["art_height"] / SCREEN_H
+    src = [r for r in spec["asset"] if r["id"] == a["from"]]
+    if not src or not os.path.exists(os.path.join(args.pack,
+                                                   src[0]["file"])):
+        print("%s: no %s to derive from" % (a["id"], a["from"]),
+              file=sys.stderr)
+        return None
+    src_path = os.path.join(args.pack, src[0]["file"])
+    work = os.path.join(args.pack, a["atlas"] + ".work.png")
+    frames, sizes, record = [], [], []
+    for n, fr in enumerate(a["frames"]):
+        picture = src_path
+        cast = []
+        if fr.get("character"):
+            entry = dict(fr)
+            cast, ok = add_cast(args, spec, [entry], src_path, work, profile,
+                                seed + 200 + n, a["id"])
+            if not ok:
+                return None
+            picture = work
+        up = upload(args.server, picture, "stmalo-derive-source.png")
+        png = render(args.server, crop_workflow(
+            up, fr["rect"], k, "stmalo/" + a["id"].replace("/", "-")))
+        frame = os.path.join(args.pack, a["atlas"] + ".%d.png" % n)
+        with open(frame, "wb") as f:
+            f.write(png)
+        frames.append(upload(args.server, frame,
+                             "stmalo-frame-%d.png" % n))
+        os.remove(frame)
+        sizes.append(tuple(round(v * k) for v in fr["rect"][2:]))
+        record.append({"rect": fr["rect"], "cast": cast or None})
+    if os.path.exists(work):
+        os.remove(work)
+    atlas = render(args.server, atlas_workflow(
+        frames, sizes, "stmalo/" + a["id"].replace("/", "-") + "-atlas"))
+    with open(os.path.join(args.pack, a["atlas"]), "wb") as f:
+        f.write(atlas)
+    lines = ["# Generated by tools/artgen/artgen.py from %s." % a["from"],
+             "[sheet]", "image = " + os.path.basename(a["atlas"]), "",
+             "[frames]"]
+    x = 0
+    for n, (w, h) in enumerate(sizes):
+        lines.append("%d = %d 0 %d %d" % (n, x, w, h))
+        x += w
+    with open(os.path.join(args.pack, a["file"]), "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return record
+
+
+def free(server):
+    """Let ComfyUI unload its models: two big ones do not fit together."""
+    call(server, "/free", json.dumps({"unload_models": True,
+                                      "free_memory": True}).encode())
+
+
 def call(server, path, data=None):
     req = urllib.request.Request(server + path, data=data, headers={
         "Content-Type": "application/json"} if data else {})
@@ -309,8 +740,9 @@ def call(server, path, data=None):
         return r.read()
 
 
-def render(server, graph):
-    """Queue "graph", wait for it, return the saved image's bytes."""
+def render(server, graph, nodes=None):
+    """Queue "graph", wait for it, return the saved image's bytes; with
+    "nodes", a dict of the images those SaveImage nodes saved."""
     client = str(uuid.uuid4())
     reply = json.loads(call(server, "/prompt", json.dumps(
         {"prompt": graph, "client_id": client}).encode()))
@@ -329,14 +761,21 @@ def render(server, graph):
                             msg.get("node_type"),
                             msg.get("exception_message", "").split("\n")[0]))
                 raise RuntimeError("generation failed")
-            for out in entry.get("outputs", {}).values():
-                for img in out.get("images", []):
+            got = {}
+            for node, out in entry.get("outputs", {}).items():
+                for img in out.get("images", [])[:1]:
                     q = urllib.parse.urlencode({
                         "filename": img["filename"],
                         "subfolder": img.get("subfolder", ""),
                         "type": img.get("type", "output")})
-                    return call(server, "/view?" + q)
-            raise RuntimeError("no image in the output")
+                    got[node] = call(server, "/view?" + q)
+            if nodes:
+                if any(n not in got for n in nodes):
+                    raise RuntimeError("no image in the output")
+                return {n: got[n] for n in nodes}
+            if not got:
+                raise RuntimeError("no image in the output")
+            return got.get("save", next(iter(got.values())))
         time.sleep(2)
 
 
@@ -437,16 +876,47 @@ def main():
             a["uploaded_inpaint"] = upload(
                 args.server, os.path.join(HERE, a["inpaint_mask"]),
                 "stmalo-inpaint-" + os.path.basename(a["inpaint_mask"]))
+        for piece in a.get("pieces", []):
+            if piece.get("mask"):
+                piece["uploaded_mask"] = upload(
+                    args.server, os.path.join(HERE, piece["mask"]),
+                    "stmalo-piece-" + os.path.basename(piece["mask"]))
         if a.get("control"):
             a["uploaded_control"] = upload(
                 args.server, os.path.join(HERE, a["control"]),
                 "stmalo-control-" + os.path.basename(a["control"]))
         name = os.path.splitext(a["file"])[0]
+        if a.get("from"):
+            t0 = time.time()
+            record = derive_sheet(args, spec, a, profile, seed)
+            if record is None:
+                failed.append(a["id"])
+                continue
+            pdir = os.path.join(args.pack, "provenance")
+            os.makedirs(pdir, exist_ok=True)
+            with open(os.path.join(pdir, a["id"].replace("/", "-") +
+                                   ".json"), "w") as f:
+                json.dump({
+                    "id": a["id"], "file": a["file"], "atlas": a["atlas"],
+                    "from": a["from"], "profile": profile, "seed": seed,
+                    "frames": record, "comfyui": system.get(
+                        "comfyui_version"), "generator": git_rev(),
+                    "date": datetime.datetime.now(datetime.timezone.utc)
+                    .isoformat(timespec="seconds")}, f, indent=2)
+                f.write("\n")
+            print("%s: %s from %s, %d frames, %.0f s" % (
+                a["id"], profile, a["from"], len(a["frames"]),
+                time.time() - t0))
+            continue
         graph = workflow(a, profile, seed, ow, oh, "stmalo/" +
                          name.replace("/", "-"), spec)
+        plated = bool(a.get("cast")) and "repaint" in graph
+        if plated:
+            add_plate(graph)
         t0 = time.time()
         try:
-            png = render(args.server, graph)
+            pngs = render(args.server, graph,
+                          ["save", "plate"] if plated else ["save"])
         except RuntimeError as e:
             print("%s: failed: %s" % (a["id"], e), file=sys.stderr)
             failed.append(a["id"])
@@ -454,7 +924,18 @@ def main():
         out = os.path.join(args.pack, a["file"])
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "wb") as f:
-            f.write(png)
+            f.write(pngs["save"])
+        plate = None
+        if plated:
+            plate = out + ".plate.png"
+            with open(plate, "wb") as f:
+                f.write(pngs["plate"])
+        cast, ok = add_cast(args, spec, a.get("cast", []), out, out,
+                            profile, seed + 100, name, plate)
+        if plate:
+            os.remove(plate)
+        if not ok:
+            failed.append(a["id"])
         prov = {
             "id": a["id"], "file": a["file"], "size": [ow, oh],
             "profile": profile, "seed": seed,
@@ -476,10 +957,14 @@ def main():
             if grade and grade.get("uploaded") and a.get("grade", True)
             else None,
             "source": a.get("source", "text"),
+            "cast": cast or None,
             "negative": a.get("negative", DEFAULT_NEGATIVE),
             "models": {k: v for k, v in MODELS.items()
                        if (k != "lightning" or PROFILES[profile]["lora"])
-                       and (k != "controlnet" or a.get("control"))},
+                       and (k != "controlnet" or a.get("control"))
+                       and (k not in ("edit", "matte") or a.get("cast"))
+                       and (k != "edit_lightning" or (
+                           a.get("cast") and EDIT_PROFILES[profile]["lora"]))},
             "workflow_sha256": hashlib.sha256(json.dumps(
                 graph, sort_keys=True).encode()).hexdigest(),
             "comfyui": system.get("comfyui_version"),

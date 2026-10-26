@@ -82,21 +82,20 @@ bottom left corner of the page. Warm even candlelight, realistic paper
 grain, sharp focus, realistic.
 """
 # The Ship's Log page turns its leaves at these two spots, so they show
-# page-turn arrows, placed exactly.
+# page-turn buttons, placed exactly: one button drawn, the other its
+# mirror, both cut round.
 [[asset.pieces]]
 rect = [200, 420, 40, 30]
+mask = "layouts/round.png"
 prompt = """
-Photograph, straight on, of a small engraved brass plate filling the
-whole image, with a bold arrow pointing to the left deeply engraved in
-its middle, warm worn brass, even soft light.
+Photograph, straight on, of one round worn brass button seen from the
+front, a perfect circle filling the whole image from edge to edge, with a
+bold arrow pointing to the left engraved in its middle, warm soft light.
 """
 [[asset.pieces]]
 rect = [380, 420, 40, 30]
-prompt = """
-Photograph, straight on, of a small engraved brass plate filling the
-whole image, with a bold arrow pointing to the right deeply engraved in
-its middle, warm worn brass, even soft light.
-"""
+mirror = 0
+mask = "layouts/round.png"
 
 # The people who appear in several pictures, described once: a prompt's
 # "{name}" becomes the description, word for word.
@@ -108,8 +107,9 @@ and rolled sleeves, a long apron of coarse linen, grimy and stained
 with wine and grease
 """
 barmaid = """
-the barmaid, a full-figured woman in her late twenties with a generous
-bust, dark curly hair and gold hoop earrings, a low-cut white
+the barmaid, a young full-figured woman in her late twenties with a
+round face, a broad warm smile, a generous bust, long dark curly hair and
+small gold earrings, a low-cut white
 off-shoulder blouse, a tight black laced bodice and a long red skirt
 """
 mapman = """
@@ -119,6 +119,18 @@ headscarf, a worn yellow-brown coat
 infoman = """
 the informant, a shady man in his forties with a dark beard and a
 turban-like headscarf, a black waistcoat over a white shirt
+"""
+sailor_old = """
+an old weathered sailor with a white beard and a green turban, a rough
+shirt
+"""
+sailor_young = """
+a young clean-shaven sailor with curly brown hair and a red neckerchief,
+a rough shirt
+"""
+sailor_big = """
+a broad dark-skinned sailor in his forties with a shaved head, a short
+black beard and a gold earring, a rough shirt
 """
 
 # One colour grade for every picture: its colours are pulled towards the
@@ -724,19 +736,118 @@ control_end = 0.6
 # The title board, at the "City Information" spot.
 plaque = [212, 6, 224, 69]
 prompt = """
-Photograph inside a busy, smoky Caribbean harbour tavern of the 1660s,
-lit by oil lamps and daylight. Heavy dark ceiling beams run across the
-top of the picture. At the back left, a long wooden bar with shelves of
-bottles behind it, and behind the bar {bartender}, polishing a mug. In
-the centre right, {barmaid} stands holding a tray.
-At the bottom centre, a round table with two very different sailors
-drinking: a young blond man in a striped shirt and an old one-eyed man
-with a grey beard and a red cap. At the bottom right, a smaller table
-with a burly dark-skinned sailor in a green headscarf. On the far right
-edge, the open wooden door of the tavern with daylight beyond. The far
-left corner and the spaces between the tables are empty. Warm amber
-light, historical reenactment photography, sharp focus, realistic.
+Photograph inside a smoky Caribbean harbour tavern of the 1660s, lit by
+oil lamps and daylight. Heavy dark ceiling beams run across the top of
+the picture. At the back left, a long wooden bar with shelves of bottles
+behind it; nobody is behind the bar. In the middle of the back wall, a
+dark arched doorway to a back room; the rough stone and timber wall
+around it is hung with a lantern, a ship's wheel and old nets. At the
+far left, a small empty round table with a stool, and a second small
+empty table just right of it near the end of the bar. In the foreground
+at the
+bottom centre right, a large round table with pewter mugs, a knife and
+coins, seen close, with three empty stools around it. On the far right
+edge, the open wooden door of the tavern with daylight beyond.
+The room is empty, nobody is in it. Warm amber light, historical
+reenactment photography, sharp focus, realistic.
 """
+# The people, repainted into the empty room on their spots, so each is
+# the size and place the game expects clicks at.
+inpaint_mask = "layouts/tavern-people.png"
+inpaint_prompt = """
+Photograph inside a smoky Caribbean harbour tavern of the 1660s. Behind
+the bar on the left, {bartender}, standing, polishing a mug, seen from
+the waist up above the counter. In the centre right, {barmaid},
+standing, holding a tray. In the foreground, three sailors sit around
+the same table at the bottom centre right, large and close to the
+camera, cut by the bottom edge of the picture, arm-wrestling and
+drinking: {sailor_young} at the front left, his back half turned to us;
+{sailor_old} behind the table, facing us; {sailor_big} at the front
+right. Each person is exactly where the room has space for them.
+Warm amber light, historical reenactment photography, sharp focus,
+realistic.
+"""
+# Then each person is given their portrait's looks where the scene put
+# them (cast pass, replace mode: rect around the person in the scene,
+# ref_crop in the portrait, 640x480).  The sailors are the crew picture's.
+[[asset.cast]]
+mode = "replace"
+character = "bartender"
+shape = "layouts/tavern-bartender.png"
+reach = 20	# nobody near him, and he comes out taller than his shape
+ref = "pic/bartenda"
+ref_crop = [0, 0, 276, 480]
+rect = [55, 180, 115, 120]
+scene = "a smoky harbour tavern"
+action = "standing behind the bar counter, polishing a mug"
+[[asset.cast]]
+mode = "replace"
+character = "barmaid"
+shape = "layouts/tavern-barmaid.png"
+ref = "pic/barmaid"
+ref_crop = [358, 28, 240, 427]
+ref_face = [425, 75, 105, 100]
+rect = [400, 165, 110, 210]
+scene = "a smoky harbour tavern"
+action = "standing on the floor, holding a tray"
+# Back to front, so the people in front win where they overlap.
+[[asset.cast]]
+mode = "replace"
+character = "sailor_old"
+shape = "layouts/tavern-sailor-old.png"
+ref = "pic/crew"
+ref_crop = [75, 20, 160, 235]
+rect = [275, 245, 110, 160]
+scene = "a smoky harbour tavern"
+action = "sitting behind the table, facing us, a mug in his hand"
+[[asset.cast]]
+mode = "replace"
+character = "sailor_young"
+shape = "layouts/tavern-sailor-young.png"
+ref = "pic/crew"
+ref_crop = [240, 20, 160, 235]
+rect = [190, 270, 170, 210]
+scene = "a smoky harbour tavern"
+action = "sitting at the front left of the table, close to the camera, arm-wrestling"
+[[asset.cast]]
+mode = "replace"
+character = "sailor_big"
+shape = "layouts/tavern-sailor-big.png"
+ref = "pic/crew"
+ref_crop = [410, 20, 160, 235]
+rect = [480, 255, 145, 225]
+scene = "a smoky harbour tavern"
+action = "sitting at the front right of the table, close to the camera"
+
+# The tavern's visitors, the map seller and the informant at their
+# tables: the game draws them over the tavern when they are there, as
+# patches of the picture (the original frames' places and
+# sizes).  Each frame is the finished tavern with that person added on
+# their spot, cut to the frame.
+[[asset]]
+id = "spr/tavern"
+file = "art/tavern-sprites.sheet"
+atlas = "art/tavern-sprites.png"
+from = "pic/tavern"
+seed = 1660
+source = "derived from pic/tavern"
+prompt = ""
+[[asset.frames]]
+rect = [0, 255, 122, 188]
+character = "mapman"
+ref = "pic/mapman"
+ref_crop = [18, 28, 294, 415]
+scene = "a smoky harbour tavern"
+action = "sitting in the left corner by a small table, a mug in his hand"
+[[asset.frames]]
+rect = [142, 259, 90, 121]
+character = "infoman"
+ref = "pic/infoman"
+ref_crop = [338, 21, 288, 434]
+scene = "a smoky harbour tavern"
+action = "sitting at a small table at the end of the bar, a bottle in front of him"
+[[asset.frames]]
+rect = [349, 199, 79, 161]	# the doorway, nobody in it
 
 [[asset]]
 id = "pic/cabin"

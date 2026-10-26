@@ -11,7 +11,8 @@ rectangles of the original executable, in 640x480 pixels), as white
 outlines on black, for the Canny ControlNet.  Only the layout comes from
 the game; the drawing is ours.  Needs ImageMagick.
 
-    sketch.py            writes town.png, tavern.png and cabin.png here
+    sketch.py            writes town.png, tavern.png, cabin.png and the
+                         tavern's people masks here
 """
 
 import os
@@ -73,19 +74,46 @@ TAVERN = sign(212, 0, 436, 66) + [
     rect(70, 270, 210, 300), ellipse(110, 225, 18, 22),
     line((92, 248), (85, 290)), line((128, 248), (135, 290)),
     line((60, 150), (220, 150)), line((60, 190), (220, 190)),	# shelves
+    # An arched doorway in the back wall, to the back room.
+    line((355, 349), (355, 235), (359, 220), (370, 209), (385, 205),
+         (400, 209), (411, 220), (415, 235), (415, 349)),
     # The barmaid standing, centre right.
     ellipse(455, 200, 17, 21), line((440, 222), (425, 355), (485, 355),
                                     (470, 222)),
-    # A table with sailors at the bottom centre.
-    ellipse(285, 390, 85, 30), ellipse(240, 330, 16, 19),
-    ellipse(330, 330, 16, 19), line((225, 350), (215, 470)),
-    line((345, 350), (355, 470)),
-    # Another table at the bottom right.
-    ellipse(530, 420, 50, 22), ellipse(520, 360, 15, 18),
+    # Two small tables on the left, where the map seller (far left) and
+    # the informant (by the bar's end) sit when they are in town.
+    ellipse(70, 375, 45, 14), ellipse(190, 345, 38, 12),
+    # Three sailors in the foreground around one table, bottom centre
+    # right, large and cut by the bottom edge: one at the front left, one
+    # behind the table, one at the front right.
+    ellipse(415, 415, 80, 28),
+    ellipse(265, 320, 26, 31), line((230, 350), (200, 478)),
+    line((300, 350), (345, 420)),
+    ellipse(325, 285, 22, 26), line((300, 310), (290, 395)),
+    line((350, 310), (365, 390)),
+    ellipse(550, 300, 26, 31), line((520, 330), (495, 478)),
+    line((580, 330), (600, 478)),
     # The door on the right edge.
     rect(585, 95, 639, 478), line((600, 290), (612, 290)),
     line((0, 478), (640, 478)),
 ]
+
+# Where the tavern's people go: filled shapes on their spots, repainted
+# into the empty room so each comes out at the size the game expects.
+TAVERN_PEOPLE = {
+    "bartender": [ellipse(110, 224, 20, 24),
+                  "polygon 80,245 140,245 146,282 74,282"],
+    "barmaid": [ellipse(455, 198, 19, 23),
+                "polygon 436,218 474,218 494,362 416,362"],
+    # The sailors: front left, behind the table, front right.
+    "sailor_young": [ellipse(265, 318, 30, 35),
+                     "polygon 222,348 308,348 350,479 200,479"],
+    "sailor_old": [ellipse(325, 283, 25, 29),
+                   "polygon 294,308 358,308 372,395 284,395"],
+    "sailor_big": [ellipse(550, 298, 30, 35),
+                   "polygon 512,328 588,328 612,479 490,479"],
+}
+
 
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
@@ -115,6 +143,25 @@ CABIN = sign(212, 0, 436, 66) + [
 ]
 
 
+def scaled(op):
+    """A polygon given in 640x480 pixels, at the render size."""
+    if not op.startswith("polygon "):
+        return op
+    pts = [p.split(",") for p in op.split()[1:]]
+    return "polygon " + " ".join("%d,%d" % (sx(int(x)), sx(int(y)))
+                                 for x, y in pts)
+
+
+def mask(name, ops):
+    """White filled shapes on black, edges softened, for an inpaint."""
+    cmd = ["magick", "-size", "%dx%d" % (W, H), "xc:black", "-fill",
+           "white", "-stroke", "white", "-strokewidth", "5"]
+    for op in ops:
+        cmd += ["-draw", scaled(op)]
+    cmd += ["-blur", "0x4", os.path.join(HERE, name)]
+    subprocess.run(cmd, check=True)
+
+
 def draw(name, ops):
     cmd = ["magick", "-size", "%dx%d" % (W, H), "xc:black", "-fill",
            "none", "-stroke", "white", "-strokewidth", "5"]
@@ -128,3 +175,8 @@ if __name__ == "__main__":
     draw("town.png", TOWN)
     draw("tavern.png", TAVERN)
     draw("cabin.png", CABIN)
+    # All of them for the repaint, and each alone for the cast pass to
+    # know where that person is.
+    mask("tavern-people.png", sum(TAVERN_PEOPLE.values(), []))
+    for who, ops in TAVERN_PEOPLE.items():
+        mask("tavern-%s.png" % who.replace("_", "-"), ops)
