@@ -9,6 +9,18 @@
 name = "stmalo open pack (photographic, draft)"
 license = "undecided: draft art, not for release"
 art_height = 1080
+# Appended to every prompt, so all pictures share one look.
+style = """
+Style: one consistent look for the whole series, photographed like a
+period film still of the 1660s Caribbean, natural warm light, gentle
+film grain, muted rich colours with warm amber and deep teal tones,
+moderate contrast, shallow depth of field, realistic textures, no text.
+"""
+# Appended to the prompt of every framed asset.
+framed = """
+The photograph is mounted in an ornate antique gilded wooden picture
+frame that fills the whole image edge to edge, no wall around it.
+"""
 
 # The governor's audience: his text is drawn at x 320-620 from y 150 in
 # a light ink, so the right half must be dark and plain.
@@ -16,6 +28,7 @@ art_height = 1080
 id = "pic/governor"
 file = "art/governor.png"
 seed = 1660
+grade = false		# the grade's reference
 prompt = """
 A single continuous photograph of one room: a colonial governor's study
 in the Caribbean in the 1660s, seen from the doorway. A stern governor
@@ -43,11 +56,497 @@ id = "pic/shiplog"
 file = "art/shiplog.png"
 seed = 1660
 prompt = """
-Close-up photograph from straight above of an old open leather-bound
-ship's log book. The two blank pages of cream laid paper fill the whole
-picture from the very top edge down to near the bottom, completely
-empty, with no writing at all; only a thin strip of dark weathered
-wooden table shows at the bottom. A faded red ribbon bookmark hangs out
-of the book at the bottom left corner. Warm even candlelight, realistic
-paper grain and leather texture, sharp focus, realistic.
+Close-up photograph from straight above of a single blank page of an old
+ship's log book, the page of cream laid paper filling almost the whole
+picture from the top edge to the bottom edge, completely empty with no
+writing. Along the left edge, a narrow strip of the book's binding and
+the edges of the other pages; along the right edge, a narrow strip of
+the red leather cover. A faded red ribbon bookmark lies across the
+bottom left corner of the page. Warm even candlelight, realistic paper
+grain, sharp focus, realistic.
+"""
+
+# One colour grade for every picture: its colours are pulled towards the
+# reference picture's (an approved one of the pack), then a touch of
+# contrast.  The reference itself is rendered without the grade.
+[grade]
+reference = "art/governor.png"
+method = "reinhard_lab"
+strength = 0.5
+contrast = 1.05
+
+# ---------------------------------------------------------------------
+# Full-screen scenes.  Prompts give the subject and the layout of the
+# game's screen (described from the original screen: composition and
+# where the text goes, never its drawing).
+
+[[asset]]
+id = "pic/merchant"
+file = "art/merchant.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Photograph inside a dim 17th-century Caribbean harbour warehouse. In the
+centre right, an old merchant with white hair and a green waistcoat over
+a white shirt sits writing in a ledger at a wooden table piled with
+papers and an inkwell. Barrels, sacks and crates stand along the walls
+on both sides; soft daylight comes through tall openings behind him.
+Muted warm colours. Historical reenactment photography, 35mm lens,
+natural textures, sharp focus, realistic.
+"""
+
+[[asset]]
+id = "pic/plunder"
+file = "art/plunder.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Photograph on the deck of a 17th-century sailing ship under a clear pale
+blue sky. Along the bottom third of the frame, four rough pirates in
+shirts and headscarves haul heavy wooden treasure chests and sacks
+across the deck by the rail; white sails at the left and right edges.
+The upper two thirds of the frame are open plain sky. Bright sunlight.
+Historical reenactment photography, natural textures, sharp focus,
+realistic.
+"""
+
+[[asset]]
+id = "pic/moon03"
+file = "art/moon03.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Night photograph at sea: a three-masted 17th-century galleon with pale
+sails rides the dark waves on the left half of the frame, seen from
+slightly below. A large full moon, warm orange, hangs low in the black
+starry sky on the right. Dark blue night, moonlight on the water.
+Long exposure marine photography, sharp focus, realistic.
+"""
+
+[[asset]]
+id = "pic/textback"
+file = "art/textback.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Photograph, straight on and evenly lit, of a sheet of old cream parchment
+filling the whole frame, with faint, barely visible embossed lines of a
+ship's rigging radiating from a point near the centre right, like a
+watermark. No writing, no marks, soft uniform light, very low contrast,
+realistic paper texture.
+"""
+
+[[asset]]
+id = "pic/trescave"
+file = "art/trescave.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Photograph from deep inside a dark sea cave. Through a jagged opening in
+the upper centre, a bright glimpse of the sea and a distant sailing
+ship. On the right, an old human skeleton in rotten clothes hangs from a
+rope tied to the cave ceiling. The rest of the cave, especially the
+left half and the bottom, is rock in deep darkness. Dramatic
+chiaroscuro, realistic textures, sharp focus.
+"""
+
+[[asset]]
+id = "pic/boarding"
+file = "art/boarding.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Photograph of a boarding fight on a 17th-century ship in a storm. On the
+left, a fierce bearded pirate in a loose shirt lunges forward with a
+cutlass, torn sails and rigging behind him, dark storm clouds and sea
+spray. The lower right quarter of the frame is dark smoke and deep
+shadow, plain. Dramatic light, motion, historical reenactment
+photography, realistic.
+"""
+
+[[asset]]
+id = "pic/bartenda"
+file = "art/bartenda.png"
+seed = 1660
+source = "layout described from the original screen"
+prompt = """
+Photograph of a 17th-century Caribbean tavern keeper standing at the far
+left of the frame, a tall man with short dark hair, a red shirt and a
+long white apron, arms crossed, looking at the viewer. Behind him and
+across the whole rest of the frame, a plain, softly lit pale yellow-green
+plaster wall, empty and out of focus. Warm light. Historical reenactment
+photography, 50mm lens, realistic.
+"""
+
+# ---------------------------------------------------------------------
+# Framed pictures: a photograph in a gilded frame at the original
+# frame's place, on a plain field of the original's colour, where the
+# screen's text goes.  frame = [x, y, w, h] in 640x480 pixels.
+
+[[asset]]
+id = "pic/arr_land"
+file = "art/arr_land.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [31, 47, 201, 254]
+field = "#000000"
+prompt = """
+Photograph of a path through a tropical Caribbean jungle with tall palm
+trees and ferns, sunlight filtering through, a glimpse of white colonial
+buildings on a hill in the distance.
+"""
+
+[[asset]]
+id = "pic/arr_sea"
+file = "art/arr_sea.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [39, 62, 254, 201]
+field = "#000000"
+prompt = """
+Photograph from the sea of a green Caribbean island coast with a small
+colonial harbour town of white houses, turquoise water in front, big
+white clouds in a blue sky.
+"""
+
+[[asset]]
+id = "pic/aztec"
+file = "art/aztec.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [178, 7, 241, 248]
+field = "#000000"
+prompt = """
+Museum photograph of an Aztec gold treasure: an ornate golden ceremonial
+ornament shaped like a fanned feather headdress, with gold coins and a
+jewelled dagger, on dark green velvet, dramatic spot light.
+"""
+
+[[asset]]
+id = "pic/bank"
+file = "art/bank.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [166, 47, 280, 227]
+field = "#0B361A"
+prompt = """
+Photograph of an old carved wooden merchant's sign showing a bulging
+canvas money sack, hanging from iron rings, weathered paint, soft light.
+"""
+
+[[asset]]
+id = "pic/barmaid"
+file = "art/barmaid.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [345, 13, 266, 457]
+field = "#003100"
+prompt = """
+Portrait photograph of a young Caribbean tavern barmaid of the 1660s with
+dark curly hair and gold hoop earrings, a white off-shoulder blouse and a
+black laced bodice, warm smile, warm tavern light, period costume,
+historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/credpic"
+file = "art/credpic.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [12, 29, 363, 404]
+field = "#CD9462"
+prompt = """
+Photograph of the stern of a 17th-century galleon at sea, its carved and
+gilded transom with lanterns and rows of windows, sails above, blue sea,
+seen from slightly below.
+"""
+
+[[asset]]
+id = "pic/crew"
+file = "art/crew.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [65, 13, 510, 249]
+field = "#411010"
+prompt = """
+Photograph of three weathered sailors of the 1660s side by side, close-up
+of their faces and shoulders, headscarves, stubble, rough shirts,
+looking at the viewer, warm light, historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/evilone"
+file = "art/evilone.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [19, 31, 308, 412]
+field = "#521008"
+prompt = """
+Portrait photograph of a menacing Spanish nobleman of the 1660s, bald
+with a thin moustache and a cold stare, a gold earring, black velvet
+clothes with a high collar, dark background, hard side light,
+historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/find-t"
+file = "art/find-t.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [170, 17, 311, 258]
+field = "#7B0000"
+prompt = """
+Photograph of two pirates on a sandy Caribbean beach under palm trees
+kneeling over a freshly dug hole, lifting the lid of a wooden treasure
+chest full of gold coins, bright sun.
+"""
+
+[[asset]]
+id = "pic/hostage"
+file = "art/hostage.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [16, 1, 340, 445]
+field = "#290829"
+prompt = """
+Portrait photograph of a captive sea captain of the 1660s in a ship's
+hold, a strong man with a headband and a short beard, his wrists bound
+in front of him, defiant look, lantern light, historical reenactment
+photography.
+"""
+
+[[asset]]
+id = "pic/inca"
+file = "art/inca.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [205, 3, 241, 248]
+field = "#000000"
+prompt = """
+Museum photograph of an Inca gold treasure: a tall golden vessel with a
+narrow neck and a small golden llama figurine beside it on dark cloth,
+dramatic spot light.
+"""
+
+[[asset]]
+id = "pic/infoman"
+file = "art/infoman.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [332, 15, 300, 446]
+field = "#082931"
+prompt = """
+Portrait photograph of a shady tavern informant of the 1660s with a
+turban-like headscarf, a dark beard and a black waistcoat over a white
+shirt, arms crossed, a bottle on the table before him, dim tavern
+light, historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/landpir"
+file = "art/landpir.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [345, 90, 227, 267]
+field = "#181041"
+prompt = """
+Photograph at night of a pirate climbing a rope up a tall stone fortress
+wall, a lantern glowing on the wall beside him, a cutlass at his belt.
+"""
+
+[[asset]]
+id = "pic/mapman"
+file = "art/mapman.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [12, 22, 306, 427]
+field = "#202018"
+prompt = """
+Portrait photograph of an old map seller of the 1660s with a grey beard
+and a patterned headscarf, a yellow-brown coat, arms crossed, sitting in
+a dim tavern corner, warm side light, historical reenactment
+photography.
+"""
+
+[[asset]]
+id = "pic/maroon"
+file = "art/maroon.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [141, 50, 362, 223]
+field = "#081831"
+prompt = """
+Photograph at dusk of a lone castaway sailor sitting by a small campfire
+under a bare twisted tree on a deserted beach, the sea and a dark
+cloudy sky behind him.
+"""
+
+[[asset]]
+id = "pic/maya"
+file = "art/maya.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [209, 5, 241, 248]
+field = "#000000"
+prompt = """
+Museum photograph of a Maya treasure: a carved green jade plaque with
+intricate glyphs and a stylised face, on dark cloth, dramatic spot
+light.
+"""
+
+[[asset]]
+id = "pic/mutiny"
+file = "art/mutiny.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [134, 20, 372, 280]
+field = "#20172D"
+prompt = """
+Photograph of a mutiny on the deck of a 17th-century ship: angry sailors
+shouting and brandishing cutlasses and pistols, under a red sunset sky,
+dramatic light, historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/night"
+file = "art/night.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [304, 23, 267, 296]
+field = "#000000"
+prompt = """
+Night photograph of a calm dark sea under a starry sky with a bright
+full moon, a lone sailing ship small in the distance on the horizon.
+"""
+
+[[asset]]
+id = "pic/olmec"
+file = "art/olmec.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [207, 2, 241, 248]
+field = "#000000"
+prompt = """
+Museum photograph of an Olmec treasure: a carved green jade figurine of
+a stylised standing figure, with a small grey stone figure beside it,
+on dark cloth, dramatic spot light.
+"""
+
+[[asset]]
+id = "pic/outrun"
+file = "art/outrun.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [169, 43, 276, 168]
+field = "#000000"
+prompt = """
+Photograph of the open Caribbean sea in daylight, deep turquoise waves in
+the foreground, a small sailing ship far away on the horizon under big
+white clouds.
+"""
+
+[[asset]]
+id = "pic/prison"
+file = "art/prison.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [56, 50, 232, 348]
+field = "#7B1800"
+prompt = """
+Photograph of a prisoner in a dark stone dungeon cell, sitting slumped
+on a bench, lit only by a shaft of light from a small barred window high
+above.
+"""
+
+[[asset]]
+id = "pic/reunionf"
+file = "art/reunionf.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [57, 55, 238, 358]
+field = "#203152"
+prompt = """
+Photograph in the doorway of a white colonial house of the 1660s: a
+young man in a sailor's waistcoat embracing a young woman in a pale
+blue dress, a joyful reunion, warm sunlight, historical reenactment
+photography.
+"""
+
+[[asset]]
+id = "pic/reunionm"
+file = "art/reunionm.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [55, 63, 214, 316]
+field = "#181041"
+prompt = """
+Photograph of a young sailor helping a frail old man with long white
+hair out of a ruined stone prison into the jungle daylight, a reunion of
+father and son, historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/search"
+file = "art/search.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [150, 26, 346, 254]
+field = "#202900"
+prompt = """
+Photograph of three sailors of the 1660s digging in the sand of a
+Caribbean beach with shovels, searching for buried treasure, the
+turquoise sea and a blue sky behind them.
+"""
+
+[[asset]]
+id = "pic/shipnews"
+file = "art/shipnews.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [317, 77, 248, 337]
+field = "#16223A"
+prompt = """
+Photograph of a tall three-masted ship of the 1660s sailing through
+heavy seas under a dramatic stormy sky, light breaking through the
+clouds.
+"""
+
+[[asset]]
+id = "pic/sinking"
+file = "art/sinking.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [155, 9, 335, 232]
+field = "#000000"
+prompt = """
+Photograph of a naval battle of the 1660s: on the left a burning ship
+sinking in smoke and flames, on the right a victorious galleon under
+full sail, cannon smoke over the sea.
+"""
+
+[[asset]]
+id = "pic/smaster"
+file = "art/smaster.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [25, 23, 279, 434]
+field = "#002110"
+prompt = """
+Portrait photograph of a proud harbour master of the 1660s, a dark
+skinned man with a short beard, a loose white shirt and a heavy gold
+medallion on his chest, hands folded, warm light, historical
+reenactment photography.
+"""
+
+[[asset]]
+id = "pic/swright"
+file = "art/swright.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [151, 54, 333, 234]
+field = "#102850"
+prompt = """
+Photograph of two shipwrights of the 1660s in long coats and tricorn
+hats talking in a grassy shipyard beside a large wooden ship hull on the
+slipway, tools and timber at their feet, daylight.
 """

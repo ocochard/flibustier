@@ -57,10 +57,23 @@ def generation_size(w, h):
             max(16, round(h * scale / 16) * 16))
 
 
-def workflow(asset, profile, seed, out_w, out_h, prefix):
-    """The ComfyUI API graph for one asset."""
+def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
+    """The ComfyUI API graph for one asset.  A framed asset is rendered
+    at its frame's size and placed on a plain field of the full size."""
     p = PROFILES[profile]
-    gw, gh = generation_size(out_w, out_h)
+    k = spec["pack"]["art_height"] / SCREEN_H
+    frame = asset.get("frame")
+    prompt = asset["prompt"]
+    if frame:
+        fx, fy, fw, fh = (round(v * k) for v in frame)
+        prompt = prompt.strip() + " " + spec["pack"]["framed"].strip()
+        rw, rh = fw, fh
+    else:
+        rw, rh = out_w, out_h
+    if spec["pack"].get("style"):
+        prompt = prompt.strip() + " " + spec["pack"]["style"].strip()
+    gw, gh = generation_size(rw, rh)
+    grade = spec.get("grade") if asset.get("grade", True) else None
     g = {
         "unet": {"class_type": "UNETLoader", "inputs": {
             "unet_name": MODELS["unet"], "weight_dtype": "fp8_e4m3fn"}},
@@ -69,7 +82,7 @@ def workflow(asset, profile, seed, out_w, out_h, prefix):
         "vae": {"class_type": "VAELoader", "inputs": {
             "vae_name": MODELS["vae"]}},
         "pos": {"class_type": "CLIPTextEncode", "inputs": {
-            "text": asset["prompt"], "clip": ["clip", 0]}},
+            "text": prompt, "clip": ["clip", 0]}},
         "neg": {"class_type": "CLIPTextEncode", "inputs": {
             "text": asset.get("negative", DEFAULT_NEGATIVE),
             "clip": ["clip", 0]}},
@@ -83,10 +96,34 @@ def workflow(asset, profile, seed, out_w, out_h, prefix):
             "temporal_overlap": 8}},
         "resize": {"class_type": "ImageScale", "inputs": {
             "image": ["decode", 0], "upscale_method": "lanczos",
-            "width": out_w, "height": out_h, "crop": "center"}},
+            "width": rw, "height": rh, "crop": "center"}},
         "save": {"class_type": "SaveImage", "inputs": {
             "images": ["resize", 0], "filename_prefix": prefix}},
     }
+    picture = ["resize", 0]
+    if grade and grade.get("uploaded"):
+        # One colour grade for the series: match the colours of the
+        # reference picture, then a touch of contrast.
+        g["ref"] = {"class_type": "LoadImage", "inputs": {
+            "image": grade["uploaded"]}}
+        g["transfer"] = {"class_type": "ColorTransfer", "inputs": {
+            "image_target": picture, "image_ref": ["ref", 0],
+            "method": grade.get("method", "reinhard_lab"),
+            "source_stats": "per_frame",
+            "strength": grade.get("strength", 0.5)}}
+        g["contrast"] = {"class_type": "AdjustContrast", "inputs": {
+            "images": ["transfer", 0],
+            "factor": grade.get("contrast", 1.0)}}
+        picture = ["contrast", 0]
+        g["save"]["inputs"]["images"] = picture
+    if frame:
+        g["field"] = {"class_type": "EmptyImage", "inputs": {
+            "width": out_w, "height": out_h, "batch_size": 1,
+            "color": int(asset["field"].lstrip("#"), 16)}}
+        g["place"] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["field", 0], "source": picture,
+            "x": fx, "y": fy, "resize_source": False}}
+        g["save"]["inputs"]["images"] = ["place", 0]
     model = ["unet", 0]
     if p["lora"]:
         g["lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
@@ -146,6 +183,28 @@ def render(server, graph):
         time.sleep(2)
 
 
+def upload(server, path, name):
+    """Put a local picture into ComfyUI's input folder as "name"."""
+    boundary = uuid.uuid4().hex
+    with open(path, "rb") as f:
+        data = f.read()
+    body = b"".join([
+        b"--" + boundary.encode() + b"\r\n",
+        b'Content-Disposition: form-data; name="image"; filename="' +
+        name.encode() + b'"\r\n',
+        b"Content-Type: image/png\r\n\r\n", data, b"\r\n",
+        b"--" + boundary.encode() + b"\r\n",
+        b'Content-Disposition: form-data; name="overwrite"\r\n\r\n',
+        b"true\r\n",
+        b"--" + boundary.encode() + b"--\r\n"])
+    req = urllib.request.Request(server + "/upload/image", data=body,
+                                 headers={"Content-Type":
+                                          "multipart/form-data; boundary=" +
+                                          boundary})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read())["name"]
+
+
 def git_rev():
     try:
         return subprocess.run(["git", "-C", HERE, "rev-parse", "--short",
@@ -190,7 +249,20 @@ def main():
     if missing:
         sys.exit("unknown asset: " + ", ".join(sorted(missing)))
     profile = "draft" if args.draft else "final"
+    failed = []
     system = json.loads(call(args.server, "/system_stats"))["system"]
+    # The colour grade's reference: a picture already in the pack.
+    grade = spec.get("grade")
+    if grade:
+        ref = os.path.join(args.pack, grade["reference"])
+        if os.path.exists(ref):
+            grade["uploaded"] = upload(args.server, ref,
+                                       "stmalo-grade-reference.png")
+            grade["reference_sha256"] = hashlib.sha256(
+                open(ref, "rb").read()).hexdigest()
+        else:
+            print("no grade reference %s yet: rendering ungraded" % ref,
+                  file=sys.stderr)
     # Other workflows' models may fill the GPU: let ComfyUI unload them.
     call(args.server, "/free", json.dumps({"unload_models": True,
                                            "free_memory": True}).encode())
@@ -201,16 +273,27 @@ def main():
         seed = args.seed if args.seed is not None else a["seed"]
         name = os.path.splitext(a["file"])[0]
         graph = workflow(a, profile, seed, ow, oh, "stmalo/" +
-                         name.replace("/", "-"))
+                         name.replace("/", "-"), spec)
         t0 = time.time()
-        png = render(args.server, graph)
+        try:
+            png = render(args.server, graph)
+        except RuntimeError as e:
+            print("%s: failed: %s" % (a["id"], e), file=sys.stderr)
+            failed.append(a["id"])
+            continue
         out = os.path.join(args.pack, a["file"])
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "wb") as f:
             f.write(png)
         prov = {
             "id": a["id"], "file": a["file"], "size": [ow, oh],
-            "profile": profile, "seed": seed, "prompt": a["prompt"],
+            "profile": profile, "seed": seed,
+            "prompt": graph["pos"]["inputs"]["text"],
+            "frame": a.get("frame"), "field": a.get("field"),
+            "grade": {k: v for k, v in grade.items() if k != "uploaded"}
+            if grade and grade.get("uploaded") and a.get("grade", True)
+            else None,
+            "source": a.get("source", "text"),
             "negative": a.get("negative", DEFAULT_NEGATIVE),
             "models": MODELS if PROFILES[profile]["lora"] else
             {k: v for k, v in MODELS.items() if k != "lightning"},
@@ -223,13 +306,15 @@ def main():
         }
         pdir = os.path.join(args.pack, "provenance")
         os.makedirs(pdir, exist_ok=True)
-        with open(os.path.join(pdir, name.replace("/", "-") + ".json"),
+        with open(os.path.join(pdir, a["id"].replace("/", "-") + ".json"),
                   "w") as f:
             json.dump(prov, f, indent=2)
             f.write("\n")
         print("%s: %s %dx%d seed %d, %.0f s" % (a["id"], profile, ow, oh,
                                                 seed, time.time() - t0))
     write_manifest(args.pack, spec)
+    if failed:
+        sys.exit("failed: " + ", ".join(failed))
 
 
 if __name__ == "__main__":
