@@ -1992,7 +1992,8 @@ logbook_draw(struct game *g)
 	case LOG_PERSONAL:
 		personal_standings(g, text, sizeof(text));
 		lvl = g->sim.reputation / 4 + 1;
-		snprintf(a[0], sizeof(a[0]), "%s", game_str(g, S_SINGLE));
+		snprintf(a[0], sizeof(a[0]), "%s", game_str(g,
+		    g->sim.married ? S_MARRIED : S_SINGLE));
 		snprintf(a[1], sizeof(a[1]), "%d", g->sim.year -
 		    g->sim.start_year + 25);
 		snprintf(a[2], sizeof(a[2]), "%s", game_word(g, W_HEALTH,
@@ -3568,6 +3569,10 @@ sword_enter(struct game *g)
 		blob_free(&b);
 	}
 	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);
+	if (g->sw_suitor) {		/* in the alley (scene 0) */
+		game_background(g, "pic/alley");
+		g->sw_stage = 1;
+	}
 	if (g->sw_mutiny) {		/* on the deck (scene 3) */
 		game_background(g, "pic/shipdeck");
 		g->sw_stage = 1;
@@ -3699,6 +3704,17 @@ sword_outcome_done(struct game *g)
 			game_goto(g, r < 0 ? &screen_prison : &screen_sail);
 		return;
 	}
+	if (g->sw_suitor) {
+		g->sw_suitor = 0;
+		if (sim_daughter_duel_end(&g->sim, &g->daughter))
+			game_goto(g, &screen_governor);	/* the wedding */
+		else {
+			g->gov_resume = 0;
+			g->disgrace_back = &screen_town;
+			game_goto(g, &screen_disgrace);
+		}
+		return;
+	}
 	if (g->sw_mutiny) {
 		int lost = g->sim.sword.result != SWORD_WON;
 
@@ -3798,6 +3814,10 @@ sword_event(struct game *g, const struct ui_event *ev)
 		} else if (g->sw_guard) {
 			sim_guard_duel(&g->sim, g->sim.fleet.leaving,
 			    g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		} else if (g->sw_suitor) {
+			sim_daughter_duel(&g->sim, &g->daughter, g->selected);
 			sword_load(g);
 			g->sw_stage = 2;
 		} else if (g->sw_mutiny) {
@@ -3963,6 +3983,8 @@ sword_draw(struct game *g)
 	 * nation (VA 0x16205). */
 	if (sw->nation == -2 && g->sim.villain_duel >= 0)
 		villain_name(g, g->sim.villain_duel, label, sizeof(label));
+	else if (sw->nation == -1 && sw->kind == SWORD_DUEL)
+		captain_name(g, sw->title, label, sizeof(label));
 	else if (sw->kind == SWORD_CREW && sw->nation >= 0 && sw->nation != 5)
 		snprintf(label, sizeof(label), "%s %s",
 		    game_word(g, W_NATION, (size_t)sw->nation),
@@ -5066,7 +5088,13 @@ const struct screen screen_rumours = {
 #define S_VILLAIN_SEEN		138
 enum { GOV_GREET, GOV_MISSION, GOV_REPORT, GOV_ASK, GOV_TASK, GOV_PROMOTED, GOV_LAND,
     GOV_VILLAIN_NEWS, GOV_VILLAIN_SEEN, GOV_OFFER, GOV_SHORT, GOV_DONE,
-    GOV_RANSOM };
+    GOV_RANSOM, GOV_DAUGHTER, GOV_SAID, GOV_CHALLENGE, GOV_WEDDING,
+    GOV_INFORM, GOV_INFORM_FLEET, GOV_INFORM_TRAIN };
+#define S_DAUGHTER		141
+#define S_WEDDING		145
+#define S_DAUGHTER_WON		146
+#define W_DAUGHTER		89	/* daughter, niece */
+#define W_INFORM		26
 #define S_RANSOM		136
 
 /* A captain's name from his id (VA 0x19fbb): the rank (CSTN 78, from
@@ -5150,9 +5178,14 @@ governor_enter(struct game *g)
 {
 	governor_inks(g, "pic/governor");
 	if (g->gov_resume) {
+		g->gov_resume = 0;
+		if (g->gov_stage == GOV_WEDDING) {
+			/* The suitor beaten: the wedding (VA 0x128c1). */
+			governor_inks(g, "pic/wedding");
+			return;
+		}
 		/* Back from the villain (VA 0x13269 goes on with the
 		 * missions). */
-		g->gov_resume = 0;
 		governor_next(g);
 		return;
 	}
@@ -5243,6 +5276,19 @@ governor_next(struct game *g)
 			g->selected = 0;
 			return;
 		}
+		/* From standing 2, his daughter or niece (VA 0x128c1). */
+		if (o == OFFER_DAUGHTER) {
+			int met = sim_daughter_meet(&g->sim, &g->daughter);
+
+			if (met != 0) {
+				governor_inks(g, g->daughter.niece ?
+				    "pic/niece" : "pic/daughter");
+				g->gov_stage = met == 1 ? GOV_DAUGHTER :
+				    GOV_INFORM;
+				g->selected = 0;
+				return;
+			}
+		}
 		/* FALLTHROUGH */
 	default:
 		bank_free(&g->gov_spr);
@@ -5252,6 +5298,44 @@ governor_next(struct game *g)
 	case GOV_VILLAIN_NEWS:
 		g->gov_stage = GOV_VILLAIN_SEEN;
 		return;
+	case GOV_INFORM:
+		g->gov_stage = GOV_INFORM_FLEET;
+		return;
+	case GOV_INFORM_FLEET:
+		g->gov_stage = GOV_INFORM_TRAIN;
+		return;
+	}
+}
+
+static void
+governor_daughter_choose(struct game *g, int i)
+{
+	if (i == 0) {				/* conversation */
+		if (sim_daughter_talk(&g->sim, &g->daughter)) {
+			g->gov_said = S_DAUGHTER_WON;
+			g->gov_stage = GOV_SAID;
+		} else {
+			g->gov_stage = GOV_SHORT;	/* nothing said: the end */
+			governor_next(g);
+		}
+		return;
+	}
+	g->gov_said = sim_daughter_propose(&g->daughter);
+	g->gov_stage = g->gov_said == 144 ? GOV_CHALLENGE : GOV_SAID;
+	g->selected = 0;
+}
+
+static void
+governor_challenge_choose(struct game *g, int i)
+{
+	if (i == 0) {
+		g->sw_suitor = 1;		/* the duel in the alley */
+		g->gov_resume = 1;
+		g->gov_stage = GOV_WEDDING;
+		game_goto(g, &screen_sword);
+	} else {
+		g->gov_stage = GOV_SHORT;	/* the visit ends */
+		governor_next(g);
 	}
 }
 
@@ -5299,6 +5383,22 @@ governor_event(struct game *g, const struct ui_event *ev)
 	}
 	if (g->gov_stage == GOV_RANSOM) {
 		menu_event(g, ev, 2, NULL, governor_ransom_choose, NULL);
+		return;
+	}
+	if (g->gov_stage == GOV_DAUGHTER) {
+		menu_event(g, ev, 2, NULL, governor_daughter_choose, NULL);
+		return;
+	}
+	if (g->gov_stage == GOV_CHALLENGE) {
+		menu_event(g, ev, 2, NULL, governor_challenge_choose, NULL);
+		return;
+	}
+	if ((g->gov_stage == GOV_SAID || g->gov_stage == GOV_WEDDING ||
+	    g->gov_stage == GOV_INFORM_TRAIN) && (ev->type == EV_CLICK ||
+	    (ev->type == EV_KEY && (ev->key == UI_KEY_ENTER ||
+	    ev->key == UI_KEY_ESCAPE)))) {
+		g->gov_stage = GOV_SHORT;	/* the visit ends */
+		governor_next(g);
 		return;
 	}
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
@@ -5360,6 +5460,60 @@ governor_greeting(struct game *g, char *out, size_t len)
 	    8 : 6), len - strlen(out) - 1);
 }
 
+/* Her pages: daughter.pcx at (350, 100) up to x 620, niece.pcx at (10,
+ * 150) up to x 310 (VA 0x128c1). */
+static void
+daughter_draw(struct game *g)
+{
+	const struct daughter *d = &g->daughter;
+	const char *arg[2];
+	char text[700], name[80];
+	int x = d->niece ? 10 : 350, y = d->niece ? 150 : 100;
+	int w = d->niece ? 300 : 270, menu = 0, at;
+
+	switch (g->gov_stage) {
+	case GOV_DAUGHTER:
+		captain_name(g, d->suitor, name, sizeof(name));
+		fill(text, sizeof(text), game_str(g, S_DAUGHTER),
+		    game_word(g, W_DAUGHTER, (size_t)d->niece), name);
+		menu = 1;
+		break;
+	case GOV_SAID:
+		if (g->gov_said == S_DAUGHTER_WON)
+			snprintf(text, sizeof(text), "%s", game_str(g,
+			    S_DAUGHTER_WON));
+		else
+			fill(text, sizeof(text), game_str(g, g->gov_said),
+			    game_word(g, 35, (size_t)(g->sim.player.difficulty &
+			    3)), NULL);
+		break;
+	case GOV_CHALLENGE:
+		at = g->sim.towns[d->town].nation & 3;
+		fill(text, sizeof(text), game_str(g, 144),
+		    game_word(g, W_RANK, g->sim.rank[at]), g->sim.player.name);
+		menu = 1;
+		break;
+	case GOV_INFORM:
+		fill(text, sizeof(text), game_word(g, W_INFORM, 0),
+		    game_word(g, W_INFORM, g->sim.towns[d->town].governor &
+		    GOV_WIFE ? 2 : 1), NULL);
+		break;
+	default:			/* the convoys, as the hostage tells */
+		at = g->gov_stage == GOV_INFORM_FLEET ? g->sim.fleet_town :
+		    g->sim.train_town;
+		arg[0] = game_str(g, g->gov_stage == GOV_INFORM_FLEET ? 46 :
+		    45);
+		arg[1] = at >= 0 && (size_t)at < g->sim.ntowns ?
+		    g->sim.towns[at].name : game_word(g, 27,
+		    g->gov_stage == GOV_INFORM_FLEET ? 1 : 2);
+		fill_args(text, sizeof(text), game_word(g, 27, 0), arg, 2);
+		break;
+	}
+	draw(g, FONT_BODY, x, y, w, text, menu);
+	if (!menu)
+		continue_prompt(g);
+}
+
 static void
 governor_draw(struct game *g)
 {
@@ -5403,6 +5557,18 @@ governor_draw(struct game *g)
 	case GOV_ASK:
 		draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W,
 		    game_str(g, S_MISSION_ASK), 1);
+		return;
+	case GOV_DAUGHTER:
+	case GOV_SAID:
+	case GOV_CHALLENGE:
+	case GOV_INFORM:
+	case GOV_INFORM_FLEET:
+	case GOV_INFORM_TRAIN:
+		daughter_draw(g);
+		return;
+	case GOV_WEDDING:
+		draw(g, FONT_BODY, 360, 150, 260, game_str(g, S_WEDDING), 0);
+		continue_prompt(g);
 		return;
 	case GOV_RANSOM:
 		captain_name(g, g->sim.prisoners[g->sim.ransom_slot & 7] & 0xFF,

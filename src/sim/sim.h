@@ -437,6 +437,10 @@ struct sim {
 	/* The treasure fleet and the silver train (VA 0x45e71, 0x45e70):
 	 * the town each is in or -1 (away: Spain, Peru), its stop on its
 	 * route (VA 0x45e8d, 0x45e8e), and the routes. */
+	/* Marriage (VA 0x45e86): 0 single, 1 a merchant's daughter, 2 a
+	 * governor's daughter, 3 his niece; romances won (VA 0x45e87). */
+	int		married;
+	int		romances;
 	int		fleet_town, fleet_step;
 	int		train_town, train_step;
 	int		fleet_route[CONVOY_STOPS];
@@ -693,6 +697,34 @@ int	sim_health(const struct sim *s);
  */
 enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
 void	sim_imprison(struct sim *s, int cause, int town);
+
+/*
+ * The governor's daughter (VA 0x128c1), met instead of his offer from
+ * standing 2.  Town field 11 holds her: bit 0 a niece rather than a
+ * daughter, 0x80 the player's informant, 0x40 his wife.
+ * sim_daughter_meet: 0 she is not met, 1 she is (charm, suitor), 2 she
+ * reports as informant or wife.  Her interest is (fortune / 499 + rank
+ * x 2 + difficulty) / (niece + 1), halved, doubled with charm; below 1,
+ * or once married, she stays away.  sim_daughter_talk wins her as an
+ * informant when rand(interest) > 2.  sim_daughter_propose: 142 or 143
+ * (her refusal, interest below 4), else 144 (the suitor's challenge):
+ * sim_daughter_duel, then sim_daughter_duel_end (1: married, the
+ * town's word 9 + 2).
+ */
+#define GOV_NIECE	0x01
+#define GOV_WIFE	0x40
+#define GOV_INFORMANT	0x80
+struct daughter {
+	int	niece;
+	int	charm;
+	int	suitor;		/* a captain id */
+	int	town;
+};
+int	sim_daughter_meet(struct sim *s, struct daughter *d);
+int	sim_daughter_talk(struct sim *s, const struct daughter *d);
+int	sim_daughter_propose(const struct daughter *d);
+void	sim_daughter_duel(struct sim *s, const struct daughter *d, int weapon);
+int	sim_daughter_duel_end(struct sim *s, const struct daughter *d);
 
 /*
  * The treasure fleet and the silver train (VA 0x13679, 0xcde9).  Each

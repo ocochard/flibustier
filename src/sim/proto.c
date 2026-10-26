@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	24
+#define STATE_VERSION	25
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -709,6 +709,10 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->escaped);
 	jb_raw(b, ",\"surnames\":");
 	jb_int(b, s->surnames);
+	jb_raw(b, ",\"married\":");
+	jb_int(b, s->married);
+	jb_raw(b, ",\"romances\":");
+	jb_int(b, s->romances);
 	jb_raw(b, ",\"fleet_town\":");
 	jb_int(b, s->fleet_town);
 	jb_raw(b, ",\"fleet_step\":");
@@ -1053,6 +1057,8 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 		const struct json *tr = json_get(j, "train_route");
 		int k;
 
+		tmp.married = (int)(json_get_int(j, "married", 0) & 3);
+		tmp.romances = (int)json_get_int(j, "romances", 0);
 		tmp.fleet_town = (int)json_get_int(j, "fleet_town", -1);
 		tmp.fleet_step = (int)json_get_int(j, "fleet_step", 16);
 		tmp.train_town = (int)json_get_int(j, "train_town", -1);
@@ -2077,6 +2083,51 @@ cmd_captain(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * The governor's daughter, from standing 2: "meet" (met 0, 1 or 2 as
+ * informant or wife), "talk", "propose" (142, 143 refused, 144 the
+ * suitor's challenge), "duel" (weapon) with "sword" ticks, then "end".
+ */
+static void
+cmd_daughter(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	const char *action = json_get_str(cmd, "action");
+	struct sim *s = &ss->sim;
+	struct daughter *d = &ss->daughter;
+	int r;
+
+	if (action == NULL) {
+		reply_error(out, "daughter needs \"action\": meet, talk, "
+		    "propose, duel or end");
+		return;
+	}
+	if (strcmp(action, "meet") == 0)
+		r = sim_daughter_meet(s, d);
+	else if (strcmp(action, "talk") == 0)
+		r = sim_daughter_talk(s, d);
+	else if (strcmp(action, "propose") == 0)
+		r = sim_daughter_propose(d);
+	else if (strcmp(action, "duel") == 0 && d->charm >= 4) {
+		sim_daughter_duel(s, d, (int)(json_get_int(cmd, "weapon", 2) %
+		    SWORD_WEAPONS));
+		r = 1;
+	} else if (strcmp(action, "end") == 0 && s->sword.active)
+		r = sim_daughter_duel_end(s, d);
+	else {
+		reply_error(out, "daughter: not now");
+		return;
+	}
+	jb_raw(out, "{\"ok\":true,\"result\":");
+	jb_int(out, r);
+	jb_raw(out, ",\"charm\":");
+	jb_int(out, d->charm);
+	jb_raw(out, ",\"niece\":");
+	jb_int(out, d->niece);
+	jb_raw(out, ",\"married\":");
+	jb_int(out, s->married);
+	jb_raw(out, "}");
+}
+
 /* The mission: "accept" the governor's offer, "deliver" to the contact
  * in the tavern of the town the player is in. */
 static void
@@ -2459,6 +2510,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_mission(ss, cmd, out);
 	else if (strcmp(name, "captain") == 0)
 		cmd_captain(ss, cmd, out);
+	else if (strcmp(name, "daughter") == 0)
+		cmd_daughter(ss, cmd, out);
 	else if (strcmp(name, "march") == 0)
 		cmd_march(ss, cmd, out);
 	else if (strcmp(name, "assault") == 0)

@@ -2922,6 +2922,64 @@ test_convoys(void)
 	CHECK(s.fleet_town == -1);
 }
 
+/* The governor's daughter: met, charmed, wed after a duel. */
+static void
+test_daughter(void)
+{
+	struct sim s;
+	struct daughter d;
+	int k, won = 0;
+
+	sea_game(&s, 300, 300, 0);
+	s.player_town = 0;
+	s.towns[0].nation = NATION_SPAIN;
+	s.towns[0].governor = 0;
+	s.player.difficulty = 1;
+	s.player.ability = ABILITY_FENCING;
+	s.rank[NATION_SPAIN] = 0;
+	s.fortune = 0;
+	/* (0 + 0 + 1) / 1 = 1, halved: 0, she stays away. */
+	CHECK(sim_daughter_meet(&s, &d) == 1 && d.charm == 0);
+	/* Rich and titled: (4990 / 499 + 2 x 3 + 1) / 1 = 17, halved 8. */
+	s.fortune = 4990;
+	s.rank[NATION_SPAIN] = 3;
+	CHECK(sim_daughter_meet(&s, &d) == 1 && d.charm == 8 &&
+	    d.suitor == 0 * 8 + 0 * 32 + 0 * 2 + 1 && !d.niece);
+	s.player.ability = ABILITY_CHARM;
+	CHECK(sim_daughter_meet(&s, &d) == 1 && d.charm == 16);
+	/* A niece halves the interest first. */
+	s.towns[0].governor = GOV_NIECE;
+	CHECK(sim_daughter_meet(&s, &d) == 1 && d.niece && d.charm == 8);
+	s.towns[0].governor = 0;
+	CHECK(sim_daughter_meet(&s, &d) == 1);
+	/* Talk: now and then she becomes an informant. */
+	for (k = 0; k < 40 && !won; k++)
+		won = sim_daughter_talk(&s, &d);
+	CHECK(won && (s.towns[0].governor & GOV_INFORMANT) &&
+	    s.romances == 1);
+	CHECK(sim_daughter_meet(&s, &d) == 2);
+	/* A proposal: too little interest is refused. */
+	d.charm = 1;
+	CHECK(sim_daughter_propose(&d) == 142);
+	d.charm = 3;
+	CHECK(sim_daughter_propose(&d) == 143);
+	d.charm = 8;
+	CHECK(sim_daughter_propose(&d) == 144);
+	/* The suitor beaten: married, the town pleased. */
+	s.towns[0].standing = 0;
+	sim_daughter_duel(&s, &d, 1);
+	CHECK(s.sword.active && s.sword.nation == -1 &&
+	    s.sword.title == d.suitor);
+	s.sword.result = SWORD_WON;
+	CHECK(sim_daughter_duel_end(&s, &d) == 1 && s.married == 2 &&
+	    (s.towns[0].governor & GOV_WIFE) &&
+	    (int16_t)s.towns[0].standing == 2);
+	/* Married, no other daughter comes. */
+	s.player_town = 1;
+	s.towns[1].governor = 0;
+	CHECK(sim_daughter_meet(&s, &d) == 0);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3024,6 +3082,7 @@ main(void)
 	test_prison();
 	test_prisoners();
 	test_convoys();
+	test_daughter();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

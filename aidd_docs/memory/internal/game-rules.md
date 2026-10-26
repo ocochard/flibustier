@@ -370,6 +370,38 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   next start (stop 16).
 - Log codes 20 and 21 ("Treasure fleet in %s.") are never written.
 
+### The governor's daughter (VA `0x128c1`)
+
+- **Town field 11** (the governor): bit 0 a niece rather than a
+  daughter (`niece.pcx`, picture 0x2c, text at (10, 150) up to x 310;
+  else `daughter.pcx`, 0x2b, at (350, 100) up to x 620); 0x80 the
+  player's informant, 0x40 his wife (0x20 is read with them, not
+  identified).
+- **Met** instead of the offer (standing 2 or more), unless married:
+  interest `(fortune / 499 + rank x 2 + difficulty) / (niece + 1)`; below
+  1 she is not met. It is then halved, doubled with the charm ability.
+  Her suitor is a captain id `(town & 3) x 8 + nation x 32 + niece x 2 +
+  1`. "The governor introduces you to his young %s. She is presently
+  being courted by %s..." (CSTR 141, CSTN 89): conversation or proposal.
+- **Conversation:** when `rand(interest) > 2`, "The governor's daughter
+  is overwhelmed by your charm and wit..." (CSTR 146): she becomes an
+  informant (0x80) and the romances (VA `0x45e87`) count one more;
+  otherwise nothing is said.
+- **Proposal:** interest below 4 is refused: "Well! What cheek!..." (CSTR
+  142, with the difficulty's name, CSTN 35) for 0-1, "...my suitor is a
+  wealthy and very distinguished man..." (143) for 2-3. Otherwise "You
+  have captured my heart, %s %s..." (144, the player's rank and name):
+  fight the duel or retract. The duel is in the alley (scene 0), against
+  the suitor, labelled with his name. Won: `wedding.pcx`, "Amid
+  merriment and celebration..." (CSTR 145 at (360, 150) up to x 620);
+  married (VA `0x45e86` = niece + 2), the town's flag 0x40 and word 9
+  + 2. Lost: the duels' disgrace.
+- **Later visits** (0xE0 set): "After dinner, you visit your %s..."
+  (CSTN 26.0, "informant" or "wife"), then where the treasure fleet and
+  the silver train are (VA `0x1e953`, `0x1ea24`), as a hostage tells.
+- A merchant's daughter (CSTR 296, married 1) and the father-in-law's
+  visits (CSTR 291-295) are not done yet.
+
 ### Named captains (VA `0xd1fc`, `0xdb7b`, `0x127da`)
 
 - **Who:** a ship that chases the player (role above 5, the player's
@@ -1383,8 +1415,8 @@ same town only bits 1 and 2 are kept.
     560: for England, France, Holland and Spain, "   %s %s" (CSTR 90)
     with the nation and the rank, or without one CSTN 21 by standing (2
     or more "Letter of Marque", 0-1 "(no title)", -1 to -3 "wary",
-    below "hostile"); "(married)" or "(single)" (CSTR 91, 285; flag VA
-    `0x45e86`, the daughter, not modelled); age `years + 25`; health
+    below "hostile"); "(married)" or "(single)" (CSTR 91, 285; VA
+    `0x45e86`); age `years + 25`; health
     (CSTN 36); the fortune; acres (x 50); the reputation word (CSTN 34,
     `clamp(reputation / 4 + 1, 0, 5)`) and the difficulty (CSTN 35).
   - **Ship Status:** the fleet panel only to look (VA `0xffae` mode 0:
@@ -1734,7 +1766,7 @@ order:
 5. **His offer, by standing s:**
    - With `s > -4`, the price is `(4 - s^3) x 200` gold.
    - From s = 2 the price is negative and his daughter is met instead
-     (VA `0x128c1`, not done yet).
+     (VA `0x128c1`, see "The governor's daughter").
    - Otherwise (VA `0x12d6d`): a Letter of Marque for `s >= 0` (CSTR
      147), a pardon for `s < 0` (CSTR 148).
    - Paying raises the standing by 2, to at most 2, and resets the

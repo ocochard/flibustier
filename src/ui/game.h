@@ -237,6 +237,9 @@ struct game {
 	int			 log_page, log_leaf;
 	int			 panel_view;	/* the fleet panel only shows */
 	int			 gov_tries;	/* ransom tries this visit */
+	struct daughter		 daughter;	/* the governor's, met */
+	int			 gov_said;	/* her answer: a CSTR */
+	int			 sw_suitor;	/* the duel with her suitor */
 	int			 hostage_said;	/* the hostage's news, or -1 */
 	int			 escape_page;	/* the roll call's second page */
 	int			 deserted_town;	/* the town just left */

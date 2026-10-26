@@ -910,6 +910,39 @@ test_governor(void)
 		}
 		CHECK(ransomed);
 	}
+	/* Standing 4: his daughter instead of an offer; a proposal, the
+	 * suitor beaten in the alley, the wedding. */
+	{
+		int n;
+		int nat = g->sim.towns[g->sim.player_town].nation & 3;
+
+		g->sim.visit_flags &= ~VISIT_GOVERNOR;
+		g->sim.mission.type = MISSION_NONE;
+		g->sim.standing[nat] = 4;
+		g->sim.rank[nat] = 9;		/* no promotion left */
+		g->sim.fortune = 4990;
+		g->sim.married = 0;
+		memset(g->sim.prisoners, 0, sizeof(g->sim.prisoners));
+		g->sim.towns[g->sim.player_town].governor = 0;
+		CHECK(game_script(g, "click:580,220 wait:40") == 0);
+		for (n = 0; n < 20 && g->screen == &screen_governor &&
+		    g->gov_stage != 13; n++)
+			CHECK(game_script(g, "enter wait:2") == 0);
+		CHECK(g->screen == &screen_governor && g->gov_stage == 13 &&
+		    g->daughter.charm >= 4);
+		CHECK(game_script(g, "down enter") == 0 &&
+		    g->gov_stage == 15);
+		CHECK(game_script(g, "enter wait:40") == 0 &&
+		    g->screen == &screen_sword && g->sw_stage == 1);
+		CHECK(game_script(g, "enter") == 0 && g->sw_stage == 2 &&
+		    g->sim.sword.nation == -1);
+		g->sim.sword.result = SWORD_WON;
+		CHECK(game_script(g, "wait:40") == 0 &&
+		    g->screen == &screen_governor && g->gov_stage == 16 &&
+		    g->sim.married == 2);
+		CHECK(game_script(g, "enter wait:40") == 0 &&
+		    g->screen == &screen_town);
+	}
 	/* A hostage's news, then back to sea. */
 	g->sim.hostage = 5 << 3 | 2;
 	g->hostage_said = -1;

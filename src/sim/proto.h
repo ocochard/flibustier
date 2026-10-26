@@ -29,6 +29,7 @@ struct session {
 	world_loader	 load_world;
 	void		*load_arg;
 	struct world	*world;		/* owned; the era of sim.world */
+	struct daughter	 daughter;	/* the governor's, met */
 };
 
 /* Release what the session allocated. */

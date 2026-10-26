@@ -303,3 +303,78 @@ sim_name_captain(struct sim *s, int nation)
 	} while (id == 0);
 	return (id);
 }
+
+int
+sim_daughter_meet(struct sim *s, struct daughter *d)
+{
+	struct sim_town *t;
+	int nation, charm;
+
+	memset(d, 0, sizeof(*d));
+	if (s->player_town < 0 || (size_t)s->player_town >= s->ntowns)
+		return (0);
+	t = &s->towns[s->player_town];
+	nation = t->nation & 3;
+	d->town = s->player_town;
+	d->niece = t->governor & GOV_NIECE;
+	if (t->governor & (GOV_WIFE | GOV_INFORMANT | 0x20))
+		return (2);
+	charm = ((int)(s->fortune / 499) + s->rank[nation] * 2 +
+	    s->player.difficulty) / (d->niece + 1);
+	if (charm < 1 || s->married != 0)
+		return (0);
+	charm /= 2;
+	if (s->player.ability == ABILITY_CHARM)
+		charm *= 2;
+	d->charm = charm;
+	d->suitor = (s->player_town & 3) * 8 + nation * 32 + d->niece * 2 + 1;
+	return (1);
+}
+
+int
+sim_daughter_talk(struct sim *s, const struct daughter *d)
+{
+	if (d->charm < 1 || rng_below(&s->rng, d->charm) <= 2)
+		return (0);
+	s->towns[d->town].governor |= GOV_INFORMANT;
+	s->romances++;
+	return (1);
+}
+
+int
+sim_daughter_propose(const struct daughter *d)
+{
+	return (d->charm < 4 ? 142 + d->charm / 2 : 144);
+}
+
+void
+sim_daughter_duel(struct sim *s, const struct daughter *d, int weapon)
+{
+	struct sword_setup in;
+
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_DUEL;
+	in.you_men = in.foe_men = 1;
+	in.you_factor = in.foe_factor = 9;
+	in.title = d->suitor;
+	in.nation = -1;			/* labelled with the suitor's name */
+	in.extra = 0;
+	in.weapon = weapon;
+	sim_sword_start(s, &in);
+	s->sword.scene = SCENE_ALLEY;
+}
+
+int
+sim_daughter_duel_end(struct sim *s, const struct daughter *d)
+{
+	struct sim_town *t = &s->towns[d->town];
+	int won = s->sword.result == SWORD_WON;
+
+	sim_duel_end(s);
+	if (!won)
+		return (0);
+	s->married = d->niece + 2;
+	t->governor |= GOV_WIFE;
+	t->standing = (uint16_t)((int16_t)t->standing + 2);
+	return (1);
+}
