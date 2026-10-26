@@ -23,6 +23,7 @@ import datetime
 import hashlib
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -66,7 +67,8 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
     prompt = asset["prompt"]
     if frame:
         fx, fy, fw, fh = (round(v * k) for v in frame)
-        prompt = prompt.strip() + " " + spec["pack"]["framed"].strip()
+        if asset.get("gilded", True):
+            prompt = prompt.strip() + " " + spec["pack"]["framed"].strip()
         rw, rh = fw, fh
     else:
         rw, rh = out_w, out_h
@@ -143,6 +145,25 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
 DEFAULT_NEGATIVE = ("text, letters, words, watermark, signature, logo, "
                     "frame, border, cartoon, illustration, painting, "
                     "anime, 3d render, lowres, blurry, deformed")
+
+
+def reachable(server):
+    """The server's URL with the first address that answers: the host
+    may resolve to addresses the server does not listen on (IPv6 for a
+    ComfyUI on 0.0.0.0), each of which would stall every request."""
+    u = urllib.parse.urlsplit(server)
+    port = u.port or 80
+    for family, kind, proto, _, addr in socket.getaddrinfo(
+            u.hostname, port, type=socket.SOCK_STREAM):
+        try:
+            with socket.socket(family, kind, proto) as sock:
+                sock.settimeout(2)
+                sock.connect(addr)
+        except OSError:
+            continue
+        host = "[%s]" % addr[0] if family == socket.AF_INET6 else addr[0]
+        return "%s://%s:%d" % (u.scheme, host, port)
+    sys.exit("cannot reach " + server)
 
 
 def call(server, path, data=None):
@@ -239,6 +260,7 @@ def main():
     ap.add_argument("--seed", type=int, help="override every seed")
     ap.add_argument("ids", nargs="*")
     args = ap.parse_args()
+    args.server = reachable(args.server)
 
     with open(args.spec, "rb") as f:
         spec = tomllib.load(f)

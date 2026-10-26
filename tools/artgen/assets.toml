@@ -4,6 +4,10 @@
 # prompt.  "size" is in 640x480 pixels (default the full screen); the
 # art is rendered at that size times art_height / 480.  Prompts describe
 # the layout the game's screen needs: where its text and sprites go.
+#
+# People: describe every person in a picture on their own (age, build,
+# face, hair or hat, clothes); "three sailors" gives three copies of one
+# face.
 
 [pack]
 name = "stmalo open pack (photographic, draft)"
@@ -102,10 +106,17 @@ seed = 1660
 source = "layout described from the original screen"
 prompt = """
 Photograph on the deck of a 17th-century sailing ship under a clear pale
-blue sky. Along the bottom third of the frame, four rough pirates in
-shirts and headscarves haul heavy wooden treasure chests and sacks
-across the deck by the rail; white sails at the left and right edges.
-The upper two thirds of the frame are open plain sky. Bright sunlight.
+blue sky. Along the bottom third of the frame, four very different
+pirates haul treasure across the deck by the rail: on the left a burly
+bald man in his forties with a thick black beard and a sleeveless brown
+leather jerkin, bent under a heavy wooden chest; next to him a skinny
+red-haired young man of twenty, freckled and clean-shaven, in a striped
+shirt and a blue headscarf, dragging a sack; then a grey-haired old
+sailor with a white stubble and a wide-brimmed straw hat, carrying a
+small iron-bound casket; on the right a tall dark-skinned man in his
+thirties with braided hair, a red sash and an open white shirt, lifting
+a chest onto his shoulder. White sails at the left and right edges. The
+upper two thirds of the frame are open plain sky. Bright sunlight.
 Historical reenactment photography, natural textures, sharp focus,
 realistic.
 """
@@ -144,10 +155,11 @@ source = "layout described from the original screen"
 prompt = """
 Photograph from deep inside a dark sea cave. Through a jagged opening in
 the upper centre, a bright glimpse of the sea and a distant sailing
-ship. On the right, an old human skeleton in rotten clothes hangs from a
-rope tied to the cave ceiling. The rest of the cave, especially the
-left half and the bottom, is rock in deep darkness. Dramatic
-chiaroscuro, realistic textures, sharp focus.
+ship. On the right, an old human skeleton in rotten clothes hangs by its
+wrists, bound together with an iron chain fixed to the cave ceiling,
+its arms raised above its skull, its feet dangling above the rocks. The
+rest of the cave, especially the left half and the bottom, is rock in
+deep darkness. Dramatic chiaroscuro, realistic textures, sharp focus.
 """
 
 [[asset]]
@@ -171,8 +183,11 @@ seed = 1660
 source = "layout described from the original screen"
 prompt = """
 Photograph of a 17th-century Caribbean tavern keeper standing at the far
-left of the frame, a tall man with short dark hair, a red shirt and a
-long white apron, arms crossed, looking at the viewer. Behind him and
+left of the frame, a tall, rough working man with short dark hair and a
+few days' stubble, a faded red shirt with sweat stains and rolled
+sleeves, a long apron of coarse linen, grimy and stained with wine and
+grease, arms crossed, looking at the viewer, his skin and clothes worn
+by hard work in a hot tavern. Behind him and
 across the whole rest of the frame, a plain, softly lit pale yellow-green
 plaster wall, empty and out of focus. Warm light. Historical reenactment
 photography, 50mm lens, realistic.
@@ -229,9 +244,14 @@ seed = 1660
 source = "layout described from the original screen"
 frame = [166, 47, 280, 227]
 field = "#0B361A"
+gilded = false		# a shop sign, not a framed picture
 prompt = """
-Photograph of an old carved wooden merchant's sign showing a bulging
-canvas money sack, hanging from iron rings, weathered paint, soft light.
+Photograph of an old weathered wooden shop signboard hanging from two
+iron rings, seen straight on and filling the whole image. On its flat
+wooden boards, a faded hand-painted picture of three bulging money
+sacks spilling gold coins, the paint cracked and peeling with the wood
+grain showing through. Only the flat painted signboard, nothing in
+front of it. Soft daylight.
 """
 
 [[asset]]
@@ -242,10 +262,11 @@ source = "layout described from the original screen"
 frame = [345, 13, 266, 457]
 field = "#003100"
 prompt = """
-Portrait photograph of a young Caribbean tavern barmaid of the 1660s with
-dark curly hair and gold hoop earrings, a white off-shoulder blouse and a
-black laced bodice, warm smile, warm tavern light, period costume,
-historical reenactment photography.
+Portrait photograph of a Caribbean tavern barmaid of the 1660s, a
+full-figured woman in her late twenties with a generous bust, dark curly
+hair and gold hoop earrings, a low-cut white off-shoulder blouse and a
+tight black laced bodice, warm smile, warm tavern light, period
+costume, historical reenactment photography.
 """
 
 [[asset]]
@@ -269,9 +290,13 @@ source = "layout described from the original screen"
 frame = [65, 13, 510, 249]
 field = "#411010"
 prompt = """
-Photograph of three weathered sailors of the 1660s side by side, close-up
-of their faces and shoulders, headscarves, stubble, rough shirts,
-looking at the viewer, warm light, historical reenactment photography.
+Photograph of three very different sailors of the 1660s side by side,
+close-up of their faces and shoulders, looking at the viewer: on the
+left an old weathered man with a white beard and a green turban; in the
+middle a young clean-shaven man with curly brown hair and a red
+neckerchief; on the right a broad dark-skinned man in his forties with
+a shaved head, a short black beard and a gold earring. Rough shirts,
+warm light, historical reenactment photography.
 """
 
 [[asset]]
@@ -296,9 +321,13 @@ source = "layout described from the original screen"
 frame = [170, 17, 311, 258]
 field = "#7B0000"
 prompt = """
-Photograph of two pirates on a sandy Caribbean beach under palm trees
-kneeling over a freshly dug hole, lifting the lid of a wooden treasure
-chest full of gold coins, bright sun.
+Photograph of two very different pirates on a sandy Caribbean beach under
+palm trees, kneeling over a freshly dug hole and lifting the lid of a
+wooden treasure chest full of gold coins: on the left a heavy-set older
+man in his fifties with a grey beard, a black tricorn hat and a long
+faded blue coat; on the right a lean young man in his twenties,
+clean-shaven, with long black hair tied back under a red headscarf and
+a loose white shirt with rolled sleeves. Bright sun.
 """
 
 [[asset]]
@@ -402,9 +431,15 @@ source = "layout described from the original screen"
 frame = [134, 20, 372, 280]
 field = "#20172D"
 prompt = """
-Photograph of a mutiny on the deck of a 17th-century ship: angry sailors
-shouting and brandishing cutlasses and pistols, under a red sunset sky,
-dramatic light, historical reenactment photography.
+Photograph of a mutiny on the deck of a 17th-century ship under a red
+sunset sky: a group of very different angry sailors shouting and
+brandishing weapons. In front, a huge bald man with a black beard and a
+torn leather vest raising a cutlass; beside him a wiry old sailor with
+white hair and an eye patch pointing a pistol; behind them a young
+blond man in a striped shirt waving a boarding axe; on the right a
+dark-skinned man in his thirties with a green headscarf and a gold
+earring gripping a belaying pin. Dramatic light, historical reenactment
+photography.
 """
 
 [[asset]]
@@ -493,9 +528,13 @@ source = "layout described from the original screen"
 frame = [150, 26, 346, 254]
 field = "#202900"
 prompt = """
-Photograph of three sailors of the 1660s digging in the sand of a
-Caribbean beach with shovels, searching for buried treasure, the
-turquoise sea and a blue sky behind them.
+Photograph of three very different sailors of the 1660s digging in the
+sand of a Caribbean beach with shovels, searching for buried treasure:
+a stocky middle-aged man with a red beard and a battered felt hat; a
+tall thin young man with long black hair, bare-chested and sunburnt;
+and a short grey-haired old man in a blue coat leaning on his shovel
+while pointing at the sand. The turquoise sea and a blue sky behind
+them.
 """
 
 [[asset]]
@@ -546,7 +585,10 @@ source = "layout described from the original screen"
 frame = [151, 54, 333, 234]
 field = "#102850"
 prompt = """
-Photograph of two shipwrights of the 1660s in long coats and tricorn
-hats talking in a grassy shipyard beside a large wooden ship hull on the
-slipway, tools and timber at their feet, daylight.
+Photograph of two very different shipwrights of the 1660s talking in a
+grassy shipyard beside a large wooden ship hull on the slipway: an
+elderly master shipwright, white-haired and stout, in a long brown coat
+and a black tricorn hat, holding plans; and a young apprentice with
+short blond hair, bareheaded, in a leather apron over a linen shirt,
+carrying an adze. Tools and timber at their feet, daylight.
 """
