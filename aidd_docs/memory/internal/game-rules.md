@@ -1685,8 +1685,16 @@ sign, the texts at (40, 280) up to x 620.
 4. **The treasure cave (VA `0xbdfe`):** eight piles (`tcave0`-`7`),
    each drawn once the fortune passes its mark (table at VA `0x32928`:
    x, y and the mark; 500, 1000, then by thousands to 7000).
-5. **"Do you... Plan another expedition? Retire from privateering?"**
-   (CSTR 157). Below Grand Master (difficulty 3), "Advance to <level>
+5. **The career may end here (VA `0x1f1d7`):** a famous expedition is
+   over (CSTR 159 at (100, 40) up to x 540), or at health 3 (see
+   "Prison") "Your crew scatters to the winds. Advancing age and old
+   battle wounds combine to sap your strength..." (CSTR 160 at (200,
+   200) up to x 620), on a cleared screen; both go to the ending
+   without the lure back to the sea. Health is read nowhere else but
+   the Personal Status, prison and the ending: age does not slow the
+   sword (VA `0x1db64` and its callers).
+6. **"Do you... Plan another expedition? Retire from privateering?"**
+   (CSTR 157). Below Swashbuckler (difficulty 3), "Advance to <level>
    level?" (CSTR 97) is a third choice that raises the difficulty.
    - Retire asks "Are you sure you want to end the game?" (CSTR 86
      with 96). Yes goes to the retirement.

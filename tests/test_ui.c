@@ -1594,6 +1594,16 @@ test_bank(void)
 	/* No: the bank lets the player go. */
 	CHECK(game_script(g, "click:540,320 wait:40 down enter wait:40") == 0
 	    && g->screen == &screen_town && g->sim.fleet.gold == 6000);
+	/* Nine years at sea: health 3, the officers leave, the career is
+	 * over before any plan (CSTR 160). */
+	g->sim.start_year = g->sim.year - 9;
+	g->sim.injuries = 0;
+	g->sim.player.ability = ABILITY_FENCING;
+	CHECK(game_script(g, "click:540,320 wait:40 enter enter enter "
+	    "wait:40 enter wait:40") == 0 && g->screen == &screen_bank &&
+	    g->bank_stage == 6);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_ending && g->end_forced);
 	game_free(g);
 }
 

@@ -5858,16 +5858,26 @@ const struct screen screen_governor = {
 #define S_PORTIONS		156
 #define S_PLAN			157
 #define S_REFIT			158
+#define S_EXPEDITION_OVER	159	/* also the prison's end pages */
+#define S_TOO_OLD		160
 #define BANK_TEXT_X		40
 #define BANK_TEXT_Y		280
 #define BANK_TEXT_W		580
 enum { BANK_ASK, BANK_SHARES, BANK_PORTIONS, BANK_PLAN, BANK_SURE_END,
-    BANK_REFIT };
+    BANK_REFIT, BANK_OVER };
 
 static void
 bank_enter(struct game *g)
 {
-	game_background(g, "pic/bank");
+	/* Back from the hideout, the career may end before any plan (VA
+	 * 0x1f1d7): a famous expedition is over (CSTR 159), or at health
+	 * 3 the officers leave for a younger captain (CSTR 160), on a
+	 * cleared screen. */
+	if (g->bank_stage == BANK_PLAN && (g->sim.player.expedition >= 0 ||
+	    sim_health(&g->sim) == 3))
+		g->bank_stage = BANK_OVER;
+	game_background(g, g->bank_stage == BANK_OVER ? "pic/textback" :
+	    "pic/bank");
 	game_portrait(g, NULL);
 	g->ink[0] = 240;
 	g->ink[1] = 220;
@@ -5943,6 +5953,12 @@ bank_event(struct game *g, const struct ui_event *ev)
 		if (go)
 			game_goto(g, &screen_town);
 		break;
+	case BANK_OVER:
+		if (go) {
+			g->end_forced = 1;	/* no lure back to the sea */
+			game_goto(g, &screen_ending);
+		}
+		break;
 	}
 }
 
@@ -5953,6 +5969,16 @@ bank_draw(struct game *g)
 	const char *arg[3];
 	int menu = 0;
 
+	if (g->bank_stage == BANK_OVER) {
+		if (g->sim.player.expedition >= 0)
+			draw(g, FONT_BODY, 100, 40, 440,
+			    game_str(g, S_EXPEDITION_OVER), 0);
+		else
+			draw(g, FONT_BODY, 200, 200, 420,
+			    game_str(g, S_TOO_OLD), 0);
+		continue_prompt(g);
+		return;
+	}
 	date_text(g, date, sizeof(date));
 	{
 		int w = text_width(&g->font[FONT_BODY], date);
@@ -6574,8 +6600,6 @@ const struct screen screen_sack = {
  * 159, 160, at (100, 40) and (200, 200) on a cleared page) and goes to
  * the Hall of Fame.
  */
-#define S_EXPEDITION_OVER	159
-#define S_TOO_OLD		160
 #define S_MONTHS_PASS		176	/* + health: 176-179 */
 
 static void	retire_choose(struct game *, int);
