@@ -155,7 +155,8 @@ image_rgba(struct fb *fb, const struct image *img, int x, int y)
 		return;
 	for (oy = cy0 < 0 ? 0 : cy0; oy < cy1 && oy < fb->out_h; oy++) {
 		ay = (int)((long)(oy - cy0) * img->rgba_h / (cy1 - cy0));
-		row = img->rgba + (size_t)ay * img->rgba_w * 4;
+		row = img->rgba + (size_t)ay * (img->rgba_stride > 0 ?
+		    img->rgba_stride : img->rgba_w) * 4;
 		d = fb->rgb + ((size_t)oy * fb->out_w + ox0) * 3;
 		for (ox = ox0; ox < ox1; ox++, d += 3) {
 			ax = (int)((long)(ox - cx0) * img->rgba_w / (cx1 - cx0));

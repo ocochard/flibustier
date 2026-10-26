@@ -119,7 +119,46 @@ image = tavern.png
     transparency).
 - Limits: the title is composed on indices (intro), and so are sprites
   drawn into the treasure map, so those show at original resolution.
-  Tiles (`tiles/`) and `img/` have no replacement format yet.
+  `img/` has no replacement format yet.
+
+## Replacement tiles: tile sheets
+
+Any `tiles/` ID may map to a `.tiles` file, loaded by `tileset_load()`
+(`src/assets/tiles.c`):
+
+```ini
+# tiles/map.tiles
+[tiles]
+image = map.png
+# tile side in art pixels: 36 for the 16 pixel map tiles at 1080p
+tile = 36
+# optional: tile count (default 256)
+count = 256
+# optional: animation frames (default 1), each a full set of tiles
+# below the previous one, and sailing passes per frame (default 4)
+frames = 8
+period = 4
+```
+
+- Tiles fill the image in rows, left to right, top to bottom; the image
+  width sets the columns.
+- A tile covers its art size times `480 / art_height` in 640x480 pixels,
+  rounded. The game needs 16 pixel map tiles (`tiles/map`) and 32 pixel
+  battle tiles (`tiles/battle`), 256 of each.
+- Palette indices and a palette come with the tiles, because game logic
+  reads terrain from tile colours: the original tileset's when it is
+  installed with the same tiles, otherwise the first frame reduced to the
+  fixed palette.
+- Animation stands in for the original's palette shimmer of the sea:
+  frame `pass / period % frames`, counted in sailing passes (12.2 a
+  second). Battles draw frame 0.
+- Limits:
+  - Without original data, terrain comes from the fixed-palette indices,
+    which the executable's colour classes do not describe. A fully open
+    pack needs its own terrain data.
+  - The treasure map's tiles are composed on indices (original
+    resolution).
+  - The shimmer pause while the ship touches land is not reproduced.
 
 ## Replacement fonts
 

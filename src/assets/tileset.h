@@ -18,6 +18,15 @@ struct tileset {
 	uint8_t		*pixels;	/* count * tile_w * tile_h indices */
 	uint8_t		 palette[256 * 3];	/* 8 bits per channel */
 	int		 has_palette;
+
+	/* Replacement art (tile sheets, see tiles.h): "frames" sets of all
+	 * tiles, each "frame_rows" rows of "columns" tiles of art_tile
+	 * pixels square; or NULL. */
+	uint8_t		*rgba;		/* rgba_w * rgba_h * 4 */
+	int		 rgba_w, rgba_h;
+	int		 art_tile, columns, frame_rows;
+	int		 frames;
+	int		 period;	/* animation passes per frame */
 };
 
 /*

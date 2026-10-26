@@ -28,6 +28,7 @@
 #include "assets/sheet.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
+#include "assets/tiles.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
 #include "gfx/fb.h"
@@ -529,15 +530,16 @@ test_img(void)
 	CHECK(img_decode(raw, sizeof(raw) - 1, &img) == -1);
 }
 
+#define IMB_LEN	(0x318 + 2 * (10 + 4 + 2))
+
+/* IMB tileset: two 2x2 tiles of colours 1 and 2, colour 1 red. */
 static void
-test_tileset(void)
+make_imb(uint8_t *buf)
 {
-	static uint8_t buf[0x318 + 2 * (10 + 4 + 2)];
-	struct tileset ts;
 	size_t off;
 	int i;
 
-	memset(buf, 0, sizeof(buf));
+	memset(buf, 0, IMB_LEN);
 	put16(buf, 3);
 	put16(buf + 2, 1);
 	put16(buf + 6, 2);		/* tile count */
@@ -550,6 +552,15 @@ test_tileset(void)
 		put16(buf + off + 8, 1);
 		memset(buf + off + 10, i + 1, 4);
 	}
+}
+
+static void
+test_tileset(void)
+{
+	static uint8_t buf[IMB_LEN];
+	struct tileset ts;
+
+	make_imb(buf);
 	CHECK(tileset_decode(buf, sizeof(buf), &ts) == 0);
 	CHECK(ts.count == 2 && ts.tile_w == 2 && ts.pixels[4] == 2);
 	CHECK(ts.has_palette && ts.palette[3] == 255 && ts.palette[0] == 0);
@@ -1035,6 +1046,137 @@ test_fonts(void)
 	remove_files(dir, files);
 }
 
+/*
+ * 8x16 RGBA tile atlas: 4x4 tiles, two per row.  Frame 0 (rows 0-7):
+ * red, green, blue, white; frame 1 (rows 8-15): all black.
+ */
+static const uint8_t png_tiles[] = {
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x10,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x2b, 0x8a, 0x3e, 0x7d, 0x00, 0x00, 0x00,
+	0x20, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0xf8, 0xcf, 0xc0, 0xf0,
+	0x1f, 0x19, 0x63, 0x81, 0x34, 0x57, 0x80, 0x26, 0x8f, 0x01, 0xe8, 0xa3,
+	0x00, 0xe2, 0x10, 0x3c, 0x78, 0x24, 0x28, 0x00, 0x00, 0xb3, 0x23, 0xdf,
+	0x21, 0x1e, 0xbc, 0xcb, 0x86, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
+	0x44, 0xae, 0x42, 0x60, 0x82,
+};
+
+/* Load tiles/sea from "dir" after writing "desc" as its sheet. */
+static int
+try_tiles(const char *dir, const char *desc)
+{
+	struct packs *packs = packs_new();
+	struct tileset ts;
+	int rc;
+
+	if (write_text(dir, "sea.tiles", desc) != 0 ||
+	    packs_add_dir(packs, dir) != 0) {
+		packs_free(packs);
+		return (-2);
+	}
+	rc = tileset_load(packs, "tiles/sea", &ts);
+	tileset_free(&ts);
+	packs_free(packs);
+	return (rc);
+}
+
+/*
+ * Tile sheets: tiles in rows, animation frames below each other, indices
+ * from the original tileset when there, else from the first frame.
+ */
+static void
+test_tiles(void)
+{
+	static const char *const low_files[] = { "pack.ini", "pair.imb", NULL };
+	static const char *const high_files[] = { "pack.ini", "atlas.png",
+	    "sea.tiles", "pair.tiles", NULL };
+	static const char sea[] = "[tiles]\nimage = atlas.png\ntile = 4\n"
+	    "count = 4\nframes = 2\nperiod = 4\n";
+	static uint8_t imb[IMB_LEN];
+	static struct fb fb;
+	char low[] = "/tmp/stmalo-test-XXXXXX";
+	char high[] = "/tmp/stmalo-test-XXXXXX";
+	struct packs *packs;
+	struct tileset ts;
+	struct image t;
+	uint8_t *rgb;
+	const uint8_t *p;
+
+	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	make_imb(imb);
+	CHECK(write_text(low, "pack.ini", "[assets]\ntiles/pair = pair.imb\n")
+	    == 0);
+	CHECK(write_bytes(low, "pair.imb", imb, sizeof(imb)) == 0);
+	CHECK(write_text(high, "pack.ini", "[pack]\nart_height = 960\n"
+	    "[assets]\ntiles/sea = sea.tiles\ntiles/pair = pair.tiles\n") == 0);
+	CHECK(write_bytes(high, "atlas.png", png_tiles, sizeof(png_tiles)) ==
+	    0);
+	CHECK(write_text(high, "sea.tiles", sea) == 0);
+	CHECK(write_text(high, "pair.tiles", "[tiles]\nimage = atlas.png\n"
+	    "tile = 4\ncount = 2\n") == 0);
+
+	/* Over the original: its indices and palette. */
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, low) == 0);
+	CHECK(packs_add_dir(packs, high) == 0);
+	CHECK(tileset_load(packs, "tiles/pair", &ts) == 0);
+	CHECK(ts.count == 2 && ts.tile_w == 2 && ts.rgba != NULL);
+	CHECK(ts.pixels != NULL && ts.pixels[0] == 1 && ts.pixels[4] == 2);
+	CHECK(ts.has_palette && ts.palette[3] == 255);
+	tileset_free(&ts);
+
+	/* Alone: indices from frame 0; the pass picks the frame. */
+	CHECK(tileset_load(packs, "tiles/sea", &ts) == 0);
+	CHECK(ts.count == 4 && ts.tile_w == 2 && ts.columns == 2 &&
+	    ts.frames == 2);
+	CHECK(ts.pixels != NULL && ts.pixels[0] == 180 && ts.pixels[4] == 30 &&
+	    ts.pixels[12] == 215);
+	tileset_tile(&ts, 1, 3, &t);		/* green, frame 0 */
+	CHECK(t.w == 2 && t.pixels == ts.pixels + 4 && t.rgba_w == 4 &&
+	    t.rgba_stride == 8);
+	CHECK(t.rgba != NULL && t.rgba[0] == 0 && t.rgba[1] == 255);
+	tileset_tile(&ts, 1, 4, &t);		/* frame 1: black */
+	CHECK(t.rgba != NULL && t.rgba[1] == 0 && t.rgba[3] == 255);
+	tileset_tile(&ts, 1, 8, &t);		/* back to frame 0 */
+	CHECK(t.rgba != NULL && t.rgba[1] == 255);
+
+	/* Drawn at 2x, a tile's art fills its 4x4 canvas pixels. */
+	if (fb_init(&fb, 960) == 0 &&
+	    (rgb = malloc((size_t)1280 * 960 * 3)) != NULL) {
+		fb_clear(&fb, 0);
+		tileset_tile(&ts, 2, 0, &t);	/* blue */
+		fb_image(&fb, &t, 2, 0, 0);
+		tileset_tile(&ts, 3, 0, &t);	/* white */
+		fb_image(&fb, &t, 4, 0, 0);
+		fb_to_rgb(&fb, 256, rgb);
+		p = at(rgb, 1280, 7, 3);
+		CHECK(p[0] == 0 && p[1] == 0 && p[2] == 255);
+		p = at(rgb, 1280, 8, 3);
+		CHECK(p[0] == 255 && p[1] == 255 && p[2] == 255);
+		CHECK(fb.px[2] == 5 && fb.px[4] == 215);
+		free(rgb);
+	}
+	fb_free(&fb);
+	tileset_free(&ts);
+	packs_free(packs);
+
+	/* Errors: too short for its frames, no tile size, bad numbers. */
+	CHECK(try_tiles(high, sea) == 0);
+	CHECK(try_tiles(high, "[tiles]\nimage = atlas.png\ntile = 4\n"
+	    "count = 4\nframes = 3\n") == -1);
+	CHECK(try_tiles(high, "[tiles]\nimage = atlas.png\n") == -1);
+	CHECK(try_tiles(high, "[tiles]\nimage = atlas.png\ntile = 9\n") == -1);
+	CHECK(try_tiles(high, "[tiles]\nimage = atlas.png\ntile = 4\n"
+	    "frames = 0\n") == -1);
+	CHECK(try_tiles(high, "[tiles]\nimage = none.png\ntile = 4\n") == -1);
+
+	remove_files(low, low_files);
+	remove_files(high, high_files);
+}
+
 int
 main(void)
 {
@@ -1053,6 +1195,7 @@ main(void)
 	test_fb();
 	test_sheets();
 	test_fonts();
+	test_tiles();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

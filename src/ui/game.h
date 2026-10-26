@@ -111,6 +111,7 @@ struct game {
 	struct world		*world;		/* the career's era, for sailing */
 	struct sprite_bank	 ship;		/* sailing ship, 16 headings */
 	struct sea		 sea;
+	struct tileset		 map_art;	/* tiles/map, for its art */
 	int			 view_x, view_y;	/* sailing view origin, pixels */
 	int			 turn;		/* steering input: -1, 0, +1 */
 	int			 enc_result;	/* -1 while the dialogs go on */

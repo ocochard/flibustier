@@ -23,6 +23,7 @@ struct image {
 	uint8_t		*rgba;		/* rgba_w * rgba_h * 4, or NULL */
 	int		 rgba_w;
 	int		 rgba_h;
+	int		 rgba_stride;	/* pixels between rows; 0: rgba_w */
 };
 
 void	image_free(struct image *img);

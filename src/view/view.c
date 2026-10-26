@@ -16,6 +16,7 @@
 #include "assets/sheet.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
+#include "assets/tiles.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
 #include "assets/world.h"
@@ -540,7 +541,7 @@ open_decoded(struct view *v, const struct blob *b, char *err, size_t errlen)
 			v->nframes += v->group.banks[i].count;
 	} else if (starts(id, "tiles/")) {
 		v->kind = K_TILES;
-		rc = tileset_decode(b->data, b->len, &v->tiles);
+		rc = tileset_from_blob(v->packs, id, b, &v->tiles);
 		if (rc == 0 && v->tiles.has_palette) {
 			memcpy(v->pal, v->tiles.palette, sizeof(v->pal));
 			snprintf(v->pal_id, sizeof(v->pal_id), "own");

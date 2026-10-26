@@ -178,6 +178,7 @@ game_free(struct game *g)
 	bank_free(&g->btl_damage[1]);
 	bank_free(&g->btl_misc);
 	tileset_free(&g->btl_tiles);
+	tileset_free(&g->map_art);
 	free(g->cursor.pixels);
 	free(g->cursor.mask);
 	bank_free(&g->intro_spr[0]);

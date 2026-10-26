@@ -87,12 +87,13 @@ The engine runs from asset packs:
    - Effects that depend on the palette, such as sea animation, are
      expressed as an engine effect (palette cycle or animated texture), so
      a new pack can supply its own version.
-   - Sprites and fonts have replacement formats, sprite sheets and
-     TrueType fonts, drawn at canvas resolution (`asset-packs.md`).
+   - Sprites, fonts and tiles have replacement formats (sprite sheets,
+     TrueType fonts, tile sheets with animation frames for the sea),
+     drawn at canvas resolution (`asset-packs.md`).
      FreeType parses the fonts, because packs from third parties are
      untrusted input (maintainer, 2026-10-26).
-   - Still original resolution: tiles and `img/`. They need a
-     replacement format (tile sheets).
+   - Still original resolution: `img/` (the weapon choice picture) and
+     anything composed on indices first (title, treasure map).
 4. **Separate simulation from presentation.** Game rules live in a module
    with no raylib dependency (pure C99, deterministic, seeded RNG), so they
    can be unit tested and compared against traces of the original.

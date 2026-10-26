@@ -16,6 +16,7 @@
 #include "assets/scenario.h"
 #include "assets/pic.h"
 #include "assets/sheet.h"
+#include "assets/tiles.h"
 #include "sim/hof.h"
 #include "sim/save.h"
 #include "screen.h"
@@ -2625,6 +2626,11 @@ sail_enter(struct game *g)
 	sea_init(&g->sea, g->fb.pal);
 	bank_free(&g->ship);
 	bank_load(g->packs, ship_sprite(&g->sim.fleet), BANK_RUNS, &g->ship);
+	/* Replacement art of the map tiles; the world has their indices. */
+	if (g->map_art.count == 0 &&
+	    (tileset_load(g->packs, "tiles/map", &g->map_art) != 0 ||
+	    g->map_art.tile_w != WORLD_TILE || g->map_art.count != 256))
+		tileset_free(&g->map_art);
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 	follow_ship(g, 1);
@@ -2743,18 +2749,26 @@ sail_draw(struct game *g)
 	const struct frame *fr;
 	char buf[128], from[64];
 	int cx, cy, x0 = g->view_x / WORLD_TILE, y0 = g->view_y / WORLD_TILE;
+	uint8_t cell;
 
 	sea_animate(&g->sea, g->sail_passes, g->fb.pal);
 	for (cy = 0; cy < FB_H / WORLD_TILE; cy++)
 		for (cx = 0; cx < FB_W / WORLD_TILE; cx++) {
 			struct image tile;
 
-			t = g->world->tiles + WORLD_TILE * WORLD_TILE *
-			    g->world->map[(y0 + cy) * WORLD_CELLS_W + x0 + cx];
-			tile.w = tile.h = WORLD_TILE;
-			tile.pixels = (uint8_t *)t;
-			tile.has_palette = 0;
-			tile.rgba = NULL;
+			cell = g->world->map[(y0 + cy) * WORLD_CELLS_W + x0 +
+			    cx];
+			if (g->map_art.rgba != NULL)
+				tileset_tile(&g->map_art, cell, g->sail_passes,
+				    &tile);
+			else {
+				t = g->world->tiles + WORLD_TILE * WORLD_TILE *
+				    cell;
+				tile.w = tile.h = WORLD_TILE;
+				tile.pixels = (uint8_t *)t;
+				tile.has_palette = 0;
+				tile.rgba = NULL;
+			}
 			fb_image(&g->fb, &tile, cx * WORLD_TILE, cy * WORLD_TILE,
 			    0);
 		}
@@ -3073,17 +3087,12 @@ static void	prize_show(struct game *);
 static void
 battle_enter(struct game *g)
 {
-	struct blob b;
-
 	game_background(g, "pic/sbat");
 	game_portrait(g, NULL);
 	battle_sprites(g, 0, g->sim.battle.you.type);
 	battle_sprites(g, 1, g->sim.battle.foe.type);
 	tileset_free(&g->btl_tiles);
-	if (packs_load(g->packs, "tiles/battle", &b) == 0) {
-		tileset_decode(b.data, b.len, &g->btl_tiles);
-		blob_free(&b);
-	}
+	tileset_load(g->packs, "tiles/battle", &g->btl_tiles);
 	g->btl_fire = g->btl_sails = 0;
 	g->btl_stage = g->sim.battle.outcome == BAT_NONE ? 0 : 1;
 	if (g->sim.battle.outcome == BAT_BOARDING &&
@@ -3430,12 +3439,9 @@ battle_draw(struct game *g)
 			for (cx = 0; cx < BATTLE_SCREEN; cx++) {
 				struct image t;
 
-				t.w = t.h = 32;
-				t.pixels = g->btl_tiles.pixels + 32 * 32 *
+				tileset_tile(&g->btl_tiles,
 				    g->world->battle_screens[bt->screen][cy *
-				    BATTLE_SCREEN + cx];
-				t.has_palette = 0;
-				t.rgba = NULL;
+				    BATTLE_SCREEN + cx], 0, &t);
 				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
 			}
 	battle_ship_draw(g, 0, &bt->you);
@@ -6663,18 +6669,14 @@ static const char *land_banks[5] = {
 static void
 land_enter(struct game *g)
 {
-	struct blob b;
 	int i;
 
 	game_background(g, "pic/lbat");
 	game_portrait(g, NULL);
 	for (i = 0; i < 5; i++)
 		load_bank(g, land_banks[i], 1, &g->land_spr[i]);
-	if (g->btl_tiles.tile_w != 32 && packs_load(g->packs, "tiles/battle",
-	    &b) == 0) {
-		tileset_decode(b.data, b.len, &g->btl_tiles);
-		blob_free(&b);
-	}
+	if (g->btl_tiles.tile_w != 32)
+		tileset_load(g->packs, "tiles/battle", &g->btl_tiles);
 	g->march_held = 0;
 	g->land_button = 0;
 	g->land_wait = 0;
@@ -6791,12 +6793,9 @@ land_draw(struct game *g)
 			for (cx = 0; cx < BATTLE_SCREEN; cx++) {
 				struct image t;
 
-				t.w = t.h = 32;
-				t.pixels = g->btl_tiles.pixels + 32 * 32 *
+				tileset_tile(&g->btl_tiles,
 				    g->world->land_screens[l->screen][cy *
-				    BATTLE_SCREEN + cx];
-				t.has_palette = 0;
-				t.rgba = NULL;
+				    BATTLE_SCREEN + cx], 0, &t);
 				fb_image(&g->fb, &t, cx * 32, cy * 32, 0);
 			}
 	nation = g->sim.towns[l->town].nation & 7;
