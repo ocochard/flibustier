@@ -62,7 +62,9 @@ harbour, meet ships at sea and fight them (Left/Right steer,
 Enter fires, Up/Down set full or battle sails), board them and fight
 their captain (Left attacks with a lunge, Shift+Left with a slash,
 Up/Down pick the line, Right steps back), and Escape opens the menu
-(save game, exit game). "Exit game" offers the Hall of Fame. Saves (one
+(save game, exit game). In sword fights the numeric keypad works too,
+its corners as diagonals. `--crt` (or F2 while playing) gives the
+window a CRT look, like dosbox-staging's default shader. "Exit game" offers the Hall of Fame. Saves (one
 JSON file per slot) and the Hall of Fame (a tab-separated text file) go
 to `~/.local/share/stmalo/saves`, or wherever `--saves DIR` says.
 `--script "enter down enter ..." out.png` plays the same screens without

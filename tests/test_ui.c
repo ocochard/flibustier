@@ -233,7 +233,7 @@ test_saves(void)
 
 	/* Sail for a while, back to the menu, then save in slot 4. */
 	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
-	    "down enter right enter enter type:Kidd enter enter esc enter wait:100 esc "
+	    "down enter right enter enter type:Kidd enter enter esc enter enter click:60,300 wait:100 esc "
 	    "down enter down down down enter");
 	if (g == NULL)
 		return;
@@ -283,7 +283,7 @@ test_hall_of_fame(void)
 	struct hof h;
 	char path[600], err[256];
 	static const char *career = "enter enter down down down down enter "
-	    "down enter right enter enter type:Anne enter enter esc ";
+	    "down enter right enter enter type:Anne enter enter esc enter enter click:60,300 wait:40 esc ";
 
 	hof_path(saves_tmp, path, sizeof(path));
 	remove(path);
@@ -318,7 +318,7 @@ test_sailing(void)
 	int y0, h0;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Low enter enter esc");	/* at Port Royale */
+	    "right enter enter type:Low enter enter esc enter enter click:60,300 wait:40 esc");	/* at Port Royale */
 	if (g == NULL)
 		return;
 	CHECK(g->started && g->world != NULL && g->sim.world == g->world);
@@ -347,7 +347,7 @@ test_encounter_screens(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter hold:right:16");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 hold:right:16");
 	if (g == NULL)
 		return;
 	/* Sail until a sail is sighted. */
@@ -381,7 +381,7 @@ test_battle_screen(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter hold:right:16");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 hold:right:16");
 	if (g == NULL)
 		return;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
@@ -437,7 +437,7 @@ test_sword_screen(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter hold:right:16");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 hold:right:16");
 	if (g == NULL)
 		return;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
@@ -466,6 +466,12 @@ test_sword_screen(void)
 	    SWM_SLASH + 1);
 	CHECK(sword_keys(g, UI_KEY_RIGHT, 0, 0) == SWM_BACK);
 	CHECK(sword_keys(g, UI_KEY_UP, 0, 0) == SWM_GUARD + 2);
+	/* The keypad's corners are diagonals: 7 lunges high, Shift+1
+	 * slashes low, 3 steps back low. */
+	CHECK(sword_keys(g, UI_KEY_UP_LEFT, 0, 0) == SWM_LUNGE + 2);
+	CHECK(sword_keys(g, UI_KEY_SHIFT, UI_KEY_DOWN_LEFT, 0) ==
+	    SWM_SLASH + 1);
+	CHECK(sword_keys(g, UI_KEY_DOWN_RIGHT, 0, 0) == SWM_BACK + 1);
 	/* Fight until it is decided. */
 	for (i = 0; i < 600 && g->sim.sword.result == SWORD_NONE; i++)
 		CHECK(game_script(g, i % 2 ? "up left wait:10" :
@@ -573,7 +579,7 @@ test_town(void)
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter wait:30");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 wait:30");
 	if (g == NULL)
 		return;
 	CHECK(g->screen == &screen_sail);
@@ -623,7 +629,7 @@ test_shipwright(void)
 	long gold;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter wait:30");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -671,7 +677,7 @@ test_merchant(void)
 	int price, food;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter wait:30");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -712,7 +718,7 @@ test_tavern(void)
 	int crew, men;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter wait:30");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -754,7 +760,7 @@ test_governor(void)
 	long gold;
 
 	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter wait:30");
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 wait:30");
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
@@ -789,6 +795,18 @@ test_story(void)
 		return;
 	CHECK(g->started && g->screen == &screen_story);
 	CHECK(g->story_text == 21 && g->story_waiting);	/* the uncle */
+	/* "Click to continue": the plaque, after 420 idle ticks only. */
+	CHECK(g->misc.count == 9);
+	g->idle = 0;
+	CHECK(game_script(g, "wait:410") == 0);
+	game_draw(g);
+	CHECK(g->fb.px[(449 + 15) * FB_W + 268 + 50] !=
+	    g->misc.frames[7].pixels[15 * g->misc.frames[7].w + 50] ||
+	    g->misc.frames[7].pixels[15 * g->misc.frames[7].w + 50] == 0);
+	CHECK(game_script(g, "wait:20") == 0);
+	game_draw(g);
+	CHECK(g->fb.px[(449 + 15) * FB_W + 268 + 50] ==
+	    g->misc.frames[7].pixels[15 * g->misc.frames[7].w + 50]);
 	CHECK(game_script(g, "enter") == 0 && g->story_text == 22);
 	CHECK(game_script(g, "enter") == 0 && g->story_text == 14);
 	CHECK(game_script(g, "enter") == 0 && g->story_text == 15);
@@ -801,8 +819,13 @@ test_story(void)
 	g->sim.sword.result = SWORD_LOST;
 	CHECK(game_script(g, "wait:40") == 0);
 	CHECK(g->screen == &screen_story && g->story_text == 23);
+	/* The sailing master's two pages, then the start town. */
 	CHECK(game_script(g, "enter wait:40") == 0 &&
-	    g->screen == &screen_voyage);
+	    g->screen == &screen_master && g->master_page == 0);
+	CHECK(game_script(g, "enter") == 0 && g->master_page == 1);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_town &&
+	    g->sim.player_town == g->sim.fleet.leaving);
 	game_free(g);
 }
 

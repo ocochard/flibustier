@@ -615,7 +615,8 @@ move) and `0x38a1a` to `0x38b99`.
 - **Lunges:** whether a strike moves the bar by 1 or 2 steps follows the
   striking move. The original follows the latest input, which differs
   only when a new key arrives in the middle of a move.
-- **Men:** the panels show the men as numbers. The original draws them
+- **Men:** the panels show the men only for kinds 0 and up (crew fights
+  and duels; not the story's fight nor practice), as numbers. The original draws them
   as figures for 500, 50 and 1 men (VA `0x169b7`).
 - **Duels and practice** use the same rules but have no caller yet.
 
@@ -930,6 +931,21 @@ The title screen's passes wait 1/10 of a 10 ms tick, which is 0. So
 their speed is the CPU's. The engine runs 167 passes per 1/60 s frame,
 about 0.1 ms each, and starts the dissolve at cell 0.
 
+## Screens in general
+
+- **Inks:** text colours are palette entries of the current picture,
+  from the table at VA `0x3421c`: 0, 2, 6 and 31.
+  - The story uses entry 2, an orange in `frame.pcx`.
+  - The engine reads that entry from the picture where it has been
+    traced, and uses fixed colours elsewhere.
+- **"Click to continue" (VA `0x1a3c4`):** after a message, the game
+  waits for a key.
+  - After 420 vertical retraces without one (about 7 s), it draws the
+    plaque of `misc.crs` frame 7 (`miscf`, `miscg` by language) at
+    (268, 449), then keeps waiting.
+  - The engine draws the same plaque after 420 idle ticks wherever it
+    waits for a key.
+
 ## New career: the time period (VA `0x15a3c`)
 
 On `textback.pcx`:
@@ -1012,6 +1028,23 @@ the oval at (237, 66).
   - The story's fight uses the boarding fight's screen, with no weapon
     choice and nothing at stake.
   - Escape skips the story.
+
+## New career: the sailing master (VA `0x13e3f`)
+
+After the story, on `smaster.pcx`, with the text at (340, 100) up to x
+620, two pages:
+
+1. **CSTR 68:** "Here in <town>, you'll probably be wantin' to see the
+   <nation> governor…".
+2. **For each other nation:** its nearest town by `|dx| + |dy|` on the
+   map, as CSTR 69, "The closest <nation> city is <town>, which lies
+   <days> days to the <direction>."
+   - `<days>` is "a few" (CSTR 48) under 31, otherwise "many" (CSTR 49).
+   - The direction (CSTN 75) comes from the signs of dx and dy, after
+     zeroing an axis that is less than half the other.
+
+Each page's last character, a line break, is replaced by a closing
+quote. The career then begins in the start town.
 
 ## Retirement and the Hall of Fame (VA `0x45d0`)
 

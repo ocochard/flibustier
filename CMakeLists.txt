@@ -82,7 +82,7 @@ endif()
 # Some raylib builds (FreeBSD raylib-6.0 package) omit libm and pthreads
 # from their own dependencies, so link them explicitly.
 find_package(Threads REQUIRED)
-add_executable(stmalo src/main.c src/play.c src/viewer.c)
+add_executable(stmalo src/main.c src/play.c src/crt.c src/viewer.c)
 target_link_libraries(stmalo PRIVATE stmalo_core ${STMALO_RAYLIB}
 	Threads::Threads)
 if(UNIX)

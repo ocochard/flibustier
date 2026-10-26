@@ -109,6 +109,21 @@ load_cursor(struct game *g)
 	g->cursor.h = h;
 }
 
+/* The language's permanent sprites (VA 0x1dd6: misc.crs, miscf.crs,
+ * miscg.crs), which hold the "Click to continue" plaque. */
+static void
+load_misc(struct game *g)
+{
+	struct blob b;
+	const char *id = strcmp(g->lang, "fre") == 0 ? "ui/miscf" :
+	    strcmp(g->lang, "ger") == 0 ? "ui/miscg" : "ui/misc";
+
+	if (packs_load(g->packs, id, &b) != 0)
+		return;
+	bank_decode_runs(b.data, b.len, &g->misc);
+	blob_free(&b);
+}
+
 int
 game_init(struct game *g, struct packs *packs, const char *lang,
     const char *save_dir)
@@ -138,6 +153,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	g->exe = b.data;	/* kept for the town and scenario tables */
 	g->exe_len = b.len;
 	load_cursor(g);
+	load_misc(g);
 	g->career.expedition = -1;
 	g->hof_new = -1;
 	g->brightness = 0;
@@ -180,6 +196,7 @@ game_free(struct game *g)
 	bank_free(&g->shop_spr[2]);
 	bank_free(&g->tavern_spr);
 	bank_free(&g->gov_spr);
+	bank_free(&g->misc);
 	for (i = 0; i < 5; i++)
 		bank_free(&g->id_spr[i]);
 	for (i = 0; i < 2; i++)
@@ -253,6 +270,8 @@ game_portrait(struct game *g, const char *spr)
 void
 game_event(struct game *g, const struct ui_event *ev)
 {
+	if (ev->type != EV_MOVE)
+		g->idle = 0;
 	if (ev->type == EV_MOVE || ev->type == EV_CLICK) {
 		g->pointer_x = ev->x;
 		g->pointer_y = ev->y;
@@ -292,6 +311,7 @@ game_tick(struct game *g)
 	if (g->screen != NULL && g->screen->tick != NULL)
 		g->screen->tick(g);
 	g->ticks++;
+	g->idle++;
 }
 
 void

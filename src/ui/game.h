@@ -38,7 +38,11 @@ enum ui_key {
 	UI_KEY_ENTER,
 	UI_KEY_ESCAPE,
 	UI_KEY_BACKSPACE,
-	UI_KEY_SHIFT		/* either shift key */
+	UI_KEY_SHIFT,		/* either shift key */
+	UI_KEY_UP_LEFT,		/* numeric keypad diagonals: 7, 9, 1, 3 */
+	UI_KEY_UP_RIGHT,
+	UI_KEY_DOWN_LEFT,
+	UI_KEY_DOWN_RIGHT
 };
 
 enum ui_event_type {
@@ -157,6 +161,9 @@ struct game {
 	int			 story_text;	/* CSTR on the page, or -1 */
 	int			 story_waiting;	/* a key turns the page */
 	int			 sw_story;	/* the sword fight is the story's */
+	struct sprite_bank	 misc;		/* ui/misc: the "continue" plaque */
+	unsigned		 idle;		/* ticks since the last input */
+	int			 master_page;	/* the sailing master: 0 or 1 */
 	struct sprite_bank	 gov_spr;	/* the proclamation */
 	int			 gov_stage;	/* greeting, promotion, land, offer,
 						 * short of gold */

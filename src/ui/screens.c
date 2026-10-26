@@ -26,7 +26,6 @@
 #define S_DIFFICULTY_PROMPT	66
 #define S_ABILITY_PROMPT	67
 #define S_NATION_PROMPT		70
-#define S_CONTINUE		71
 #define S_HOF_QUESTION		73	/* with its own ~Yes ~No options */
 #define S_SAVE_GAME		290
 #define S_LOAD_GAME		320
@@ -154,6 +153,21 @@ draw(struct game *g, int font, int x, int y, int w, const char *text,
 	return (lay.height);
 }
 
+/*
+ * "Click to continue" (VA 0x1a3c4): after about seven seconds without
+ * input (420 vertical retraces), the plaque of ui/misc frame 7 appears
+ * at (268, 449); a key or a click goes on at any time.
+ */
+#define CONTINUE_IDLE		420
+#define CONTINUE_FRAME		7
+
+static void
+continue_prompt(struct game *g)
+{
+	if (g->idle >= CONTINUE_IDLE && g->misc.count > CONTINUE_FRAME)
+		fb_frame(&g->fb, &g->misc.frames[CONTINUE_FRAME], 268, 449);
+}
+
 static void
 draw_centered(struct game *g, int font, int y, const char *text)
 {
@@ -238,6 +252,7 @@ static void	load_bank(struct game *, const char *, int,
 static void	fill_args(char *, size_t, const char *, const char *const *,
 		    int);
 static void	sword_load(struct game *);
+static void	fill(char *, size_t, const char *, const char *, const char *);
 
 #define INTRO_STEPS		5
 #define TITLE_X			272	/* the title's left edge */
@@ -1315,6 +1330,7 @@ const struct screen screen_confirm = {
  * build always passes; codes '2'-'7' show nothing.
  */
 #define STORY_TEXT_Y		340
+#define STORY_INK		2
 #define STORY_END		0
 #define STORY_PAGE		(-2)
 #define STORY_WAIT		')'
@@ -1358,7 +1374,7 @@ story_advance(struct game *g)
 	int c;
 
 	if ((p = story_script(g, &len)) == NULL) {
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_master);
 		return;
 	}
 	g->story_waiting = 0;
@@ -1379,7 +1395,7 @@ story_advance(struct game *g)
 			continue;
 		g->story_text = c < 0 ? -c : c;
 	}
-	game_goto(g, &screen_voyage);
+	game_goto(g, &screen_master);
 }
 
 static void
@@ -1389,9 +1405,10 @@ story_enter(struct game *g)
 	game_portrait(g, NULL);
 	load_bank(g, captain_portrait[g->career.difficulty & 3], 0,
 	    &g->id_spr[2]);
-	g->ink[0] = 240;
-	g->ink[1] = 220;
-	g->ink[2] = 170;
+	/* The game's ink here is palette entry 2 (VA 0x159df, table at VA
+	 * 0x3421c), an orange in this picture. */
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
 	if (g->story_pos == 0)
 		g->story_text = -1;
 	story_advance(g);
@@ -1402,7 +1419,7 @@ story_event(struct game *g, const struct ui_event *ev)
 {
 	/* Escape skips the story: an engine convenience. */
 	if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE) {
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_master);
 		return;
 	}
 	if (!g->story_waiting || !(ev->type == EV_CLICK ||
@@ -1433,11 +1450,135 @@ story_draw(struct game *g)
 	fill_args(text, sizeof(text), game_str(g, g->story_text), arg, 4);
 	draw(g, FONT_BODY, 40, STORY_TEXT_Y, 580, text, 0);
 	if (g->story_waiting)
-		draw(g, FONT_BODY, 40, 440, 580, game_str(g, S_CONTINUE), 0);
+		continue_prompt(g);
 }
 
 const struct screen screen_story = {
 	"story", story_enter, story_event, NULL, story_draw,
+};
+
+/*
+ * The sailing master (VA 0x13e3f), when the story is over: on his
+ * picture, "Here in <town>, you'll probably be wantin' to see the
+ * <nation> governor..." (CSTR 68), then, for every other nation, its
+ * nearest town (CSTR 69) by distance on the map, "a few" (CSTR 48)
+ * days away under 31 or "many" (49), and in which direction (CSTN 75).
+ * Then the career begins in the start town.
+ */
+#define S_MASTER		68
+#define S_CLOSEST		69
+#define S_A_FEW			48
+#define S_MANY			49
+#define W_DIRECTION		75
+#define FEW_DAYS		31
+
+static void
+master_enter(struct game *g)
+{
+	game_background(g, "pic/smaster");
+	game_portrait(g, NULL);
+	g->ink[0] = 240;
+	g->ink[1] = 220;
+	g->ink[2] = 170;
+	g->master_page = 0;
+}
+
+/* Replace a text's last character (a line break) with a quote. */
+static void
+close_quote(char *text)
+{
+	size_t n = strlen(text);
+
+	if (n > 0)
+		text[n - 1] = '"';
+}
+
+static void
+master_text(struct game *g, int page, char *out, size_t len)
+{
+	const struct sim *sm = &g->sim;
+	const struct sim_town *here_t, *t;
+	int best[4], dist[4], n, i, d, dx, dy, dir;
+	const char *arg[4];
+	char line[400], days[32];
+
+	out[0] = '\0';
+	if (sm->fleet.leaving < 0 || (size_t)sm->fleet.leaving >= sm->ntowns)
+		return;
+	here_t = &sm->towns[sm->fleet.leaving];
+	if (page == 0) {
+		fill(out, len, game_str(g, S_MASTER), here_t->name,
+		    game_word(g, W_NATION, here_t->nation & 3));
+		close_quote(out);
+		return;
+	}
+	for (n = 0; n < 4; n++) {
+		best[n] = -1;
+		dist[n] = 0x7FFF;
+	}
+	for (i = 0; i < (int)sm->ntowns; i++) {
+		t = &sm->towns[i];
+		if (i == sm->fleet.leaving || t->nation > 3)
+			continue;
+		d = abs(t->x - here_t->x) + abs(t->y - here_t->y);
+		if (d < dist[t->nation]) {
+			dist[t->nation] = d;
+			best[t->nation] = i;
+		}
+	}
+	for (n = 0; n < 4; n++) {
+		if (n == here_t->nation || best[n] < 0)
+			continue;
+		t = &sm->towns[best[n]];
+		dx = t->x - here_t->x;
+		dy = t->y - here_t->y;
+		if (abs(dy) * 2 < abs(dx))
+			dy = 0;
+		if (abs(dx) * 2 < abs(dy))
+			dx = 0;
+		dir = dy < 0 ? (dx < 0 ? 4 : dx == 0 ? 0 : 5) :
+		    dy == 0 ? (dx < 0 ? 3 : dx == 0 ? 8 : 2) :
+		    (dx < 0 ? 6 : dx == 0 ? 1 : 7);
+		snprintf(days, sizeof(days), "%s", game_str(g,
+		    abs(dx) + abs(dy) < FEW_DAYS ? S_A_FEW : S_MANY));
+		arg[0] = game_word(g, W_NATION, (size_t)n);
+		arg[1] = t->name;
+		arg[2] = days;
+		arg[3] = game_word(g, W_DIRECTION, (size_t)dir);
+		fill_args(line, sizeof(line), game_str(g, S_CLOSEST), arg, 4);
+		strncat(out, line, len - strlen(out) - 1);
+	}
+	close_quote(out);
+}
+
+static void
+master_event(struct game *g, const struct ui_event *ev)
+{
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	if (g->master_page == 0) {
+		g->master_page = 1;
+		g->idle = 0;
+		return;
+	}
+	/* The career begins in the start town. */
+	sim_enter_town(&g->sim, g->sim.fleet.leaving);
+	game_goto(g, &screen_town);
+}
+
+static void
+master_draw(struct game *g)
+{
+	char text[2048];
+
+	master_text(g, g->master_page, text, sizeof(text));
+	draw(g, FONT_BODY, 340, 100, 280, text, 0);
+	continue_prompt(g);
+}
+
+const struct screen screen_master = {
+	"master", master_enter, master_event, NULL, master_draw,
 };
 
 /* Summary: the career is created; the voyage itself is the next phase. */
@@ -1481,7 +1622,7 @@ summary_draw(struct game *g)
 	y += 30;
 	draw_centered(g, FONT_BODY, y,
 	    game_word(g, W_ABILITY, (size_t)g->career.ability));
-	draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+	continue_prompt(g);
 }
 
 const struct screen screen_summary = {
@@ -2169,7 +2310,7 @@ encounter_draw(struct game *g)
 			news_text(g, n, text, sizeof(text));
 			y += draw(g, FONT_BODY, 20, y, 290, text, 0) + 8;
 		}
-		draw(g, FONT_BODY, 20, 440, 290, game_str(g, S_CONTINUE), 0);
+		continue_prompt(g);
 		return;
 	}
 	if (g->enc_result >= 0) {
@@ -2186,7 +2327,7 @@ encounter_draw(struct game *g)
 			break;
 		}
 
-		draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
+		continue_prompt(g);
 		return;
 	}
 	switch (e->stage) {
@@ -2506,7 +2647,7 @@ battle_draw(struct game *g)
 		break;
 	}
 	draw(g, FONT_BODY, 80, 170, 400, text, 0);
-	draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
+	continue_prompt(g);
 }
 
 const struct screen screen_battle = {
@@ -2645,6 +2786,14 @@ key_bit(int key)
 		return (H_DOWN);
 	case UI_KEY_SHIFT:
 		return (H_SHIFT);
+	case UI_KEY_UP_LEFT:
+		return (H_UP | H_LEFT);
+	case UI_KEY_UP_RIGHT:
+		return (H_UP | H_RIGHT);
+	case UI_KEY_DOWN_LEFT:
+		return (H_DOWN | H_LEFT);
+	case UI_KEY_DOWN_RIGHT:
+		return (H_DOWN | H_RIGHT);
 	default:
 		return (0);
 	}
@@ -2802,7 +2951,7 @@ sword_draw(struct game *g)
 		fill(text, sizeof(text), game_str(g, S_BOARDING),
 		    game_word(g, W_SAILING, SAILING_CAPTAIN), NULL);
 		draw(g, FONT_BODY, 80, 340, 480, text, 0);
-		draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+		continue_prompt(g);
 		return;
 	case 1:
 		/* The picture, the prompt in its lower panel and the chosen
@@ -2830,19 +2979,29 @@ sword_draw(struct game *g)
 	sword_flag(g, 1, SW_FOE_FLAG_X, 14 + 8 * nation + (int)(g->ticks & 7),
 	    sw->foe.bar);
 
-	snprintf(label, sizeof(label), "%s %s",
-	    game_word(g, W_NATION, (size_t)(sw->nation < 0 ? 5 : sw->nation)),
-	    game_word(g, W_TITLE, (size_t)sw->title));
+	/* The nation leads the title only in crew fights against a known
+	 * nation (VA 0x16205). */
+	if (sw->kind == SWORD_CREW && sw->nation >= 0 && sw->nation != 5)
+		snprintf(label, sizeof(label), "%s %s",
+		    game_word(g, W_NATION, (size_t)sw->nation),
+		    game_word(g, W_TITLE, (size_t)sw->title));
+	else
+		snprintf(label, sizeof(label), "%s",
+		    game_word(g, W_TITLE, (size_t)sw->title));
 	w = text_width(&g->font[FONT_BODY], label);
 	draw(g, FONT_BODY, 160 - w / 2, 336, 300, label, 0);
 	w = text_width(&g->font[FONT_BODY], g->sim.player.name);
 	draw(g, FONT_BODY, 480 - w / 2, 336, 300, g->sim.player.name, 0);
-	snprintf(text, sizeof(text), "%s%d",
-	    game_word(g, W_SAILING, SAILING_MEN), sw->foe.men);
-	draw(g, FONT_BODY, 100, 380, 140, text, 0);
-	snprintf(text, sizeof(text), "%s%d",
-	    game_word(g, W_SAILING, SAILING_MEN), sw->you.men);
-	draw(g, FONT_BODY, 420, 380, 140, text, 0);
+	/* The crews are shown only for kinds 0 and up (VA 0x169b7): not
+	 * in the story's fight nor in practice. */
+	if (sw->kind >= 0) {
+		snprintf(text, sizeof(text), "%s%d",
+		    game_word(g, W_SAILING, SAILING_MEN), sw->foe.men);
+		draw(g, FONT_BODY, 100, 380, 140, text, 0);
+		snprintf(text, sizeof(text), "%s%d",
+		    game_word(g, W_SAILING, SAILING_MEN), sw->you.men);
+		draw(g, FONT_BODY, 420, 380, 140, text, 0);
+	}
 
 	if (g->sw_stage != 3)
 		return;
@@ -2865,7 +3024,7 @@ sword_draw(struct game *g)
 		snprintf(text, sizeof(text), "%s", "(Your boarding party is "
 		    "driven back to your ship.)");
 	draw(g, FONT_BODY, 80, 170, 400, text, 0);
-	draw_centered(g, FONT_BODY, 430, game_str(g, S_CONTINUE));
+	continue_prompt(g);
 }
 
 const struct screen screen_sword = {
@@ -3147,7 +3306,7 @@ cityinfo_draw(struct game *g)
 		return;
 	city_text(g, t, text, sizeof(text));
 	draw(g, FONT_BODY, 400, 150, 220, text, 0);
-	draw(g, FONT_BODY, 400, 420, 220, game_str(g, S_CONTINUE), 0);
+	continue_prompt(g);
 }
 
 const struct screen screen_cityinfo = {
@@ -3341,7 +3500,7 @@ shipwright_draw(struct game *g)
 	default:
 		draw(g, FONT_BODY, WRIGHT_TEXT_X, WRIGHT_TEXT_Y, WRIGHT_TEXT_W,
 		    game_str(g, g->wright_note), 0);
-		draw_centered(g, FONT_BODY, 440, game_str(g, S_CONTINUE));
+		continue_prompt(g);
 		return;
 	}
 	if (g->msg[0] != '\0')
@@ -3511,7 +3670,7 @@ merchant_draw(struct game *g)
 		text_band(g, 20, 170);
 		draw(g, FONT_BODY, 80, 30, 480, game_str(g, g->shop_stage == 2 ?
 		    S_NO_PIRATES : sim_merchant_greeting(&g->sim)), 0);
-		draw_centered(g, FONT_BODY, 165, game_str(g, S_CONTINUE));
+		continue_prompt(g);
 		return;
 	}
 	board_frame(g, 1, 0, 203, 17);
@@ -3752,7 +3911,7 @@ recruit_draw(struct game *g)
 	text_band(g, 290, 160);
 	if (g->sim.recruits == 0) {
 		draw(g, FONT_BODY, 60, 300, 520, game_str(g, S_NO_RECRUITS), 0);
-		draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+		continue_prompt(g);
 		return;
 	}
 	snprintf(men, sizeof(men), "%d", g->sim.recruits);
@@ -3814,7 +3973,7 @@ rumours_draw(struct game *g)
 			y += draw(g, FONT_BODY, 222, y, 388, text, 0) + 4;
 		}
 	}
-	draw_centered(g, FONT_BODY, 420, game_str(g, S_CONTINUE));
+	continue_prompt(g);
 }
 
 const struct screen screen_rumours = {
@@ -4018,8 +4177,7 @@ governor_draw(struct game *g)
 		return;
 	}
 	draw(g, FONT_BODY, GOV_TEXT_X, GOV_TEXT_Y, GOV_TEXT_W, text, 0);
-	draw(g, FONT_BODY, GOV_TEXT_X, 430, GOV_TEXT_W,
-	    game_str(g, S_CONTINUE), 0);
+	continue_prompt(g);
 }
 
 const struct screen screen_governor = {

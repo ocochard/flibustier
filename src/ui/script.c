@@ -19,7 +19,9 @@ static const struct {
 	{ "up", UI_KEY_UP }, { "down", UI_KEY_DOWN }, { "left", UI_KEY_LEFT },
 	{ "right", UI_KEY_RIGHT }, { "enter", UI_KEY_ENTER },
 	{ "esc", UI_KEY_ESCAPE }, { "bs", UI_KEY_BACKSPACE },
-	{ "shift", UI_KEY_SHIFT },
+	{ "shift", UI_KEY_SHIFT }, { "upleft", UI_KEY_UP_LEFT },
+	{ "upright", UI_KEY_UP_RIGHT }, { "downleft", UI_KEY_DOWN_LEFT },
+	{ "downright", UI_KEY_DOWN_RIGHT },
 };
 
 static void

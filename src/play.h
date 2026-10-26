@@ -18,7 +18,7 @@
  * status.
  */
 int	play_run(struct packs *packs, const char *lang, const char *saves,
-	    const char *shot, int shot_frames);
+	    const char *shot, int shot_frames, int crt);
 
 /*
  * Run the game without a window: play "script" (see src/ui/script.h),

@@ -11,6 +11,7 @@
 
 #include "raylib.h"
 
+#include "crt.h"
 #include "play.h"
 #include "sim/save.h"
 #include "ui/game.h"
@@ -27,6 +28,11 @@ static const struct {
 	{ KEY_ENTER, UI_KEY_ENTER }, { KEY_KP_ENTER, UI_KEY_ENTER },
 	{ KEY_ESCAPE, UI_KEY_ESCAPE }, { KEY_BACKSPACE, UI_KEY_BACKSPACE },
 	{ KEY_LEFT_SHIFT, UI_KEY_SHIFT }, { KEY_RIGHT_SHIFT, UI_KEY_SHIFT },
+	/* The numeric keypad: its arrows, and its corners as diagonals. */
+	{ KEY_KP_8, UI_KEY_UP }, { KEY_KP_2, UI_KEY_DOWN },
+	{ KEY_KP_4, UI_KEY_LEFT }, { KEY_KP_6, UI_KEY_RIGHT },
+	{ KEY_KP_7, UI_KEY_UP_LEFT }, { KEY_KP_9, UI_KEY_UP_RIGHT },
+	{ KEY_KP_1, UI_KEY_DOWN_LEFT }, { KEY_KP_3, UI_KEY_DOWN_RIGHT },
 };
 
 /* The save directory, or "" (saving disabled) with a warning. */
@@ -99,7 +105,7 @@ feed_input(struct game *g, Vector2 *last_mouse)
 
 int
 play_run(struct packs *packs, const char *lang, const char *saves,
-    const char *shot, int shot_frames)
+    const char *shot, int shot_frames, int crt_on)
 {
 	static struct game g;
 	static uint8_t rgb[FB_W * FB_H * 3];
@@ -109,6 +115,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	char dir[512];
 	int frames = 0, rc = 0, k, big_k;
 	RenderTexture2D big;
+	struct crt crt = { 0 };
 	Rectangle box;
 
 	resolve_saves(saves, dir, sizeof(dir));
@@ -117,7 +124,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		game_free(&g);
 		return (1);
 	}
-	SetTraceLogLevel(LOG_WARNING);
+	SetTraceLogLevel(getenv("STMALO_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
 	InitWindow(FB_W * WINDOW_SCALE, FB_H * WINDOW_SCALE, "stmalo");
 	SetExitKey(KEY_NULL);	/* Escape is a game key */
@@ -134,13 +141,24 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	 */
 	big = (RenderTexture2D){ 0 };
 	big_k = 0;
+	if (crt_load(&crt) != 0 && crt_on)
+		fprintf(stderr, "the CRT look is not available here\n");
 	while (!WindowShouldClose() && !g.quit) {
 		feed_input(&g, &last_mouse);
 		game_tick(&g);
 		game_draw(&g);
 		fb_to_rgb(&g.fb, g.brightness, rgb);
 		UpdateTexture(tex, rgb);
+		if (IsKeyPressed(KEY_F2))
+			crt_on = !crt_on;
 		box = letterbox();
+		if (crt_on && crt.ok) {
+			BeginDrawing();
+			ClearBackground(BLACK);
+			crt_draw(&crt, tex, box);
+			EndDrawing();
+			goto shown;
+		}
 		k = (int)(box.width / FB_W);
 		if (k < 1)
 			k = 1;
@@ -162,6 +180,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		DrawTexturePro(big.texture, (Rectangle){ 0, 0, FB_W * k,
 		    -FB_H * k }, box, (Vector2){ 0, 0 }, 0, WHITE);
 		EndDrawing();
+shown:
 		if (shot != NULL && ++frames >= shot_frames) {
 			screen = LoadImageFromScreen();
 			if (!ExportImage(screen, shot))
@@ -172,6 +191,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	}
 	if (big_k > 0)
 		UnloadRenderTexture(big);
+	crt_unload(&crt);
 	UnloadTexture(tex);
 	CloseWindow();
 	game_free(&g);
@@ -197,7 +217,7 @@ play_headless(struct packs *packs, const char *lang, const char *saves,
 	}
 	fb_to_rgb(&g.fb, g.brightness, rgb);
 	im = (Image){ rgb, FB_W, FB_H, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
-	SetTraceLogLevel(LOG_WARNING);
+	SetTraceLogLevel(getenv("STMALO_GL_LOG") != NULL ? LOG_INFO : LOG_WARNING);
 	if (out != NULL && !ExportImage(im, out))
 		rc = 1;
 	printf("screen: %s\n", g.screen != NULL ? "shown" : "quit");

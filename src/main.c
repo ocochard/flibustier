@@ -32,7 +32,8 @@ usage(void)
 	    "                ~/.local/share/stmalo/saves)\n"
 	    "\n"
 	    "commands:\n"
-	    "  (none)        play [--screenshot OUT.png [--frames N]]\n"
+	    "  (none)        play [--crt] [--screenshot OUT.png [--frames N]]\n"
+	    "                (--crt, or F2 while playing: a CRT look)\n"
 	    "  --script STEPS OUT.png\n"
 	    "                play without a window, then save the screen\n"
 	    "  --viewer [--id ID] [--screenshot OUT.png [--frames N]]\n"
@@ -99,7 +100,7 @@ main(int argc, char **argv)
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
-	int shot_frames = 30, rc, a;
+	int shot_frames = 30, rc, a, crt = 0;
 
 	data = getenv("STMALO_DATA");
 	for (a = 1; a < argc; a++) {
@@ -130,6 +131,8 @@ main(int argc, char **argv)
 			frame = strtoul(argv[++a], NULL, 10);
 		else if (strcmp(argv[a], "--tick") == 0 && a + 1 < argc)
 			tick = (unsigned)strtoul(argv[++a], NULL, 10);
+		else if (strcmp(argv[a], "--crt") == 0)
+			crt = 1;
 		else if (strcmp(argv[a], "--screenshot") == 0 && a + 1 < argc)
 			shot = argv[++a];
 		else if (strcmp(argv[a], "--frames") == 0 && a + 1 < argc)
@@ -162,7 +165,7 @@ main(int argc, char **argv)
 		usage();
 	switch (cmd) {
 	case PLAY:
-		rc = play_run(packs, lang, saves, shot, shot_frames);
+		rc = play_run(packs, lang, saves, shot, shot_frames, crt);
 		break;
 	case SCRIPT:
 		rc = play_headless(packs, lang, saves, script, out);
