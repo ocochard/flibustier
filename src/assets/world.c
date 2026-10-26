@@ -80,6 +80,19 @@ load_map(struct world *w, struct packs *packs, int era, char *err,
 	memcpy(w->tiles, ts.pixels, sizeof(w->tiles));
 	memcpy(w->palette, ts.palette, sizeof(w->palette));
 	tileset_free(&ts);
+	if (packs_load(packs, "tiles/battle", &b) != 0) {
+		snprintf(err, errlen, "cannot load tiles/battle");
+		return (-1);
+	}
+	rc = tileset_decode(b.data, b.len, &ts);
+	blob_free(&b);
+	if (rc != 0 || ts.tile_w != BATTLE_TILE || ts.count != 256) {
+		tileset_free(&ts);
+		snprintf(err, errlen, "bad tiles/battle");
+		return (-1);
+	}
+	memcpy(w->battle_tiles, ts.pixels, sizeof(w->battle_tiles));
+	tileset_free(&ts);
 	return (0);
 }
 

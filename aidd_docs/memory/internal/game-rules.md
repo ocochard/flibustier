@@ -443,6 +443,29 @@ fight computes its level the same way with fencing.
 
    The enemy then turns toward the target by `t` every 8 ticks.
 
+### The coast
+
+The battle field is the map around the fleet at twice its scale: each
+map cell is drawn as a 32 x 32 battle tile (`battle.imb`). The engine
+places the field's top left 7 cells up and left of the fleet's cell.
+The terrain under a ship is the class of the battle tile's colour there
+(table at VA `0x4113c`, the one sailing uses).
+- **The player's ship (VA `0x81f0`), after it moves:**
+  - Shallows: once a cooldown has run out, a roll `rand(16) >= class`
+    (table at VA `0x327ce`, 0..7) costs 16 damage and starts a 20-tick
+    cooldown. The cooldown only counts down on the shallows. A pinnace
+    always takes the damage; a galleon on 9 rolls in 16.
+  - Land: the ship is beached (outcome 13). If the enemy is alongside
+    (the boarding test, VA `0x9c84`), it is a boarding instead (outcome
+    5).
+- **The enemy (VA `0x8732`):** the same shallows rule, with its own
+  cooldown. Land does not stop it.
+- **Beached:** the enemy's portrait (VA `0xe9e6`) and CSTR 173 at (100,
+  300) up to x 560. Nothing is lost.
+- **Not modelled yet:** the field scrolls when the player nears its
+  edge (VA `0x95ac`); the engine's field is fixed, and a ship off it is
+  on open sea.
+
 ### End of battle
 
 Each ending has its own picture (VA `0xe67b`-`0xe918`), with the text in
@@ -762,6 +785,32 @@ same town only bits 1 and 2 are kept.
   - 5 city information (the scroll);
   - 6 leave town.
 - **Choice 7:** the captain's cabin, from the Space key.
+
+### The captain's cabin (VA `0x9ffc`)
+
+- **Picture:** `cabin.pcx`. `cabin.spr` frame 0 is drawn at (325, 229)
+  while none of the three slots at VA `0x47186` (treasure maps, it
+  seems) is filled.
+- **Title:** "Captain's Cabin" (CSTN 92.7), PIRATE1, centred at (320,
+  38), in ink 0. Pointing at a spot shows its label there (CSTN 86).
+- **Spots (table at VA `0x327e0`, x0, y0, x1, y1, on):**
+
+  | Spot | Label | Engine |
+  |---|---|---|
+  | 1 | Continue travels | back to the town or the sea |
+  | 2 | Treasure maps | not yet |
+  | 3 | Treasure cave | the cave, back to the cabin |
+  | 4 | Logbook | the latest news on `shiplog.pcx` (layout not traced) |
+  | 5 | Map of the Caribbean | not yet |
+  | 6-8 | Search, Divide party, Join party | off unless a party is ashore |
+  | 9 | Save game | the save slots |
+  | 10 | Exit game | the retirement question |
+  | 11 | Practice fencing | below |
+
+- **Practice fencing (VA `0xbdae`):** a sword fight on the deck (scene
+  3) against the first mate (title 5): 200 men of factor 32 a side, the
+  weapon chosen first. Afterwards the practice value (VA `0x45e90`)
+  rises by 5, to at most 30.
 - **Labels:** pointing at a building shows its label (CSTN group 84) on
   the scroll; pointing elsewhere restores the name.
 - **Keyboard:** the arrows step through the open buildings, wrapping
@@ -873,6 +922,9 @@ sign, the texts at (40, 280) up to x 620.
 
 ### Merchant (VA `0x21e56`)
 
+- **Greeting:** written on `merchant.pcx` at (160, 40) up to x 480, in
+  ink 0, without a box.
+
 - **Refusal:** as at the shipwright (CSTR 256), except for the
   merchant's family (town word 12 `& 0xe0`, set by marrying his
   daughter).
@@ -945,17 +997,23 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - with fewer than `4m` men aboard, at least `m = (4 - difficulty) x
     6`;
   - at most `(ships x 2 + capacity) x 16 - crew`, and at least 1.
+- **Inks:** the tavern sets ink entry 1 (palette index 2) and highlight
+  entry 2 (index 6) for its pages.
 - **Recruiting (VA `0x10f04`), on `crew.pcx`:**
+  - Written on the picture at (60, 300) up to x 620, the choice up to x
+    560, without a box.
   - CSTR 151 offers the men, naming the player by reputation, rank and
     name.
   - Signing them up adds them to the crew; all four seamen spots then
     leave.
   - With no recruits: CSTR 309.
 - **The bartender (VA `0x1183e`):**
-  - On `bartenda.pcx`, "The Bartender tells you that:" (CSTN 18.1),
-    then up to 12 recent public news items.
+  - On `bartenda.pcx`, in ink entry 0, "The Bartender tells you that:"
+    (CSTN 18.1), then up to 12 recent public news items, at (222, 40)
+    up to x 610 (VA `0x1e78d`, mode 1).
   - With none, he listens to the player's last exploit (CSTR 125 with
-    CSTN 33, by the latest personal log entry).
+    CSTN 33, by the latest personal log entry), at (320, 150) up to x
+    560 (VA `0x10b10`).
   - The engine keeps no personal log yet, so it always says "your
     promising plans".
 - **Not done yet:** the map seller, the information seller, the barmaid

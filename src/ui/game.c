@@ -197,6 +197,7 @@ game_free(struct game *g)
 	bank_free(&g->tavern_spr);
 	bank_free(&g->gov_spr);
 	bank_free(&g->misc);
+	bank_free(&g->cabin_spr);
 	for (i = 0; i < 8; i++)
 		bank_free(&g->cave[i]);
 	for (i = 0; i < 5; i++)

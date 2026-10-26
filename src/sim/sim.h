@@ -149,7 +149,8 @@ enum battle_outcome {
 	BAT_PLAYER_SUNK,
 	BAT_ENEMY_SUNK,
 	BAT_REPELLED,		/* boarding: the player was driven back */
-	BAT_DEFEATED		/* boarding: the player's men gave up */
+	BAT_DEFEATED,		/* boarding: the player's men gave up */
+	BAT_BEACHED		/* the player ran onto land (CSTR 173) */
 };
 
 /* Sword fights: who fights, and how it ended. */
@@ -225,6 +226,8 @@ struct sword_setup {
 #define BEV_RELOADED	0x10	/* the player's guns are ready again */
 #define BEV_SAILS	0x20	/* the player's sails changed */
 #define BEV_WIND	0x40	/* the wind changed */
+#define BEV_AGROUND	0x80	/* the player's ship scraped the shallows */
+#define BEV_FOE_AGROUND	0x100
 
 struct battle_shot {
 	int		ticks;		/* flight ticks left; 0: none */
@@ -257,6 +260,10 @@ struct sim_battle {
 	int		outcome;	/* enum battle_outcome */
 	int		crew_ashore;	/* crew and guns left with the fleet */
 	int		guns_ashore;
+	int		origin_x;	/* map cell at the field's top left */
+	int		origin_y;
+	int		you_scrape;	/* ticks before the shallows can hurt */
+	int		foe_scrape;
 	struct battle_ship you, foe;
 };
 
@@ -481,6 +488,12 @@ void	sim_sword_input(struct sim *s, int move);
 
 /* One fight tick.  Returns SEV_* bits; sim.sword.result ends it. */
 int	sim_sword_tick(struct sim *s);
+
+/* Fencing practice from the cabin (VA 0xbdae): 200 men of factor 32 a
+ * side against the first mate, then the practice value rises by 5, to
+ * at most 30. */
+void	sim_practice_start(struct sim *s, int weapon);
+void	sim_practice_end(struct sim *s);
 
 /* Board the enemy after BAT_BOARDING, with the player's weapon. */
 void	sim_board(struct sim *s, int weapon);

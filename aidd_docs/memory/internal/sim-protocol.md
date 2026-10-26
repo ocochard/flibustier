@@ -51,7 +51,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 12,
+  "version": 13,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -67,7 +67,8 @@ with a message. Numbers are integers only.
                 "hostile": 0, "town": 20},
   "battle": {"active": 0, "tick": 0, "wind": 192, "wind_strength": 1,
              "decision": 1, "outcome": "none", "crew_ashore": 0,
-             "guns_ashore": 0,
+             "guns_ashore": 0, "origin_x": 113, "origin_y": 45,
+             "you_scrape": 0, "foe_scrape": 0,
              "you": {"x": 69632, "y": 53760, "heading": 160,
                      "target": 0, "speed": 0, "type": 1, "guns": 10,
                      "crew": 40, "damage": 0, "full_sails": 0,
@@ -123,10 +124,15 @@ with a message. Numbers are integers only.
   the encounter command wait until `finish` applies the outcome.
   - `battle` runs ticks with the same inputs and stops early once
     `outcome` is set: `boarding`, `escaped`, `sunset`, `surrender`,
-    `player_sunk` or `enemy_sunk`.
+    `player_sunk`, `enemy_sunk` or `beached` (the player ran onto
+    land).
   - `events` bits: 1 the player fired, 2 the enemy fired, 4 the player
     hit, 8 the enemy hit, 16 the player's guns reloaded, 32 the
-    player's sails changed, 64 the wind changed.
+    player's sails changed, 64 the wind changed, 128 the player's ship
+    scraped the shallows, 256 the enemy's did.
+  - `origin_x`, `origin_y`: the map cell at the field's top left;
+    `you_scrape`, `foe_scrape`: ticks before the shallows can hurt
+    again.
   - Positions are in 1/256 pixels on a 480 x 480 field. `shot` is
     `[ticks left, x, y, heading]`; 0 ticks means no shot in flight.
   - A `boarding` outcome needs a sword fight: `board` starts it and

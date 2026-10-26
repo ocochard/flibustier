@@ -24,6 +24,10 @@
 #define SHOT_SPEED	0x80
 #define MAX_SHIPS	8
 #define FP		256	/* positions are in 1/256 pixels */
+#define FIELD		480	/* the battle field's side, in pixels */
+#define FIELD_CELLS	(FIELD / BATTLE_TILE)
+#define SCRAPE_TICKS	20	/* after the shallows hurt a ship */
+#define SCRAPE_DAMAGE	16
 
 struct sideinfo {
 	int	half_w, half_h;
@@ -129,6 +133,9 @@ sim_battle_start(struct sim *s)
 	bt->active = 1;
 	bt->wind = s->wind;
 	bt->wind_strength = rng_below(&s->rng, 3);
+	/* The field: the map around the fleet, at twice its scale. */
+	bt->origin_x = s->fleet.x / WORLD_TILE - FIELD_CELLS / 2;
+	bt->origin_y = s->fleet.y / WORLD_TILE - FIELD_CELLS / 2;
 
 	flagship(s);
 
@@ -161,6 +168,58 @@ sim_battle_start(struct sim *s)
 	    bt->you.heading - 40);
 	bt->foe.target = bt->foe.heading;
 	bt->decision = 1;
+}
+
+/* Terrain under field pixel (x, y): the colour of the battle tile drawn
+ * there; open sea off the field. */
+static int
+field_terrain(const struct sim *s, int x, int y)
+{
+	const struct sim_battle *bt = &s->battle;
+	int cx, cy, tile;
+
+	if (x < 0 || y < 0 || x >= FIELD || y >= FIELD)
+		return (TERRAIN_SEA);
+	cx = clampi(bt->origin_x + x / BATTLE_TILE, 0, WORLD_CELLS_W - 1);
+	cy = clampi(bt->origin_y + y / BATTLE_TILE, 0, WORLD_CELLS_H - 1);
+	tile = s->world->map[cy * WORLD_CELLS_W + cx];
+	return (s->world->colour_class[s->world->battle_tiles[tile *
+	    BATTLE_TILE * BATTLE_TILE + (y % BATTLE_TILE) * BATTLE_TILE +
+	    x % BATTLE_TILE]]);
+}
+
+/*
+ * The shallows (VA 0x81fb, 0x8732): once a ship's cooldown has run out,
+ * a roll of rand(16) at or above its class (the table at VA 0x327ce
+ * holds 0..7) costs 16 damage and starts 20 ticks of cooldown.  Returns
+ * 1 when it hurt.
+ */
+static int
+scrape(struct sim *s, struct battle_ship *b, int *cooldown)
+{
+	if (*cooldown > 0) {
+		(*cooldown)--;
+		return (0);
+	}
+	if ((b->type & 7) > rng_below(&s->rng, 16))
+		return (0);
+	b->damage += SCRAPE_DAMAGE;
+	*cooldown = SCRAPE_TICKS;
+	return (1);
+}
+
+/* Do the quarter-size boxes of the two ships touch (VA 0x9c84)? */
+static int
+touching(const struct sim *s)
+{
+	const struct sim_battle *bt = &s->battle;
+	struct sideinfo by, be;
+
+	box(s, &bt->you, &by);
+	box(s, &bt->foe, &be);
+	return (abs(px(bt->foe.x) - px(bt->you.x)) <= (be.half_w >> 2) +
+	    (by.half_w >> 2) && abs(px(bt->foe.y) - px(bt->you.y)) <=
+	    (be.half_h >> 2) + (by.half_h >> 2));
 }
 
 /* Speed a ship heads for (game-rules.md, "Each tick"). */
@@ -324,7 +383,6 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 {
 	struct sim_battle *bt = &s->battle;
 	struct battle_ship *y = &bt->you, *e = &bt->foe;
-	struct sideinfo by, be;
 	int ev = 0, bearing, lx, ly;
 
 	if (!bt->active || bt->outcome != BAT_NONE || s->world == NULL)
@@ -365,6 +423,19 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 
 	y->speed = ship_speed(s, y, 0);
 	move_ship(s, y);
+	/* The player's ship on the shallows or on land (VA 0x81f0): land
+	 * beaches it, unless the enemy is alongside. */
+	switch (field_terrain(s, px(y->x), px(y->y))) {
+	case TERRAIN_SHALLOWS:
+		if (scrape(s, y, &bt->you_scrape))
+			ev |= BEV_AGROUND;
+		break;
+	case TERRAIN_LAND:
+		bt->outcome = touching(s) ? BAT_BOARDING : BAT_BEACHED;
+		return (ev);
+	default:
+		break;
+	}
 
 	/* The enemy: decisions, steering, firing, moving. */
 	if (bt->tick % AI_TICKS == 0)
@@ -388,6 +459,9 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	}
 	e->speed = ship_speed(s, e, 1);
 	move_ship(s, e);
+	if (field_terrain(s, px(e->x), px(e->y)) == TERRAIN_SHALLOWS &&
+	    scrape(s, e, &bt->foe_scrape))
+		ev |= BEV_FOE_AGROUND;
 
 	/* The wind may shift. */
 	if (bt->tick % WIND_TICKS == 0) {
@@ -407,11 +481,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	else if (sunk(e))
 		bt->outcome = BAT_ENEMY_SUNK;
 	else {
-		box(s, y, &by);
-		box(s, e, &be);
-		if (abs(px(e->x) - px(y->x)) <= (be.half_w >> 2) +
-		    (by.half_w >> 2) && abs(px(e->y) - px(y->y)) <=
-		    (be.half_h >> 2) + (by.half_h >> 2))
+		if (touching(s))
 			bt->outcome = BAT_BOARDING;
 		else if (abs(px(e->x) - px(y->x)) > ESCAPE_RANGE ||
 		    abs(px(e->y) - px(y->y)) > ESCAPE_RANGE)

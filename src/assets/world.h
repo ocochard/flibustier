@@ -57,6 +57,8 @@ struct sword_tables {
 	uint8_t		line[SWORD_MOVES];	/* the line of a move */
 };
 
+#define BATTLE_TILE	32
+
 /* Terrain classes of map pixel colours. */
 enum terrain {
 	TERRAIN_SHALLOWS = 1,
@@ -74,6 +76,9 @@ struct world {
 	uint8_t		map[WORLD_CELLS_W * WORLD_CELLS_H];
 	uint8_t		tiles[256 * WORLD_TILE * WORLD_TILE];
 	uint8_t		palette[256 * 3];	/* the map tiles' palette */
+	/* Sea battles draw each map cell as a 32 x 32 tile; the colour
+	 * under a ship gives its terrain (VA 0x8200). */
+	uint8_t		battle_tiles[256 * BATTLE_TILE * BATTLE_TILE];
 	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];

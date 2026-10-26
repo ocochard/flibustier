@@ -70,6 +70,7 @@
 #define S_STRUCK		170
 #define S_YOU_ESCAPED		197
 #define S_COMMAND		286
+#define S_BEACHED		173
 #define BTL_COMMAND		4	/* battle stage: choosing the ship */
 #define S_FOE_ESCAPED		198
 #define S_BOARDING		171	/* "...you spot %s approaching" */
@@ -1602,7 +1603,7 @@ summary_event(struct game *g, const struct ui_event *ev)
 {
 	if (g->started && (ev->type == EV_CLICK ||
 	    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)))
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_cabin);
 	else if (!g->started && ev->type == EV_KEY)
 		game_goto(g, &screen_welcome);
 }
@@ -1711,48 +1712,28 @@ date_text(const struct game *g, char *out, size_t len)
 }
 
 /*
- * Voyage: a stand-in for the sailing screens of the next phase, with the
- * game's own in-game menu words: continue travels (a month passes),
- * save, or exit.
+ * Logbook (cabin spot 4): the latest news, oldest first, on shiplog.pcx.
+ * The original's log layout is not traced; an engine page for now.
  */
-
-static const int travel_items[3] = {
-	TRAVEL_CONTINUE, TRAVEL_SAVE, TRAVEL_EXIT,
-};
-
-static int
-voyage_enabled(const struct game *g, int i)
+static void
+logbook_enter(struct game *g)
 {
-	return (travel_items[i] != TRAVEL_SAVE || g->save_dir[0] != '\0');
+	game_background(g, "pic/shiplog");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, g->bg.palette, 3);
 }
 
 static void
-voyage_choose(struct game *g, int i)
+logbook_event(struct game *g, const struct ui_event *ev)
 {
-	switch (travel_items[i]) {
-	case TRAVEL_CONTINUE:
-		g->msg[0] = '\0';
-		game_goto(g, g->sim.player_town >= 0 ? &screen_town :
-		    g->world != NULL ? &screen_sail : &screen_voyage);
-		break;
-	case TRAVEL_SAVE:
-		g->saving = 1;
-		game_goto(g, &screen_slots);
-		break;
-	case TRAVEL_EXIT:
-		game_goto(g, &screen_retire);
-		break;
-	}
+	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
+		game_goto(g, &screen_cabin);
 }
 
 static void
-voyage_event(struct game *g, const struct ui_event *ev)
-{
-	menu_event(g, ev, 3, voyage_enabled, voyage_choose, NULL);
-}
-
-static void
-voyage_draw(struct game *g)
+logbook_draw(struct game *g)
 {
 	const struct sim_news *n;
 	char buf[256], line[160];
@@ -1766,27 +1747,180 @@ voyage_draw(struct game *g)
 	snprintf(buf, sizeof(buf), "%s, %s", g->sim.player.title, line);
 	draw_centered(g, FONT_BODY, y, buf);
 	y += 40;
-	/* The latest news, oldest first. */
 	kept = sim_news_kept(&g->sim);
-	first = kept > 12 ? kept - 12 : 0;
+	first = kept > 14 ? kept - 14 : 0;
 	for (i = first; i < kept; i++) {
 		n = sim_news_at(&g->sim, i);
 		news_text(g, n, line, sizeof(line));
 		y += draw(g, FONT_BODY, 80, y, 480, line, 0);
 	}
-	buf[0] = '\0';
-	for (i = 0; i < 3; i++) {
-		snprintf(line, sizeof(line), "%s~%s", i > 0 ? "\r" : "",
-		    game_word(g, W_TRAVEL, (size_t)travel_items[i]));
-		strncat(buf, line, sizeof(buf) - strlen(buf) - 1);
-	}
-	draw(g, FONT_BODY, 240, 370, 300, buf, 1);
-	if (g->msg[0] != '\0')
-		draw_centered(g, FONT_BODY, 440, g->msg);
+	continue_prompt(g);
 }
 
-const struct screen screen_voyage = {
-	"voyage", parchment_enter, voyage_event, NULL, voyage_draw,
+const struct screen screen_logbook = {
+	"logbook", logbook_enter, logbook_event, NULL, logbook_draw,
+};
+
+/*
+ * The captain's cabin (VA 0x9ffc): cabin.pcx, with cabin.spr frame 0 at
+ * (325, 229) while no treasure map is held, and eleven spots (table at
+ * VA 0x327e0: x0, y0, x1, y1, on).  The title, "Captain's Cabin" (CSTN
+ * 92.7), is centred at (320, 38) in ink 0; pointing at a spot shows its
+ * label there instead (CSTN 86).  Search, Divide party and Join party
+ * are off unless a party is ashore.
+ */
+#define CABIN_SPOTS		11
+#define W_CABIN			86
+#define W_CABIN_TITLE		92
+#define CABIN_TITLE		7
+enum { CABIN_CONTINUE, CABIN_MAPS, CABIN_CAVE, CABIN_LOG, CABIN_MAP,
+    CABIN_SEARCH, CABIN_DIVIDE, CABIN_JOIN, CABIN_SAVE, CABIN_EXIT,
+    CABIN_PRACTICE };
+
+static int
+cabin_rect(const struct game *g, int i, int r[5])
+{
+	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->cabin_va + (uint32_t)i * 10, 10);
+	int k;
+
+	if (p == NULL)
+		return (-1);
+	for (k = 0; k < 5; k++)
+		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+	return (0);
+}
+
+static int
+cabin_open(const struct game *g, int i)
+{
+	int r[5];
+
+	if (cabin_rect(g, i, r) != 0 || !r[4])
+		return (0);
+	return (i != CABIN_SAVE || g->save_dir[0] != '\0');
+}
+
+static int
+cabin_hit(const struct game *g, int x, int y)
+{
+	int i, r[5];
+
+	for (i = 0; i < CABIN_SPOTS; i++)
+		if (cabin_open(g, i) && cabin_rect(g, i, r) == 0 &&
+		    x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
+			return (i);
+	return (-1);
+}
+
+static void
+cabin_enter(struct game *g)
+{
+	game_background(g, "pic/cabin");
+	game_portrait(g, NULL);
+	load_bank(g, "spr/cabin", 0, &g->cabin_spr);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, g->bg.palette, 3);
+	g->cabin_spot = -1;
+	g->cabin_key = CABIN_CONTINUE;
+}
+
+static void
+cabin_choose(struct game *g, int i)
+{
+	g->msg[0] = '\0';
+	switch (i) {
+	case CABIN_CONTINUE:
+		game_goto(g, g->sim.player_town >= 0 ? &screen_town :
+		    g->world != NULL ? &screen_sail : &screen_town);
+		break;
+	case CABIN_CAVE:
+		g->cave_back = &screen_cabin;
+		game_goto(g, &screen_cave);
+		break;
+	case CABIN_LOG:
+		game_goto(g, &screen_logbook);
+		break;
+	case CABIN_SAVE:
+		g->saving = 1;
+		game_goto(g, &screen_slots);
+		break;
+	case CABIN_EXIT:
+		game_goto(g, &screen_retire);
+		break;
+	case CABIN_PRACTICE:
+		g->sw_practice = 1;
+		game_goto(g, &screen_sword);
+		break;
+	default:
+		snprintf(g->msg, sizeof(g->msg), "(%s: not implemented yet.)",
+		    game_word(g, W_CABIN, (size_t)i));
+		break;
+	}
+}
+
+static void
+cabin_step(struct game *g, int d)
+{
+	int n;
+
+	for (n = 0; n < CABIN_SPOTS; n++) {
+		g->cabin_key = (g->cabin_key + d + CABIN_SPOTS) % CABIN_SPOTS;
+		if (cabin_open(g, g->cabin_key))
+			break;
+	}
+	g->cabin_spot = g->cabin_key;
+}
+
+static void
+cabin_event(struct game *g, const struct ui_event *ev)
+{
+	int i;
+
+	switch (ev->type) {
+	case EV_MOVE:
+		g->cabin_spot = cabin_hit(g, ev->x, ev->y);
+		if (g->cabin_spot >= 0)
+			g->cabin_key = g->cabin_spot;
+		break;
+	case EV_CLICK:
+		if ((i = cabin_hit(g, ev->x, ev->y)) >= 0)
+			cabin_choose(g, i);
+		break;
+	case EV_KEY:
+		if (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_UP)
+			cabin_step(g, -1);
+		else if (ev->key == UI_KEY_RIGHT || ev->key == UI_KEY_DOWN)
+			cabin_step(g, 1);
+		else if (ev->key == UI_KEY_ENTER)
+			cabin_choose(g, g->cabin_key);
+		else if (ev->key == UI_KEY_ESCAPE)
+			cabin_choose(g, CABIN_CONTINUE);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+cabin_draw(struct game *g)
+{
+	const char *label;
+	int w;
+
+	if (g->cabin_spr.count > 0)
+		fb_frame(&g->fb, &g->cabin_spr.frames[0], 325, 229);
+	label = g->cabin_spot >= 0 ?
+	    game_word(g, W_CABIN, (size_t)g->cabin_spot) :
+	    game_word(g, W_CABIN_TITLE, CABIN_TITLE);
+	w = text_width(&g->font[FONT_TITLE], label);
+	draw(g, FONT_TITLE, 320 - w / 2, 38, FB_W, label, 0);
+	if (g->msg[0] != '\0')
+		draw_centered(g, FONT_BODY, 444, g->msg);
+}
+
+const struct screen screen_cabin = {
+	"cabin", cabin_enter, cabin_event, NULL, cabin_draw,
 };
 
 /* Save slots, for both saving and loading. */
@@ -1830,7 +1964,7 @@ slots_choose(struct game *g, int i)
 			snprintf(g->msg, sizeof(g->msg), "%s", g->err);
 		else
 			snprintf(g->msg, sizeof(g->msg), "%s", desc);
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_cabin);
 		return;
 	}
 	if (save_read(path, &g->sim, NULL, 0, g->err, sizeof(g->err)) != 0 ||
@@ -1841,14 +1975,14 @@ slots_choose(struct game *g, int i)
 	g->started = 1;
 	g->news_seen = g->sim.nnews;
 	g->msg[0] = '\0';
-	game_goto(g, &screen_voyage);
+	game_goto(g, &screen_cabin);
 }
 
 static void
 slots_event(struct game *g, const struct ui_event *ev)
 {
 	menu_event(g, ev, SAVE_SLOTS, slots_enabled, slots_choose,
-	    g->saving ? &screen_voyage : &screen_welcome);
+	    g->saving ? &screen_cabin : &screen_welcome);
 }
 
 static void
@@ -1921,7 +2055,7 @@ retire_choose(struct game *g, int i)
 static void
 retire_event(struct game *g, const struct ui_event *ev)
 {
-	menu_event(g, ev, 2, NULL, retire_choose, &screen_voyage);
+	menu_event(g, ev, 2, NULL, retire_choose, &screen_cabin);
 }
 
 static void
@@ -2083,7 +2217,7 @@ sail_event(struct game *g, const struct ui_event *ev)
 	    (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT))
 		g->turn = 0;
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_cabin);
 	else if (ev->type == EV_CHAR && (ev->ch == 't' || ev->ch == 'T'))
 		g->sail_fast = !g->sail_fast;	/* VA 0x1b6ef */
 }
@@ -2552,6 +2686,9 @@ battle_end_text(struct game *g, char *text, size_t len)
 	case BAT_SURRENDER:
 		snprintf(text, len, "%s", game_str(g, S_STRUCK));
 		break;
+	case BAT_BEACHED:
+		snprintf(text, len, "%s", game_str(g, S_BEACHED));
+		break;
 	case BAT_ESCAPED:
 		/* Out of range (VA 0xe82a): the enemy pulled away when it
 		 * was fleeing (decision 2), otherwise the player did. */
@@ -2571,6 +2708,11 @@ battle_end_draw(struct game *g)
 {
 	char text[600];
 
+	if (g->sim.battle.outcome == BAT_BEACHED) {
+		fb_clear(&g->fb, fb_nearest(&g->fb, 0, 0, 0));
+		fb_image_part(&g->fb, &g->bg, 0, 0, PORTRAIT_VIEW,
+		    PORTRAIT_VIEW, (FB_W - PORTRAIT_VIEW) / 2, 50, -1);
+	}
 	battle_end_text(g, text, sizeof(text));
 	if (g->sim.battle.outcome == BAT_SUNSET)
 		draw(g, FONT_BODY, 40, 150, 240, text, 0);
@@ -2592,6 +2734,8 @@ battle_end_picture(int outcome)
 		return ("pic/outrun");
 	case BAT_SUNSET:
 		return ("pic/night");
+	case BAT_BEACHED:		/* the enemy's portrait (VA 0xe9e6) */
+		return ("beached");
 	default:
 		return (NULL);
 	}
@@ -2612,7 +2756,11 @@ battle_tick(struct game *g)
 	} else if (g->sim.battle.outcome != BAT_NONE) {
 		g->btl_stage = 1;
 		g->turn = 0;
-		if (battle_end_picture(g->sim.battle.outcome) != NULL) {
+		if (g->sim.battle.outcome == BAT_BEACHED) {
+			game_background(g, ship_portrait[g->sim.battle.foe.type %
+			    9]);
+			g->ink[0] = g->ink[1] = g->ink[2] = 240;
+		} else if (battle_end_picture(g->sim.battle.outcome) != NULL) {
 			game_background(g,
 			    battle_end_picture(g->sim.battle.outcome));
 			/* The ink is palette entry 2 (VA 0xe8a9). */
@@ -2670,7 +2818,6 @@ static void
 battle_draw(struct game *g)
 {
 	const struct sim_battle *bt = &g->sim.battle;
-	const struct sim_fleet *f = &g->sim.fleet;
 	char text[600], from[64], tons[16], guns[16];
 	int cx0, cy0, cx, cy, lvl;
 
@@ -2679,8 +2826,8 @@ battle_draw(struct game *g)
 		return;
 	}
 	/* The sea around the fleet, at twice the sailing scale. */
-	cx0 = f->x / WORLD_TILE - AREA_CELLS / 2;
-	cy0 = f->y / WORLD_TILE - AREA_CELLS / 2;
+	cx0 = bt->origin_x;
+	cy0 = bt->origin_y;
 	if (g->btl_tiles.tile_w == 32)
 		for (cy = 0; cy < AREA_CELLS; cy++)
 			for (cx = 0; cx < AREA_CELLS; cx++) {
@@ -2867,6 +3014,10 @@ sword_enter(struct game *g)
 		game_background(g, "pic/alley");
 		g->sw_stage = 1;
 	}
+	if (g->sw_practice) {		/* on the deck (scene 3) */
+		game_background(g, "pic/shipdeck");
+		g->sw_stage = 1;
+	}
 	if (g->sw_story) {
 		sword_story_start(g);
 		sword_load(g);
@@ -2938,6 +3089,12 @@ sword_outcome_done(struct game *g)
 		game_goto(g, &screen_story);
 		return;
 	}
+	if (g->sw_practice) {
+		g->sw_practice = 0;
+		sim_practice_end(&g->sim);
+		game_goto(g, &screen_cabin);
+		return;
+	}
 	if (g->sw_guard) {
 		g->sw_guard = 0;
 		/* Back to sea either way (VA 0x195f5); a loss or a retreat
@@ -2975,7 +3132,11 @@ sword_event(struct game *g, const struct ui_event *ev)
 		else if (ev->type == EV_KEY && (ev->key == UI_KEY_DOWN ||
 		    ev->key == UI_KEY_RIGHT))
 			g->selected = (g->selected + 1) % SWORD_WEAPONS;
-		else if (enter && g->sw_guard) {
+		else if (enter && g->sw_practice) {
+			sim_practice_start(&g->sim, g->selected);
+			sword_load(g);
+			g->sw_stage = 2;
+		} else if (enter && g->sw_guard) {
 			sim_guard_duel(&g->sim, g->sim.fleet.leaving,
 			    g->selected);
 			sword_load(g);
@@ -3027,7 +3188,8 @@ sword_tick(struct game *g)
 		g->sw_wait = 1;
 	sim_sword_tick(&g->sim);
 	if (g->sim.sword.result != SWORD_NONE) {
-		if (g->sim.sword.result == SWORD_WON || g->sw_story)
+		if (g->sim.sword.result == SWORD_WON || g->sw_story ||
+		    g->sw_practice)
 			sword_outcome_done(g);
 		else
 			g->sw_stage = 3;
@@ -3092,10 +3254,13 @@ sword_draw(struct game *g)
 
 	switch (g->sw_stage) {
 	case 0:
-		text_band(g, 330, 120);
+		/* On the picture, no box (VA 0xf10a): at (274, 306) up to
+		 * x 560, in palette entry 2. */
+		if (g->bg.pixels != NULL)
+			memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
 		fill(text, sizeof(text), game_str(g, S_BOARDING),
 		    game_word(g, W_SAILING, SAILING_CAPTAIN), NULL);
-		draw(g, FONT_BODY, 80, 340, 480, text, 0);
+		draw(g, FONT_BODY, 274, 306, 286, text, 0);
 		continue_prompt(g);
 		return;
 	case 1:
@@ -3288,10 +3453,10 @@ town_choose(struct game *g, int i)
 	case SPOT_LEAVE:
 		sim_leave_town(&g->sim);
 		bank_free(&g->town_spr);
-		game_goto(g, g->world != NULL ? &screen_sail : &screen_voyage);
+		game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
 		break;
 	case SPOT_CABIN:
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_cabin);
 		break;
 	default:
 		snprintf(g->msg, sizeof(g->msg), "(%s: not implemented yet.)",
@@ -3370,12 +3535,8 @@ town_draw(struct game *g)
 	    t != NULL ? t->name : "";
 	w = text_width(&g->font[FONT_TITLE], label);
 	draw(g, FONT_TITLE, TOWN_NAME_X - w / 2, TOWN_NAME_Y, FB_W, label, 0);
-	if (g->msg[0] != '\0') {
-		text_band(g, 440, 30);
-		g->ink[0] = g->ink[1] = g->ink[2] = 240;
+	if (g->msg[0] != '\0')		/* an engine note, in the ink */
 		draw_centered(g, FONT_BODY, 444, g->msg);
-		g->ink[0] = g->ink[1] = g->ink[2] = 0;
-	}
 }
 
 const struct screen screen_town = {
@@ -3817,9 +3978,17 @@ merchant_draw(struct game *g)
 	int i, r[4], row, sel, held, used, room;
 
 	if (g->shop_stage != 1) {
-		text_band(g, 20, 170);
-		draw(g, FONT_BODY, 80, 30, 480, game_str(g, g->shop_stage == 2 ?
-		    S_NO_PIRATES : sim_merchant_greeting(&g->sim)), 0);
+		/* On the picture, no box, in ink 0 (VA 0x21e56): at (160,
+		 * 40) up to x 480. */
+		uint8_t ink[3];
+
+		memcpy(ink, g->ink, 3);
+		if (g->bg.pixels != NULL)
+			memcpy(g->ink, g->bg.palette, 3);
+		draw(g, FONT_BODY, 160, 40, 320, game_str(g,
+		    g->shop_stage == 2 ? S_NO_PIRATES :
+		    sim_merchant_greeting(&g->sim)), 0);
+		memcpy(g->ink, ink, 3);
 		continue_prompt(g);
 		return;
 	}
@@ -3939,7 +4108,7 @@ tavern_choose(struct game *g, int i)
 	else if (i == TAVERN_BARTENDER)
 		game_goto(g, &screen_rumours);
 	else if (i == SPOT_CABIN)
-		game_goto(g, &screen_voyage);
+		game_goto(g, &screen_cabin);
 	else
 		snprintf(g->msg, sizeof(g->msg), "(Not implemented yet.)");
 }
@@ -4006,12 +4175,8 @@ tavern_draw(struct game *g)
 	name = game_word(g, W_TAVERN_NAME, (size_t)g->sim.player_town);
 	w = text_width(&g->font[FONT_TITLE], name);
 	draw(g, FONT_TITLE, 320 - w / 2, TOWN_NAME_Y, FB_W, name, 0);
-	if (g->msg[0] != '\0') {
-		text_band(g, 440, 30);
-		g->ink[0] = g->ink[1] = g->ink[2] = 240;
+	if (g->msg[0] != '\0')		/* an engine note, in the ink */
 		draw_centered(g, FONT_BODY, 444, g->msg);
-		g->ink[0] = g->ink[1] = g->ink[2] = 0;
-	}
 }
 
 const struct screen screen_tavern = {
@@ -4024,12 +4189,11 @@ recruit_enter(struct game *g)
 {
 	game_background(g, "pic/crew");
 	game_portrait(g, NULL);
-	g->ink[0] = 240;
-	g->ink[1] = 220;
-	g->ink[2] = 170;
-	g->highlight[0] = 255;
-	g->highlight[1] = 200;
-	g->highlight[2] = 60;
+	/* The tavern's inks (VA 0x11867): palette entries 2 and 6. */
+	if (g->bg.pixels != NULL) {
+		memcpy(g->ink, &g->bg.palette[2 * 3], 3);
+		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+	}
 }
 
 static void
@@ -4058,9 +4222,10 @@ recruit_draw(struct game *g)
 	char text[600], men[16];
 	int r = g->sim.reputation / 4 + 1;
 
-	text_band(g, 290, 160);
+	/* On the picture, no box (VA 0x10f04): at (60, 300) up to x 620,
+	 * the choice up to x 560. */
 	if (g->sim.recruits == 0) {
-		draw(g, FONT_BODY, 60, 300, 520, game_str(g, S_NO_RECRUITS), 0);
+		draw(g, FONT_BODY, 60, 300, 560, game_str(g, S_NO_RECRUITS), 0);
 		continue_prompt(g);
 		return;
 	}
@@ -4071,7 +4236,7 @@ recruit_draw(struct game *g)
 	arg[2] = g->sim.player.name;
 	arg[3] = men;
 	fill_args(text, sizeof(text), game_str(g, S_RECRUITS), arg, 4);
-	draw(g, FONT_BODY, 60, 300, 520, text, 1);
+	draw(g, FONT_BODY, 60, 300, 500, text, 1);
 }
 
 const struct screen screen_recruit = {
@@ -4087,9 +4252,9 @@ rumours_enter(struct game *g)
 {
 	game_background(g, "pic/bartenda");
 	game_portrait(g, NULL);
-	g->ink[0] = 240;
-	g->ink[1] = 220;
-	g->ink[2] = 170;
+	/* Ink entry 0 (VA 0x1e78d): palette index 0. */
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, g->bg.palette, 3);
 }
 
 static void
@@ -4107,12 +4272,13 @@ rumours_draw(struct game *g)
 	size_t i, kept = sim_news_kept(&g->sim);
 	int y = 40;
 
-	text_band(g, 30, 410);
+	/* No box: the news at (222, 40) up to x 610 (VA 0x1e78d), the
+	 * gossip at (320, 150) up to x 560 (VA 0x10b10). */
 	if (kept == 0) {
 		/* The personal log is not kept yet: "your promising plans". */
 		fill(text, sizeof(text), game_str(g, S_GOSSIP),
 		    game_word(g, W_GOSSIP, 0), NULL);
-		draw(g, FONT_BODY, 222, y, 388, text, 0);
+		draw(g, FONT_BODY, 320, 150, 240, text, 0);
 	} else {
 		y += draw(g, FONT_BODY, 222, y, 388, game_word(g, W_NEWS, 1),
 		    0) + 6;
@@ -4426,6 +4592,7 @@ bank_event(struct game *g, const struct ui_event *ev)
 	case BANK_PORTIONS:
 		if (go) {
 			g->bank_stage = BANK_PLAN;
+			g->cave_back = &screen_bank;
 			game_goto(g, &screen_cave);
 		}
 		break;
@@ -4537,7 +4704,8 @@ cave_event(struct game *g, const struct ui_event *ev)
 {
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		game_goto(g, &screen_bank);
+		game_goto(g, g->cave_back != NULL ? g->cave_back :
+		    &screen_bank);
 }
 
 static void

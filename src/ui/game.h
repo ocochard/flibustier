@@ -170,6 +170,11 @@ struct game {
 	int			 arrive_last;	/* the fort sank the only ship */
 	int			 sw_guard;	/* the sword fight is the guard's duel */
 	int			 sail_fast;	/* T: a sailing pass every frame */
+	int			 sw_practice;	/* the sword fight is practice */
+	int			 cabin_spot;	/* pointed at, or -1 */
+	int			 cabin_key;	/* selected with the keys */
+	const struct screen	*cave_back;	/* where the cave returns */
+	struct sprite_bank	 cabin_spr;
 	unsigned		 sail_wait;	/* frames to the next pass */
 	unsigned		 sail_passes;	/* passes of the sailing loop */
 	struct plunder		 plunder;

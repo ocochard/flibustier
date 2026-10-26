@@ -237,7 +237,7 @@ test_saves(void)
 	/* Sail for a while, back to the menu, then save in slot 4. */
 	g = play_in(saves_tmp, "eng", "enter enter down down down down enter "
 	    "down enter right enter enter type:Kidd enter enter esc enter enter click:60,300 wait:100 esc "
-	    "down enter down down down enter");
+	    "click:560,170 down down down enter");	/* Save game */
 	if (g == NULL)
 		return;
 	CHECK(g->started && g->sim.day >= 1 && g->sim.fleet.ticks >= 100);
@@ -295,7 +295,7 @@ test_hall_of_fame(void)
 		return;
 	/* Three months at sea, then Exit game, then "No". */
 	g->sim.day = 90;
-	CHECK(game_script(g, "down down enter down enter") == 0);
+	CHECK(game_script(g, "click:400,180 down enter") == 0);
 	CHECK(!g->started);
 	game_free(g);
 	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 0);
@@ -304,7 +304,7 @@ test_hall_of_fame(void)
 	if (g == NULL)
 		return;
 	g->sim.day = 90;
-	CHECK(game_script(g, "down down enter enter") == 0);
+	CHECK(game_script(g, "click:400,180 enter") == 0);	/* Exit, Yes */
 	CHECK(g->hof_new == 0);
 	game_free(g);
 	CHECK(hof_load(path, &h, err, sizeof(err)) == 0 && h.count == 1);
@@ -871,6 +871,55 @@ test_story(void)
 	game_free(g);
 }
 
+/* The captain's cabin: labels, the logbook, the cave, practice. */
+static void
+test_cabin(void)
+{
+	struct game *g;
+	int practice;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_town);
+	{
+		struct ui_event ev = { 0 };
+
+		ev.type = EV_CHAR;	/* Space: the cabin */
+		ev.ch = ' ';
+		game_event(g, &ev);
+	}
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_cabin && g->cabin_spot == -1);
+	/* Pointing at the logbook names it; the disabled search does not
+	 * answer. */
+	CHECK(game_script(g, "move:190,200") == 0 && g->cabin_spot == 3);
+	CHECK(game_script(g, "move:280,200") == 0 && g->cabin_spot == -1);
+	CHECK(game_script(g, "click:190,200 wait:40") == 0 &&
+	    g->screen == &screen_logbook);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_cabin);
+	CHECK(game_script(g, "click:60,300 wait:40") == 0 &&
+	    g->screen == &screen_cave);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_cabin);
+	/* Practice: the weapon on the deck, a fight, then 5 more. */
+	practice = g->sim.practice;
+	CHECK(game_script(g, "click:110,120 wait:40") == 0 &&
+	    g->screen == &screen_sword && g->sw_stage == 1);
+	CHECK(game_script(g, "enter") == 0 && g->sw_stage == 2 &&
+	    g->sim.sword.kind == SWORD_PRACTICE &&
+	    g->sim.sword.you.men == 200 && g->sim.sword.title == 5);
+	g->sim.sword.result = SWORD_LOST;
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_cabin && g->sim.practice == practice + 5);
+	/* Escape continues the travels: back in town. */
+	CHECK(game_script(g, "esc wait:40") == 0 &&
+	    g->screen == &screen_town);
+	game_free(g);
+}
+
 /* Sailing passes: one in 5 frames, every frame after T; T again. */
 static void
 test_pace(void)
@@ -1047,6 +1096,7 @@ main(void)
 	test_cannon();
 	test_arrival();
 	test_pace();
+	test_cabin();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

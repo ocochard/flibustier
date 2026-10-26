@@ -336,3 +336,26 @@ sim_board(struct sim *s, int weapon)
 	in.weapon = weapon;
 	sim_sword_start(s, &in);
 }
+
+void
+sim_practice_start(struct sim *s, int weapon)
+{
+	struct sword_setup in;
+
+	memset(&in, 0, sizeof(in));
+	in.kind = SWORD_PRACTICE;
+	in.you_men = in.foe_men = 200;
+	in.you_factor = in.foe_factor = 32;
+	in.title = 5;				/* the first mate */
+	in.nation = 5;
+	in.weapon = weapon;
+	sim_sword_start(s, &in);
+}
+
+void
+sim_practice_end(struct sim *s)
+{
+	s->sword.active = 0;
+	if (s->practice < 30)
+		s->practice += 5;
+}

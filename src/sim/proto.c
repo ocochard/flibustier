@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	12
+#define STATE_VERSION	13
 #define MAX_ADVANCE	(100 * 365)
 
 static const char *nation_names[4] = { "spain", "england", "france", "holland" };
@@ -137,7 +137,7 @@ static const char *stage_names[] = { "none", "sighted", "identified",
     "colours" };
 static const char *outcome_names[] = { "none", "boarding", "escaped",
     "sunset", "surrender", "player_sunk", "enemy_sunk", "repelled",
-    "defeated" };
+    "defeated", "beached" };
 #define NOUTCOMES	(sizeof(outcome_names) / sizeof(outcome_names[0]))
 static const char *sword_results[] = { "none", "won", "repelled", "lost" };
 
@@ -353,6 +353,14 @@ battle_json(const struct sim_battle *bt, struct jbuf *out)
 	jb_int(out, bt->crew_ashore);
 	jb_raw(out, ",\"guns_ashore\":");
 	jb_int(out, bt->guns_ashore);
+	jb_raw(out, ",\"origin_x\":");
+	jb_int(out, bt->origin_x);
+	jb_raw(out, ",\"origin_y\":");
+	jb_int(out, bt->origin_y);
+	jb_raw(out, ",\"you_scrape\":");
+	jb_int(out, bt->you_scrape);
+	jb_raw(out, ",\"foe_scrape\":");
+	jb_int(out, bt->foe_scrape);
 	jb_raw(out, ",\"you\":");
 	battle_ship_json(&bt->you, out);
 	jb_raw(out, ",\"foe\":");
@@ -379,6 +387,10 @@ battle_from_json(struct sim_battle *bt, const struct json *j)
 			bt->outcome = i;
 	bt->crew_ashore = (int)json_get_int(j, "crew_ashore", 0);
 	bt->guns_ashore = (int)json_get_int(j, "guns_ashore", 0);
+	bt->origin_x = (int)json_get_int(j, "origin_x", 0);
+	bt->origin_y = (int)json_get_int(j, "origin_y", 0);
+	bt->you_scrape = (int)json_get_int(j, "you_scrape", 0);
+	bt->foe_scrape = (int)json_get_int(j, "foe_scrape", 0);
 	if (battle_ship_from_json(&bt->you, json_get(j, "you")) != 0 ||
 	    battle_ship_from_json(&bt->foe, json_get(j, "foe")) != 0)
 		return (-1);

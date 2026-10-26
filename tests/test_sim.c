@@ -497,6 +497,15 @@ make_world(struct world *w)
 	for (y = 40; y < 50; y++)
 		for (x = 110; x < 130; x++)
 			w->map[y * WORLD_CELLS_W + x] = 1;
+	/* Battle tiles: 1 land as on the map, 2 shallows, on the row under
+	 * the land (tile 2 looks like sea when sailing). */
+	w->colour_class[98] = TERRAIN_SHALLOWS;
+	memset(w->battle_tiles + 1 * BATTLE_TILE * BATTLE_TILE, 99,
+	    BATTLE_TILE * BATTLE_TILE);
+	memset(w->battle_tiles + 2 * BATTLE_TILE * BATTLE_TILE, 98,
+	    BATTLE_TILE * BATTLE_TILE);
+	for (x = 110; x < 130; x++)
+		w->map[50 * WORLD_CELLS_W + x] = 2;
 	for (i = 0; i < 128; i++)
 		w->sine[i] = (uint8_t)(i < 64 ? i * 4 : i == 64 ? 255 :
 		    (128 - i) * 4);
@@ -1700,6 +1709,65 @@ test_governor(void)
 	CHECK(!sim_shipwright_refuses(&s));
 }
 
+/* Sea battles at the coast: the shallows scrape, land beaches. */
+static void
+test_coast(void)
+{
+	struct sim s;
+	int i, hurt = 0;
+
+	/* The field's origin is 7 cells up and left of the fleet: land
+	 * covers field rows 0..159 here, shallows 160..191. */
+	sea_game(&s, 120, 52, 0);
+	sim_battle_start(&s);
+	CHECK(s.battle.origin_x == 113 && s.battle.origin_y == 45);
+	s.battle.foe.x = 420 * 256;		/* in range, not alongside */
+	s.battle.foe.y = 300 * 256;
+	/* A pinnace (class 0) in the shallows: hurt at once, then 20 ticks
+	 * of grace. */
+	s.battle.you.type = 0;
+	s.battle.you.damage = 0;
+	s.battle.you.x = 240 * 256;
+	s.battle.you.y = 176 * 256;
+	s.battle.you.heading = 0x40;		/* along the shoal */
+	CHECK(sim_battle_tick(&s, 0, 0, 0) & BEV_AGROUND);
+	CHECK(s.battle.you.damage == 16 && s.battle.you_scrape == 20);
+	for (i = 0; i < 5; i++)
+		CHECK(!(sim_battle_tick(&s, 0, 0, 0) & BEV_AGROUND));
+	CHECK(s.battle.you.damage == 16 && s.battle.you_scrape == 15);
+	/* A galleon (class 7) is hurt on rolls of 7..15 only. */
+	s.battle.you.type = 7;
+	for (i = 0; i < 400 && s.battle.outcome == BAT_NONE; i++) {
+		s.battle.you.y = 176 * 256;
+		s.battle.you.x = 240 * 256;
+		s.battle.you.damage = 0;
+		s.battle.you_scrape = 0;
+		hurt += (sim_battle_tick(&s, 0, 0, 0) & BEV_AGROUND) != 0;
+	}
+	CHECK(hurt > 150 && hurt < 300);	/* 9/16 of 400 */
+	/* Land: beached; with the enemy alongside, a boarding. */
+	s.battle.outcome = BAT_NONE;
+	s.battle.you.x = 240 * 256;
+	s.battle.you.y = 100 * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.outcome == BAT_BEACHED);
+	s.battle.outcome = BAT_NONE;
+	s.battle.you.y = 100 * 256;
+	s.battle.foe.x = s.battle.you.x;
+	s.battle.foe.y = s.battle.you.y;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.outcome == BAT_BOARDING);
+	/* Off the field is open sea. */
+	s.battle.outcome = BAT_NONE;
+	s.battle.you.damage = s.battle.foe.damage = 0;
+	s.battle.you.x = -50 * 256;
+	s.battle.you.y = 100 * 256;
+	s.battle.foe.x = -50 * 256;
+	s.battle.foe.y = 300 * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(s.battle.outcome == BAT_NONE);
+}
+
 /* Choosing the ship to command swaps it into the flagship's place. */
 static void
 test_command(void)
@@ -1951,6 +2019,7 @@ main(void)
 	test_cannon();
 	test_arrival();
 	test_command();
+	test_coast();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);
