@@ -171,11 +171,8 @@ Sprite bank of 15x15 frames: `u16 15, u16 15, u16 2`, then 225 pixels and
     - 216-223 rotate every 2 passes in the opposite direction (VA
       `0x2b009`), except while the ship touches land (VA `0x4d28a`).
     - Another loop (VA `0x7db8`) turns all of them every 8 passes.
-  - **Pace:** each pass of the sailing loop waits for a clock read
-    through the DOS extender (VA `0x7c8d`) to advance by 1, or by 5
-    when VA `0x33fcc` is 0. The game does not reprogram the system
-    timer, so this is presumably the BIOS clock at 18.2 Hz; the engine
-    assumes it for the shimmer.
+  - The rotations are counted in passes of the sailing loop, so they
+    follow its pace (12.2 passes a second, or 60.9 in the fast mode).
   - The sea tiles use 208-215, so that range is the water shimmer.
 - **Other palette cycling.** A generic "rotate range by one" (VA
   `0x35f8`) cycles 238-254, 100-163, 194-206 and 211-236 in three
@@ -304,6 +301,12 @@ The first 512 bytes of the matching PCX, presumably a backup for the
   - `+0x10`: banner string.
   - `+0x30`: entry count.
   - `+0x32`: entry offset table.
+- **The game clock:** entry 5 returns a tick count, which the game
+  reads through the DOS extender's real-mode call (VA `0x7c8d`). The
+  driver's set-up programs PIT channel 0 with divisor `0x4C90` (60.9
+  Hz) and counts its own interrupts, chaining to the BIOS every third
+  one (`NSOUND` image offsets `0xb1`-`0xd7`). Sailing, sea battles and
+  sword fights all wait on this clock.
 - Drivers:
 
   | File | Device |

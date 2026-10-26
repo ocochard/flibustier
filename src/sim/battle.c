@@ -74,20 +74,14 @@ box(const struct sim *s, const struct battle_ship *b, struct sideinfo *bx)
 	bx->half_h = s->world->half_h[t];
 }
 
-void
-sim_battle_start(struct sim *s)
+/* The flagship fights; the other ships keep 8 men each. */
+static void
+flagship(struct sim *s)
 {
 	struct sim_battle *bt = &s->battle;
 	struct sim_fleet *f = &s->fleet;
-	const struct sim_encounter *e = &s->encounter;
-	int cls, off;
+	int cls;
 
-	memset(bt, 0, sizeof(*bt));
-	bt->active = 1;
-	bt->wind = s->wind;
-	bt->wind_strength = rng_below(&s->rng, 3);
-
-	/* The flagship fights; the other ships keep 8 men each. */
 	bt->you.type = f->ships[0];
 	cls = f->ships[0] & 7;
 	bt->you.damage = f->damage[0];
@@ -104,6 +98,39 @@ sim_battle_start(struct sim *s)
 		bt->you.guns = (cls + 2) * 4;
 	bt->guns_ashore = f->guns - bt->you.guns;
 	bt->you.turn_rate = 3 - (cls + 2) / 4;
+}
+
+void
+sim_battle_command(struct sim *s, int ship)
+{
+	struct sim_fleet *f = &s->fleet;
+	uint8_t t;
+
+	if (!s->battle.active || s->battle.tick != 0 || ship <= 0 ||
+	    ship >= f->nships)
+		return;
+	t = f->ships[0];
+	f->ships[0] = f->ships[ship];
+	f->ships[ship] = t;
+	t = f->damage[0];
+	f->damage[0] = f->damage[ship];
+	f->damage[ship] = t;
+	flagship(s);
+}
+
+void
+sim_battle_start(struct sim *s)
+{
+	struct sim_battle *bt = &s->battle;
+	const struct sim_encounter *e = &s->encounter;
+	int off;
+
+	memset(bt, 0, sizeof(*bt));
+	bt->active = 1;
+	bt->wind = s->wind;
+	bt->wind_strength = rng_below(&s->rng, 3);
+
+	flagship(s);
 
 	bt->foe.type = e->type;
 	bt->foe.guns = e->guns;

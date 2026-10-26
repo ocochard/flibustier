@@ -169,6 +169,9 @@ struct game {
 	int			 arrive_result;	/* enum arrival */
 	int			 arrive_last;	/* the fort sank the only ship */
 	int			 sw_guard;	/* the sword fight is the guard's duel */
+	int			 sail_fast;	/* T: a sailing pass every frame */
+	unsigned		 sail_wait;	/* frames to the next pass */
+	unsigned		 sail_passes;	/* passes of the sailing loop */
 	struct plunder		 plunder;
 	struct sprite_bank	 cave[8];	/* the treasure piles */
 	struct sprite_bank	 gov_spr;	/* the proclamation */

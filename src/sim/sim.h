@@ -459,6 +459,9 @@ void	sim_new_expedition(struct sim *s, int advance);
 
 /* Start a sea battle against the current encounter's ship. */
 void	sim_battle_start(struct sim *s);
+/* With several ships, the one to command (VA 0xf246), before the first
+ * tick: it swaps into the flagship's place. */
+void	sim_battle_command(struct sim *s, int ship);
 
 /*
  * One battle tick: turn -1, 0 or +1; fire when nonzero; sails -1 for

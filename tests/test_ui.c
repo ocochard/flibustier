@@ -63,6 +63,9 @@ play_in(const char *saves, const char *lang, const char *script)
 		failures++;
 		return (NULL);
 	}
+	/* Sail in the fast mode (T), a pass a frame, so that the scripts
+	 * count passes; test_pace checks the normal pace. */
+	g.sail_fast = 1;
 	if (game_script(&g, script) != 0) {
 		fprintf(stderr, "script: %s\n", g.err);
 		failures++;
@@ -390,24 +393,46 @@ test_battle_screen(void)
 	if (g->sim.encounter.stage == ENC_COLOURS)
 		CHECK(game_script(g, "enter") == 0);	/* attack */
 	CHECK(g->screen == &screen_battle && g->sim.battle.active);
-	/* An escape writes its text in the band (CSTR 197, 198). */
+	/* An escape: outrun.pcx and its text in the ink at (100, 300)
+	 * (CSTR 197, 198). */
 	{
 		struct sim_battle saved = g->sim.battle;
-		int x, y, inked = 0;
-		uint8_t band;
+		int x, y, inked = 0, before = 0;
+		uint8_t ink;
 
 		g->sim.battle.outcome = BAT_ESCAPED;
 		g->sim.battle.decision = 2;
 		CHECK(game_script(g, "wait:2") == 0 && g->btl_stage == 1);
-		band = fb_nearest(&g->fb, 20, 15, 10);
-		for (y = 170; y < 200; y++)
-			for (x = 80; x < 480; x++)
-				inked += g->fb.px[y * FB_W + x] != band;
-		CHECK(inked > 100);
+		CHECK(g->bg.w == 640 && g->bg.h == 480);
+		ink = fb_nearest(&g->fb, g->ink[0], g->ink[1], g->ink[2]);
+		for (y = 300; y < 330; y++)
+			for (x = 100; x < 560; x++) {
+				inked += g->fb.px[y * FB_W + x] == ink;
+				before += g->bg.pixels[y * 640 + x] == ink;
+			}
+		CHECK(inked > before + 100);
 		g->sim.battle = saved;
-		g->btl_stage = 0;
+		game_switch(g, &screen_battle);
+		CHECK(game_script(g, "wait:2") == 0 && g->btl_stage == 0);
 	}
-	CHECK(game_script(g, "up wait:200") == 0);	/* full sails */
+	/* With two ships, the one to command comes first. */
+	{
+		int n = g->sim.fleet.nships;
+
+		g->sim.fleet.nships = 2;
+		g->sim.fleet.ships[1] = 5;
+		g->sim.battle.tick = 0;
+		game_switch(g, &screen_battle);
+		CHECK(game_script(g, "wait:2") == 0 && g->btl_stage == 4);
+		CHECK(game_script(g, "down enter") == 0 &&
+		    g->btl_stage == 0 && g->sim.fleet.ships[0] == 5 &&
+		    g->sim.battle.you.type == 5);
+		g->sim.fleet.nships = n;	/* the frigate fights on */
+	}
+	/* Raising sail takes 160 ticks, then full sails. */
+	CHECK(game_script(g, "up") == 0 && g->sim.battle.you.sail_timer > 0 &&
+	    !g->sim.battle.you.full_sails);
+	CHECK(game_script(g, "wait:200") == 0);	/* full sails */
 	CHECK(g->sim.battle.you.full_sails || g->sim.battle.outcome != 0);
 	/* Steer toward her and fire until it is decided. */
 	for (i = 0; i < 300 && g->btl_stage == 0; i++)
@@ -846,6 +871,32 @@ test_story(void)
 	game_free(g);
 }
 
+/* Sailing passes: one in 5 frames, every frame after T; T again. */
+static void
+test_pace(void)
+{
+	struct game *g;
+	int32_t t0;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter "
+	    "click:60,300 wait:30");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_sail);
+	g->sim.encounters = 0;
+	g->sail_fast = 0;
+	t0 = g->sim.fleet.ticks;
+	CHECK(game_script(g, "wait:50") == 0 &&
+	    g->sim.fleet.ticks - t0 == 10);
+	CHECK(game_script(g, "type:t") == 0 && g->sail_fast);
+	t0 = g->sim.fleet.ticks;
+	CHECK(game_script(g, "wait:50") == 0 &&
+	    g->sim.fleet.ticks - t0 == 50);
+	CHECK(game_script(g, "type:T") == 0 && !g->sail_fast);
+	game_free(g);
+}
+
 /* Reaching a hostile port: the fort fires; sneaking in, a guard. */
 static void
 test_arrival(void)
@@ -995,6 +1046,7 @@ main(void)
 	test_bank();
 	test_cannon();
 	test_arrival();
+	test_pace();
 	rmdir(saves_tmp);
 	packs_free(packs);
 	if (failures > 0) {

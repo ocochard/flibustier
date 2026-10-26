@@ -1700,6 +1700,35 @@ test_governor(void)
 	CHECK(!sim_shipwright_refuses(&s));
 }
 
+/* Choosing the ship to command swaps it into the flagship's place. */
+static void
+test_command(void)
+{
+	struct sim s;
+
+	sea_game(&s, 300, 300, 0);
+	s.fleet.nships = 2;
+	s.fleet.ships[0] = 1;			/* a sloop */
+	s.fleet.ships[1] = 5;			/* a frigate */
+	s.fleet.damage[0] = 0;
+	s.fleet.damage[1] = 20;
+	s.fleet.crew = 100;
+	s.fleet.guns = 30;
+	sim_battle_start(&s);
+	CHECK(s.battle.you.type == 1 && s.battle.you.crew == 92);
+	CHECK(s.battle.you.guns == 12);		/* (1 + 2) x 4 */
+	sim_battle_command(&s, 1);
+	CHECK(s.fleet.ships[0] == 5 && s.fleet.ships[1] == 1 &&
+	    s.fleet.damage[0] == 20 && s.fleet.damage[1] == 0);
+	CHECK(s.battle.you.type == 5 && s.battle.you.damage == 20 &&
+	    s.battle.you.crew == 92 && s.battle.you.guns == 23);
+	CHECK(s.battle.crew_ashore == 8 && s.battle.guns_ashore == 7);
+	/* Not once the battle runs. */
+	sim_battle_tick(&s, 0, 0, 0);
+	sim_battle_command(&s, 1);
+	CHECK(s.fleet.ships[0] == 5);
+}
+
 /* The arrival: the fort's welcome, a lost ship's cargo, sneaking in. */
 static void
 test_arrival(void)
@@ -1921,6 +1950,7 @@ main(void)
 	test_bank();
 	test_cannon();
 	test_arrival();
+	test_command();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

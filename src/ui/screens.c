@@ -69,12 +69,16 @@
 #define S_SUNSET		169
 #define S_STRUCK		170
 #define S_YOU_ESCAPED		197
+#define S_COMMAND		286
+#define BTL_COMMAND		4	/* battle stage: choosing the ship */
 #define S_FOE_ESCAPED		198
 #define S_BOARDING		171	/* "...you spot %s approaching" */
 #define SAILING_RELOADING	0
 #define SAILING_LOADED		1
 #define SAILING_BATTLE_SAILS	2
 #define SAILING_FULL_SAILS	3
+#define SAILING_RAISING		4
+#define SAILING_LOWERING	5
 #define SAILING_CAPTAIN		7	/* "the enemy captain" */
 #define SAILING_GUNS		10	/* "Guns: " */
 #define SAILING_MEN		11	/* "Men: " */
@@ -2080,7 +2084,17 @@ sail_event(struct game *g, const struct ui_event *ev)
 		g->turn = 0;
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)
 		game_goto(g, &screen_voyage);
+	else if (ev->type == EV_CHAR && (ev->ch == 't' || ev->ch == 'T'))
+		g->sail_fast = !g->sail_fast;	/* VA 0x1b6ef */
 }
+
+/*
+ * The sailing loop's pace (VA 0x231b8): each pass waits for the sound
+ * driver's clock, 60.9 Hz (PIT divisor 0x4C90), to advance by 5, or by 1
+ * once T has been pressed: 12.2 or 60.9 passes a second.  At 60 frames a
+ * second, a pass every 5 frames or every frame.
+ */
+#define SAIL_FRAMES		5
 
 static void
 sail_tick(struct game *g)
@@ -2089,8 +2103,13 @@ sail_tick(struct game *g)
 
 	if (g->fading != 0)
 		return;		/* the ship waits for the screen */
+	if (!g->sail_fast && ++g->sail_wait < SAIL_FRAMES)
+		return;
+	g->sail_wait = 0;
+	g->sail_passes++;
 	switch (sim_sail(&g->sim, g->turn, 1, &town)) {
 	case SAIL_TOWN:
+		g->sail_fast = 0;		/* VA 0x284b6 */
 		g->arrive_stage = 0;
 		game_goto(g, &screen_arrive);
 		break;
@@ -2114,10 +2133,7 @@ sail_draw(struct game *g)
 	char buf[128], from[64];
 	int cx, cy, x0 = g->view_x / WORLD_TILE, y0 = g->view_y / WORLD_TILE;
 
-	/* The game's loop runs on the BIOS clock, 18.2 passes a second;
-	 * ours at 60 frames a second. */
-	sea_animate(&g->sea, (unsigned)((unsigned long)g->ticks * 182 / 600),
-	    g->fb.pal);
+	sea_animate(&g->sea, g->sail_passes, g->fb.pal);
 	for (cy = 0; cy < FB_H / WORLD_TILE; cy++)
 		for (cx = 0; cx < FB_W / WORLD_TILE; cx++) {
 			struct image tile;
@@ -2319,15 +2335,14 @@ encounter_draw(struct game *g)
 		return;
 	}
 	if (g->enc_result >= 0) {
-		text_band(g, 300, 150);
-		y = 310;
+		y = 256;
 		switch (g->enc_result) {
 		case RES_OVERTAKEN:
-			y += draw(g, FONT_BODY, 80, y, 480,
+			y += draw(g, FONT_BODY, 200, y, 340,
 			    game_str(g, S_OVERTAKEN), 0);
 			break;
 		case RES_UNANSWERED:
-			y += draw(g, FONT_BODY, 80, y, 480,
+			y += draw(g, FONT_BODY, 200, y, 340,
 			    game_str(g, S_UNANSWERED), 0);
 			break;
 		}
@@ -2356,8 +2371,13 @@ encounter_draw(struct game *g)
 			    game_word(g, W_COLOURS, (size_t)e->nation), NULL);
 		break;
 	}
-	text_band(g, 300, 150);
-	draw(g, FONT_BODY, 80, 310, 480, text, 1);
+	/* No box: the text is written on the screen (VA 0x10560): "Sail
+	 * ho!" at (100, 300), the later questions at (200, 256), all up
+	 * to x 540. */
+	if (e->stage == ENC_SIGHTED)
+		draw(g, FONT_BODY, 100, 300, 440, text, 1);
+	else
+		draw(g, FONT_BODY, 200, 256, 340, text, 1);
 }
 
 const struct screen screen_encounter = {
@@ -2428,8 +2448,22 @@ battle_enter(struct game *g)
 		g->btl_stage = 2;	/* back from the fight: the prize */
 		g->selected = 0;
 	}
+	/* Several ships: which one to command, before the first tick. */
+	if (g->btl_stage == 0 && g->sim.battle.tick == 0 &&
+	    g->sim.fleet.nships > 1) {
+		g->btl_stage = BTL_COMMAND;
+		g->selected = 0;
+	}
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
+}
+
+static void
+command_choose(struct game *g, int i)
+{
+	sim_battle_command(&g->sim, i);
+	battle_sprites(g, 0, g->sim.battle.you.type);
+	g->btl_stage = 0;
 }
 
 static void
@@ -2453,6 +2487,11 @@ battle_event(struct game *g, const struct ui_event *ev)
 
 	if (g->btl_stage == 2) {
 		menu_event(g, ev, 2, NULL, prize_choose, NULL);
+		return;
+	}
+	if (g->btl_stage == BTL_COMMAND) {
+		menu_event(g, ev, g->sim.fleet.nships, NULL, command_choose,
+		    NULL);
 		return;
 	}
 	if (g->btl_stage == 1) {
@@ -2482,6 +2521,82 @@ battle_event(struct game *g, const struct ui_event *ev)
 		g->btl_sails = -1;
 }
 
+/* The text of a battle's end (CSTR 167-170, 197, 198). */
+static void
+battle_end_text(struct game *g, char *text, size_t len)
+{
+	const struct sim_battle *bt = &g->sim.battle;
+
+	switch (bt->outcome) {
+	case BAT_PLAYER_SUNK:
+		snprintf(text, len, "%s", game_str(g, S_YOU_SUNK));
+		if (g->sim.fleet.nships == 1) {
+			/* The last ship (VA 0x1f2a1): washed ashore, then
+			 * picked up by former crew members. */
+			char more[400];
+
+			fill(more, sizeof(more), game_str(g, S_PICKED_UP),
+			    game_word(g, W_CAPTAIN,
+			    (size_t)g->sim.player.difficulty), NULL);
+			snprintf(text, len, "%s\r%s\r%s",
+			    game_str(g, S_YOU_SUNK), game_str(g, S_ASHORE),
+			    more);
+		}
+		break;
+	case BAT_ENEMY_SUNK:
+		snprintf(text, len, "%s", game_str(g, S_FOE_SUNK));
+		break;
+	case BAT_SUNSET:
+		snprintf(text, len, "%s", game_str(g, S_SUNSET));
+		break;
+	case BAT_SURRENDER:
+		snprintf(text, len, "%s", game_str(g, S_STRUCK));
+		break;
+	case BAT_ESCAPED:
+		/* Out of range (VA 0xe82a): the enemy pulled away when it
+		 * was fleeing (decision 2), otherwise the player did. */
+		snprintf(text, len, "%s", game_str(g,
+		    bt->decision == 2 ? S_FOE_ESCAPED : S_YOU_ESCAPED));
+		break;
+	default:
+		text[0] = '\0';
+		break;
+	}
+}
+
+/* A battle's end on its own picture: the sunset's text at (40, 150) up to
+ * x 280, the others at (100, 300) up to x 560 (VA 0xe67b-0xe883). */
+static void
+battle_end_draw(struct game *g)
+{
+	char text[600];
+
+	battle_end_text(g, text, sizeof(text));
+	if (g->sim.battle.outcome == BAT_SUNSET)
+		draw(g, FONT_BODY, 40, 150, 240, text, 0);
+	else
+		draw(g, FONT_BODY, 100, 300, 460, text, 0);
+	continue_prompt(g);
+}
+
+/* The picture of a battle's end (VA 0xe67b-0xe918), or NULL to stay on
+ * the battle. */
+static const char *
+battle_end_picture(int outcome)
+{
+	switch (outcome) {
+	case BAT_PLAYER_SUNK:
+	case BAT_ENEMY_SUNK:
+		return ("pic/sinking");
+	case BAT_ESCAPED:
+		return ("pic/outrun");
+	case BAT_SUNSET:
+		return ("pic/night");
+	default:
+		return (NULL);
+	}
+}
+
 static void
 battle_tick(struct game *g)
 {
@@ -2497,6 +2612,14 @@ battle_tick(struct game *g)
 	} else if (g->sim.battle.outcome != BAT_NONE) {
 		g->btl_stage = 1;
 		g->turn = 0;
+		if (battle_end_picture(g->sim.battle.outcome) != NULL) {
+			game_background(g,
+			    battle_end_picture(g->sim.battle.outcome));
+			/* The ink is palette entry 2 (VA 0xe8a9). */
+			if (g->bg.pixels != NULL)
+				memcpy(g->ink, &g->bg.palette[STORY_INK * 3],
+				    3);
+		}
 	}
 }
 
@@ -2551,6 +2674,10 @@ battle_draw(struct game *g)
 	char text[600], from[64], tons[16], guns[16];
 	int cx0, cy0, cx, cy, lvl;
 
+	if (g->btl_stage == 1 && battle_end_picture(bt->outcome) != NULL) {
+		battle_end_draw(g);
+		return;
+	}
 	/* The sea around the fleet, at twice the sailing scale. */
 	cx0 = f->x / WORLD_TILE - AREA_CELLS / 2;
 	cy0 = f->y / WORLD_TILE - AREA_CELLS / 2;
@@ -2578,8 +2705,11 @@ battle_draw(struct game *g)
 
 	/* The panel: the enemy above, the player below, the wind between. */
 	battle_side_text(g, 14, &bt->foe, -1);
-	battle_side_text(g, 358, &bt->you, bt->you.reload > 0 ?
-	    SAILING_RELOADING : -1);
+	/* While the sails change, "Raising sail" or "Lowering sail" (VA
+	 * 0xef06, event 10); reloading waits for them. */
+	battle_side_text(g, 358, &bt->you, bt->you.sail_timer > 0 ?
+	    (bt->you.full_sails ? SAILING_LOWERING : SAILING_RAISING) :
+	    bt->you.reload > 0 ? SAILING_RELOADING : -1);
 	lvl = bt->foe.damage / 16 > 4 ? 4 : bt->foe.damage / 16;
 	if (g->btl_damage[1].count == 5)
 		fb_frame(&g->fb, &g->btl_damage[1].frames[lvl], 489, 137);
@@ -2592,8 +2722,24 @@ battle_draw(struct game *g)
 
 	if (g->btl_stage == 0)
 		return;
-	text_band(g, 160, 290);	/* room for the longest outcome */
+	if (g->btl_stage == BTL_COMMAND) {
+		/* "Which ship will you command?" (CSTR 286) and the fleet;
+		 * the original picks on its fleet panel (VA 0xffae). */
+		int i;
+
+		text_band(g, 160, 290);
+		snprintf(text, sizeof(text), "%s", game_str(g, S_COMMAND));
+		for (i = 0; i < g->sim.fleet.nships; i++) {
+			strncat(text, "\r~", sizeof(text) - strlen(text) - 1);
+			strncat(text, game_word(g, W_SHIP_TYPE,
+			    (size_t)(g->sim.fleet.ships[i] % 9)),
+			    sizeof(text) - strlen(text) - 1);
+		}
+		draw(g, FONT_BODY, 80, 170, 400, text, 1);
+		return;
+	}
 	if (g->btl_stage == 2) {
+		text_band(g, 160, 290);
 		/* "%sa %s ton %s with %s guns... space for %s tons" (VA
 		 * 0xdb7b): 20 tons per class step, guns rounded up to even,
 		 * and the fleet's room (no cargo is carried yet). */
@@ -2622,42 +2768,9 @@ battle_draw(struct game *g)
 		draw(g, FONT_BODY, 80, 170, 400, text, 1);
 		return;
 	}
-	switch (bt->outcome) {
-	case BAT_PLAYER_SUNK:
-		snprintf(text, sizeof(text), "%s", game_str(g, S_YOU_SUNK));
-		if (g->sim.fleet.nships == 1) {
-			/* The last ship (VA 0x1f2a1): washed ashore, then
-			 * picked up by former crew members. */
-			char more[400];
-
-			fill(more, sizeof(more), game_str(g, S_PICKED_UP),
-			    game_word(g, W_CAPTAIN,
-			    (size_t)g->sim.player.difficulty), NULL);
-			snprintf(text, sizeof(text), "%s\r%s\r%s",
-			    game_str(g, S_YOU_SUNK), game_str(g, S_ASHORE),
-			    more);
-		}
-		break;
-	case BAT_ENEMY_SUNK:
-		snprintf(text, sizeof(text), "%s", game_str(g, S_FOE_SUNK));
-		break;
-	case BAT_SUNSET:
-		snprintf(text, sizeof(text), "%s", game_str(g, S_SUNSET));
-		break;
-	case BAT_SURRENDER:
-		snprintf(text, sizeof(text), "%s", game_str(g, S_STRUCK));
-		break;
-	case BAT_ESCAPED:
-		/* Out of range (VA 0xe82a): the enemy pulled away when it
-		 * was fleeing (decision 2), otherwise the player did. */
-		snprintf(text, sizeof(text), "%s", game_str(g,
-		    bt->decision == 2 ? S_FOE_ESCAPED : S_YOU_ESCAPED));
-		break;
-	default:
-		text[0] = '\0';
-		break;
-	}
-	draw(g, FONT_BODY, 80, 170, 400, text, 0);
+	/* The colours struck: written over the battle, no box. */
+	battle_end_text(g, text, sizeof(text));
+	draw(g, FONT_BODY, 100, 300, 460, text, 0);
 	continue_prompt(g);
 }
 
@@ -2906,10 +3019,10 @@ sword_tick(struct game *g)
 		return;
 	if (--g->sw_wait > 0)
 		return;
-	/* A fight tick lasts 9-12 timer units; the engine takes them as
-	 * 1/120 s (the original's timer is not identified). */
+	/* A fight tick lasts 9-12 units of the sound driver's 60.9 Hz
+	 * clock: taken as frames. */
 	t = &g->world->sword;
-	g->sw_wait = t->delay[g->sim.sword.level & 3] / 2;
+	g->sw_wait = t->delay[g->sim.sword.level & 3];
 	if (g->sw_wait < 1)
 		g->sw_wait = 1;
 	sim_sword_tick(&g->sim);

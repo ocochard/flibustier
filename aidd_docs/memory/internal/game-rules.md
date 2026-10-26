@@ -162,6 +162,10 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   top and north at the bottom.
 - **Heading:** one byte, 256 per turn: `0x00` north, `0x40` east,
   `0x80` south, `0xC0` west.
+- **Pace:** each pass (tick) of the loop waits for the game clock to
+  advance by 5, or by 1 in the fast mode: 12.2 or 60.9 passes a second.
+  The T key toggles the fast mode (VA `0x1b6ef`); the voyage's end (VA
+  `0x284b6`) turns it off. The engine does so on reaching a town.
 - **Ticks:** a tick counter; 64 ticks make a day. When a voyage ends,
   the game adds `ticks / 64 + 1` days (VA `0x28789`).
 
@@ -260,6 +264,10 @@ Where the original's behaviour is not traced yet, the engine does this:
      nearest town).
    - Choices: investigate or continue the voyage. Continuing ends the
      encounter.
+   - Layout: no box; the text and choices are written at (100, 300) up
+     to x 540. The later questions are at (200, 256), below the ship's
+     portrait or flag, on a screen cleared to colour 0 (black in those
+     pictures, VA `0x247b`).
 2. **Which ship:**
    - The ship comes from the per-era block (offset `0x100`, VA
      `0x47086`): 4 nations x 5 records of 7 bytes.
@@ -353,13 +361,23 @@ fight computes its level the same way with fencing.
 - **Battle state:** the wind keeps its direction from sailing, with
   strength `w = rand(3)` rolled during the encounter (VA `0xd1fc`).
   Both ships start with battle sails.
+- **Which ship (VA `0xf246`):** with more than one ship, the player
+  picks the ship to command on the fleet panel (VA `0xffae`), under
+  "Which ship will you command?" (CSTR 286). The code fills CSTR 123
+  ("We have %s men and %s cannon ready for battle. Winds are %s…")
+  first, but copies CSTR 286 over it. The chosen ship swaps places
+  with the flagship, then fights with `crew - 8 x (ships - 1)` men. The
+  engine shows a list of the ships instead of the panel.
 - **Enemy reload:** `|144 - 8 x role|` ticks.
 
 ### Each tick
 
 - **Steering:** the player's heading changes by 16 x turn input every
   8 ticks.
-- **Sails:** changing sails takes 160 ticks. Full sails then multiply
+- **Sails:** Up raises and Down lowers them. Changing sails takes 160
+  ticks, while the panel says "Raising sail" or "Lowering sail" (CSTN
+  30.4, 30.5, VA `0xef06` event 10) and reloading waits. Then it shows
+  "Full sails" or "Battle sails" (30.3, 30.2), and full sails multiply
   the speed by 1.5.
 - **Speed:**
   - Start from `(speed_table[class][sector] x 4 - damage / 4)`, with
@@ -426,6 +444,15 @@ fight computes its level the same way with fencing.
    The enemy then turns toward the target by `t` every 8 ticks.
 
 ### End of battle
+
+Each ending has its own picture (VA `0xe67b`-`0xe918`), with the text in
+palette entry 2 and no box:
+- **Either ship sunk:** `sinking.pcx`, text at (100, 300) up to x 560.
+- **Escape:** `outrun.pcx`, the same place.
+- **Sunset:** `night.pcx`, text at (40, 150) up to x 280 (CSTR 317
+  against a fort).
+- **Colours struck, beached (CSTR 173):** written over the battle at
+  (100, 300).
 
 | Outcome | When | What follows |
 |---|---|---|
@@ -612,16 +639,13 @@ move) and `0x38a1a` to `0x38b99`.
   1 man, the opponent is beaten. A hit that leaves him beaten fells him
   at once (move 14); one beaten by the melee falls at the next hit. The
   same holds the other way for the player.
-- **Speed:** a tick lasts 12, 11, 10 or 9 timer units by `level & 3`
-  (VA `0x389c4`).
+- **Speed:** a tick lasts 12, 11, 10 or 9 units of the game clock
+  (60.9 Hz, see the game clock) by `level & 3` (VA `0x389c4`).
 - **Debug flag:** a byte at VA `0x33ee9`, 0 in the shipped game, would
   make the player invulnerable. No code sets it.
 
 ### Engine choices for sword fights
 
-- **Pace:** a fight tick lasts `delay / 120` seconds. The original's
-  timer is read through a pointer set at run time and its unit is not
-  identified.
 - **Lunges:** whether a strike moves the bar by 1 or 2 steps follows the
   striking move. The original follows the latest input, which differs
   only when a new key arrives in the middle of a move.
