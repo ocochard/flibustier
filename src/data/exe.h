@@ -51,6 +51,8 @@ struct exe_layout {
 						 * picture, 20 RGB ink steps */
 	uint32_t	 treasure_va;		/* 256 x {i16 x, y}: treasure
 						 * spots, in map cells */
+	uint32_t	 coast_va;		/* 256 bytes: a map tile's shore
+						 * side (0x11, 0x22, 0x33) */
 };
 
 /* Returns the layout of a known build, or NULL. */

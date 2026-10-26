@@ -59,7 +59,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 21,
+  "version": 22,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -205,6 +205,12 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   `mission_offer` (`type`, negative once done, `giver`, `dest`,
   `nation`, `pirate`); the encounter has `named`. Absent before version
   20: none.
+- **Prison:** `injuries`, `start_year`, and `jail` (`fresh` until told,
+  `cause` 0 town, 1 ship, 2 marooned, 3 fort, `town`, `end` 0 or 1
+  expedition over, 2 too old, `health`, `spells`). The sim imprisons
+  the player itself on the defeats above (`finish`, `town sail_in`,
+  `assault end`, `land end`). Absent before version 22: no injuries,
+  the career starting the current year.
 - **Older states:** states from version 14 on still load. The town
   fields added since (`barmaid`, `garrison`, `land_x`, `land_y`,
   `party_x`, `party_y`) then read as 65535 until the player's program

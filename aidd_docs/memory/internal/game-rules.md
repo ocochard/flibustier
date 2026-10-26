@@ -226,8 +226,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 ### Landing parties (VA `0x231b8`, `0x315d`, `0x24808`)
 
 - **Going ashore:** when the ship's next step is on land, the player is
-  asked (a box at (268, 218)-(370, 248), answered Y or N; the original's
-  wording was not found, the engine writes "Ashore? Y/N"). No puts the
+  asked with the language's "Disembark (y/n)" plaque, `misc.crs` frame 8
+  at (268, 218) (VA `0x315d`; frame 4 is "Quit (Y/N)", 5 "Game
+  Paused"), answered with the keys at VA `0x31610` ("YN"). No puts the
   ship back where it was and turns it half round. Yes leaves the ship
   where it stood and puts the party on that land.
 - **On foot:** the party walks with the input, eight directions (bits 1
@@ -256,7 +257,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   gold aboard. Careers start at 0, the famous expeditions at their
   scenario's byte 0x58 (3, 0, 1, 3, 0, 3). A new expedition sets -16
   while the refit's days pass, then 0 (VA `0x184a8`, `0x1ef87`); prison
-  does the same (VA `0x1f803`, not modelled).
+  does the same (VA `0x1f803`).
 - **The mood (VA `0x1da9b`, player block +0x18):**
   `(int)(sqrt((float)(gold / 10) / crew) x 2.0) - months + 4 -
   difficulty`, recomputed after every month's update and at the start
@@ -285,6 +286,52 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   deserted" (CSTR 109, at (340, 150) up to x 620) on the town's arrival
   picture. Then one of the 8 prisoners (VA `0x4720a`) may jump
   overboard (CSTR 110, not modelled).
+
+### Prison (VA `0x16647`, `0x1f803`)
+
+- **Ways in:**
+  - Beaten storming a town (the assault's sword fight, or a land battle
+    that leaves fewer than 2 men, VA `0x18cd0`): prison in the town.
+  - A boarding party beaten (VA `0x16647` from the sword fight): prison
+    "in the ship" (CSTN 77.4), after the flagship is lost.
+  - The last ship sunk in a sea battle (VA `0x1f2a1`, `from_fort` 0):
+    marooned.
+  - The last ship sunk by a fort's salvo on arrival (`from_fort` 1):
+    prison in the town.
+- **Pages:** on `prison.pcx` (picture 10) at (300, 150) up to x 560,
+  "You are imprisoned in %s" (CSTR 175, the town or "the ship");
+  marooned, on `maroon.pcx` (picture 11) at (100, 320) up to x 620,
+  "With your last ship gone, you are washed ashore..." (CSTR 161).
+- **Injury:** a defeat (not the ship losses) adds 1 to VA `0x45e88`.
+- **The career may end (VA `0x1f1d7`):** a famous expedition (CSTR 159,
+  at (100, 40)), or health 3 (CSTR 160, at (200, 200)), on a cleared
+  page; then the ending (the engine: the Hall of Fame).
+- **Health (VA `0x1db64`):** `(years since the start (VA `0x45e85`) +
+  injuries) / (3, 4 with medicine)`, at most 3.
+- **Placement (VA `0x1c056`, `0x1be71`):** prison in a town puts the
+  ship on its water (fields 26-28; the engine leaves as from the town,
+  which then counts as just left). Inland towns (no water cell) start
+  from the town's cell nudged toward the coast (ids 0x2d: x +50, 0x33:
+  x +20, 0x2b: y -20, 7: y +16, 0x1e: y -20, 0x31: y -10), then the
+  nearest shore. Marooned: the nearest shore from where the ship was.
+  "In the ship": no move.
+  - **Nearest shore (VA `0x1be71`):** for r = 1, 2... with n = 2r + 1:
+    n cells of row y - r from x + r leftward, n of row y + r from x - r
+    rightward, then n - 2 of row y - r + 1 from x - r rightward and n - 2
+    of the same row from x + r rightward. The first cell whose map tile
+    reads 0x11, 0x22 or 0x33 in the table at VA `0x33b18` (0x80 and 0
+    elsewhere) wins: 0x11 steps x + 1 heading 0x40, 0x22 y - 1 heading
+    0x80, 0x33 x - 1 heading 0xC0.
+- **The stay (VA `0x1f803`):** months set to -16, then `reputation / 2 +
+  7` spells of 27 days (none when that is not positive); a fresh start
+  from the fortune (VA `0x1ef87` with no gold: the fortune loses a
+  tenth, the gold is a tenth of the rest); the mission and the 8
+  prisoners are cleared.
+- **After:** "The months pass quickly..." to "Each month seems an
+  eternity..." (CSTR 176-179 by health; at (40, 320) up to x 620 when
+  marooned), the difficulty eases by one (not below 0), then "...take
+  you back as %s captain" (CSTR 190, or 162 when marooned, with CSTN 73
+  for the difficulty).
 
 ### Villains (VA `0x12178`, `0x18913`)
 
@@ -351,7 +398,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     pirate ship is him (VA `0xd1fc`), cannot be avoided once seen, and
     capturing it fulfils the mission (VA `0xdb7b`). The original also
     gives him a level bonus and the CSTR 121 hail, not done.
-- Prison clears the mission (VA `0x1f803`), not done.
+- Prison clears the mission (VA `0x1f803`).
 
 ### Treasure maps (VA `0x1f08a`, `0x29ece`, `0xa801`)
 
@@ -847,11 +894,7 @@ After a landing by the fort, or straight away at a town without forts:
   and the sack follows.
 - **Repelled:** the fallen leave the crew; reputation -1 and an attack
   of -1 on the town's nation.
-- **Defeated:** the same, then prison (VA `0x16647`, also after a
-  boarding party is beaten, "imprisoned in the ship", CSTN 77.4): on
-  `prison.pcx`,
-  CSTR 175 with the town, a stay not traced yet (VA `0x1f803`), and CSTR
-  190. Back at sea afterwards.
+- **Defeated:** the same, then prison (see "Prison").
 - **Not modelled:** the treasure fleet and silver train (10 more
   soldiers), a personal enemy hiding in the town (VA `0x18913`), the
   family members held there (VA `0x1eba6`), missions.
@@ -1168,10 +1211,9 @@ move) and `0x38a1a` to `0x38b99`.
   - food (with its eaten fraction, `food x 256 + fraction`), goods,
     sugar and guns each lose `trunc(x x r + 0.5)`.
   - The crew is untouched.
-- The last ship: washed ashore (CSTR 161, 162) after a sea battle, or
-  imprisoned (CSTR 175 with the town, then 190) when `from_fort`. The
-  engine then gives the player a pinnace and at least 8 men, an engine
-  choice until the rest is traced.
+- The last ship: marooned after a sea battle, or imprisoned in the town
+  when `from_fort` (see "Prison"); the ship stays in the fleet's first
+  slot, and the fresh start that follows keeps her type.
 - Callers: a ship sold (keep 1), the flagship lost in battle (VA
   `0xe81d`, keep 0), the fort's salvo on arrival (keep 0, from_fort 1).
 
@@ -1225,13 +1267,34 @@ same town only bits 1 and 2 are kept.
   | 2 | Treasure maps | the maps held, one after another; on while one is |
   | 3 | Treasure cave | the cave, back to the cabin |
   | 4 | Logbook | the latest news on `shiplog.pcx` (layout not traced) |
-  | 5 | Map of the Caribbean | not yet |
+  | 5 | Map of the Caribbean | below |
   | 6 | Search | digging, on foot only (see "Treasure maps") |
   | 7-8 | Divide party, Join party | always off, as in the original (below) |
   | 9 | Save game | the save slots |
   | 10 | Exit game | the retirement question |
   | 11 | Practice fencing | below |
 
+- **Map of the Caribbean (VA `0xb464`):** on `citymap.pcx`:
+  - A dot per town, `misc.crs` frame 1 at the town's fields 29, 30 (its
+    map position, about its cell x 0.75) less 3.
+  - The player's mark (frame 3): his town's dot in town, else his cell
+    x 0.75. The selected town's mark (frame 2) and the player's blink
+    in turn every 5 timer ticks.
+  - The right panel lists 20 town names, centred at x 554 from y 40
+    every 20; the arrows at (480, 0)-(639, 29) and (480, 450)-(639,
+    479) scroll it by one, within the towns.
+  - The selected town (kept between visits, the first at the start):
+    its name and "Forts:", "Status:" (CSTN 9 by wealth / 64), "Nation:",
+    "Soldiers:" (x 10), "Citizens:" (x 10) from CSTN 94, centred at
+    (84, 384), (243, 384), (404, 384), (84, 440), (243, 440), (404,
+    440); each value reads "?" (CSTN 92.5) until the town's
+    information is known (flag 0x80).
+  - Clicks: DONE (348, 315)-(479, 359) leaves; on the map, the town
+    within 2 pixels; in the list, its row. Escape and Space leave; the
+    arrow keys move a bar over the list rows (VA `0xb3ef`), which the
+    engine replaces by selecting the previous or next town.
+  - A debug flag (VA `0x45e6c`) lets a right click move the ship there;
+    not reproduced.
 - **Divide and join (dead in Pirates! Gold):** each time the cabin
   opens (VA `0x9ffc`) the flags of spots 7 and 8 (VA `0x32824`,
   `0x3282e`) are set to 0 before the picker, and nothing else sets

@@ -167,7 +167,6 @@ struct game {
 	int			 bank_stage;
 	int			 arrive_stage;	/* the arrival menu, then its result */
 	int			 arrive_result;	/* enum arrival */
-	int			 arrive_last;	/* the fort sank the only ship */
 	int			 sw_guard;	/* the sword fight is the guard's duel */
 	int			 sail_fast;	/* T: a sailing pass every frame */
 	int			 sw_practice;	/* the sword fight is practice */
@@ -198,7 +197,6 @@ struct game {
 	int			 land_button;	/* Space, Enter or a click */
 	int			 land_wait;
 	int			 land_stage;	/* 0 fighting, 1 the failure */
-	int			 prison_at_sea;	/* beaten boarding: "the ship" */
 	int			 panel_cursor;	/* the fleet panel: 0-7 a ship, 8 done */
 	unsigned		 panel_marked;	/* ships selected, bit by bit */
 	struct sprite_bank	 panel_spr[8];
@@ -229,6 +227,10 @@ struct game {
 	const struct screen	*villain_back;
 	const struct screen	*disgrace_back;
 	int			 sw_mutiny;	/* the fight is the mutineers' */
+	/* The Map of the Caribbean: towns' dots, the selected town (kept
+	 * between visits), the list's first row, the player's mark. */
+	int			 cm_x[TOWN_MAX], cm_y[TOWN_MAX];
+	int			 cm_sel, cm_scroll, cm_px, cm_py;
 	int			 deserted_town;	/* the town just left */
 	char			 save_dir[512];	/* empty: saving disabled */
 	int			 saving;	/* slot screen: save, not load */

@@ -692,14 +692,10 @@ sim_drop_ship(struct sim *s, int i, int keep)
 
 	if (i < 0 || i >= f->nships)
 		return;
-	if (f->nships == 1) {
-		f->ships[0] = 0;
-		f->damage[0] = 0;
-		f->capacity = sim_ship_room(0);
-		if (f->crew < 8)
-			f->crew = 8;
+	/* The last ship: the caller imprisons or maroons the player,
+	 * whose fresh start keeps her type (VA 0x1f2a1, 0x1ef87). */
+	if (f->nships == 1)
 		return;
-	}
 	room = sim_ship_room(f->ships[i]);
 	r = f->capacity > 0 ? (float)room / (float)f->capacity : 0.0f;
 	f->capacity -= room;
@@ -744,6 +740,7 @@ sim_battle_finish(struct sim *s, int keep)
 	struct sim_battle *bt = &s->battle;
 	struct sim_fleet *f = &s->fleet;
 	enum battle_outcome o = (enum battle_outcome)bt->outcome;
+	int last = 0;
 
 	if (!bt->active)
 		return (BAT_NONE);
@@ -766,6 +763,7 @@ sim_battle_finish(struct sim *s, int keep)
 	case BAT_PLAYER_SUNK:
 		f->crew = bt->crew_ashore;
 		f->guns = bt->guns_ashore;
+		last = f->nships == 1;
 		sim_drop_ship(s, 0, 0);		/* VA 0xe81d */
 		break;
 	case BAT_SURRENDER:
@@ -790,5 +788,11 @@ sim_battle_finish(struct sim *s, int keep)
 	else if (o == BAT_REPELLED || o == BAT_DEFEATED)
 		sim_reputation(s, -2);
 	bt->active = 0;
+	/* Beaten aboard: prison in the ship (VA 0x16647); the last ship
+	 * sunk: marooned (VA 0x1f2a1). */
+	if (o == BAT_DEFEATED)
+		sim_imprison(s, JAIL_SHIP, -1);
+	else if (o == BAT_PLAYER_SUNK && last)
+		sim_imprison(s, JAIL_MAROONED, -1);
 	return (o);
 }

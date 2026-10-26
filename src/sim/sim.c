@@ -99,8 +99,8 @@ town_near(const struct sim *s, int reach)
  * Out of a town onto its water (VA 0x19b9e): the cell of fields 26 and
  * 27, heading field 28 x 32, which points away from the town.
  */
-static void
-harbour_mouth(struct sim *s, int town)
+void
+sim_harbour_mouth(struct sim *s, int town)
 {
 	const struct sim_town *t = &s->towns[town];
 
@@ -251,10 +251,11 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	 * outside its harbour. */
 	s->fleet.leaving = town_near(s, ARRIVAL_CELLS + 3);
 	if (s->fleet.leaving >= 0)
-		harbour_mouth(s, s->fleet.leaving);
+		sim_harbour_mouth(s, s->fleet.leaving);
 	start_log(s);
 	/* The expeditions start months at sea (scenario byte 0x58). */
 	s->months = (int8_t)scn->raw[0x58];
+	s->start_year = s->year;
 	s->fleet.mood = sim_crew_mood(s);
 }
 
@@ -968,7 +969,7 @@ sim_leave_town(struct sim *s)
 			s->fleet.x = s->towns[s->player_town].x * WORLD_TILE + 8;
 			s->fleet.y = s->towns[s->player_town].y * WORLD_TILE + 8;
 		} else
-			harbour_mouth(s, s->player_town);
+			sim_harbour_mouth(s, s->player_town);
 		s->fleet.leaving = s->player_town;
 	}
 	s->player_town = SIM_NO_TOWN;

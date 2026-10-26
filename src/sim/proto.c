@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	21
+#define STATE_VERSION	22
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -694,6 +694,23 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->crew_event);
 	jb_raw(b, ",\"deserted\":");
 	jb_int(b, s->deserted);
+	jb_raw(b, ",\"injuries\":");
+	jb_int(b, s->injuries);
+	jb_raw(b, ",\"start_year\":");
+	jb_int(b, s->start_year);
+	jb_raw(b, ",\"jail\":{\"fresh\":");
+	jb_int(b, s->jail.fresh);
+	jb_raw(b, ",\"cause\":");
+	jb_int(b, s->jail.cause);
+	jb_raw(b, ",\"town\":");
+	jb_int(b, s->jail.town);
+	jb_raw(b, ",\"end\":");
+	jb_int(b, s->jail.end);
+	jb_raw(b, ",\"health\":");
+	jb_int(b, s->jail.health);
+	jb_raw(b, ",\"spells\":");
+	jb_int(b, s->jail.spells);
+	jb_raw(b, "}");
 	for (i = 0; i < SIM_MAPS; i++) {
 		jb_raw(b, i == 0 ? ",\"maps\":[{\"pieces\":" :
 		    ",{\"pieces\":");
@@ -976,6 +993,22 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	if (tmp.crew_event < CREW_NONE || tmp.crew_event > CREW_MUTINY)
 		tmp.crew_event = CREW_NONE;
 	tmp.deserted = (int)json_get_int(j, "deserted", 0);
+	tmp.injuries = (int)json_get_int(j, "injuries", 0);
+	{
+		/* Absent before version 22: the career starts now. */
+		const struct json *jl = json_get(j, "jail");
+
+		tmp.start_year = (int)json_get_int(j, "start_year",
+		    json_get_int(j, "year", 0));
+		tmp.jail.fresh = json_get_int(jl, "fresh", 0) != 0;
+		tmp.jail.cause = (int)(json_get_int(jl, "cause", 0) & 3);
+		tmp.jail.town = (int)json_get_int(jl, "town", -1);
+		tmp.jail.end = (int)json_get_int(jl, "end", 0);
+		tmp.jail.health = (int)(json_get_int(jl, "health", 0) & 3);
+		tmp.jail.spells = (int)json_get_int(jl, "spells", 0);
+		if (tmp.jail.town < -1 || tmp.jail.town >= TOWN_MAX)
+			tmp.jail.town = -1;
+	}
 	{
 		/* Absent before version 19: no maps. */
 		const struct json *maps = json_get(j, "maps"), *m;

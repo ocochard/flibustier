@@ -96,6 +96,7 @@ struct world {
 			    BATTLE_SCREEN];
 	uint8_t		land_class[256];
 	int16_t		treasure[TREASURE_SPOTS][2];	/* x, y cells */
+	uint8_t		coast[256];	/* per map tile (VA 0x33b18) */
 	uint8_t		colour_class[256];
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];

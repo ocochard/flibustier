@@ -507,6 +507,9 @@ make_world(struct world *w)
 	w->era = 4;
 	memset(w->colour_class, TERRAIN_SEA, sizeof(w->colour_class));
 	w->colour_class[99] = TERRAIN_LAND;
+	/* Every land tile reads as a shore with the sea to its west. */
+	memset(w->coast, 0x80, sizeof(w->coast));
+	w->coast[1] = 0x33;
 	/* Treasure spots: three cells east of each town in turn. */
 	for (i = 0; i < TREASURE_SPOTS; i++) {
 		static const int16_t town[4][2] = { { 100, 100 },
@@ -957,14 +960,16 @@ test_battles(void)
 	s.sword.you.men = 25;
 	CHECK(sim_battle_finish(&s, 1) == BAT_REPELLED);
 	CHECK(s.fleet.nships == 1 && s.fleet.crew == 25);
-	/* Lost: the flagship goes, as if sunk; the last one leaves the
-	 * player marooned with a pinnace. */
+	/* Lost: prison aboard (an injury), then a fresh start in the
+	 * same type of ship. */
 	battle_game(&s);
 	bt->outcome = BAT_BOARDING;
 	sim_board(&s, 0);
 	s.sword.result = SWORD_LOST;
+	int ship0 = s.fleet.ships[0] & 7;
 	CHECK(sim_battle_finish(&s, 1) == BAT_DEFEATED);
-	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0);
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == ship0 &&
+	    s.jail.fresh && s.jail.cause == JAIL_SHIP && s.injuries == 1);
 
 	/* Surrender: an outmatched enemy alongside strikes her colours at
 	 * the next decision. */
@@ -1988,7 +1993,8 @@ test_land_battle(void)
 	for (i = 1; i < 4; i++)
 		l->u[i].men = 0;
 	sim_land_tick(&s, 0, 0, 0);
-	CHECK(l->result == 3 && sim_land_end(&s) == 0 && s.fleet.crew == 1);
+	CHECK(l->result == 3 && sim_land_end(&s) == 0 && s.jail.fresh &&
+	    s.jail.cause == JAIL_TOWN && s.jail.town == 1);
 	(void)ev;
 }
 
@@ -2232,9 +2238,10 @@ test_arrival(void)
 	s.fleet.capacity = 14;
 	sim_drop_ship(&s, 1, 1);
 	CHECK(s.fleet.gold == 1000 && s.fleet.goods == 14);
-	/* The last ship: the castaway's pinnace. */
+	/* The last ship stays for the caller to maroon the player. */
+	int ship0 = s.fleet.ships[0];
 	sim_drop_ship(&s, 0, 0);
-	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == 0 &&
+	CHECK(s.fleet.nships == 1 && s.fleet.ships[0] == ship0 &&
 	    s.fleet.gold == 1000);
 
 	/* Sailing in, replayed against the same random numbers. */
@@ -2666,6 +2673,66 @@ test_crew_mood(void)
 	CHECK(s.deserted == 0 && s.fleet.crew == 28);
 }
 
+/* Prison: the stay, the fresh start, the career's ends, health. */
+static void
+test_prison(void)
+{
+	struct sim s;
+	int day;
+
+	sea_game(&s, 300, 300, 0);
+	s.player.expedition = -1;
+	s.player.difficulty = 2;
+	s.player.ability = ABILITY_FENCING;
+	/* Health: (years + injuries) / 3, / 4 with medicine. */
+	s.start_year = s.year - 4;
+	s.injuries = 2;
+	CHECK(sim_health(&s) == 2);
+	s.player.ability = ABILITY_MEDICINE;
+	CHECK(sim_health(&s) == 1);
+	s.player.ability = ABILITY_FENCING;
+	s.start_year = s.year;
+	s.injuries = 0;
+	/* Beaten in Beta: an injury, rep / 2 + 7 spells of 27 days, a
+	 * fresh start from the fortune, the mission lost, one level down. */
+	s.reputation = 4;
+	s.fortune = 5000;
+	s.fleet.gold = 9999;
+	s.fleet.nships = 2;
+	s.mission.type = MISSION_LETTER;
+	s.player_town = 1;
+	s.towns[1].sea_x = 125;
+	s.towns[1].sea_y = 115;
+	day = s.day;
+	sim_imprison(&s, JAIL_TOWN, 1);
+	CHECK(s.jail.fresh && !s.jail.end && s.jail.spells == 9 &&
+	    s.day == day + 9 * 27 && s.injuries == 1);
+	CHECK(s.fortune == 4500 && s.fleet.gold == 450 && s.fleet.nships == 1 &&
+	    s.fleet.crew == 20 && s.months == 0 && s.mission.type == 0 &&
+	    s.player.difficulty == 1 && s.player_town == -1);
+	/* Out on the town's water. */
+	CHECK(s.fleet.x / WORLD_TILE == s.towns[1].sea_x &&
+	    s.fleet.y / WORLD_TILE == s.towns[1].sea_y);
+	/* Marooned: by the nearest shore, an injury less. */
+	s.fleet.x = 104 * WORLD_TILE + 8;	/* west of the test land */
+	s.fleet.y = 45 * WORLD_TILE + 8;
+	s.reputation = -20;			/* no time at all */
+	day = s.day;
+	sim_imprison(&s, JAIL_MAROONED, -1);
+	CHECK(s.jail.spells == 0 && s.day == day && s.injuries == 1);
+	CHECK(world_terrain(&test_world, s.fleet.x, s.fleet.y) !=
+	    TERRAIN_LAND && s.fleet.x / WORLD_TILE == 109 &&
+	    s.fleet.heading == 0xC0);
+	/* A famous expedition ends in prison; so does health 3. */
+	s.player.expedition = 2;
+	sim_imprison(&s, JAIL_SHIP, -1);
+	CHECK(s.jail.end == 1 && s.injuries == 2);
+	s.player.expedition = -1;
+	s.injuries = 8;
+	sim_imprison(&s, JAIL_SHIP, -1);
+	CHECK(s.jail.end == 2);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -2765,6 +2832,7 @@ main(void)
 	test_villains();
 	test_missions();
 	test_crew_mood();
+	test_prison();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

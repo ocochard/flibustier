@@ -410,6 +410,17 @@ struct sim {
 					 * 0x45e79) */
 	int		crew_event;	/* enum crew_event, until handled */
 	int		deserted;	/* men who left on leaving town */
+	int		injuries;	/* defeats survived (VA 0x45e88) */
+	/* The last imprisonment, for the pages that tell it. */
+	struct sim_jail {
+		int	fresh;		/* not told yet */
+		int	cause;		/* enum jail_cause */
+		int	town;
+		int	end;		/* 0, or the career is over: 1, 2 */
+		int	health;		/* 0..3 after the stay */
+		int	spells;		/* 27-day spells served */
+	} jail;
+	int		start_year;	/* the career's (VA 0x45e85) */
 	/* The villains who know where the relatives are (VA 0x471da). */
 	struct sim_villain {
 		int	active;
@@ -642,6 +653,25 @@ int	sim_crew_mood(const struct sim *s);
 void	sim_crew_leave(struct sim *s, int n);
 void	sim_mutiny_duel(struct sim *s, int weapon);
 void	sim_mutiny_end(struct sim *s);
+
+/*
+ * Health (VA 0x1db64): (years since the career began + injuries) / 3,
+ * / 4 with medicine, at most 3.
+ */
+int	sim_health(const struct sim *s);
+
+/*
+ * Prison (VA 0x16647, 0x1f803): beaten in a town or aboard (an injury
+ * more), or the last ship lost at sea (marooned) or to a fort.  A famous
+ * expedition ends there (end 1, CSTR 159), as does a career in health 3
+ * (end 2, CSTR 160).  Otherwise the player is put back on the water by
+ * the town, where he was, or by the nearest shore; reputation / 2 + 7
+ * spells of 27 days pass; a fresh start from the fortune; the mission
+ * is lost; the difficulty eases by one.  "health" is then that of the
+ * texts CSTR 176-179.
+ */
+enum jail_cause { JAIL_TOWN, JAIL_SHIP, JAIL_MAROONED, JAIL_FORT };
+void	sim_imprison(struct sim *s, int cause, int town);
 
 /*
  * The relatives' villains.  After a promotion, while a relative is

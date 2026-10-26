@@ -377,6 +377,9 @@ sim_land_end(struct sim *s)
 	s->fleet.crew = mine < 1 ? 1 : mine;
 	s->towns[l->town].soldiers = (uint16_t)(theirs / 10);
 	s->heat += (int)(l->pass / 99);
+	/* Beaten with no one left: prison (VA 0x18cd0). */
+	if (l->result != 2 && s->fleet.crew < 2)
+		sim_imprison(s, JAIL_TOWN, l->town);
 	return (l->result == 2);
 }
 

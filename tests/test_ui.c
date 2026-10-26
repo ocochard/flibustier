@@ -539,9 +539,11 @@ test_sword_screen(void)
 		CHECK(game_script(g, "enter wait:30") == 0);	/* keep her */
 		CHECK(g->sim.fleet.nships == 2);
 	} else if (g->sim.sword.result == SWORD_LOST) {
-		/* Prison, "in the ship", then the battle's end. */
-		CHECK(g->screen == &screen_prison && g->prison_at_sea);
-		CHECK(game_script(g, "enter enter wait:30") == 0);
+		/* Prison, "in the ship": the defeat, the months, the
+		 * way back. */
+		CHECK(g->screen == &screen_prison &&
+		    g->sim.jail.cause == JAIL_SHIP);
+		CHECK(game_script(g, "enter enter enter wait:30") == 0);
 	}
 	CHECK(g->screen == &screen_sail && !g->sim.battle.active &&
 	    !g->sim.sword.active);
@@ -1216,6 +1218,16 @@ test_cabin(void)
 	    g->screen == &screen_logbook);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_cabin);
+	/* The Map of the Caribbean: a town picked in the list, the list
+	 * scrolled, DONE. */
+	CHECK(game_script(g, "click:200,400 wait:40") == 0 &&
+	    g->screen == &screen_citymap && g->cm_scroll == 0);
+	CHECK(game_script(g, "click:560,85") == 0 && g->cm_sel == 2);
+	CHECK(game_script(g, "click:560,465") == 0 && g->cm_scroll == 1);
+	CHECK(game_script(g, "click:560,10") == 0 && g->cm_scroll == 0);
+	CHECK(game_script(g, "down") == 0 && g->cm_sel == 3);
+	CHECK(game_script(g, "click:400,335 wait:40") == 0 &&
+	    g->screen == &screen_cabin);
 	CHECK(game_script(g, "click:60,300 wait:40") == 0 &&
 	    g->screen == &screen_cave);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
@@ -1302,8 +1314,14 @@ test_arrival(void)
 			CHECK(game_script(g, "enter") == 0);
 			CHECK(g->arrive_stage == 1 && g->screen ==
 			    &screen_arrive && g->sim.player_town == -1);
-			CHECK(game_script(g, "enter wait:40") == 0 &&
-			    g->screen == &screen_sail);
+			CHECK(game_script(g, "enter wait:40") == 0);
+			/* The only ship sunk: prison in the town. */
+			if (g->screen == &screen_prison) {
+				CHECK(g->sim.jail.cause == JAIL_FORT);
+				CHECK(game_script(g, "wait:40 enter enter "
+				    "enter wait:40") == 0);
+			}
+			CHECK(g->screen == &screen_sail);
 			fired = 1;
 			continue;
 		}

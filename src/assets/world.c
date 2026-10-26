@@ -253,6 +253,11 @@ world_load(struct world *w, struct packs *packs,
 		snprintf(err, errlen, "no treasure spots");
 		return (-1);
 	}
+	if ((p = exe_at(layout, exe, len, layout->coast_va, 256)) == NULL) {
+		snprintf(err, errlen, "no coast table");
+		return (-1);
+	}
+	memcpy(w->coast, p, 256);
 	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
 	    NULL)
 		goto bad;

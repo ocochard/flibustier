@@ -258,7 +258,10 @@ Status (2026-10-26): first slice.
 - **Mystery man:** the relatives' villains and the governors' missions.
 - **Crew's mood:** warnings, mutiny, desertion; dividing parties is dead
   in the original.
-- **Next:** prison, prisoners and ransoms.
+- **Prison:** the stay, health, marooning, the career's ends.
+- **Map of the Caribbean.**
+- **Next:** the log book's status pages (CSTR 312), prisoners and
+  ransoms.
 
 - Governor (titles, missions, daughter), tavern (rumours, crew, maps),
   merchant (trade economy), shipwright, bank and ship log screens.

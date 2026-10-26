@@ -42,6 +42,16 @@ sim_ship_room(int type)
 
 #define SCENE_ALLEY	0	/* sword fight pictures (VA 0x3361c) */
 
+/*
+ * A fresh start (VA 0x1ef87): the gold (the fortune less a tenth when
+ * none) by 10, the flagship alone and repaired, its guns, 15 food, no
+ * cargo, reputation + 16 men, months 0.
+ */
+void	sim_fresh_crew(struct sim *s, long gold);
+
+/* Out of a town onto its water (VA 0x19b9e). */
+void	sim_harbour_mouth(struct sim *s, int town);
+
 /* Add an entry to the log (news codes as CSTN 20). */
 void	sim_log_news(struct sim *s, int code, int a, int b);
 

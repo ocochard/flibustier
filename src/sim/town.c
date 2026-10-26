@@ -561,12 +561,25 @@ sim_divide_plunder(struct sim *s, struct plunder *out)
 void
 sim_new_expedition(struct sim *s, int advance)
 {
-	struct sim_fleet *f = &s->fleet;
-	long gold = f->gold;
-	int type, i;
+	long gold = s->fleet.gold;
+	int i;
 
 	if (advance && s->player.difficulty < 3)
 		s->player.difficulty++;
+	s->visit_flags = 0;
+	/* The refit keeps the crew quiet (VA 0x184a8). */
+	s->months = -16;
+	for (i = 0; i < REFIT_SPELLS; i++)
+		sim_advance(s, REFIT_DAYS);
+	sim_fresh_crew(s, gold);
+}
+
+void
+sim_fresh_crew(struct sim *s, long gold)
+{
+	struct sim_fleet *f = &s->fleet;
+	int type;
+
 	if (gold == 0) {
 		s->fortune -= s->fortune / 10;
 		gold = s->fortune;
@@ -583,12 +596,6 @@ sim_new_expedition(struct sim *s, int advance)
 	f->crew = s->reputation + 16;
 	if (f->crew <= 0)
 		f->crew = 1;
-	s->visit_flags = 0;
-	/* The refit keeps the crew quiet; then a fresh start, months 0
-	 * (VA 0x184a8, 0x1ef87). */
-	s->months = -16;
-	for (i = 0; i < REFIT_SPELLS; i++)
-		sim_advance(s, REFIT_DAYS);
 	s->months = 0;
 	s->crew_event = CREW_NONE;
 	f->mood = sim_crew_mood(s);
@@ -650,7 +657,11 @@ sim_sail_in(struct sim *s, int town)
 	}
 	if (x > -1.0 || s->fleet.ashore)	/* a ship only by sea */
 		return (ARRIVE_FIRED);
-	sim_drop_ship(s, rng_below(&s->rng, s->fleet.nships), 0);
+	if (s->fleet.nships == 1) {
+		sim_drop_ship(s, 0, 0);
+		sim_imprison(s, JAIL_FORT, town);	/* VA 0x1f2a1 */
+	} else
+		sim_drop_ship(s, rng_below(&s->rng, s->fleet.nships), 0);
 	return (ARRIVE_SUNK);
 }
 
@@ -767,12 +778,14 @@ sim_assault_end(struct sim *s, int town)
 		return (1);
 	}
 	/* Repelled: the men who fell (VA 0x16384). Defeated: prison (VA
-	 * 0x16647), whose consequences are not traced yet. */
+	 * 0x16647). */
 	s->fleet.crew -= sw->men_start - sw->you.men;
 	if (s->fleet.crew < 1)
 		s->fleet.crew = 1;
 	s->reputation = s->reputation > -128 ? s->reputation - 1 : -128;
 	sim_attack_nation(s, t->nation, -1);
+	if (r < 0)
+		sim_imprison(s, JAIL_TOWN, town);
 	return (r);
 }
 

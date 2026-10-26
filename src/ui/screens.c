@@ -176,6 +176,7 @@ draw(struct game *g, int font, int x, int y, int w, const char *text,
  */
 #define CONTINUE_IDLE		420
 #define CONTINUE_FRAME		7
+#define DISEMBARK_FRAME		8	/* "Disembark", answered Y or N */
 
 static void
 continue_prompt(struct game *g)
@@ -1932,6 +1933,9 @@ cabin_choose(struct game *g, int i)
 	case CABIN_MAPS:
 		tmap_show(g, -1, &screen_cabin);
 		break;
+	case CABIN_MAP:
+		game_goto(g, &screen_citymap);
+		break;
 	case CABIN_SEARCH:
 		g->dig_i = g->dig_page = 0;
 		game_goto(g, &screen_dig);
@@ -2421,7 +2425,7 @@ sail_event(struct game *g, const struct ui_event *ev)
 	};
 	size_t i;
 
-	/* "Go ashore?" (VA 0x315d): Y or N; Enter and Escape as well. */
+	/* "Disembark" (VA 0x315d): Y or N; Enter and Escape as well. */
 	if (g->ashore_prompt) {
 		if ((ev->type == EV_CHAR && (ev->ch == 'y' || ev->ch == 'Y')) ||
 		    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)) {
@@ -2557,11 +2561,11 @@ sail_draw(struct game *g)
 	}
 	clouds_draw(g);
 	if (g->ashore_prompt) {
-		/* The box of VA 0x32184; the original's wording is not
-		 * found, an engine text stands in. */
-		fb_rect(&g->fb, 268, 218, 103, 31, fb_nearest(&g->fb, 20, 15,
-		    10));
-		draw(g, FONT_SMALL, 276, 226, 92, "Ashore? Y/N", 0);
+		/* The language's "Disembark" plaque, misc.crs frame 8 at
+		 * (268, 218) (VA 0x315d). */
+		if (g->misc.count > DISEMBARK_FRAME)
+			fb_frame(&g->fb, &g->misc.frames[DISEMBARK_FRAME], 268,
+			    218);
 	}
 	date_text(g, buf, sizeof(buf));
 	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
@@ -2914,6 +2918,11 @@ battle_finish(struct game *g, int keep)
 
 	g->btl_chosen = 0;
 	g->btl_final = (int)sim_battle_finish(&g->sim, keep);
+	if (g->sim.jail.fresh) {
+		/* Beaten aboard, or the last ship gone (VA 0x16647). */
+		game_goto(g, &screen_prison);
+		return;
+	}
 	if (hunted && g->sim.mission.type == -MISSION_PIRATE) {
 		/* The pirate a governor wanted (CSTR 207, VA 0x1f8f7). */
 		g->villain_back = &screen_sail;
@@ -2983,18 +2992,6 @@ battle_end_text(struct game *g, char *text, size_t len)
 	switch (bt->outcome) {
 	case BAT_PLAYER_SUNK:
 		snprintf(text, len, "%s", game_str(g, S_YOU_SUNK));
-		if (g->sim.fleet.nships == 1) {
-			/* The last ship (VA 0x1f2a1): washed ashore, then
-			 * picked up by former crew members. */
-			char more[400];
-
-			fill(more, sizeof(more), game_str(g, S_PICKED_UP),
-			    game_word(g, W_CAPTAIN,
-			    (size_t)g->sim.player.difficulty), NULL);
-			snprintf(text, len, "%s\r%s\r%s",
-			    game_str(g, S_YOU_SUNK), game_str(g, S_ASHORE),
-			    more);
-		}
 		break;
 	case BAT_ENEMY_SUNK:
 		snprintf(text, len, "%s", game_str(g, S_FOE_SUNK));
@@ -3462,8 +3459,7 @@ sword_outcome_done(struct game *g)
 		game_goto(g, &screen_battle);	/* the prize */
 	else if (g->sim.sword.result == SWORD_LOST) {
 		/* Beaten: prison, "in the ship" at sea (VA 0x16647). */
-		g->prison_at_sea = 1;
-		game_goto(g, &screen_prison);
+		battle_finish(g, 0);
 	} else
 		battle_finish(g, 0);		/* driven back */
 }
@@ -5505,7 +5501,6 @@ arrive_choose(struct game *g, int i)
 
 	switch (i) {
 	case 0:
-		g->arrive_last = g->sim.fleet.nships == 1;
 		g->arrive_result = sim_sail_in(&g->sim, town);
 		if (g->arrive_result == ARRIVE_ENTER)
 			game_goto(g, &screen_town);
@@ -5558,7 +5553,8 @@ arrive_event(struct game *g, const struct ui_event *ev)
 		break;
 	case ARRIVE_ANSWER:
 		if (go)
-			game_goto(g, &screen_sail);
+			game_goto(g, g->sim.jail.fresh ? &screen_prison :
+			    &screen_sail);
 		break;
 	default:
 		if (go) {
@@ -5590,21 +5586,7 @@ arrive_draw(struct game *g)
 		if (g->arrive_result == ARRIVE_SUNK)
 			snprintf(text + strlen(text), sizeof(text) -
 			    strlen(text), " %s", game_str(g, S_SHIP_SUNK));
-		if (g->arrive_result == ARRIVE_SUNK && g->arrive_last) {
-			/* The last ship (VA 0x1f2a1, from a fort): prison,
-			 * then traded back (CSTR 175, 190). */
-			char more[600];
 
-			fill(more, sizeof(more), game_str(g, S_IMPRISONED),
-			    t->name, NULL);
-			snprintf(text + strlen(text), sizeof(text) -
-			    strlen(text), "\r%s", more);
-			fill(more, sizeof(more), game_str(g, S_TRADED_BACK),
-			    game_word(g, W_CAPTAIN,
-			    (size_t)g->sim.player.difficulty), NULL);
-			snprintf(text + strlen(text), sizeof(text) -
-			    strlen(text), "\r%s", more);
-		}
 		draw(g, FONT_BODY, ARR_TEXT_X, 40, 290, text, 0);
 		continue_prompt(g);
 		return;
@@ -5848,15 +5830,27 @@ const struct screen screen_sack = {
 };
 
 /*
- * Prison (VA 0x16647), after a defeat: on prison.pcx, "...You are
- * imprisoned in %s." (CSTR 175), then "Your former comrades take pity
- * on you..." (CSTR 190), at (300, 150) up to x 560.  What happens in
- * prison (VA 0x1f803) is not traced yet.
+ * Prison (VA 0x16647, 0x1f803), told from the sim's last imprisonment:
+ * on prison.pcx at (300, 150) up to x 560, "...You are imprisoned in
+ * %s" (CSTR 175, the town or "the ship"); marooned, on maroon.pcx at
+ * (100, 320) up to x 620, "With your last ship gone, you are washed
+ * ashore..." (CSTR 161).  Then the months (CSTR 176-179 by health; at
+ * (40, 320) when marooned) and "...take you back as %s captain" (CSTR
+ * 190, or 162 when marooned).  A career that ends there says so (CSTR
+ * 159, 160, at (100, 40) and (200, 200) on a cleared page) and goes to
+ * the Hall of Fame.
  */
+#define S_EXPEDITION_OVER	159
+#define S_TOO_OLD		160
+#define S_MONTHS_PASS		176	/* + health: 176-179 */
+
+static void	retire_choose(struct game *, int);
+
 static void
 prison_enter(struct game *g)
 {
-	game_background(g, "pic/prison");
+	game_background(g, g->sim.jail.cause == JAIL_MAROONED ?
+	    "pic/maroon" : "pic/prison");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
 		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
@@ -5869,29 +5863,59 @@ prison_event(struct game *g, const struct ui_event *ev)
 	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
 		return;
-	if (g->sack_stage++ == 0)
+	g->sack_stage++;
+	if (g->sim.jail.end && g->sack_stage == 1) {
+		game_background(g, "pic/textback");
 		return;
-	if (g->prison_at_sea) {
-		g->prison_at_sea = 0;
-		battle_finish(g, 0);	/* the enemy keeps the flagship */
-	} else
-		game_goto(g, &screen_sail);
+	}
+	if (g->sack_stage < 3 && !g->sim.jail.end)
+		return;
+	g->sim.jail.fresh = 0;
+	if (g->sim.jail.end)
+		retire_choose(g, 0);		/* the Hall of Fame */
+	else
+		game_goto(g, g->world != NULL ? &screen_sail : &screen_cabin);
 }
 
 static void
 prison_draw(struct game *g)
 {
+	const struct sim_jail *j = &g->sim.jail;
+	int maroon = j->cause == JAIL_MAROONED;
 	char text[600];
 
-	if (g->sack_stage == 0)
+	if (g->sack_stage == 0) {
+		if (maroon) {
+			draw(g, FONT_BODY, 100, 320, 520, game_str(g, S_ASHORE),
+			    0);
+			continue_prompt(g);
+			return;
+		}
 		fill(text, sizeof(text), game_str(g, S_IMPRISONED),
-		    g->prison_at_sea ? game_word(g, W_THE_SHIP, 4) :
-		    g->sim.towns[g->assault_town].name, NULL);
-	else
-		fill(text, sizeof(text), game_str(g, S_TRADED_BACK),
-		    game_word(g, W_CAPTAIN, (size_t)g->sim.player.difficulty),
+		    j->cause == JAIL_SHIP || j->town < 0 ||
+		    (size_t)j->town >= g->sim.ntowns ?
+		    game_word(g, W_THE_SHIP, 4) : g->sim.towns[j->town].name,
 		    NULL);
-	draw(g, FONT_BODY, 300, 150, 260, text, 0);
+	} else if (j->end) {
+		if (j->end == 1)
+			draw(g, FONT_BODY, 100, 40, 440,
+			    game_str(g, S_EXPEDITION_OVER), 0);
+		else
+			draw(g, FONT_BODY, 200, 200, 420,
+			    game_str(g, S_TOO_OLD), 0);
+		continue_prompt(g);
+		return;
+	} else if (g->sack_stage == 1)
+		snprintf(text, sizeof(text), "%s", game_str(g,
+		    S_MONTHS_PASS + (j->health & 3)));
+	else
+		fill(text, sizeof(text), game_str(g, maroon ? S_PICKED_UP :
+		    S_TRADED_BACK), game_word(g, W_CAPTAIN,
+		    (size_t)g->sim.player.difficulty), NULL);
+	if (maroon)
+		draw(g, FONT_BODY, 40, 320, 580, text, 0);
+	else
+		draw(g, FONT_BODY, 300, 150, 260, text, 0);
 	continue_prompt(g);
 }
 
@@ -6369,7 +6393,7 @@ land_event(struct game *g, const struct ui_event *ev)
 	if (g->land_stage == 1) {
 		if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 		    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-			game_goto(g, g->sim.fleet.crew < 2 ? &screen_prison :
+			game_goto(g, g->sim.jail.fresh ? &screen_prison :
 			    &screen_sail);
 		return;
 	}
@@ -7005,4 +7029,183 @@ deserted_draw(struct game *g)
 
 const struct screen screen_deserted = {
 	"deserted", deserted_enter, deserted_event, NULL, deserted_draw,
+};
+
+/*
+ * The Map of the Caribbean (VA 0xb464), on citymap.pcx: a dot per town
+ * (misc.crs frame 1 at town fields 29, 30 less 3), the list of 20 town
+ * names centred at x 554 from y 40 every 20, scrolled by the arrows at
+ * the top and bottom of the right panel, and the selected town's panel:
+ * its name centred at (84, 384), then "Forts:", "Status:", "Nation:",
+ * "Soldiers:", "Citizens:" (CSTN 94) at (243, 384), (404, 384), (84,
+ * 440), (243, 440), (404, 440), "?" while its information is not known
+ * (CSTN 92.5).  The selected town's mark (frame 2) and the player's
+ * (frame 3: his town's dot, or at sea his cell x 0.75) blink in turn.
+ * A click picks a town on the map (within 2 pixels) or in the list;
+ * DONE, Escape or Space leaves.  The engine's Up and Down select the
+ * previous and next town (the original moves a bar over the rows).
+ */
+#define W_TOWN_FIELD		94
+#define W_UNKNOWN		92
+#define CM_ROWS			20
+#define CM_BLINK		8	/* frames between the marks */
+
+static int
+cm_in(int x, int y, int x0, int y0, int x1, int y1)
+{
+	return (x >= x0 && x <= x1 && y >= y0 && y <= y1);
+}
+
+static void
+citymap_show_town(struct game *g, int t)
+{
+	if (t < 0 || (size_t)t >= g->sim.ntowns)
+		return;
+	g->cm_sel = t;
+	if (t < g->cm_scroll)
+		g->cm_scroll = t;
+	else if (t >= g->cm_scroll + CM_ROWS)
+		g->cm_scroll = t - CM_ROWS + 1;
+}
+
+static void
+citymap_enter(struct game *g)
+{
+	struct era_towns e;
+	size_t i;
+
+	game_background(g, "pic/citymap");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, g->bg.palette, 3);
+	memset(g->cm_x, 0, sizeof(g->cm_x));
+	memset(g->cm_y, 0, sizeof(g->cm_y));
+	if (towns_load(g->layout, g->exe, g->exe_len, g->world != NULL ?
+	    g->world->era : 0, &e) == 0)
+		for (i = 0; i < e.count && i < g->sim.ntowns; i++) {
+			g->cm_x[i] = e.towns[i].raw[29];
+			g->cm_y[i] = e.towns[i].raw[30];
+		}
+	g->cm_scroll = 0;
+	if ((size_t)g->cm_sel >= g->sim.ntowns)
+		g->cm_sel = 0;
+	if (here(g) != NULL) {
+		g->cm_px = g->cm_x[g->sim.player_town];
+		g->cm_py = g->cm_y[g->sim.player_town];
+	} else {
+		g->cm_px = (int)((double)(g->sim.fleet.x / WORLD_TILE) * 0.75);
+		g->cm_py = (int)((double)(g->sim.fleet.y / WORLD_TILE) * 0.75);
+	}
+}
+
+static void
+citymap_event(struct game *g, const struct ui_event *ev)
+{
+	int x = ev->x, y = ev->y, max = (int)g->sim.ntowns - CM_ROWS;
+	size_t i;
+
+	if (ev->type == EV_KEY) {
+		if (ev->key == UI_KEY_ESCAPE || ev->key == UI_KEY_ENTER)
+			game_goto(g, &screen_cabin);
+		else if (ev->key == UI_KEY_UP && g->cm_sel > 0)
+			citymap_show_town(g, g->cm_sel - 1);
+		else if (ev->key == UI_KEY_DOWN)
+			citymap_show_town(g, g->cm_sel + 1);
+		return;
+	}
+	if (ev->type == EV_CHAR && ev->ch == ' ') {
+		game_goto(g, &screen_cabin);
+		return;
+	}
+	if (ev->type != EV_CLICK)
+		return;
+	if (cm_in(x, y, 348, 315, 479, 359))		/* DONE */
+		game_goto(g, &screen_cabin);
+	else if (cm_in(x, y, 0, 0, 479, 359)) {		/* the map */
+		for (i = 0; i < g->sim.ntowns; i++)
+			if (abs(g->cm_x[i] - x) <= 2 && abs(g->cm_y[i] - y) <= 2) {
+				g->cm_sel = (int)i;
+				break;
+			}
+	} else if (cm_in(x, y, 480, 30, 639, 449)) {	/* the list */
+		if (y >= 40 && (size_t)((y - 40) / 20 + g->cm_scroll) <
+		    g->sim.ntowns && (y - 40) / 20 < CM_ROWS)
+			g->cm_sel = (y - 40) / 20 + g->cm_scroll;
+	} else if (cm_in(x, y, 480, 0, 639, 29)) {
+		if (g->cm_scroll > 0)
+			g->cm_scroll--;
+	} else if (cm_in(x, y, 480, 450, 639, 479)) {
+		if (g->cm_scroll < max)
+			g->cm_scroll++;
+	}
+}
+
+static void
+citymap_draw(struct game *g)
+{
+	static const int at[6][2] = { { 84, 384 }, { 243, 384 },
+	    { 404, 384 }, { 84, 440 }, { 243, 440 }, { 404, 440 } };
+	const struct sim_town *t;
+	char text[6][96], num[24];
+	size_t i;
+	int k, w, blink = (int)(g->ticks / CM_BLINK) & 1;
+
+	if (g->misc.count > 3) {
+		for (i = 0; i < g->sim.ntowns; i++)
+			fb_frame(&g->fb, &g->misc.frames[1], g->cm_x[i] - 3,
+			    g->cm_y[i] - 3);
+		if (blink)
+			fb_frame(&g->fb, &g->misc.frames[2],
+			    g->cm_x[g->cm_sel] - 3, g->cm_y[g->cm_sel] - 3);
+		else
+			fb_frame(&g->fb, &g->misc.frames[3], g->cm_px - 3,
+			    g->cm_py - 3);
+	}
+	for (k = 0; k < CM_ROWS && (size_t)(g->cm_scroll + k) <
+	    g->sim.ntowns; k++) {
+		const char *name = g->sim.towns[g->cm_scroll + k].name;
+
+		w = text_width(&g->font[FONT_SMALL], name);
+		draw(g, FONT_SMALL, 554 - w / 2, 33 + 20 * k, 150, name, 0);
+	}
+	t = &g->sim.towns[g->cm_sel];
+	snprintf(text[0], sizeof(text[0]), "%s", t->name);
+	for (k = 1; k < 6; k++) {
+		if (!(t->flags & 0x80)) {
+			snprintf(text[k], sizeof(text[k]), "%s%s",
+			    game_word(g, W_TOWN_FIELD, (size_t)(k - 1)),
+			    game_word(g, W_UNKNOWN, 5));
+			continue;
+		}
+		switch (k) {
+		case 1:
+			snprintf(num, sizeof(num), "%d", t->forts);
+			break;
+		case 2:
+			snprintf(num, sizeof(num), "%s", game_word(g, 9,
+			    (size_t)((t->wealth / 64) & 3)));
+			break;
+		case 3:
+			snprintf(num, sizeof(num), "%s", game_word(g, W_NATION,
+			    (size_t)(t->nation <= 4 ? t->nation : 4)));
+			break;
+		case 4:
+			snprintf(num, sizeof(num), "%d", t->soldiers * 10);
+			break;
+		default:
+			snprintf(num, sizeof(num), "%d", t->citizens * 10);
+			break;
+		}
+		snprintf(text[k], sizeof(text[k]), "%s%s",
+		    game_word(g, W_TOWN_FIELD, (size_t)(k - 1)), num);
+	}
+	for (k = 0; k < 6; k++) {	/* centred in their cells */
+		w = text_width(&g->font[FONT_SMALL], text[k]);
+		draw(g, FONT_SMALL, at[k][0] - w / 2, at[k][1] - 6, 158,
+		    text[k], 0);
+	}
+}
+
+const struct screen screen_citymap = {
+	"caribbean map", citymap_enter, citymap_event, NULL, citymap_draw,
 };
