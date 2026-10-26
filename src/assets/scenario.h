@@ -39,6 +39,7 @@ struct scenario {
 	int		 nation;	/* town nation order */
 	long		 gold;
 	int		 food, goods, sugar;	/* tons */
+	int		 food_frac;	/* food eaten into, 256ths */
 	int		 capacity;	/* hold, tens of tons */
 	int		 nships;
 	uint8_t		 ships[SCENARIO_SHIPS];	/* ship types, 0 = pinnace */

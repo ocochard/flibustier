@@ -712,9 +712,10 @@ sim_drop_ship(struct sim *s, int i, int keep)
 	if (keep)
 		return;
 	f->gold -= (long)((float)f->gold * r);
-	v = f->food << 8;			/* with its eaten fraction */
+	v = f->food << 8 | f->food_frac;	/* with its eaten fraction */
 	v -= (int)((double)((float)v * r) + 0.5);
 	f->food = v >> 8;
+	f->food_frac = v & 0xFF;
 	f->goods -= (int)((double)((float)f->goods * r) + 0.5);
 	f->sugar -= (int)((double)((float)f->sugar * r) + 0.5);
 	f->guns -= (int)((double)((float)f->guns * r) + 0.5);

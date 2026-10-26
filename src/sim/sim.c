@@ -207,6 +207,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->fleet.guns = scn->guns;
 	s->fleet.gold = scn->gold;
 	s->fleet.food = scn->food;
+	s->fleet.food_frac = scn->food_frac;
 	s->fleet.goods = scn->goods;
 	s->fleet.sugar = scn->sugar;
 	s->fleet.capacity = scn->capacity;
@@ -759,6 +760,43 @@ town_at(struct sim *s)
 	return (near);
 }
 
+/*
+ * The crew eats (VA 0x231b8), two passes before each day's: food x 256
+ * + fraction loses a 256th a man, floored at 0; the days left are that
+ * over the crew (at most 32767).  Under 21 days, on a multiple of 4,
+ * the master warns (CSTR 124); at 0 the crew starves (VA 0x2849c): a
+ * third desert with their share of the gold, food becomes 5 (CSTR 180,
+ * 181 on foot).  Returns 1 when that crew event is raised.
+ */
+static int
+eat(struct sim *s)
+{
+	struct sim_fleet *f = &s->fleet;
+	int32_t v;
+	int days;
+
+	if ((f->ticks + 2) % TICKS_PER_DAY != 0 || f->crew <= 0 ||
+	    f->nships <= 0)
+		return (0);
+	v = (int32_t)f->food * 256 + f->food_frac - f->crew;
+	if (v < 0)
+		v = 0;
+	f->food = (int)(v >> 8);
+	f->food_frac = (int)(v & 0xFF);
+	days = v / f->crew > 0x7FFF ? 0x7FFF : (int)(v / f->crew);
+	if (days >= 21 || (days & 3) != 0 || s->crew_event != CREW_NONE)
+		return (0);
+	if (days == 0) {
+		f->food = 5;
+		sim_crew_leave(s, f->crew / 3);
+		s->crew_event = CREW_STARVING;
+	} else {
+		s->food_days = days;
+		s->crew_event = CREW_HUNGRY;
+	}
+	return (1);
+}
+
 enum sail_stop
 sim_sail(struct sim *s, int turn, int ticks, int *town)
 {
@@ -802,6 +840,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		/* Time passes whether or not the ship can move. */
 		if (f->ticks % WIND_TICKS == 0)
 			shift_wind(s);
+		if (eat(s))
+			return (SAIL_CREW);
 		if (f->ticks % TICKS_PER_DAY == 0) {
 			sim_advance(s, 1);
 			if (s->crew_event != CREW_NONE)
@@ -924,6 +964,8 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 		f->ticks++;
 		if (f->ticks % WIND_TICKS == 0)
 			shift_wind(s);
+		if (eat(s))
+			return (SAIL_CREW);
 		if (f->ticks % TICKS_PER_DAY == 0)
 			sim_advance(s, 1);
 		if (dx == 0 && dy == 0)

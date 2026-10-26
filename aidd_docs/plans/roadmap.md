@@ -285,6 +285,8 @@ Status (2026-10-26): first slice.
 - **Retirement:** the original's score, rating, summary and verdict.
 - **Manning the fleet:** abandoning ships, the last ship, cargo
   overboard; a prize replacing a ship when eight sail.
+- **Food:** eating at sea and on foot, the master's warning,
+  starvation.
 - **A capture's plunder:** gold, the loot board with cannon, the
   volunteers.
 - **Near a town:** the hunted pirate off his town; a battle's heat, a

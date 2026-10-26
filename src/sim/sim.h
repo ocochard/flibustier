@@ -131,6 +131,7 @@ struct sim_fleet {
 	int		guns;
 	long		gold;
 	int		food, goods, sugar;	/* cargo, tons */
+	int		food_frac;	/* food eaten into, in 256ths */
 	int		capacity;	/* hold, tens of tons: 2 x class + 2
 					 * per ship */
 	int		mood;		/* the crew's (VA 0x45faa): see
@@ -165,8 +166,12 @@ enum crew_event {
 	CREW_RESTLESS,	/* mood below 0: "...they'll mutiny!" (CSTR 140) */
 	CREW_ANXIOUS,	/* the same after 12 months: "...dividin' up the
 			 * plunder" (CSTR 210) */
-	CREW_MUTINY	/* below -3: a third leave, their leader duels the
+	CREW_MUTINY,	/* below -3: a third leave, their leader duels the
 			 * player (CSTR 139) */
+	CREW_HUNGRY,	/* under 21 days of food: "...only %s days food
+			 * left!" (CSTR 124, food_days) */
+	CREW_STARVING	/* none left: a third deserted with their share,
+			 * food 5 (CSTR 180, on foot 181) */
 };
 
 #define NATION_PIRATE	4	/* in encounter records */
@@ -428,6 +433,7 @@ struct sim {
 	int		months;		/* since the plunder was divided (VA
 					 * 0x45e79) */
 	int		crew_event;	/* enum crew_event, until handled */
+	int		food_days;	/* for CREW_HUNGRY */
 	int		deserted;	/* men who left on leaving town */
 	int		injuries;	/* defeats survived (VA 0x45e88) */
 	/* The last imprisonment, for the pages that tell it. */

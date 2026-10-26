@@ -16,6 +16,7 @@
 #define FOOD_OFF	0x1a	/* cargo, in tons */
 #define GOODS_OFF	0x1b
 #define SUGAR_OFF	0x1c
+#define FOOD_FRAC_OFF	0x1e	/* VA 0x138d4 */
 #define CAPACITY_OFF	0x1f	/* hold, in tens of tons */
 #define NSHIPS_OFF	0x20
 #define SHIPS_OFF	0x21
@@ -55,6 +56,7 @@ scenario_load(const struct exe_layout *layout, const uint8_t *exe,
 	out->nation = r[NATION_OFF];
 	out->gold = (long)le16(r + GOLD_OFF) * 10;
 	out->food = r[FOOD_OFF];
+	out->food_frac = r[FOOD_FRAC_OFF];
 	out->goods = r[GOODS_OFF];
 	out->sugar = r[SUGAR_OFF];
 	out->capacity = r[CAPACITY_OFF];

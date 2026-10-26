@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	29
+#define STATE_VERSION	30
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -570,6 +570,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.mood);
 	jb_raw(b, ",\"food\":");
 	jb_int(b, s->fleet.food);
+	jb_raw(b, ",\"food_frac\":");
+	jb_int(b, s->fleet.food_frac);
 	jb_raw(b, ",\"goods\":");
 	jb_int(b, s->fleet.goods);
 	jb_raw(b, ",\"sugar\":");
@@ -713,6 +715,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->months);
 	jb_raw(b, ",\"crew_event\":");
 	jb_int(b, s->crew_event);
+	jb_raw(b, ",\"food_days\":");
+	jb_int(b, s->food_days);
 	jb_raw(b, ",\"deserted\":");
 	jb_int(b, s->deserted);
 	jb_raw(b, ",\"injuries\":");
@@ -942,6 +946,7 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	f->mood = (int)json_get_int(j, "mood", json_get_int(j, "gunnery",
 	    0));
 	f->food = (int)json_get_int(j, "food", 0);
+	f->food_frac = (int)(json_get_int(j, "food_frac", 0) & 0xFF);
 	f->goods = (int)json_get_int(j, "goods", 0);
 	f->sugar = (int)json_get_int(j, "sugar", 0);
 	f->capacity = (int)json_get_int(j, "capacity", 0);
@@ -1058,8 +1063,9 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	tmp.relative = (int)json_get_int(j, "relative", 0);
 	tmp.months = (int)json_get_int(j, "months", 0);
 	tmp.crew_event = (int)json_get_int(j, "crew_event", CREW_NONE);
-	if (tmp.crew_event < CREW_NONE || tmp.crew_event > CREW_MUTINY)
+	if (tmp.crew_event < CREW_NONE || tmp.crew_event > CREW_STARVING)
 		tmp.crew_event = CREW_NONE;
+	tmp.food_days = (int)json_get_int(j, "food_days", 0);
 	tmp.deserted = (int)json_get_int(j, "deserted", 0);
 	tmp.injuries = (int)json_get_int(j, "injuries", 0);
 	{
@@ -1818,7 +1824,7 @@ static void
 cmd_crew(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	static const char *events[] = { "none", "restless", "anxious",
-	    "mutiny" };
+	    "mutiny", "hungry", "starving" };
 	const char *action = json_get_str(cmd, "action");
 	struct sim *s = &ss->sim;
 
@@ -1860,6 +1866,10 @@ cmd_crew(struct session *ss, const struct json *cmd, struct jbuf *out)
 	}
 	jb_raw(out, "{\"ok\":true,\"event\":");
 	jb_str(out, events[s->crew_event]);
+	if (s->crew_event == CREW_HUNGRY) {
+		jb_raw(out, ",\"food_days\":");
+		jb_int(out, s->food_days);
+	}
 	jb_raw(out, ",\"mood\":");
 	jb_int(out, s->fleet.mood);
 	jb_raw(out, ",\"months\":");

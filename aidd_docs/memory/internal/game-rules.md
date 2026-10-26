@@ -674,6 +674,22 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   town (the spots' flags are set from the arrival mode, VA `0xa060`).
   Dividing and joining parties are unreachable in the original.
 
+### Food (VA `0x231b8`, `0x2849c`)
+
+- **Eating:** at sea and on foot, every 64 passes, two before each
+  day's (`(pass + 2) & 63 == 0`), with ships and crew: `food x 256 +
+  fraction` (the fraction at VA `0x45fa2`, a career's from its start
+  record's byte `0x1e`) loses one per man, floored at 0. A ton feeds 256
+  men a day; the days left are `(food x 256 + fraction) / crew`, as the
+  Party Status shows.
+- **Warning:** under 21 days, when the days are a multiple of 4, on
+  `smaster.pcx` at (340, 150) up to x 620: "Captain, we have only %s
+  days food left!" (CSTR 124).
+- **Starving:** at 0, "The crew is starving! A surly group steals a
+  small boat and deserts, taking a portion of the plunder." (CSTR 180;
+  on foot CSTR 181, without the boat); a third of the crew leave with
+  their share of the gold (VA `0x1f044`), and food becomes 5 tons.
+
 ### Manning the fleet (VA `0x1f65f`)
 
 Run at each start of sailing (VA `0x28789`), after leaving a town (VA

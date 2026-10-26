@@ -2679,6 +2679,7 @@ test_crew_mood(void)
 	/* Broke for 5 months: restless, and sailing stops to say so. */
 	s.fleet.gold = 0;
 	s.fleet.crew = 30;
+	s.fleet.food = 1000;		/* not hungry */
 	s.months = 4;
 	for (k = 0; k < 40 && stop != SAIL_CREW; k++)
 		stop = sim_sail(&s, 0, 64, &town);
@@ -3409,6 +3410,37 @@ test_fleet_calendar(void)
 	}
 }
 
+/* The crew eats a 256th of a ton a man a day; the master warns under
+ * 21 days on multiples of 4; at none a third desert, food becomes 5. */
+static void
+test_food(void)
+{
+	struct sim s;
+	int town, k, stop = SAIL_TICKS;
+
+	sea_game(&s, 300, 300, 0x00);
+	s.encounters = 0;
+	s.months = 0;
+	s.fleet.gold = 30000;		/* a happy crew */
+	s.fleet.crew = 10;
+	s.fleet.food = 1;		/* 25 days for 10 men */
+	s.fleet.food_frac = 0;
+	for (k = 0; k < 40 && stop != SAIL_CREW; k++)
+		stop = sim_sail(&s, 0, 64, &town);
+	CHECK(stop == SAIL_CREW && s.crew_event == CREW_HUNGRY &&
+	    s.food_days == 20 && s.fleet.food == 0 &&
+	    s.fleet.food_frac == 256 - 5 * 10);	/* 206 / 10 */
+	s.crew_event = CREW_NONE;
+	for (stop = SAIL_TICKS, k = 0; k < 40; k++) {
+		stop = sim_sail(&s, 0, 64, &town);
+		if (stop == SAIL_CREW && s.crew_event == CREW_STARVING)
+			break;
+		s.crew_event = CREW_NONE;	/* the warnings at 16..4 */
+	}
+	CHECK(s.crew_event == CREW_STARVING && s.fleet.crew == 7 &&
+	    s.fleet.food == 5 && s.fleet.gold == 30000 - 3 * 3000);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3523,6 +3555,7 @@ main(void)
 	test_month_housekeeping();
 	test_capture_plunder();
 	test_fleet_calendar();
+	test_food();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

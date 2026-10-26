@@ -1994,7 +1994,7 @@ logbook_draw(struct game *g)
 		snprintf(a[2], sizeof(a[2]), "%d", f->guns);
 		snprintf(a[3], sizeof(a[3]), "%ld", f->gold);
 		snprintf(a[4], sizeof(a[4]), "%d", f->crew > 0 ?
-		    f->food * 256 / f->crew : 0);
+		    (f->food * 256 + f->food_frac) / f->crew : 0);
 		snprintf(a[5], sizeof(a[5]), "%s", game_word(g, W_MOOD,
 		    (size_t)(lvl < 0 ? 0 : lvl > 3 ? 3 : lvl)));
 		snprintf(a[6], sizeof(a[6]), "%d", f->goods);
@@ -7719,6 +7719,8 @@ const struct screen screen_contact = {
 #define S_MUTINY		139
 #define S_RESTLESS		140
 #define S_ANXIOUS		210
+#define S_FOOD_LEFT		124	/* "...only %s days food left!" */
+#define S_STARVING		180	/* 181 on foot */
 
 static void
 crew_enter(struct game *g)
@@ -7750,6 +7752,17 @@ crew_draw(struct game *g)
 {
 	if (g->sim.crew_event == CREW_MUTINY)
 		draw(g, FONT_BODY, 50, 350, 570, game_str(g, S_MUTINY), 0);
+	else if (g->sim.crew_event == CREW_HUNGRY) {
+		/* On smaster.pcx, the box at (340, 150) up to x 620 (VA
+		 * 0x2849c). */
+		char text[256], days[16];
+
+		snprintf(days, sizeof(days), "%d", g->sim.food_days);
+		fill(text, sizeof(text), game_str(g, S_FOOD_LEFT), days, NULL);
+		draw(g, FONT_BODY, 340, 150, 280, text, 0);
+	} else if (g->sim.crew_event == CREW_STARVING)
+		draw(g, FONT_BODY, 340, 150, 280, game_str(g, S_STARVING +
+		    (g->sim.fleet.ashore ? 1 : 0)), 0);
 	else
 		draw(g, FONT_BODY, 340, 150, 280, game_str(g,
 		    g->sim.crew_event == CREW_ANXIOUS ? S_ANXIOUS :
