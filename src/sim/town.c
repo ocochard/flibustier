@@ -484,8 +484,7 @@ sim_governor_promote(struct sim *s, int *acres)
 		return (0);
 	s->rank[n] = (uint8_t)r;
 	s->standing[n] = (int8_t)(s->standing[n] - surplus);
-	/* The game also logs it (code 2) in the personal log, which the
-	 * engine does not keep yet. */
+	sim_log_news(s, NEWS_TITLED, n * 64 + r, 0);
 	land = surplus + t->standing;
 	if (land > 0) {
 		s->acres += land;

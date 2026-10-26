@@ -842,6 +842,11 @@ sim_battle_finish(struct sim *s, int keep)
 	else if (o == BAT_REPELLED || o == BAT_DEFEATED)
 		sim_reputation(s, -2);
 	near_town(s, o);
+	/* Logged at sea (VA 0xe986): captured, or engaged. */
+	if (!bt->fort)
+		sim_log_news(s, o == BAT_SURRENDER ? NEWS_CAPTURED :
+		    NEWS_ENGAGED, (s->encounter.nation & 7) * 16 +
+		    (s->encounter.type & 0xF), 0);
 	bt->active = 0;
 	/* Beaten aboard: prison in the ship (VA 0x16647); the last ship
 	 * sunk: marooned (VA 0x1f2a1). */

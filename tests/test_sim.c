@@ -1729,6 +1729,8 @@ test_governor(void)
 	t->standing = 1;
 	CHECK(sim_governor_promote(&s, &acres) == 1);
 	CHECK(s.rank[NATION_ENGLAND] == 1 && s.standing[NATION_ENGLAND] == 3);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_TITLED &&
+	    news_abs(&s, s.nnews - 1)->a == NATION_ENGLAND * 64 + 1);
 	CHECK(acres == (2 + 1) * 50 && s.acres == 3);
 	s.standing[NATION_ENGLAND] = 6;			/* rank 2: 6 */
 	t->standing = 0;
@@ -3252,6 +3254,45 @@ test_battle_near_town(void)
 	CHECK(s.heat == 0 && s.battle.news_town == -1);
 }
 
+/* The personal log: visits, captures and engagements at sea. */
+static void
+test_personal_log(void)
+{
+	struct sim s;
+	size_t n;
+
+	sea_game(&s, 120, 112, 0x00);
+	n = s.nnews;
+	sim_enter_town(&s, 1);
+	CHECK(s.nnews == n + 1 && news_abs(&s, s.nnews - 1)->code ==
+	    NEWS_VISITED && news_abs(&s, s.nnews - 1)->a == 1);
+	/* A stay that goes on is not logged again. */
+	s.visit_flags |= VISIT_KEPT;
+	sim_enter_town(&s, 1);
+	CHECK(s.nnews == n + 1);
+	s.player_town = -1;
+	memset(&s.battle, 0, sizeof(s.battle));
+	s.battle.active = 1;
+	s.battle.outcome = BAT_SURRENDER;
+	s.battle.you.crew = 20;
+	s.encounter.nation = 1;
+	s.encounter.type = 7;
+	sim_battle_finish(&s, 0);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_CAPTURED &&
+	    news_abs(&s, s.nnews - 1)->a == 1 * 16 + 7);
+	s.battle.active = 1;
+	s.battle.outcome = BAT_ESCAPED;
+	sim_battle_finish(&s, 0);
+	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_ENGAGED);
+	/* Not against a fort. */
+	n = s.nnews;
+	s.battle.active = 1;
+	s.battle.fort = 1;
+	s.battle.outcome = BAT_ESCAPED;
+	sim_battle_finish(&s, 0);
+	CHECK(s.nnews == n);
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3362,6 +3403,7 @@ main(void)
 	test_prize_place();
 	test_hunted_pirate();
 	test_battle_near_town();
+	test_personal_log();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

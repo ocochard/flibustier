@@ -21,6 +21,8 @@ static const struct {
 	const char	*name;
 	int		 code;
 } news_names[] = {
+	{ "visited", NEWS_VISITED }, { "titled", NEWS_TITLED },
+	{ "captured", NEWS_CAPTURED }, { "engaged", NEWS_ENGAGED },
 	{ "amnesty", NEWS_AMNESTY }, { "indians", NEWS_INDIANS },
 	{ "gold_mine", NEWS_GOLD_MINE }, { "malaria", NEWS_MALARIA },
 	{ "governor", NEWS_GOVERNOR }, { "plunder", NEWS_PLUNDER },

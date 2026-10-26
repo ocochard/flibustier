@@ -1762,6 +1762,20 @@ news_body(const struct game *g, const struct sim_news *n, char *out,
 	char name[80];
 
 	switch (n->code) {
+	case NEWS_TITLED:
+		/* "an English" "Captain" (VA 0x10b10). */
+		fill(out, len, fmt, game_word(g, 68, (size_t)(n->a / 64) % 5),
+		    game_word(g, 78, (size_t)n->a & 63));
+		break;
+	case NEWS_CAPTURED:
+	case NEWS_ENGAGED:
+		/* "a Spanish" "galleon", lowercased (VA 0x2d914). */
+		snprintf(name, sizeof(name), "%s", game_word(g, 8,
+		    (size_t)n->a & 15));
+		name[0] = (char)tolower((unsigned char)name[0]);
+		fill(out, len, fmt, game_word(g, 68, (size_t)(n->a / 16) % 5),
+		    name);
+		break;
 	case NEWS_WAR:
 	case NEWS_PEACE:
 	case NEWS_ALLIANCE:
@@ -5135,27 +5149,83 @@ rumours_event(struct game *g, const struct ui_event *ev)
 			game_goto(g, &screen_tavern);
 }
 
+/*
+ * The player's last exploit, for the bartender (VA 0x10b10): from the
+ * newest log entry back (a visit at the head passed over), the first
+ * of codes 1-8 or 22-26; none, or a visit to this very town, is "your
+ * promising plans" (CSTN 33.0).
+ */
+static void
+gossip_text(const struct game *g, char *out, size_t len)
+{
+	const struct sim_news *n = NULL;
+	size_t i = sim_news_kept(&g->sim);
+	char word[160], ship[40];
+	int code = 0;
+
+	if (i > 0 && sim_news_at(&g->sim, i - 1)->code == NEWS_VISITED)
+		i--;
+	for (; i > 0; i--) {
+		n = sim_news_at(&g->sim, i - 1);
+		if ((n->code < 9 || n->code > 21) && n->code <= 26)
+			break;
+	}
+	if (i > 0 && !(n->code == NEWS_VISITED &&
+	    n->a == g->sim.player_town))
+		code = n->code & 0x3f;
+	switch (code) {
+	case NEWS_VISITED:
+	case NEWS_PLUNDERED:
+	case NEWS_NOT_TAKEN:
+		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
+		    town_name(g, n->a), NULL);
+		break;
+	case NEWS_TITLED:
+		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
+		    game_word(g, 68, (size_t)(n->a / 64) % 5),
+		    game_word(g, 78, (size_t)n->a & 63));
+		break;
+	case NEWS_CAPTURED:
+	case 5:
+	case NEWS_ENGAGED:
+		snprintf(ship, sizeof(ship), "%s", game_word(g, 8,
+		    (size_t)n->a & 15));
+		ship[0] = (char)tolower((unsigned char)ship[0]);
+		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
+		    game_word(g, 68, (size_t)(n->a / 16) % 5), ship);
+		break;
+	case NEWS_TAKEN:
+		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
+		    town_name(g, n->a), game_word(g, 71, (size_t)n->b & 3));
+		break;
+	case NEWS_RESCUED:
+		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
+		    game_word(g, 37, (size_t)n->a & 3), NULL);
+		break;
+	default:
+		snprintf(word, sizeof(word), "%s", game_word(g, W_GOSSIP,
+		    (size_t)code));
+	}
+	fill(out, len, game_str(g, S_GOSSIP), word, NULL);
+}
+
 static void
 rumours_draw(struct game *g)
 {
 	char text[512];
-	size_t i, kept = sim_news_kept(&g->sim);
+	struct sim_news pub[RUMOURS_SHOWN];
+	size_t i, np = public_news(g, pub, RUMOURS_SHOWN);
 	int y = 40;
 
 	/* No box: the news at (222, 40) up to x 610 (VA 0x1e78d), the
 	 * gossip at (320, 150) up to x 560 (VA 0x10b10). */
-	if (kept == 0) {
-		/* The personal log is not kept yet: "your promising plans". */
-		fill(text, sizeof(text), game_str(g, S_GOSSIP),
-		    game_word(g, W_GOSSIP, 0), NULL);
+	if (np == 0) {
+		gossip_text(g, text, sizeof(text));
 		draw(g, FONT_BODY, 320, 150, 240, text, 0);
 	} else {
 		y += draw(g, FONT_BODY, 222, y, 388, game_word(g, W_NEWS, 1),
 		    0) + 6;
 		/* The latest public items, oldest first (VA 0x1e548). */
-		struct sim_news pub[RUMOURS_SHOWN];
-		size_t np = public_news(g, pub, RUMOURS_SHOWN);
-
 		for (i = np; i > 0 && y < 400; i--) {
 			news_text(g, &pub[i - 1], text, sizeof(text));
 			y += draw(g, FONT_BODY, 222, y, 388, text, 0) + 4;

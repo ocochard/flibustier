@@ -1135,6 +1135,9 @@ sim_enter_town(struct sim *s, int town)
 	if (town < 0 || (size_t)town >= s->ntowns)
 		return;
 	sim_arrive(s, town);
+	/* Logged unless the stay goes on (VA 0x17e78). */
+	if (!(s->visit_flags & VISIT_KEPT))
+		log_news(s, NEWS_VISITED, town, 0);
 	s->player_town = town;
 	s->tavern_spots = TAVERN_ALL;		/* VA 0x18fa9 */
 	t = &s->towns[town];

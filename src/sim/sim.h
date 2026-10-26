@@ -31,7 +31,12 @@
 
 /* News codes: the entries of the game's news list (CSTN group 20). */
 enum news_code {
+	NEWS_VISITED = 1,	/* a: town */
+	NEWS_TITLED = 2,	/* a: nation x 64 + rank */
 	NEWS_PLUNDERED = 3,	/* a: town, sacked by the player */
+	NEWS_CAPTURED = 4,	/* a: nation x 16 + ship class */
+	NEWS_ENGAGED = 6,	/* a: nation x 16 + ship class (5, a
+				 * sinking, is never logged) */
 	NEWS_LOST_TREASURE = 7,	/* a: the civilisation (CSTN 93) */
 	NEWS_TREASURE = 8,	/* buried treasure dug up */
 	NEWS_VILLAIN = 9,	/* a: the villain, b: the town he is in */

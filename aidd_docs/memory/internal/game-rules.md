@@ -656,7 +656,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 - **Then** the crew check (see "Manning the fleet").
 - **The cabin:** Save game only in town, Search only on foot outside a
   town (the spots' flags are set from the arrival mode, VA `0xa060`).
-  Dividing and joining parties are not done yet.
+  Dividing and joining parties are unreachable in the original.
 
 ### Manning the fleet (VA `0x1f65f`)
 
@@ -1057,7 +1057,8 @@ After a landing by the fort, or straight away at a town without forts:
 - **Repelled:** the fallen leave the crew; reputation -1 and an attack
   of -1 on the town's nation.
 - **Defeated:** the same, then prison (see "Prison").
-- **Not modelled:** the family members held there (VA `0x1eba6`).
+- **The family members held there** are told by the villains' news
+  (see "Villains").
 
 ### The sack (VA `0x22764`)
 
@@ -1098,7 +1099,7 @@ palette entry 2 and no box:
 | Outcome | When | What follows |
 |---|---|---|
 | boarding | quarter-size boxes touch | CSTR 171, then a sword fight |
-| escape | the ships are more than 240 pixels apart on either axis | CSTR 198 when the enemy was fleeing (decision 2, VA `0x44a20`), otherwise CSTR 197; CSTR 196 against a fort (VA `0xe82a`). The encounter ends; possible loss of a slow ship (CSTR 172) |
+| escape | the ships are more than 240 pixels apart on either axis | CSTR 198 when the enemy was fleeing (decision 2, VA `0x44a20`), otherwise CSTR 197; CSTR 196 against a fort (VA `0xe82a`). The encounter ends (see "The slow ship") |
 | sunset | 4500 ticks | CSTR 169 |
 | surrender | as above | CSTR 170, then capture (CSTR 164: keep her or plunder and sink her) |
 | player sunk | damage level 4 | CSTR 167; the fleet loses the ship and its cargo share (see losing a ship); with no ship left, marooned (CSTR 161) |
@@ -1139,8 +1140,16 @@ byte), return to the fleet.
   8 men. The original keeps the last ship's entry and runs routines not
   traced yet: VA `0x1be71` looks for land around the fleet, VA `0x1f803`
   resets the crew, and a value used as the difficulty drops by one.
-- **Not done yet:** choosing the flagship among several ships, and the
-  loss of a slow ship on escape (CSTR 172).
+- **The slow ship (VA `0xe78f`, outcome 6 in the table at VA
+  `0x33030`):** at each escape the original reads the byte at VA
+  `0x45f10`; unless it is -1 the ship in that slot is lost, "As you flee
+  the battle, the undamaged enemy ship overtakes a slow sailing %s from
+  your fleet and captures it!" (CSTR 172, CSTN 8 by her class), dropped
+  by VA `0x1f2a1`. No sea battle code writes that byte: only the new
+  game's start (the starting town's code, VA `0x1451e`) and the land
+  battle's unit records (cleared at VA `0x1b0e5`, unit 0 unused) share
+  it. The engine does not reproduce a loss driven by that leftover
+  value.
 - The engine keeps hull damage beside each ship rather than packed in
   the type byte.
 
@@ -1782,13 +1791,20 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - On `bartenda.pcx`, in ink entry 0, "The Bartender tells you that:"
     (CSTN 18.1), then up to 12 recent public news items, at (222, 40)
     up to x 610 (VA `0x1e78d`, mode 1).
-  - With none, he listens to the player's last exploit (CSTR 125 with
-    CSTN 33, by the latest personal log entry), at (320, 150) up to x
-    560 (VA `0x10b10`).
-  - The engine keeps no personal log yet, so it always says "your
-    promising plans".
-- **Not done yet:** the map seller, the information seller, the barmaid
-  and the stranger.
+  - With no public news, he listens to the player's last exploit (CSTR
+    125 with CSTN 33), at (320, 150) up to x 560 (VA `0x10b10`): from
+    the newest log entry back (a visit at the head passed over), the
+    first of codes 1-8 or 22-26; none, or a visit to this very town,
+    gives "your promising plans" (33.0). Its words: the town (1, 3, 23),
+    CSTN 68 by `a / 64` and the rank (2), CSTN 68 by `a / 16` and the
+    ship class lowercased (4-6), the town and CSTN 71 (22), the relative
+    (26).
+- **Personal log entries:** a visit (code 1, the town) on entering
+  unless the stay goes on (visit flag 2, set by sneaking in, the
+  traveller and loading a game; VA `0x17e78`); a title (2, `nation x 64
+  + rank`, VA `0x12549`); after a sea battle not against a fort, 4 for
+  a capture and 6 otherwise, `nation x 16 + class` (VA `0xe986`). Code
+  5, a sinking, is never logged.
 
 ### Standing and ranks
 
