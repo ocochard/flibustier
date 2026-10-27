@@ -986,7 +986,14 @@ test_battles(void)
 	sim_board(&s, 0);
 	s.sword.result = SWORD_REPELLED;
 	s.sword.you.men = 25;
-	CHECK(sim_battle_finish(&s, 1) == BAT_REPELLED);
+	{
+		int heat = s.heat, rep = s.reputation;
+
+		CHECK(sim_battle_finish(&s, 1) == BAT_REPELLED);
+		/* The heat rises by 16 (no town near), the reputation
+		 * drops by 2 (VA 0xe775). */
+		CHECK(s.heat == heat + 16 && s.reputation == rep - 2);
+	}
 	CHECK(s.fleet.nships == 1 && s.fleet.crew == 25);
 	/* Lost: prison aboard (an injury), then a fresh start in the
 	 * same type of ship. */

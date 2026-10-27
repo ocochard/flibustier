@@ -882,8 +882,8 @@ Where the original's behaviour is not traced yet, the engine does this:
   (`pic/shipnews`, CSTN 18.2) lists the 6 latest public news items
   (types 10-19) dated up to today, or "(no entries)" (CSTN 18.3). The
   game also records the date of the hail.
-- **Hostile pirates:** they use the "He's chasing us" dialog (CSTR 311).
-  The original's named pirates (CSTR 121) need the pirate name lists.
+- **Hostile ships:** a named captain hails (CSTR 121, see "Named
+  captains"); any other hostile ship uses "He's chasing us" (CSTR 311).
 - **Pictures:**
   - Ship portraits (`S_*.PCX`) hold 5 views of 200x200 at (1, 1), (202,
     1), (403, 1), (1, 202), (202, 202), shown in turn in a window at
@@ -1287,8 +1287,10 @@ back reduced.
   - The opponent is title 4 ("Captain") of the record's nation, with
     `extra` 0 for an ordinary ship.
   - A win leads to the capture (VA `0xdb7b`, CSTR 164). Being driven
-    back ends the battle with no capture. Both lower a counter at VA
-    `0x45e76` by 2 (not identified).
+    back ends the battle with no capture: the reputation (VA `0x45e76`)
+    drops by 2 and the heat (VA `0x4c09e`) rises by 16 (VA `0xe775`). A
+    loss does the same once its prison is over (the fight's routine, VA
+    `0x16205`, returns 0 after VA `0x16647`).
   - A loss (VA `0x16647`): CSTR 175, "Your men flee in panic…
     imprisoned in %s", then CSTR 190. Not traced further.
   - After a win or a repulse, the fleet loses the men who fell.
@@ -1851,7 +1853,7 @@ sign, the texts at (40, 280) up to x 620.
 
 A signed byte, 0 at the start:
 - +1 for each capture (VA `0xdb7b`);
-- -2 for a failed boarding (VA `0xe775`);
+- -2 for a failed boarding, beaten back or beaten (VA `0xe775`);
 - set to -1 after a disgrace in a duel (CSTR 174).
 
 It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,

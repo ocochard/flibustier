@@ -952,5 +952,9 @@ sim_battle_finish(struct sim *s, int keep)
 		sim_imprison(s, JAIL_SHIP, -1);
 	else if (o == BAT_PLAYER_SUNK && last)
 		sim_imprison(s, JAIL_MAROONED, -1);
+	/* A boarding that fails, beaten back or beaten (the latter after
+	 * its prison, VA 0x16205), raises the heat by 16 (VA 0xe775). */
+	if (o == BAT_REPELLED || o == BAT_DEFEATED)
+		s->heat += 16;
 	return (o);
 }
