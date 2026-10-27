@@ -514,10 +514,14 @@ def matte_workflow(entry, spec, scene, crop, prefix):
             "bg_removal_name": MODELS["matte"]}},
         "matte": {"class_type": "RemoveBackground", "inputs": {
             "bg_removal_model": ["matter", 0], "image": ["crop", 0]}},
+        # Solid wherever the matte is fairly sure: it is unsure of dark
+        # clothes on a dark floor, which then let the room show through.
+        "solid": {"class_type": "ThresholdMask", "inputs": {
+            "mask": ["matte", 0], "value": 0.2}},
         # Tight on the person: a pixel in, then softened, so no band of
         # the edit's own background comes along.
         "shrink": {"class_type": "GrowMask", "inputs": {
-            "mask": ["matte", 0], "expand": -soft,
+            "mask": ["solid", 0], "expand": -soft,
             "tapered_corners": True}},
         "mimage": {"class_type": "MaskToImage", "inputs": {
             "mask": ["shrink", 0]}},
@@ -553,8 +557,13 @@ def matte_workflow(entry, spec, scene, crop, prefix):
         g["cover"] = {"class_type": "GrowMask", "inputs": {
             "mask": ["smask", 0], "expand": round(3 * k),
             "tapered_corners": True}}
+        # The person: all of their shape (the matte misses dark legs on
+        # a dark floor), plus what the matte finds just around it.
+        g["within"] = {"class_type": "MaskComposite", "inputs": {
+            "destination": ["solid", 0], "source": ["smask", 0],
+            "x": 0, "y": 0, "operation": "or"}}
         g["mine"] = {"class_type": "MaskComposite", "inputs": {
-            "destination": ["matte", 0], "source": ["near", 0],
+            "destination": ["within", 0], "source": ["near", 0],
             "x": 0, "y": 0, "operation": "and"}}
         if entry.get("uploaded_plate"):
             # The empty room where the old person stood, then the new
@@ -675,6 +684,82 @@ def atlas_workflow(images, sizes, prefix):
     return g
 
 
+def repaint_workflow(spec, profile, seed, scene, mask, rect, prompt,
+                     prefix):
+    """Repaint the white of "mask" (a whole-picture mask at the
+    generation size) inside "rect" (640x480 pixels) of an uploaded
+    picture with the scene model, and return the whole picture."""
+    p = PROFILES[profile]
+    k = spec["pack"]["art_height"] / SCREEN_H
+    x, y, w, h = (round(v * k) for v in rect)
+    gw, gh = generation_size(w, h, 0.6)
+    text = characters(prompt, spec).strip()
+    if spec["pack"].get("style"):
+        text += " " + spec["pack"]["style"].strip()
+    g = {
+        "unet": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": MODELS["unet"], "weight_dtype": "fp8_e4m3fn"}},
+        "clip": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": MODELS["clip"], "type": "qwen_image"}},
+        "vae": {"class_type": "VAELoader", "inputs": {
+            "vae_name": MODELS["vae"]}},
+        "pos": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": text, "clip": ["clip", 0]}},
+        "neg": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": DEFAULT_NEGATIVE, "clip": ["clip", 0]}},
+        "scene": {"class_type": "LoadImage", "inputs": {"image": scene}},
+        "crop": {"class_type": "ImageCrop", "inputs": {
+            "image": ["scene", 0], "width": w, "height": h, "x": x, "y": y}},
+        "up": {"class_type": "ImageScale", "inputs": {
+            "image": ["crop", 0], "upscale_method": "lanczos",
+            "width": gw, "height": gh, "crop": "disabled"}},
+        "enc": {"class_type": "VAEEncodeTiled", "inputs": {
+            "pixels": ["up", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}},
+        "mask": {"class_type": "LoadImage", "inputs": {"image": mask}},
+        "mfit": {"class_type": "ImageScale", "inputs": {
+            "image": ["mask", 0], "upscale_method": "bilinear",
+            "width": round(SCREEN_W * k), "height": round(SCREEN_H * k),
+            "crop": "center"}},
+        "mcrop": {"class_type": "ImageCrop", "inputs": {
+            "image": ["mfit", 0], "width": w, "height": h, "x": x, "y": y}},
+        "mup": {"class_type": "ImageScale", "inputs": {
+            "image": ["mcrop", 0], "upscale_method": "bilinear",
+            "width": gw, "height": gh, "crop": "disabled"}},
+        "lmask": {"class_type": "ImageToMask", "inputs": {
+            "image": ["mup", 0], "channel": "red"}},
+        "cmask": {"class_type": "ImageToMask", "inputs": {
+            "image": ["mcrop", 0], "channel": "red"}},
+        "noise": {"class_type": "SetLatentNoiseMask", "inputs": {
+            "samples": ["enc", 0], "mask": ["lmask", 0]}},
+        "decode": {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["sample", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}},
+        "down": {"class_type": "ImageScale", "inputs": {
+            "image": ["decode", 0], "upscale_method": "lanczos",
+            "width": w, "height": h, "crop": "disabled"}},
+        "paste": {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["scene", 0], "source": ["down", 0],
+            "x": x, "y": y, "resize_source": False, "mask": ["cmask", 0]}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["paste", 0], "filename_prefix": prefix}},
+    }
+    model = ["unet", 0]
+    if p["lora"]:
+        g["lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": model, "lora_name": MODELS["lightning"],
+            "strength_model": 1.0}}
+        model = ["lora", 0]
+    g["shift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {
+        "model": model, "shift": SHIFT}}
+    g["sample"] = {"class_type": "KSampler", "inputs": {
+        "model": ["shift", 0], "seed": seed, "steps": p["steps"],
+        "cfg": p["cfg"], "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["pos", 0], "negative": ["neg", 0],
+        "latent_image": ["noise", 0], "denoise": 1.0}}
+    return g
+
+
 def derive_sheet(args, spec, a, profile, seed):
     """A sprite sheet whose frames are patches of another asset's picture
     with a person added on each frame's spot (the tavern's visitors)."""
@@ -691,10 +776,36 @@ def derive_sheet(args, spec, a, profile, seed):
     for n, fr in enumerate(a["frames"]):
         picture = src_path
         cast = []
+        start = src_path
+        plate = None
+        steps = fr.get("repaint", [])
+        if steps:
+            # Paint, in turn, what the person sits at and then someone of
+            # the right size on the spot, for the cast pass to give their
+            # looks; it fills from the picture before that someone.
+            free(args.server)
+        for m, step in enumerate(steps):
+            plate = start
+            up = upload(args.server, start, "stmalo-derive-source.png")
+            mask = upload(args.server, os.path.join(HERE, step["mask"]),
+                          "stmalo-repaint-" + os.path.basename(step["mask"]))
+            try:
+                png = render(args.server, repaint_workflow(
+                    spec, profile, seed + 300 + 10 * n + m, up, mask,
+                    step["rect"], step["prompt"],
+                    "stmalo/" + a["id"].replace("/", "-") + "-repaint"))
+            except RuntimeError as e:
+                print("%s: repaint failed: %s" % (a["id"], e),
+                      file=sys.stderr)
+                return None
+            step_path = work + ".%d.png" % m
+            with open(step_path, "wb") as f:
+                f.write(png)
+            start = step_path
         if fr.get("character"):
             entry = dict(fr)
-            cast, ok = add_cast(args, spec, [entry], src_path, work, profile,
-                                seed + 200 + n, a["id"])
+            cast, ok = add_cast(args, spec, [entry], start, work, profile,
+                                seed + 200 + n, a["id"], plate)
             if not ok:
                 return None
             picture = work
@@ -709,8 +820,9 @@ def derive_sheet(args, spec, a, profile, seed):
         os.remove(frame)
         sizes.append(tuple(round(v * k) for v in fr["rect"][2:]))
         record.append({"rect": fr["rect"], "cast": cast or None})
-    if os.path.exists(work):
-        os.remove(work)
+    for left in [work] + [work + ".%d.png" % m for m in range(4)]:
+        if os.path.exists(left):
+            os.remove(left)
     atlas = render(args.server, atlas_workflow(
         frames, sizes, "stmalo/" + a["id"].replace("/", "-") + "-atlas"))
     with open(os.path.join(args.pack, a["atlas"]), "wb") as f:
@@ -934,6 +1046,25 @@ def main():
                             profile, seed + 100, name, plate)
         if plate:
             os.remove(plate)
+        # Last touches the rest of the picture is kept around: repaint
+        # each step's mask (the left table widened into a sprite frame).
+        for m, step in enumerate(a.get("finish", []) if ok else []):
+            free(args.server)
+            up = upload(args.server, out, "stmalo-finish-source.png")
+            mask = upload(args.server, os.path.join(HERE, step["mask"]),
+                          "stmalo-finish-" + os.path.basename(step["mask"]))
+            try:
+                png = render(args.server, repaint_workflow(
+                    spec, profile, seed + 400 + m, up, mask, step["rect"],
+                    step["prompt"], "stmalo/" + name.replace("/", "-") +
+                    "-finish"))
+            except RuntimeError as e:
+                print("%s: finish failed: %s" % (a["id"], e),
+                      file=sys.stderr)
+                failed.append(a["id"])
+                break
+            with open(out, "wb") as f:
+                f.write(png)
         if not ok:
             failed.append(a["id"])
         prov = {
@@ -958,6 +1089,10 @@ def main():
             else None,
             "source": a.get("source", "text"),
             "cast": cast or None,
+            "finish": [{"mask": f["mask"], "sha256": hashlib.sha256(open(
+                os.path.join(HERE, f["mask"]), "rb").read()).hexdigest(),
+                        "rect": f["rect"], "prompt": f["prompt"].strip()}
+                       for f in a.get("finish", [])] or None,
             "negative": a.get("negative", DEFAULT_NEGATIVE),
             "models": {k: v for k, v in MODELS.items()
                        if (k != "lightning" or PROFILES[profile]["lora"])

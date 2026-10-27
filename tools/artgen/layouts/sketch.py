@@ -23,6 +23,11 @@ W, H = 1472, 1104		# the render size of a 4:3 picture
 K = W / 640
 
 
+# No timestamps in the PNGs, so a redraw of an unchanged sketch is the
+# same file.
+SAME = ["-define", "png:exclude-chunk=date,time,tIME"]
+
+
 def sx(v):
     return round(v * K)
 
@@ -81,7 +86,8 @@ TAVERN = sign(212, 0, 436, 66) + [
     ellipse(455, 200, 17, 21), line((440, 222), (425, 355), (485, 355),
                                     (470, 222)),
     # Two small tables on the left, where the map seller (far left) and
-    # the informant (by the bar's end) sit when they are in town.
+    # the informant (by the bar's end) sit when they are in town; the
+    # model draws one, which a repaint then widens to his spot.
     ellipse(70, 375, 45, 14), ellipse(190, 345, 38, 12),
     # Three sailors in the foreground around one table, bottom centre
     # right, large and cut by the bottom edge: one at the front left, one
@@ -113,6 +119,25 @@ TAVERN_PEOPLE = {
     "sailor_big": [ellipse(550, 298, 30, 35),
                    "polygon 512,328 588,328 612,479 490,479"],
 }
+
+
+# The left table's whole top, redrawn larger so it reaches into the
+# informant's frame (a repaint of its end alone draws a second table).
+TABLE_END = [ellipse(116, 340, 106, 24)]
+
+
+# The visitors, when they are in town, both behind the left table and
+# inside their sprite frames, the table left alone between their
+# shoulders and their legs: the map seller behind its left end (0,255
+# 122x188), the informant behind its right end (142,259) (its far edge is at y 320 in the picture, its near
+# edge at 364; his frame is drawn taller than the original's 90x121 to
+# reach the floor).
+MAPMAN = [ellipse(50, 286, 19, 23),
+          "polygon 22,306 80,306 88,328 14,328",
+          "polygon 18,364 84,364 94,443 8,443"]
+INFOMAN = [ellipse(178, 280, 15, 18),
+           "polygon 158,297 200,297 206,328 152,328",
+           "polygon 162,364 204,364 210,446 158,446"]
 
 
 # Cabin: the captain's cabin, its objects at the spots.
@@ -158,7 +183,7 @@ def mask(name, ops):
            "white", "-stroke", "white", "-strokewidth", "5"]
     for op in ops:
         cmd += ["-draw", scaled(op)]
-    cmd += ["-blur", "0x4", os.path.join(HERE, name)]
+    cmd += ["-blur", "0x4"] + SAME + [os.path.join(HERE, name)]
     subprocess.run(cmd, check=True)
 
 
@@ -167,7 +192,7 @@ def draw(name, ops):
            "none", "-stroke", "white", "-strokewidth", "5"]
     for op in ops:
         cmd += ["-draw", op]
-    cmd.append(os.path.join(HERE, name))
+    cmd += SAME + [os.path.join(HERE, name)]
     subprocess.run(cmd, check=True)
 
 
@@ -180,3 +205,6 @@ if __name__ == "__main__":
     mask("tavern-people.png", sum(TAVERN_PEOPLE.values(), []))
     for who, ops in TAVERN_PEOPLE.items():
         mask("tavern-%s.png" % who.replace("_", "-"), ops)
+    mask("tavern-table-end.png", TABLE_END)
+    mask("tavern-mapman.png", MAPMAN)
+    mask("tavern-infoman.png", INFOMAN)

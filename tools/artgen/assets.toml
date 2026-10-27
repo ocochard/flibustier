@@ -819,6 +819,19 @@ rect = [480, 255, 145, 225]
 scene = "a smoky harbour tavern"
 action = "sitting at the front right of the table, close to the camera"
 
+# The left table, widened into the informant's sprite frame, so he has
+# it to sit behind.
+[[asset.finish]]
+mask = "layouts/tavern-table-end.png"
+rect = [0, 250, 260, 200]
+prompt = """
+Photograph inside a smoky Caribbean harbour tavern of the 1660s: one
+large oval wooden table top, a single piece of dark smooth wood with a
+rounded edge, empty, seen slightly from above in front of the wooden
+bar. Warm amber light, historical
+reenactment photography, sharp focus, realistic.
+"""
+
 # The tavern's visitors, the map seller and the informant at their
 # tables: the game draws them over the tavern when they are there, as
 # patches of the picture (the original frames' places and
@@ -834,18 +847,44 @@ source = "derived from pic/tavern"
 prompt = ""
 [[asset.frames]]
 rect = [0, 255, 122, 188]
+mode = "replace"
+shape = "layouts/tavern-mapman.png"
 character = "mapman"
 ref = "pic/mapman"
-ref_crop = [18, 28, 294, 415]
+ref_crop = [50, 60, 230, 340]	# inside the gilded frame
 scene = "a smoky harbour tavern"
-action = "sitting in the left corner by a small table, a mug in his hand"
+action = "sitting behind the left end of the round table, facing us, his arms on it, his legs below it"
+[[asset.frames.repaint]]
+mask = "layouts/tavern-mapman.png"
+rect = [0, 200, 200, 243]
+prompt = """
+Photograph inside a smoky Caribbean harbour tavern of the 1660s:
+{mapman} sits behind the left end of a round wooden table, facing us,
+his arms on the table, the table hiding his body; below the table his
+legs in breeches and boots reach the floor. Warm amber light,
+historical reenactment photography, sharp focus, realistic.
+"""
 [[asset.frames]]
-rect = [142, 259, 90, 121]
+rect = [142, 259, 90, 190]	# taller than the original, for his legs
+mode = "replace"
+shape = "layouts/tavern-infoman.png"
+reach = 3	# the edit turns the bar behind him into shelves
 character = "infoman"
 ref = "pic/infoman"
-ref_crop = [338, 21, 288, 434]
+ref_crop = [370, 60, 230, 350]	# inside the gilded frame
 scene = "a smoky harbour tavern"
-action = "sitting at a small table at the end of the bar, a bottle in front of him"
+action = "sitting behind the right end of the round table, facing us, his forearms on it, his legs below it"
+[[asset.frames.repaint]]
+mask = "layouts/tavern-infoman.png"
+rect = [100, 220, 180, 240]
+prompt = """
+Photograph inside a smoky Caribbean harbour tavern of the 1660s, by the
+end of the wooden bar: {infoman} sits behind the right end of a round
+wooden table, facing us, his forearms on the table, the table hiding his
+body; below the table his legs in dark breeches and boots reach the floor.
+Warm amber light, historical reenactment photography, sharp focus,
+realistic.
+"""
 [[asset.frames]]
 rect = [349, 199, 79, 161]	# the doorway, nobody in it
 
