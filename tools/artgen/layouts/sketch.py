@@ -178,6 +178,24 @@ DECK = [
 ]
 
 
+# Weapon choice: the panel drawn at (369, 56), 205x386, in its own
+# pixels; each blade upright in the column clicked to take it (rapier
+# x 23-75, cutlass 77-112, longsword 114-181, all from y 22 to 303).
+WPNSEL_SIZE = (205, 386)
+WPNSEL = [
+    rect(4, 4, 201, 382), rect(16, 16, 189, 370),	# the frame
+    # The rapier: a needle blade under a swept hilt of looping bars.
+    ellipse(49, 58, 16, 12), ellipse(49, 70, 10, 8), line((49, 30), (49, 300)),
+    line((28, 64), (70, 64)),
+    ellipse(94, 52, 12, 8), line((94, 44), (92, 255)),	# the cutlass
+    line((92, 255), (100, 230)),
+    # The broadsword: a wide blade, a long cross guard, a round pommel.
+    ellipse(147, 30, 7, 7), rect(143, 37, 151, 60),
+    line((116, 62), (178, 62)),
+    "polygon 138,66 156,66 154,286 147,300 140,286",
+]
+
+
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
     rect(160, 80, 300, 150), rect(330, 80, 470, 150),	# stern windows
@@ -314,11 +332,12 @@ def mask(name, ops, blur=4):
     subprocess.run(cmd, check=True)
 
 
-def draw(name, ops):
-    cmd = ["magick", "-size", "%dx%d" % (W, H), "xc:black", "-fill",
+def draw(name, ops, size=(640, 480)):
+    cmd = ["magick", "-size", "%dx%d" % (sx(size[0]), sx(size[1])),
+           "xc:black", "-fill",
            "none", "-stroke", "white", "-strokewidth", "5"]
     for op in ops:
-        cmd += ["-draw", op]
+        cmd += ["-draw", scaled(op)]
     cmd += SAME + [os.path.join(HERE, name)]
     subprocess.run(cmd, check=True)
 
@@ -330,6 +349,7 @@ if __name__ == "__main__":
     draw("alley.png", ALLEY + [rect(*b) for b in DUEL_BOXES])
     draw("fort.png", FORT + [rect(*b) for b in DUEL_BOXES])
     draw("deck.png", DECK + [rect(*b) for b in DUEL_BOXES])
+    draw("wpnsel.png", WPNSEL, WPNSEL_SIZE)
     x0, y0, c = PAD
     cells = [(x0 + c * i + 1, y0 + c * j + 1, x0 + c * (i + 1) - 1,
               y0 + c * (j + 1) - 1) for i in range(3) for j in range(3)]

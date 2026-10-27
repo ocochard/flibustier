@@ -1002,6 +1002,35 @@ from edge to edge with no edge, rim, ring or dial, warm even light,
 plain and flat.
 """
 
+# The weapon choice, drawn over the duel screens' scene at (369, 56):
+# the three blades hang upright in the columns the game takes clicks in,
+# their names written across them at y 178.
+[[asset]]
+id = "img/wpnsel"
+file = "art/wpnsel.png"
+size = [205, 386]
+seed = 1660
+source = "layout described from the original screen"
+control = "layouts/wpnsel.png"
+control_strength = 0.85
+control_end = 0.6
+prompt = """
+Photograph, straight on, of a tall rectangular display board filling the
+whole picture: a heavy frame of dark carved pewter with a beaded inner
+edge, and inside it deep crimson velvet. On the velvet hang three
+period swords side by side, upright, hilts at the top and points down,
+well apart, each plainly different: on the left a rapier with a
+needle-thin blade no wider than a pencil and a swept hilt of looping
+blued steel bars and rings around the grip; in the middle a short broad
+cutlass with a curved blade and a brass shell guard; on the right a
+heavy broadsword with a wide straight double-edged blade, three times
+as wide as the rapier's, with a long gilded cross guard, a leather grip
+and a round gilded pommel at the top; its blade narrows to a single
+sharp point at the bottom, with nothing below the point. Each sword has
+one hilt only, at its top. Even museum light, sharp focus,
+realistic.
+"""
+
 [[asset]]
 id = "pic/fort"
 file = "art/fort.png"

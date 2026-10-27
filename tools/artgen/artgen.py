@@ -266,6 +266,11 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "name": MODELS["controlnet"]}}
         g["sketch"] = {"class_type": "LoadImage", "inputs": {
             "image": asset["uploaded_control"]}}
+        # At the generation's size, which the control needs (a sketch
+        # of another shape runs out of memory).
+        g["sketchfit"] = {"class_type": "ImageScale", "inputs": {
+            "image": ["sketch", 0], "upscale_method": "bilinear",
+            "width": gw, "height": gh, "crop": "disabled"}}
         if asset.get("scene_area"):
             # The sketch is of the whole screen: only the scene's part.
             ks = SKETCH_W / SCREEN_W
@@ -273,12 +278,11 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             g["sketchpart"] = {"class_type": "ImageCrop", "inputs": {
                 "image": ["sketch", 0], "width": aw, "height": ah,
                 "x": ax, "y": ay}}
+            g["sketchfit"]["inputs"]["image"] = ["sketchpart", 0]
         g["control"] = {"class_type": "QwenImageDiffsynthControlnet",
                         "inputs": {
                             "model": model, "model_patch": ["cpatch", 0],
-                            "vae": ["vae", 0], "image":
-                            ["sketchpart", 0] if asset.get("scene_area")
-                            else ["sketch", 0],
+                            "vae": ["vae", 0], "image": ["sketchfit", 0],
                             "strength": asset.get("control_strength", 0.7),
                             "start_percent": 0.0,
                             "end_percent": asset.get("control_end", 0.6)}}
