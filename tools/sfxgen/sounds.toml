@@ -10,7 +10,7 @@
 # No voices: the model cannot speak or shout, a voice prompt comes out as
 # vocal noise.  The sounds that are voices in the original (the hail's
 # "Arrgh!", the harbour's call, the land battle's "En garde!", the
-# cries of the hit in sword fights)
+# cries of the hit in sword fights, the beaten opponent's surrender)
 # are left out, so the game keeps the original's; the other sounds are
 # asked without voices.
 
@@ -30,12 +30,6 @@ id = "sound/broadside"
 length = 1.46
 seconds = 2
 prompt = "a ship's broadside, several heavy old cannons firing in quick succession at sea, deep booms, rolling echo"
-
-[[sound]]
-id = "sound/last-man"
-length = 1.00
-seconds = 1.5
-prompt = "a heavy body and a steel sword falling onto a wooden deck, a dull thud and a clatter"
 
 [[sound]]
 id = "sound/sail-ho"

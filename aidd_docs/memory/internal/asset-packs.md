@@ -36,10 +36,11 @@ any format raylib loads (WAV, OGG, MP3, FLAC, QOA), loaded once at the
 start. See "Sound effects" and "FM effects" in game-rules.md for when
 each plays.
 
-- **The digitised effects** (`DIGITAL.PIR`): `sound/hail`,
-  `sound/broadside`, `sound/land-battle`, `sound/last-man`,
-  `sound/harbour`, `sound/sail-ho`, `sound/parry`, `sound/hit-foe`,
-  `sound/hit-you`. A recording plays even without the original driver,
+- **The digitised effects** (`DIGITAL.PIR`): `sound/hail` (a pirate's
+  "Arrgh!"), `sound/broadside`, `sound/land-battle` (a voice: "En
+  garde!"), `sound/last-man` (the beaten opponent's voice, surrendering),
+  `sound/harbour` (a voice), `sound/sail-ho`, `sound/parry`,
+  `sound/hit-foe` and `sound/hit-you` (cries of the man hit). A recording plays even without the original driver,
   and wins over the driver's where the game prefers a digitised effect
   to an FM one.
 - **The FM effects** (sent to the music driver): `sound/shot-hit`,
@@ -49,7 +50,8 @@ each plays.
   `sound/row` (the trade board's row). A recording plays instead of the
   driver's sound.
 - An effect without a recording plays as before.
-- **The open set:** `tools/sfxgen/sfxgen.py` renders all twenty with
+- **The open set:** `tools/sfxgen/sfxgen.py` renders those that are not
+  voices (the model cannot speak; the voices stay the original's) with
   Stable Audio Open 1.0 on a ComfyUI server, from the text prompts of
   `tools/sfxgen/sounds.toml` alone (never an original sound as input),
   trims and normalises them with ffmpeg, and writes them to the open
