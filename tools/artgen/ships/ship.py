@@ -14,8 +14,10 @@ the first eight, cur/shipNb the last).  The ship is modelled here, from
 a few measures per size, so every heading shows the very same ship.
 
     blender -b -P ship.py -- --size 2 --out DIR [--frame 156x116]
+                         [--headings 16] [--blend MODEL.blend]
 
-writes DIR/0.png to DIR/15.png, transparent around the ship.
+writes DIR/0.png to DIR/15.png, transparent around the ship, and with
+--blend the model itself, to open and change in Blender.
 """
 
 import argparse
@@ -270,6 +272,7 @@ def main():
     ap.add_argument("--frame", default="156x116",
                     help="pixels of one frame (the game's 78x58 x2)")
     ap.add_argument("--headings", type=int, default=16)
+    ap.add_argument("--blend", help="also save the built model there")
     args = ap.parse_args(argv)
     fw, fh = (int(v) for v in args.frame.split("x"))
     s = SIZES[args.size]
@@ -297,6 +300,10 @@ def main():
     big = SIZES[2]
     extent = max(big["length"] * 1.3, max(h for _, h in big["masts"]) * 1.15)
     scene(fw, fh, extent * max(1, fw / fh))
+    if args.blend:
+        # The model as built, heading north, with its camera and light.
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.blend),
+                                    compress=True)
     os.makedirs(args.out, exist_ok=True)
     for k in range(args.headings):
         # Heading k: clockwise from north (the bow up the screen).
