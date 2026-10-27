@@ -12,10 +12,13 @@ Stable Audio Open 1.0, its silence trimmed, faded out, converted to OGG
 Vorbis with ffmpeg, and written to the pack with a provenance record
 (model files, prompt, seed, workflow) and the pack.d/sound.ini fragment.
 
-    sfxgen.py [--server URL] [--pack DIR] [--seed N] [--force] [ID ...]
+    sfxgen.py [--server URL] [--pack DIR] [--seed N] [--force]
+              [--prompt TEXT] [ID ...]
 
 Without IDs, every sound missing from the pack is rendered; --force
-renders the named (or all) sounds again.
+renders the named (or all) sounds again.  --prompt tries another wording
+for the one sound named, without changing sounds.toml (for takes into a
+review pack).
 """
 
 import argparse
@@ -181,6 +184,7 @@ def main():
         "~/flibustier-openpack"))
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--prompt", help="another prompt for the one ID named")
     ap.add_argument("ids", nargs="*")
     a = ap.parse_args()
     a.server = reachable(a.server)
@@ -189,6 +193,10 @@ def main():
     todo = [s for s in spec["sound"] if not a.ids or s["id"] in a.ids]
     if a.ids and len(todo) != len(set(a.ids)):
         sys.exit("unknown id among: " + " ".join(a.ids))
+    if a.prompt is not None:
+        if len(todo) != 1:
+            sys.exit("--prompt needs exactly one ID")
+        todo = [dict(todo[0], prompt=a.prompt)]
     os.makedirs(os.path.join(a.pack, "sound"), exist_ok=True)
     os.makedirs(os.path.join(a.pack, "provenance"), exist_ok=True)
     jobs = []
