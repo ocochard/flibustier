@@ -250,6 +250,8 @@ struct game {
 	/* The digitised effects, and those asked for since the front end
 	 * last played them (bit n: effect n); the last one, for tests. */
 	struct digital		 sfx;
+	unsigned		 sfx_packed;	/* bit n: a pack's recording of
+					 * effect n, with or without DIGITAL */
 	unsigned		 sfx_pending;
 	int			 sfx_last;
 	/* The tune asked for (MUS_*), -1 none, until the front end takes
@@ -373,5 +375,12 @@ void	game_fm(struct game *g, int cmd);
 
 /* Ask for digitised effect n (SFX_*) to play. */
 void	game_sfx(struct game *g, int n);
+/* Whether effect n can play: DIGITAL.PIR's, or a pack's recording. */
+int	game_has_sfx(const struct game *g, int n);
+/* The asset IDs a pack replaces the sounds with: digitised effect n
+ * (SFX_*, "sound/broadside"), or FM effect "cmd" (FM_*, "sound/swing");
+ * NULL for none. */
+const char	*game_sfx_id(int n);
+const char	*game_fm_id(int cmd);
 
 #endif

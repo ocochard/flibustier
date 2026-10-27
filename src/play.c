@@ -111,47 +111,96 @@ feed_input(struct game *g, Vector2 *last_mouse)
 }
 
 /*
- * The digitised effects through raylib's audio device: loaded once,
- * played when the game asks.  Without a device the game stays silent.
+ * The effects through raylib's audio device, loaded once and played when
+ * the game asks: DIGITAL.PIR's, each replaced by a pack's recording
+ * ("sound/broadside") when there is one, and the recordings a pack gives
+ * the FM effects ("sound/swing"), played instead of the driver's.
+ * Without a device the game stays silent.
  */
+#define FM_COMMANDS	64
+
+struct sounds {
+	Sound		 digital[DIGITAL_EFFECTS];
+	Sound		 fm[FM_COMMANDS];	/* by driver command */
+};
+
+/* A pack's recording "id" as a sound; 0 when there is none. */
+static int
+sound_from_pack(struct game *g, const char *id, Sound *out)
+{
+	struct blob b;
+	char type[16];
+	Wave w;
+
+	if (id == NULL || !packs_provides(g->packs, id) ||
+	    packs_load(g->packs, id, &b) != 0)
+		return (0);
+	snprintf(type, sizeof(type), ".%s", b.ext);
+	w = LoadWaveFromMemory(type, b.data, (int)b.len);
+	blob_free(&b);
+	if (w.frameCount == 0) {
+		fprintf(stderr, "%s: cannot play this %s file\n", id, type + 1);
+		return (0);
+	}
+	*out = LoadSoundFromWave(w);
+	UnloadWave(w);
+	return (out->frameCount > 0);
+}
+
 static void
-sounds_load(const struct game *g, Sound sfx[DIGITAL_EFFECTS])
+sounds_load(struct game *g, struct sounds *sd)
 {
 	Wave w;
 	int i;
 
-	memset(sfx, 0, sizeof(Sound) * DIGITAL_EFFECTS);
+	memset(sd, 0, sizeof(*sd));
 	InitAudioDevice();
 	if (!IsAudioDeviceReady())
 		return;
 	for (i = 0; i < DIGITAL_EFFECTS; i++) {
+		if (sound_from_pack(g, game_sfx_id(i), &sd->digital[i])) {
+			g->sfx_packed |= 1u << i;
+			continue;
+		}
 		if (g->sfx.pcm[i] == NULL)
 			continue;
 		w = (Wave){ (unsigned)g->sfx.len[i], DIGITAL_RATE, 8, 1,
 		    g->sfx.pcm[i] };
-		sfx[i] = LoadSoundFromWave(w);
+		sd->digital[i] = LoadSoundFromWave(w);
+	}
+	for (i = 0; i < FM_COMMANDS; i++)
+		sound_from_pack(g, game_fm_id(i), &sd->fm[i]);
+}
+
+static void
+sounds_play(struct game *g, struct sounds *sd)
+{
+	int i;
+
+	for (i = 0; i < DIGITAL_EFFECTS; i++)
+		if ((g->sfx_pending & (1u << i)) &&
+		    sd->digital[i].frameCount > 0)
+			PlaySound(sd->digital[i]);
+	g->sfx_pending = 0;
+	/* An FM effect with a recording plays it, not the driver. */
+	if (g->fm_request > 0 && g->fm_request < FM_COMMANDS &&
+	    sd->fm[g->fm_request].frameCount > 0) {
+		PlaySound(sd->fm[g->fm_request]);
+		g->fm_request = 0;
 	}
 }
 
 static void
-sounds_play(struct game *g, Sound sfx[DIGITAL_EFFECTS])
+sounds_unload(struct sounds *sd)
 {
 	int i;
 
 	for (i = 0; i < DIGITAL_EFFECTS; i++)
-		if ((g->sfx_pending & (1u << i)) && sfx[i].frameCount > 0)
-			PlaySound(sfx[i]);
-	g->sfx_pending = 0;
-}
-
-static void
-sounds_unload(Sound sfx[DIGITAL_EFFECTS])
-{
-	int i;
-
-	for (i = 0; i < DIGITAL_EFFECTS; i++)
-		if (sfx[i].frameCount > 0)
-			UnloadSound(sfx[i]);
+		if (sd->digital[i].frameCount > 0)
+			UnloadSound(sd->digital[i]);
+	for (i = 0; i < FM_COMMANDS; i++)
+		if (sd->fm[i].frameCount > 0)
+			UnloadSound(sd->fm[i]);
 	if (IsAudioDeviceReady())
 		CloseAudioDevice();
 }
@@ -356,7 +405,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	char dir[512];
 	int frames = 0, rc = 0, k, big_k, tw, th;
 	RenderTexture2D big;
-	Sound sfx[DIGITAL_EFFECTS];
+	static struct sounds sd;
 	struct jukebox jb;
 	struct crt crt = { 0 };
 	Rectangle box;
@@ -381,7 +430,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	SetExitKey(KEY_NULL);	/* Escape is a game key */
 	HideCursor();		/* the game draws its own sword pointer */
 	SetTargetFPS(60);
-	sounds_load(&g, sfx);
+	sounds_load(&g, &sd);
 	jukebox_open(&g, &jb);
 	im = (Image){ rgb, tw, th, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8 };
 	tex = LoadTextureFromImage(im);
@@ -399,7 +448,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 	while (!WindowShouldClose() && !g.quit) {
 		feed_input(&g, &last_mouse);
 		game_tick(&g);
-		sounds_play(&g, sfx);
+		sounds_play(&g, &sd);
 		jukebox_feed(&g, &jb);
 		game_draw(&g);
 		fb_to_rgb(&g.fb, g.brightness, rgb);
@@ -449,7 +498,7 @@ shown:
 	crt_unload(&crt);
 	UnloadTexture(tex);
 	jukebox_close(&jb);
-	sounds_unload(sfx);
+	sounds_unload(&sd);
 	CloseWindow();
 	free(rgb);
 	game_free(&g);

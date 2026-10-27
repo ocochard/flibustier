@@ -27,6 +27,28 @@ the [roadmap](../../plans/roadmap.md).
 | `text/<lang>/<name>` | string table | `<NAME>.<LANG>`, e.g. `CSTR.ENG` |
 | `program/main` | original executable (data tables) | `PIRATESG.EXE` |
 | `music/<tune>` | a recording that replaces a tune (packs only) | none |
+| `sound/<name>` | a recording that replaces a sound effect (packs only) | none |
+
+## Replacement sounds (`sound/`)
+
+A pack may replace any of the game's sound effects with a recording, in
+any format raylib loads (WAV, OGG, MP3, FLAC, QOA), loaded once at the
+start. See "Sound effects" and "FM effects" in game-rules.md for when
+each plays.
+
+- **The digitised effects** (`DIGITAL.PIR`): `sound/hail`,
+  `sound/broadside`, `sound/land-battle`, `sound/last-man`,
+  `sound/harbour`, `sound/sail-ho`, `sound/parry`, `sound/hit-foe`,
+  `sound/hit-you`. A recording plays even without the original driver,
+  and wins over the driver's where the game prefers a digitised effect
+  to an FM one.
+- **The FM effects** (sent to the music driver): `sound/shot-hit`,
+  `sound/shot-miss`, `sound/crash` (hulls meeting, a reef),
+  `sound/swing`, `sound/blow`, `sound/miss`, `sound/their-men`,
+  `sound/our-men`, `sound/scrape`, `sound/trade` (a unit traded),
+  `sound/row` (the trade board's row). A recording plays instead of the
+  driver's sound.
+- An effect without a recording plays as before.
 
 ## Replacement music (`music/`)
 

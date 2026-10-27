@@ -3431,8 +3431,7 @@ play_sound(struct game *g, int fm, int digital)
 {
 	if (fm == 0)
 		return;
-	if (digital >= 0 && digital < DIGITAL_EFFECTS &&
-	    g->sfx.pcm[digital] != NULL)
+	if (game_has_sfx(g, digital))
 		game_sfx(g, digital);
 	else
 		game_fm(g, fm);

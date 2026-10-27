@@ -398,13 +398,31 @@ test_sailing(void)
 	game_free(g);
 }
 
-/* The tunes a pack can replace, by driver command. */
+/* The tunes and sounds a pack can replace. */
 static void
 test_tune_ids(void)
 {
 	CHECK(strcmp(game_tune_id(MUS_TITLE), "music/title") == 0);
 	CHECK(strcmp(game_tune_id(MUS_HARBOUR), "music/harbour") == 0);
 	CHECK(game_tune_id(MUS_STOP) == NULL && game_tune_id(26) == NULL);
+	/* The sounds: the digitised effects and the FM ones. */
+	CHECK(strcmp(game_sfx_id(SFX_BROADSIDE), "sound/broadside") == 0);
+	CHECK(strcmp(game_sfx_id(SFX_LAST_MAN), "sound/last-man") == 0);
+	CHECK(game_sfx_id(DIGITAL_EFFECTS) == NULL);
+	CHECK(strcmp(game_fm_id(FM_SWING), "sound/swing") == 0);
+	CHECK(strcmp(game_fm_id(FM_ROW), "sound/row") == 0);
+	CHECK(game_fm_id(FM_BROADSIDE) == NULL);	/* the digitised one */
+	/* A pack's recording makes an effect playable without DIGITAL. */
+	{
+		struct game g;
+
+		memset(&g, 0, sizeof(g));
+		CHECK(!game_has_sfx(&g, SFX_HAIL));
+		g.sfx_packed = 1u << SFX_HAIL;
+		CHECK(game_has_sfx(&g, SFX_HAIL) && !game_has_sfx(&g, SFX_PARRY));
+		game_sfx(&g, SFX_HAIL);
+		CHECK(g.sfx_pending == (1u << SFX_HAIL));
+	}
 }
 
 /* The original's debug mode (--debug): the keys at sea, and a right

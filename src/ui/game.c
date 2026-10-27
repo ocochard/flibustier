@@ -446,10 +446,60 @@ game_start_career(struct game *g)
 	return (game_attach_world(g));
 }
 
+int
+game_has_sfx(const struct game *g, int n)
+{
+	return (n >= 0 && n < DIGITAL_EFFECTS && (g->sfx.pcm[n] != NULL ||
+	    (g->sfx_packed & (1u << n))));
+}
+
+const char *
+game_sfx_id(int n)
+{
+	static const char *const ids[DIGITAL_EFFECTS] = {
+		"sound/hail", "sound/broadside", "sound/land-battle",
+		"sound/last-man", "sound/harbour", "sound/sail-ho",
+		"sound/parry", "sound/hit-foe", "sound/hit-you",
+	};
+
+	return (n >= 0 && n < DIGITAL_EFFECTS ? ids[n] : NULL);
+}
+
+const char *
+game_fm_id(int cmd)
+{
+	switch (cmd) {
+	case FM_SHOT_HIT:
+		return ("sound/shot-hit");
+	case FM_SHOT_MISS:
+		return ("sound/shot-miss");
+	case FM_CRASH:
+		return ("sound/crash");
+	case FM_SWING:
+		return ("sound/swing");
+	case FM_BLOW:
+		return ("sound/blow");
+	case FM_MISS:
+		return ("sound/miss");
+	case FM_THEIR_MEN:
+		return ("sound/their-men");
+	case FM_OUR_MEN:
+		return ("sound/our-men");
+	case FM_SCRAPE:
+		return ("sound/scrape");
+	case FM_TRADE:
+		return ("sound/trade");
+	case FM_ROW:
+		return ("sound/row");
+	default:
+		return (NULL);
+	}
+}
+
 void
 game_sfx(struct game *g, int n)
 {
-	if (n < 0 || n >= DIGITAL_EFFECTS || g->sfx.pcm[n] == NULL)
+	if (!game_has_sfx(g, n))
 		return;
 	g->sfx_pending |= 1u << n;
 	g->sfx_last = n;
