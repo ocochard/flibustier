@@ -130,10 +130,11 @@ class Bot:
             if best is None:
                 return None
             goal = best[1]
-        if not self.water(*start):
+        if start not in self.comp:
+            # on land, or in a ',' cell: head for the nearest open sea
             near = [(abs(dx) + abs(dy), (start[0] + dx, start[1] + dy))
                     for dy in range(-4, 5) for dx in range(-4, 5)
-                    if self.water(start[0] + dx, start[1] + dy)]
+                    if (start[0] + dx, start[1] + dy) in self.comp]
             if near:
                 start = min(near)[1]
         if start not in self.comp:
@@ -721,6 +722,17 @@ class Bot:
         return "assaulted"
 
     # ------------------------------------------------------------- search
+    def reboarded(self, mapi):
+        """The party stepped onto water near its landing point, as the
+        original lets it on a winding coast: try landing again, and only
+        flag a map that keeps failing."""
+        self.stats["dig_reboarded"] += 1
+        self.bumps["dig%d" % mapi] += 1
+        if self.bumps["dig%d" % mapi] == 6:
+            self.odd("the party kept walking back aboard on its way to map %d" % mapi)
+        else:
+            self.note("the party walked back aboard on its way to map %d" % mapi)
+
     def dig(self, mapi):
         s = self.refresh()
         m = s["maps"][mapi]
@@ -765,13 +777,13 @@ class Bot:
             if abs(cx - tx) < 2 and abs(cy - ty) < 2:
                 break
             if not f["ashore"]:
-                self.odd("the party walked back aboard on its way to map %d" % mapi)
+                self.reboarded(mapi)
                 return False
             dx = (tx > cx) - (tx < cx)
             dy = (ty > cy) - (ty < cy)
             r = self.sim("march", dx=dx, dy=dy, ticks=8)
             if r["stop"] == "boarded":
-                self.odd("the party walked back aboard on its way to map %d" % mapi)
+                self.reboarded(mapi)
                 return False
             if r["stop"] == "town":
                 self.visit(self.town_index(r["town"]) if isinstance(r["town"], str) else r["town"])
@@ -885,7 +897,10 @@ class Bot:
             sp = [i for i, t in enumerate(s["towns"]) if t["nation"] == 0 and t["sea_x"]]
             ti = random.Random(loops).choice(sp)
             t = s["towns"][ti]
-            res = self.go(t["sea_x"] + 6, t["sea_y"] + 6, max_days=40)
+            gx, gy = t["sea_x"] + 6, t["sea_y"] + 6
+            if not self.water(gx, gy):
+                gx, gy = t["sea_x"], t["sea_y"]	# the offset fell inland
+            res = self.go(gx, gy, max_days=40)
             if res == "town" and not self.at_war(s["towns"][self.last_town]["nation"]):
                 self.visit(self.last_town)
         return self.report()
