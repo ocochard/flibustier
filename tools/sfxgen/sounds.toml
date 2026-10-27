@@ -5,6 +5,10 @@
 # is the length asked of the model; the silence around the sound is cut
 # afterwards.  The IDs are the engine's (asset-packs.md, "Replacement
 # sounds").
+#
+# No voices: the model cannot speak or shout, a voice prompt comes out as
+# vocal noise.  The hail (the original's "Arrgh!") is left out, so the
+# game keeps the original's; the other sounds are asked without voices.
 
 [render]
 checkpoint = "stable-audio-open-1.0.safetensors"
@@ -13,14 +17,9 @@ steps = 100
 cfg = 7.0
 sampler = "dpmpp_3m_sde_gpu"
 scheduler = "exponential"
-negative = "music, melody, singing, speech, low quality, distorted, noise, hiss, static"
+negative = "music, melody, singing, speech, voice, vocals, shouting, screaming, talking, low quality, distorted, noise, hiss, static"
 
 # The digitised effects (DIGITAL.PIR's nine).
-
-[[sound]]
-id = "sound/hail"
-seconds = 3
-prompt = "a gruff pirate captain bellowing a single defiant shout across open water, short, outdoor"
 
 [[sound]]
 id = "sound/broadside"
@@ -30,12 +29,12 @@ prompt = "a ship's broadside, several heavy old cannons firing in quick successi
 [[sound]]
 id = "sound/land-battle"
 seconds = 4
-prompt = "a volley of 17th-century muskets fired together, then men shouting a charge, outdoor battle"
+prompt = "a volley of 17th-century muskets fired together, outdoor, echo across a field"
 
 [[sound]]
 id = "sound/last-man"
 seconds = 2
-prompt = "a man groaning as he falls, his body and sword dropping onto a wooden deck"
+prompt = "a heavy body and a steel sword falling onto a wooden deck, a dull thud and a clatter"
 
 [[sound]]
 id = "sound/harbour"
@@ -55,12 +54,12 @@ prompt = "two steel swords clashing once, a sharp metallic ring"
 [[sound]]
 id = "sound/hit-foe"
 seconds = 1
-prompt = "a sword slash cutting through cloth, a man's short pained grunt"
+prompt = "a sword blade slashing through thick cloth and leather, a sharp cut"
 
 [[sound]]
 id = "sound/hit-you"
 seconds = 1
-prompt = "a heavy sword blow landing, a man gasping in pain"
+prompt = "a heavy sword blow landing on leather armour, a dull impact"
 
 # The FM effects (sent to the music driver).
 
@@ -97,12 +96,12 @@ prompt = "a sword slicing through empty air, a thin quick swish"
 [[sound]]
 id = "sound/their-men"
 seconds = 2
-prompt = "a group of enemy soldiers shouting and clashing swords at a distance"
+prompt = "steel swords clashing repeatedly in a skirmish at a distance"
 
 [[sound]]
 id = "sound/our-men"
 seconds = 2
-prompt = "a crowd of sailors shouting as they fight, swords clashing close by"
+prompt = "many steel swords clashing close by in a fierce melee"
 
 [[sound]]
 id = "sound/scrape"

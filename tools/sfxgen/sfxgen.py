@@ -22,6 +22,7 @@ import argparse
 import datetime
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,26 @@ import urllib.request
 import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def reachable(server):
+    """The server's URL with the first address that answers: the host
+    may resolve to addresses the server does not listen on (IPv6 for a
+    ComfyUI on 0.0.0.0), each of which would stall every request (as
+    tools/artgen does)."""
+    u = urllib.parse.urlsplit(server)
+    port = u.port or 80
+    for family, kind, proto, _, addr in socket.getaddrinfo(
+            u.hostname, port, type=socket.SOCK_STREAM):
+        try:
+            with socket.socket(family, kind, proto) as sock:
+                sock.settimeout(2)
+                sock.connect(addr)
+        except OSError:
+            continue
+        host = "[%s]" % addr[0] if family == socket.AF_INET6 else addr[0]
+        return "%s://%s:%d" % (u.scheme, host, port)
+    sys.exit("cannot reach " + server)
 
 
 def call(server, path, data=None):
@@ -159,6 +180,7 @@ def main():
     ap.add_argument("--force", action="store_true")
     ap.add_argument("ids", nargs="*")
     a = ap.parse_args()
+    a.server = reachable(a.server)
     with open(os.path.join(HERE, "sounds.toml"), "rb") as f:
         spec = tomllib.load(f)
     todo = [s for s in spec["sound"] if not a.ids or s["id"] in a.ids]
