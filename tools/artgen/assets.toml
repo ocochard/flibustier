@@ -913,3 +913,41 @@ right, a pair of tall leather sea boots standing on the floor. No
 people. Historical reenactment photography, wide lens, sharp focus,
 realistic.
 """
+# The table cleared, then the maps painted back well inside the chart
+# frame (the game hides them under it while no treasure map is held).
+[[asset.finish]]
+mask = "layouts/cabin-table-top.png"
+rect = [200, 200, 340, 160]
+prompt = """
+Photograph of a 17th-century sea captain's cabin: the top of a wooden
+table, bare dark polished planks running from left to right with their
+grain. Daylight from the stern windows, historical reenactment
+photography, sharp focus, realistic.
+"""
+[[asset.finish]]
+rect = [345, 245, 145, 65]	# inside the chart frame, with a margin
+scene = "a sea captain's cabin, the top of a wooden table"
+thing = """
+an old hand-drawn treasure map of a Caribbean island on yellowed
+parchment lying flat on the table, a dagger stuck upright through it
+"""
+
+# The chart frame: while no treasure map is held, the game draws the
+# table without them over the picture's maps (the original frame's place
+# and size).
+[[asset]]
+id = "spr/cabin"
+file = "art/cabin-sprites.sheet"
+atlas = "art/cabin-sprites.png"
+from = "pic/cabin"
+seed = 1660
+source = "derived from pic/cabin"
+prompt = ""
+[[asset.frames]]
+rect = [325, 229, 200, 106]
+scene = "a sea captain's cabin, the top of a wooden table"
+instruction = """
+Take the treasure map away from the table and pull the dagger out: the
+dagger now lies flat on the bare wooden table, and the bare planks show
+where the map was.
+"""

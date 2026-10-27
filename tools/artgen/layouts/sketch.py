@@ -168,6 +168,12 @@ CABIN = sign(212, 0, 436, 66) + [
 ]
 
 
+# The cabin picture's table: all of its top cleared, for the maps to be
+# put back well inside the chart frame the game draws while no treasure
+# map is held (325,229 200x106), so it hides all of them.
+CABIN_TABLE_TOP = ["polygon 262,250 488,250 494,306 256,306"]
+
+
 def scaled(op):
     """A polygon given in 640x480 pixels, at the render size."""
     if not op.startswith("polygon "):
@@ -177,13 +183,14 @@ def scaled(op):
                                  for x, y in pts)
 
 
-def mask(name, ops):
-    """White filled shapes on black, edges softened, for an inpaint."""
+def mask(name, ops, blur=4):
+    """White filled shapes on black, edges softened (by "blur" render
+    pixels), for an inpaint."""
     cmd = ["magick", "-size", "%dx%d" % (W, H), "xc:black", "-fill",
            "white", "-stroke", "white", "-strokewidth", "5"]
     for op in ops:
         cmd += ["-draw", scaled(op)]
-    cmd += ["-blur", "0x4"] + SAME + [os.path.join(HERE, name)]
+    cmd += ["-blur", "0x%d" % blur] + SAME + [os.path.join(HERE, name)]
     subprocess.run(cmd, check=True)
 
 
@@ -207,4 +214,5 @@ if __name__ == "__main__":
         mask("tavern-%s.png" % who.replace("_", "-"), ops)
     mask("tavern-table-end.png", TABLE_END)
     mask("tavern-mapman.png", MAPMAN)
+    mask("cabin-table-top.png", CABIN_TABLE_TOP)
     mask("tavern-infoman.png", INFOMAN)

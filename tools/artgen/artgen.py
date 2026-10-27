@@ -379,7 +379,8 @@ def cast_workflow(entry, spec, profile, seed, scene, ref, prefix):
     p = EDIT_PROFILES[profile]
     k = spec["pack"]["art_height"] / SCREEN_H
     x, y, w, h = (round(v * k) for v in entry["rect"])
-    who = characters("{%s}" % entry["character"], spec)
+    who = characters("{%s}" % entry["character"], spec) \
+        if entry.get("character") else ""
     if ref is not None:
         rx, ry, rw, rh = (round(v * k) for v in entry["ref_crop"])
         who = ("the person from image 2, %s: the very same person, with "
@@ -387,7 +388,24 @@ def cast_workflow(entry, spec, profile, seed, scene, ref, prefix):
         if entry.get("ref_face"):
             who += (" (image 3 is a close-up of the same person's face: "
                     "keep exactly that face and expression)")
-    if entry.get("mode") == "replace":
+    if entry.get("instruction"):
+        # A change to what is there (the cabin's maps taken away).
+        prompt = (
+            "Image 1 is a part of %s. %s Keep everything else of image 1 "
+            "exactly as it is, with the same light and colours. "
+            "Photograph, realistic." % (
+                entry.get("scene", "the scene"),
+                " ".join(entry["instruction"].split())))
+    elif entry.get("thing"):
+        # An object, not a person (the cabin's maps).
+        prompt = (
+            "Image 1 is a part of %s. Add to image 1 %s, in the middle of "
+            "image 1, at the right scale. Add nothing else. Keep "
+            "everything else of image 1 exactly as it is, with the same "
+            "light and colours. Photograph, realistic." % (
+                entry.get("scene", "the scene"),
+                " ".join(entry["thing"].split())))
+    elif entry.get("mode") == "replace":
         # The scene already has someone there, at the right size and
         # place: give them this character's looks.
         prompt = (
@@ -587,6 +605,11 @@ def matte_workflow(entry, spec, scene, crop, prefix):
     return g
 
 
+def label(entry):
+    """What a cast entry adds: its character, or the start of its thing."""
+    return entry.get("character") or " ".join(entry["thing"].split()[:6])
+
+
 def add_cast(args, spec, entries, scene_path, out, profile, seed, name,
              plate=None):
     """Add each character of "entries" to the picture at scene_path, in
@@ -633,7 +656,7 @@ def add_cast(args, spec, entries, scene_path, out, profile, seed, name,
                 name.replace("/", "-") + "-matte"))
             free(args.server)
         except RuntimeError as e:
-            print("cast %s failed: %s" % (entry["character"], e),
+            print("cast %s failed: %s" % (label(entry), e),
                   file=sys.stderr)
             return cast, False
         os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -641,7 +664,7 @@ def add_cast(args, spec, entries, scene_path, out, profile, seed, name,
             f.write(png)
         current = out
         cast.append({
-            "character": entry["character"], "portrait": entry.get("ref"),
+            "character": label(entry), "portrait": entry.get("ref"),
             "portrait_sha256": hashlib.sha256(
                 open(ref_path, "rb").read()).hexdigest()
             if ref_path else None,
@@ -663,6 +686,25 @@ def crop_workflow(image, rect, k, prefix):
             "y": y}},
         "save": {"class_type": "SaveImage", "inputs": {
             "images": ["crop", 0], "filename_prefix": prefix}},
+    }
+
+
+def match_workflow(image, edited, rect, k, prefix):
+    """An edited crop of rect (640x480 pixels) of an uploaded picture,
+    its colours matched to that crop."""
+    x, y, w, h = (round(v * k) for v in rect)
+    return {
+        "image": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "edited": {"class_type": "LoadImage", "inputs": {"image": edited}},
+        "crop": {"class_type": "ImageCrop", "inputs": {
+            "image": ["image", 0], "width": w, "height": h, "x": x,
+            "y": y}},
+        "match": {"class_type": "ColorTransfer", "inputs": {
+            "image_target": ["edited", 0], "image_ref": ["crop", 0],
+            "method": "reinhard_lab", "source_stats": "per_frame",
+            "strength": 1.0}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["match", 0], "filename_prefix": prefix}},
     }
 
 
@@ -738,8 +780,14 @@ def repaint_workflow(spec, profile, seed, scene, mask, rect, prompt,
         "down": {"class_type": "ImageScale", "inputs": {
             "image": ["decode", 0], "upscale_method": "lanczos",
             "width": w, "height": h, "crop": "disabled"}},
+        # Match the repaint's colours to its surroundings: the draft
+        # model paints lighter, which shows at the mask's edge.
+        "match": {"class_type": "ColorTransfer", "inputs": {
+            "image_target": ["down", 0], "image_ref": ["crop", 0],
+            "method": "reinhard_lab", "source_stats": "per_frame",
+            "strength": 1.0}},
         "paste": {"class_type": "ImageCompositeMasked", "inputs": {
-            "destination": ["scene", 0], "source": ["down", 0],
+            "destination": ["scene", 0], "source": ["match", 0],
             "x": x, "y": y, "resize_source": False, "mask": ["cmask", 0]}},
         "save": {"class_type": "SaveImage", "inputs": {
             "images": ["paste", 0], "filename_prefix": prefix}},
@@ -809,9 +857,32 @@ def derive_sheet(args, spec, a, profile, seed):
             if not ok:
                 return None
             picture = work
+        else:
+            picture = start		# repainted only, or as it is
         up = upload(args.server, picture, "flibustier-derive-source.png")
-        png = render(args.server, crop_workflow(
-            up, fr["rect"], k, "flibustier/" + a["id"].replace("/", "-")))
+        if fr.get("instruction"):
+            # The frame is the edit model's change of that part of the
+            # picture, its colours matched back to it.
+            free(args.server)
+            try:
+                png = render(args.server, cast_workflow(
+                    fr, spec, profile, seed + 200 + n, up, None,
+                    "flibustier/" + a["id"].replace("/", "-") + "-edit"))
+                edited = os.path.join(args.pack, a["atlas"] + ".edit.png")
+                with open(edited, "wb") as f:
+                    f.write(png)
+                free(args.server)
+                eup = upload(args.server, edited, "flibustier-edit.png")
+                os.remove(edited)
+                png = render(args.server, match_workflow(
+                    up, eup, fr["rect"], k,
+                    "flibustier/" + a["id"].replace("/", "-")))
+            except RuntimeError as e:
+                print("%s: edit failed: %s" % (a["id"], e), file=sys.stderr)
+                return None
+        else:
+            png = render(args.server, crop_workflow(
+                up, fr["rect"], k, "flibustier/" + a["id"].replace("/", "-")))
         frame = os.path.join(args.pack, a["atlas"] + ".%d.png" % n)
         with open(frame, "wb") as f:
             f.write(png)
@@ -1049,6 +1120,15 @@ def main():
         # Last touches the rest of the picture is kept around: repaint
         # each step's mask (the left table widened into a sprite frame).
         for m, step in enumerate(a.get("finish", []) if ok else []):
+            if step.get("thing"):
+                # An object added by the edit model and cut out, so it
+                # keeps its own edges.
+                added, ok = add_cast(args, spec, [dict(step)], out, out,
+                                     profile, seed + 400 + m, name)
+                cast += added
+                if not ok:
+                    break
+                continue
             free(args.server)
             up = upload(args.server, out, "flibustier-finish-source.png")
             mask = upload(args.server, os.path.join(HERE, step["mask"]),
@@ -1092,6 +1172,9 @@ def main():
             "finish": [{"mask": f["mask"], "sha256": hashlib.sha256(open(
                 os.path.join(HERE, f["mask"]), "rb").read()).hexdigest(),
                         "rect": f["rect"], "prompt": f["prompt"].strip()}
+                       if f.get("mask") else
+                       {"thing": " ".join(f["thing"].split()),
+                        "rect": f["rect"]}
                        for f in a.get("finish", [])] or None,
             "negative": a.get("negative", DEFAULT_NEGATIVE),
             "models": {k: v for k, v in MODELS.items()
