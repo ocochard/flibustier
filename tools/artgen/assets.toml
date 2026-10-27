@@ -1332,3 +1332,58 @@ frames_of = "spr/ship2"
 frames = [8, 8]
 seed = 1660
 prompt = ""
+
+# The sailing map's tiles, 16x16 in the game, 36 pixels at 1080 lines:
+# each keeps the coastline of the tile it replaces, which the game tests
+# pixel by pixel (shapes from flibustier --export-world, see --world),
+# its picture laid from these textures (tilemaker.py).  The town tiles
+# get the cut-out houses.
+[[asset]]
+id = "tiles/map"
+file = "art/map.tiles"
+atlas = "art/map.png"
+seed = 1660
+source = "textures of this pack through the original tiles' coastlines"
+tiles = { tile = 16, towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 123, 124, 125, 126, 127, 255] }
+prompt = ""
+[[asset.textures]]
+name = "sea"
+size = 192
+colour = "#123A78"	# its average colour
+detail = 0.45
+prompt = """
+Aerial photograph taken straight down from very high above of calm deep
+open sea, an even deep blue with a very fine, faint, uniform texture of
+tiny ripples, low contrast, no foam, no glare, no sun reflection,
+nothing else, filling the whole image.
+"""
+[[asset.textures]]
+name = "land"
+size = 192
+colour = "#3C6E28"	# its average colour
+detail = 0.8
+prompt = """
+Satellite photograph taken straight down from very high above of a vast
+tropical rainforest, the canopy seen as a fine, even, uniform texture of
+countless tiny green tree crowns, low contrast, no clearings, no rivers,
+nothing else, filling the whole image.
+"""
+[[asset.textures]]
+name = "sand"
+size = 192
+colour = "#D2B478"	# its average colour
+detail = 0.6
+prompt = """
+Aerial photograph taken straight down of pale golden beach sand, fine,
+even and uniform, low contrast, nothing else, filling the whole image.
+"""
+[[asset.textures]]
+name = "town"
+size = 256
+cutout = true
+prompt = """
+Photograph from above at an angle of a single small 17th-century
+Caribbean colonial house with white plastered walls, a red clay tile
+roof, a dark door and two small windows, standing alone on a plain flat
+light grey ground, nothing else.
+"""
