@@ -725,6 +725,68 @@ chickens and a goat, no people. Hot sun, dust, historical
 reenactment photography, wide lens, sharp focus, realistic.
 """
 
+# The ship and the shipwright's shed come with the harbour frame (drawn
+# while the ship is in port), cut from the picture before they are taken
+# out of it; and the governor's gate, open, where the game draws it
+# closed.
+before_finish = "art/town-in-port.png"
+[[asset.finish]]
+mask = "layouts/town-harbour.png"
+rect = [0, 140, 200, 140]
+scene = "a Caribbean port town of the 1650s, the sea beyond its outskirts"
+instruction = """
+Remove the sailing ship from the sea: show the empty sea and the beach
+that were behind it.
+"""
+[[asset.finish]]
+mask = "layouts/town-harbour.png"
+rect = [0, 300, 180, 180]
+scene = "a Caribbean port town of the 1650s, its outskirts on the left"
+instruction = """
+Remove the timber shed and the boat under it completely: show the dirt
+road, the grass and the bushes that were behind them, open ground.
+"""
+[[asset.finish]]
+rect = [572, 206, 68, 66]	# the closed gate frame's place, with a margin
+scene = "a Caribbean port town of the 1650s, the path up to the governor's residence"
+thing = """
+a gateway on the path, two weathered stone pillars of the same stone as
+the wall beside them, a wrought-iron gate swung wide open against one
+of them
+"""
+
+# The town's frames: the harbour while the ship is in port, the gate
+# closed while the governor will not receive (the original frames'
+# places and sizes).
+[[asset]]
+id = "spr/town"
+file = "art/town-sprites.sheet"
+atlas = "art/town-sprites.png"
+from = "pic/town"
+seed = 1660
+source = "derived from pic/town"
+prompt = ""
+# The harbour: the ship at anchor and the shipwright's shed, as first
+# rendered.  The frame reaches up over the sea from where the game draws
+# it.
+[[asset.frames]]
+rect = [0, 148, 176, 332]	# edges on whole art pixels (multiples of 4)
+at = [0, 258]
+before_finish = true
+# The gate closed: the gate itself put between the pillars.
+[[asset.frames]]
+rect = [580, 216, 60, 52]	# edges on whole art pixels (multiples of 4)
+at = [582, 216]
+[[asset.frames.add]]
+rect = [572, 206, 68, 66]
+shape = "layouts/town-gate.png"
+reach = 1
+scene = "a Caribbean port town of the 1650s, a gateway on a path"
+thing = """
+a closed wrought-iron gate standing shut between the two stone pillars,
+filling the gap between them
+"""
+
 [[asset]]
 id = "pic/tavern"
 file = "art/tavern.png"

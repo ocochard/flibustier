@@ -180,6 +180,15 @@ CABIN_CORNER = ["polygon 162,172 272,172 278,298 158,298",
                 "polygon 78,196 152,196 152,230 78,230"]
 
 
+# The town's harbour, ship and shipwright's shed: in the harbour frame
+# the game draws while the ship is in port (0,258 174x222), so cleared
+# from the picture, which is the town seen with the party ashore.
+TOWN_HARBOUR = ["polygon 56,160 128,160 128,262 56,262",
+                "polygon 0,322 166,322 166,470 0,470"]
+# The closed gate the frame adds, as the shape it keeps whole.
+TOWN_GATE = ["polygon 598,220 628,220 628,258 598,258"]
+
+
 def scaled(op):
     """A polygon given in 640x480 pixels, at the render size."""
     if not op.startswith("polygon "):
@@ -222,4 +231,6 @@ if __name__ == "__main__":
     mask("tavern-mapman.png", MAPMAN)
     mask("cabin-table-top.png", CABIN_TABLE_TOP)
     mask("cabin-corner.png", CABIN_CORNER)
+    mask("town-harbour.png", TOWN_HARBOUR)
+    mask("town-gate.png", TOWN_GATE)
     mask("tavern-infoman.png", INFOMAN)

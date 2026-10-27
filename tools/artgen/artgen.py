@@ -23,6 +23,7 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -845,11 +846,14 @@ def derive_sheet(args, spec, a, profile, seed):
         return None
     src_path = os.path.join(args.pack, src[0]["file"])
     work = os.path.join(args.pack, a["atlas"] + ".work.png")
-    frames, sizes, record = [], [], []
+    frames, sizes, offsets, record = [], [], [], []
     for n, fr in enumerate(a["frames"]):
-        picture = src_path
+        # Cut from the picture, or from it before its last touches.
+        base = os.path.join(args.pack, src[0]["before_finish"]) \
+            if fr.get("before_finish") else src_path
+        picture = base
         cast = []
-        start = src_path
+        start = base
         plate = None
         steps = fr.get("repaint", [])
         if steps:
@@ -884,6 +888,16 @@ def derive_sheet(args, spec, a, profile, seed):
             picture = work
         else:
             picture = start		# repainted only, or as it is
+        if fr.get("add"):
+            # Objects put into the frame, each cut out, so the rest of
+            # it stays the picture's.
+            added, ok = add_cast(args, spec, [dict(t) for t in fr["add"]],
+                                 picture, work, profile,
+                                 seed + 250 + 10 * n, a["id"])
+            if not ok:
+                return None
+            cast += added
+            picture = work
         up = upload(args.server, picture, "flibustier-derive-source.png")
         if fr.get("instruction"):
             # The frame is the edit model's change of that part of the
@@ -915,7 +929,13 @@ def derive_sheet(args, spec, a, profile, seed):
                              "flibustier-frame-%d.png" % n))
         os.remove(frame)
         sizes.append(tuple(round(v * k) for v in fr["rect"][2:]))
-        record.append({"rect": fr["rect"], "cast": cast or None})
+        # Drawn by the game at "at" (640x480), the frame's top-left when
+        # it covers more than the original frame's place.
+        at = fr.get("at", fr["rect"][:2])
+        offsets.append(tuple(round((v - w) * k) for v, w in
+                             zip(fr["rect"][:2], at)))
+        record.append({"rect": fr["rect"], "at": fr.get("at"),
+                       "cast": cast or None})
     for left in [work] + [work + ".%d.png" % m for m in range(4)]:
         if os.path.exists(left):
             os.remove(left)
@@ -927,8 +947,9 @@ def derive_sheet(args, spec, a, profile, seed):
              "[sheet]", "image = " + os.path.basename(a["atlas"]), "",
              "[frames]"]
     x = 0
-    for n, (w, h) in enumerate(sizes):
-        lines.append("%d = %d 0 %d %d" % (n, x, w, h))
+    for n, ((w, h), (ox, oy)) in enumerate(zip(sizes, offsets)):
+        lines.append("%d = %d 0 %d %d" % (n, x, w, h) +
+                     (" %d %d" % (ox, oy) if ox or oy else ""))
         x += w
     with open(os.path.join(args.pack, a["file"]), "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -1145,6 +1166,11 @@ def main():
         # Last touches the rest of the picture is kept around: repaint
         # each step's mask (the left table widened into a sprite frame).
         k_art = height / SCREEN_H
+        if a.get("before_finish") and ok:
+            # The picture as rendered, before its last touches take out
+            # what a sprite frame brings back (the town's harbour).
+            shutil.copyfile(out, os.path.join(args.pack,
+                                              a["before_finish"]))
         for m, step in enumerate(a.get("finish", []) if ok else []):
             if step.get("instruction"):
                 # The edit model changes that part (it keeps what is
