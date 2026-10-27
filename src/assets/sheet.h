@@ -19,10 +19,13 @@
  *	image = tavern.png
  *
  *	[frames]
- *	# frame = x y w h, in art pixels
+ *	# frame = x y w h [ox oy], in art pixels
  *	0 = 0 0 300 200
- *	1 = 300 0 120 80
+ *	1 = 300 0 120 80 0 -60
  *
+ * The optional ox oy, which may be negative, move where the frame is
+ * drawn from the point the game draws it at, so a replacement frame can
+ * reach past the original's top or left.
  * Fencing groups (grp/) number their frames "bank.frame": "3.0".  Frame
  * numbers start at 0 with no gaps.  A frame covers its art size times
  * 480 / art_height of its pack in 640x480 pixels, rounded, so game code

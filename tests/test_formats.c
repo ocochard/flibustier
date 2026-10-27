@@ -876,6 +876,27 @@ test_sheets(void)
 	fb_free(&fb);
 	bank_free(&bank);
 
+	/* An offset, at half the art height: moved by half its art pixels,
+	 * either way; the original's indices are not used with it. */
+	CHECK(write_text(high, "boat.sheet", "[sheet]\nimage = atlas.png\n"
+	    "[frames]\n0 = 0 0 4 4 -2 3\n") == 0);
+	CHECK(bank_load(packs, "cur/boat", BANK_RAW, &bank) == 0);
+	if (bank.count == 1) {
+		f = &bank.frames[0];
+		CHECK(f->ox == -1 && f->oy == 2 && f->w == 2 && f->h == 2);
+		if (fb_init(&fb, 960) == 0) {
+			fb_clear(&fb, 9);
+			fb_frame(&fb, f, 3, 3);
+			CHECK(fb.px[5 * FB_W + 2] == f->pixels[0] &&
+			    fb.px[5 * FB_W + 1] == 9 &&
+			    fb.px[4 * FB_W + 2] == 9);
+		}
+		fb_free(&fb);
+	}
+	bank_free(&bank);
+	CHECK(write_text(high, "boat.sheet", "[sheet]\nimage = atlas.png\n"
+	    "[frames]\n0 = 0 0 4 4\n") == 0);
+
 	/* Groups: "bank.frame". */
 	CHECK(group_load(packs, "grp/fight", &grp) == 0);
 	CHECK(grp.count == 2 && grp.banks[0].count == 1 &&
@@ -895,6 +916,10 @@ test_sheets(void)
 	    "0 = 0 0 2\n") == -1);
 	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
 	    "0 = 0 0 0 2\n") == -1);
+	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
+	    "0 = 0 0 1 1 -1\n") == -1);
+	CHECK(try_sheet(high, "[sheet]\nimage = flag.png\n[frames]\n"
+	    "0 = 0 0 1 1 1 x\n") == -1);
 	CHECK(try_sheet(high, "[sheet]\nimage = ../flag.png\n[frames]\n"
 	    "0 = 0 0 1 1\n") == -1);
 	CHECK(try_sheet(high, "[frames]\n0 = 0 0 1 1\n") == -1);

@@ -20,6 +20,7 @@ struct rect {
 	int	bank;		/* 0 for banks */
 	int	frame;
 	int	x, y, w, h;
+	int	ox, oy;		/* drawing offset, art pixels */
 };
 
 struct sheet {
@@ -61,6 +62,21 @@ number(char **p, int stop, int *out)
 		(*p)++;
 	if (stop == '.')
 		(*p)++;
+	return (0);
+}
+
+/* A whole number, maybe negative, then a space or the end. */
+static int
+offset(char **p, int *out)
+{
+	int neg = **p == '-';
+
+	if (neg)
+		(*p)++;
+	if (number(p, ' ', out) != 0)
+		return (-1);
+	if (neg)
+		*out = -*out;
 	return (0);
 }
 
@@ -112,7 +128,10 @@ parse(const uint8_t *data, size_t len, int grouped, struct sheet *sh)
 		    number(&val, ' ', &r.x) != 0 ||
 		    number(&val, ' ', &r.y) != 0 ||
 		    number(&val, ' ', &r.w) != 0 ||
-		    number(&val, ' ', &r.h) != 0 || *val != '\0' ||
+		    number(&val, ' ', &r.h) != 0 ||
+		    (r.ox = r.oy = 0, *val != '\0' &&
+		    (offset(&val, &r.ox) != 0 || offset(&val, &r.oy) != 0)) ||
+		    *val != '\0' ||
 		    r.w == 0 || r.h == 0 || r.bank >= MAX_BANKS ||
 		    r.frame >= MAX_FRAMES || sh->count >= MAX_FRAMES)
 			goto bad;
@@ -169,6 +188,16 @@ screen_size(int art, int art_height)
 	return (v < 1 ? 1 : v);
 }
 
+/* An offset in art pixels, in 640x480 pixels, rounded either way. */
+static int
+screen_offset(int art, int art_height)
+{
+	long v = (long)(art < 0 ? -art : art) * SCREEN_H;
+
+	v = (v + art_height / 2) / art_height;
+	return ((int)(art < 0 ? -v : v));
+}
+
 /*
  * Cut frame "r" out of the sheet image; take its indices from "orig"
  * when that has the same size, else reduce its colours.
@@ -184,6 +213,8 @@ make_frame(const struct image *art, const struct rect *r, int art_height,
 		return (-1);
 	f->w = screen_size(r->w, art_height);
 	f->h = screen_size(r->h, art_height);
+	f->ox = screen_offset(r->ox, art_height);
+	f->oy = screen_offset(r->oy, art_height);
 	f->rgba_w = r->w;
 	f->rgba_h = r->h;
 	n = (size_t)f->w * f->h;
@@ -194,7 +225,8 @@ make_frame(const struct image *art, const struct rect *r, int art_height,
 		memcpy(f->rgba + (size_t)y * r->w * 4, art->rgba +
 		    ((size_t)(r->y + y) * art->rgba_w + r->x) * 4,
 		    (size_t)r->w * 4);
-	if (orig != NULL && orig->w == f->w && orig->h == f->h) {
+	if (orig != NULL && orig->w == f->w && orig->h == f->h &&
+	    f->ox == 0 && f->oy == 0) {
 		memcpy(f->pixels, orig->pixels, n);
 		f->key = orig->key;
 		if (orig->mask != NULL) {

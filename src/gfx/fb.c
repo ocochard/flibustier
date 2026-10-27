@@ -289,6 +289,8 @@ fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
 	int fx, fy, px, py;
 	size_t i;
 
+	x += f->ox;
+	y += f->oy;
 	if (x0 < 0)
 		x0 = 0;
 	if (y0 < 0)

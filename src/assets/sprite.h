@@ -32,6 +32,9 @@ struct frame {
 	uint8_t		*rgba;		/* rgba_w * rgba_h * 4 */
 	int		 rgba_w;
 	int		 rgba_h;
+	/* Drawn this far from the point given (sheets): 640x480 pixels. */
+	int		 ox;
+	int		 oy;
 };
 
 struct sprite_bank {
