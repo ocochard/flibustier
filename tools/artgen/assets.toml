@@ -10,7 +10,7 @@
 # face.
 
 [pack]
-name = "stmalo open pack (photographic, draft)"
+name = "flibustier open pack (photographic, draft)"
 license = "undecided: draft art, not for release"
 art_height = 1080
 # Appended to every prompt, so all pictures share one look.
