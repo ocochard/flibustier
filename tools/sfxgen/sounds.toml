@@ -52,7 +52,8 @@ prompt = "an iron cannonball striking a thick wooden ship's hull, one hard heavy
 id = "sound/shot-miss"
 length = 1.01
 seconds = 1.5
-prompt = "a cannonball plunging into the sea, a deep splash of water"
+prompt = "a heavy iron ball plunging into the sea, a loud water splash and spray, waves"
+negative = "explosion, gunshot, cannon fire, boom, music, speech, voice, low quality, distorted, hiss"
 
 [[sound]]
 id = "sound/swing"
