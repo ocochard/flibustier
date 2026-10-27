@@ -3395,10 +3395,11 @@ test_personal_log(void)
 	sim_enter_town(&s, 1);
 	CHECK(s.nnews == n + 1 && news_abs(&s, s.nnews - 1)->code ==
 	    NEWS_VISITED && news_abs(&s, s.nnews - 1)->a == 1);
-	/* A stay that goes on is not logged again. */
-	s.visit_flags |= VISIT_KEPT;
+	/* Every arrival is logged, sneaking in or after the traveller
+	 * too (VA 0x1da14). */
+	s.visit_flags |= VISIT_KEPT | VISIT_SNEAKED;
 	sim_enter_town(&s, 1);
-	CHECK(s.nnews == n + 1);
+	CHECK(s.nnews == n + 2);
 	s.player_town = -1;
 	memset(&s.battle, 0, sizeof(s.battle));
 	s.battle.active = 1;

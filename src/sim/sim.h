@@ -600,7 +600,8 @@ enum encounter_result sim_encounter_act(struct sim *s,
 
 /* Visit flags, per stay in a town (the game's VA 0x45f0a). */
 #define VISIT_GOVERNOR	0x01	/* seen the governor this stay */
-#define VISIT_KEPT	0x02	/* kept on a return; not identified */
+#define VISIT_KEPT	0x02	/* set by sneaking in and the traveller,
+				 * kept on a return; nothing reads it */
 #define VISIT_SNEAKED	0x08	/* came in by stealth: no bank */
 
 /*

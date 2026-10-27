@@ -1394,9 +1394,10 @@ sim_enter_town(struct sim *s, int town)
 	if (town < 0 || (size_t)town >= s->ntowns)
 		return;
 	sim_arrive(s, town);
-	/* Logged unless the stay goes on (VA 0x17e78). */
-	if (!(s->visit_flags & VISIT_KEPT))
-		log_news(s, NEWS_VISITED, town, 0);
+	/* Every arrival is logged (VA 0x17e78, from the main loop at VA
+	 * 0x1da14).  The original stops logging for good once a saved game
+	 * is loaded (VA 0x45e84 bit 1, never cleared); the engine goes on. */
+	log_news(s, NEWS_VISITED, town, 0);
 	s->player_town = town;
 	s->tavern_spots = TAVERN_ALL;		/* VA 0x18fa9 */
 	t = &s->towns[town];

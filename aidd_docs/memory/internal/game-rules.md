@@ -1528,7 +1528,7 @@ and, when it was set, sets 0x20 ("information obsolete").
 | Bit | Meaning |
 |---|---|
 | 1 | the governor has been seen this stay |
-| 2 | kept on a return; set when sneaking in, not identified |
+| 2 | set when sneaking in and by the traveller's draw, kept on a return; nothing reads it |
 | 8 | sneaked in: the bank is closed |
 
 On entering a different town the flags are cleared; on re-entering the
@@ -1935,9 +1935,12 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
     CSTN 68 by `a / 64` and the rank (2), CSTN 68 by `a / 16` and the
     ship class lowercased (4-6), the town and CSTN 71 (22), the relative
     (26).
-- **Personal log entries:** a visit (code 1, the town) on entering
-  unless the stay goes on (visit flag 2, set by sneaking in, the
-  traveller and loading a game; VA `0x17e78`); a title (2, `nation x 64
+- **Personal log entries:** a visit (code 1, the town) on every arrival
+  in a town (VA `0x17e78`, called by the main loop at VA `0x1da14`),
+  except once a saved game has been loaded: loading sets bit 1 of VA
+  `0x45e84` (VA `0x134f2`), which only a new career clears, and the
+  original then logs no visit again; the engine goes on logging (an
+  engine fix). A title (2, `nation x 64
   + rank`, VA `0x12549`); after a sea battle not against a fort, 4 for
   a capture and 6 otherwise, `nation x 16 + class` (VA `0xe986`). Code
   5, a sinking, is never logged.
