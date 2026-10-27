@@ -68,6 +68,8 @@ class Bot:
         self.unreachable = set()
         self.fields = {}
         self.no_repair_until = 0
+        self.food_town = None
+        self.reefs = set()	# cells where a ship was lost on shallows
         self.visited = {}
         self.dead_ends = set()
         self.bumps = collections.Counter()
@@ -112,6 +114,12 @@ class Bot:
                                 comp[q] = n
                                 stack.append(q)
         self.comp = comp
+        # open cells touching a ',' cell or land: ships drift onto shallows there
+        self.shore = {(x, y) for y in range(self.H) for x in range(self.W)
+                      if self.grid[y][x] == "." and any(
+                          self.grid[y + dy][x + dx] != "."
+                          for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                          if 0 <= y + dy < self.H and 0 <= x + dx < self.W)}
 
     def path(self, start, goal):
         """A* over water cells, 8-connected; shallows only as a last step."""
@@ -163,7 +171,7 @@ class Bot:
                     if dx and dy and not (self.water(cur[0] + dx, cur[1]) and
                                           self.water(cur[0], cur[1] + dy)):
                         continue
-                    d = d0 + (14 if dx and dy else 10) * (6 if self.grid[n[1]][n[0]] == "," else 1)
+                    d = d0 + (14 if dx and dy else 10) * (40 if self.grid[n[1]][n[0]] == "," else 1) * (40 if n in self.reefs else 1) * (4 if n in self.shore else 1)
                     if d < field.get(n, 1 << 30):
                         field[n] = d
                         heapq.heappush(q, (d, n))
@@ -189,8 +197,8 @@ class Bot:
         for i in range(1, n + 1):
             x = round(a[0] + (b[0] - a[0]) * i / n)
             y = round(a[1] + (b[1] - a[1]) * i / n)
-            if not self.water(x, y):
-                return False
+            if self.grid[y][x] != "." if 0 <= y < self.H and 0 <= x < self.W else True:
+                return False	# ',' cells hide shallows: never cut across them
         return True
 
     def back_off(self, tries):
@@ -314,8 +322,16 @@ class Bot:
             self.stats["crew_" + ev] += 1
             if ev in ("hungry", "starving"):
                 self.hungry = True
+                f = self.refresh()["fleet"]
+                self.note("%s: food %d, crew %d, gold %d" % (
+                    ev, f["food"], f["crew"], f["gold"]))
             if ev == "wrecked":
-                self.note("wrecked on a reef")
+                f = self.refresh()["fleet"]
+                cx, cy = f["x"] // 16, f["y"] // 16
+                self.note("wrecked on a reef at %d,%d (cell %s, %d ships)" % (
+                    cx, cy, self.grid[cy][cx], len(f["ships"])))
+                self.reefs.add((cx, cy))	# plan around it from now on
+                self.fields.clear()
             self.sim("crew", action="heard")
         self.check_fleet()
 
@@ -451,6 +467,7 @@ class Bot:
         self.stats["visits"] += 1
         self.visited[ti] = s["day"]
         self.hungry = False
+        self.food_town = None
         self.governor(ti)
         if t["nation"] == self.mynation() and (s["months"] >= 6 or s["fleet"]["mood"] < 2):
             d = self.sim("bank", action="divide")
@@ -565,6 +582,10 @@ class Bot:
             if r.get("ok") and r.get("traded", 1):
                 break
             want //= 2
+        g = self.refresh()["fleet"]
+        self.note("food %d -> %d for %d crew (wanted %d, gold %d, room %s, stock %s)" % (
+            f["food"], g["food"], g["crew"], f["crew"] // 2 + 20 - f["food"],
+            g["gold"], m.get("hold_space"), m.get("stock")))
         self.sim("merchant", action="close", traded=0, check=False)
 
     def shipwright(self):
@@ -603,6 +624,8 @@ class Bot:
                 continue
             if stop == "crew":
                 self.crew_stop()
+                if self.hungry and self.food_town is None and self.refresh()["fleet"]["gold"] >= 100:
+                    return "hungry"	# the main loop resupplies
                 continue
             if stop == "town":
                 t = r["town"]
@@ -855,7 +878,23 @@ class Bot:
                 self.note("no ship left")
                 break
             f = s["fleet"]
-            # 1. the lost relative's map, then the lost treasure
+            # 1. food and repairs, before any long trip
+            hurt = sum(f["damage"]) > 0 and f["gold"] > 1500 and s["day"] >= self.no_repair_until
+            if (self.hungry or f["food"] < f["crew"] // 4 + 5 or hurt) and f["gold"] >= 100:
+                ti = self.food_town
+                if ti is None:
+                    ti = self.nearest_town(lambda t: self.friendly(t) and self.visited.get(
+                        self.st["towns"].index(t), -99) <= self.st["day"] - 7)
+                    self.food_town = ti	# keep to it until reached
+                if ti is not None:
+                    res = self.go_town(ti)
+                    if res in ("recent", "noroute", "slow"):
+                        if res != "recent":
+                            self.unreachable.add(ti)
+                        self.food_town = None
+                    if res != "recent":
+                        continue
+            # 2. the lost relative's map, then the lost treasure
             for mapi in (1, 2, 0):
                 if s["maps"][mapi]["pieces"] & 0xF:
                     self.dig(mapi)
@@ -864,13 +903,6 @@ class Bot:
                 mapi = None
             if mapi is not None:
                 continue
-            # 2. food and repairs
-            hurt = sum(f["damage"]) > 0 and f["gold"] > 1500 and s["day"] >= self.no_repair_until
-            if (self.hungry or f["food"] < f["crew"] // 4 + 5 or hurt) and f["gold"] >= 100:
-                ti = self.nearest_town(lambda t: self.friendly(t) and self.visited.get(
-                    self.st["towns"].index(t), -99) <= self.st["day"] - 7)
-                if ti is not None and self.go_town(ti) != "recent":
-                    continue
             # 3. a known villain
             vill = [v for v in s["villains"] if v["active"] and
                     s["towns"][v["town"]]["sea_x"] and
@@ -882,11 +914,15 @@ class Bot:
                 self.note("hunting a villain in %s" % s["towns"][v["town"]]["name"])
                 self.go_town(v["town"])
                 continue
-            # 4. the silver train, once strong
-            tt = s["train_town"]
-            if 0 <= tt < len(s["towns"]) and tt not in self.unreachable and s["towns"][tt]["sea_x"] and f["crew"] >= 2 * s["towns"][tt]["soldiers"] + 30 \
-                    and s["towns"][tt]["nation"] == 0 and self.at_war(0):
-                self.go_town(tt, attack=True)
+            # 4. the silver train and the treasure fleet, once strong
+            convoy = None
+            for tt in (s["train_town"], s["fleet_town"]):
+                if 0 <= tt < len(s["towns"]) and tt not in self.unreachable and s["towns"][tt]["sea_x"] and f["crew"] >= 2 * s["towns"][tt]["soldiers"] + 30 \
+                        and s["towns"][tt]["nation"] == 0 and self.at_war(0):
+                    convoy = tt
+                    break
+            if convoy is not None:
+                self.go_town(convoy, attack=True)
                 continue
             # 5. back home for promotions every few loops, else hunt prizes
             if loops % 4 == 0 or s["months"] >= 8:

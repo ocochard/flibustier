@@ -58,8 +58,8 @@ main(int argc, char **argv)
 	for (y = 0; y < WORLD_CELLS_H; y++) {
 		for (x = 0; x < WORLD_CELLS_W; x++) {
 			t = TERRAIN_SEA;
-			for (j = 1; j < WORLD_TILE; j += 7)
-				for (i = 1; i < WORLD_TILE; i += 7) {
+			for (j = 0; j < WORLD_TILE; j++)
+				for (i = 0; i < WORLD_TILE; i++) {
 					u = world_terrain(&w, x * WORLD_TILE + i,
 					    y * WORLD_TILE + j);
 					if (u != TERRAIN_SEA)
