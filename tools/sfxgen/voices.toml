@@ -23,6 +23,11 @@ length = 1.15
 text = "[S1] Sail ho!"
 
 [[voice]]
+id = "sound/harbour"
+length = 1.04
+text = "[S1] Land ho!"
+
+[[voice]]
 id = "sound/land-battle"
 length = 0.81
 text = "[S1] En garde!"
