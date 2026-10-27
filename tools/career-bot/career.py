@@ -652,6 +652,25 @@ class Bot:
             g["gold"], m.get("hold_space"), m.get("stock")))
         self.sim("merchant", action="close", traded=0, check=False)
 
+    def rating(self, ship):
+        """What a ship is worth to a pirate: her fighting power (guns and
+        hull) times her speed, from the sim's per-class figures:
+        (guns + 4 x hull) x speed, per class (era 1660):
+
+            class  name                    rating
+              5    Frigate / fast galleon    3024
+              7    Galleon                   2808
+              6    War galleon               2752
+              4    Merchantman               2160
+              2    Barque                    2080
+              1    Sloop                     1944
+              3    Cargo fluyt               1840
+              0    Pinnace                   1328
+
+        The weighting is a guess, not tuned against results."""
+        c = self.st["ship_classes"][ship & 7]
+        return (c["guns"] + 4 * c["hull"]) * c["speed"]
+
     def shipwright(self):
         p = self.sim("shipwright", action="prices", check=False)
         if not p.get("ok"):
@@ -659,7 +678,7 @@ class Bot:
         f = self.refresh()["fleet"]
         if len(f["ships"]) > 3:
             # sell the worst extras
-            idx = sorted(range(1, len(f["ships"])), key=lambda i: f["ships"][i])[: len(f["ships"]) - 3]
+            idx = sorted(range(1, len(f["ships"])), key=lambda i: self.rating(f["ships"][i]))[: len(f["ships"]) - 3]
             r = self.sim("shipwright", action="sell", ships=idx, check=False)
             self.stats["ships_sold"] += len(idx)
         f = self.refresh()["fleet"]

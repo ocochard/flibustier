@@ -691,6 +691,24 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 		jb_int(b, s->rank[i]);
 	}
 	jb_raw(b, "]");
+	/* What each class is worth: guns and hull by the battle rules, speed
+	 * as the sum of its sailing speeds over the 16 wind sectors. */
+	jb_raw(b, ",\"ship_classes\":[");
+	for (i = 0; i < SHIP_CLASSES; i++) {
+		int k, sum = 0;
+
+		if (s->world != NULL)
+			for (k = 0; k < WIND_SECTORS; k++)
+				sum += s->world->speed[i][k];
+		jb_raw(b, i == 0 ? "{\"guns\":" : ",{\"guns\":");
+		jb_int(b, (i + 2) * 4);
+		jb_raw(b, ",\"hull\":");
+		jb_int(b, i + 2);
+		jb_raw(b, ",\"speed\":");
+		jb_int(b, sum);
+		jb_raw(b, "}");
+	}
+	jb_raw(b, "]");
 	for (i = 0; i < SIM_VILLAINS; i++) {
 		const struct sim_villain *v = &s->villains[i];
 

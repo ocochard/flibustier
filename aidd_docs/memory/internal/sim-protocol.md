@@ -103,6 +103,7 @@ with a message. Numbers are integers only.
   "wright_gold": -1, "wright_cannon": 0, "merchant_gold": -1,
   "reputation": 0, "tavern_spots": 1023, "recruits": 0,
   "acres": 0, "fortune": 0, "rank": [0, 0, 0, 0, 0],
+  "ship_classes": [{"guns": 8, "hull": 2, "speed": 0}],
   "market": {"open": 0, "stock": [0, 0, 0], "price": [0, 0, 0],
              "gold_at_open": 0},
   "relations": [[0,-1,0,0], [-1,0,0,-1], [0,0,0,0], [0,-1,0,0]],
