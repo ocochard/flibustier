@@ -327,7 +327,8 @@ class Bot:
                             abs(f["x"] // 16 - tx), abs(f["y"] // 16 - ty)) <= 10:
                         return {"stop": "arrived"}	# close enough: go on by land
                     if bumps > 30:
-                        self.odd("kept running aground near %d,%d" % (f["x"] // 16, f["y"] // 16))
+                        if self.comp.get((f["x"] // 16, f["y"] // 16)) is not None:
+                            self.odd("kept running aground near %d,%d" % (f["x"] // 16, f["y"] // 16))
                         return {"stop": "stuck"}
                     if route is None:
                         self.odd("lost the route after a land stop")
@@ -745,7 +746,7 @@ class Bot:
         if not near:
             return False
         nx, ny = min(near)[1]
-        self.odd("ship set on land at %d,%d (heading %d): rescued to %d,%d" % (
+        self.note("ship set on land at %d,%d (heading %d): rescued to %d,%d" % (
             cx, cy, f["heading"], nx, ny))
         self.stats["rescued_from_land"] += 1
         f["x"], f["y"], f["fx"], f["fy"] = nx * 16 + 8, ny * 16 + 8, 4, 4
@@ -877,6 +878,52 @@ class Bot:
         else:
             self.note("the party walked back aboard on its way to map %d" % mapi)
 
+    def land_path(self, a, b):
+        """Cells to walk from a to b over land and shallows, 8-connected without
+        cutting corners; the ends may be anything.  None when shut in."""
+        ok = lambda c: c in (a, b) or (0 <= c[0] < self.W and 0 <= c[1] < self.H
+                                       and self.grid[c[1]][c[0]] in "#,")
+        prev = {a: None}
+        q = collections.deque([a])
+        while q:
+            cur = q.popleft()
+            if cur == b:
+                out = []
+                while cur is not None:
+                    out.append(cur)
+                    cur = prev[cur]
+                return out[::-1]
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+                n = (cur[0] + dx, cur[1] + dy)
+                if n in prev or not ok(n):
+                    continue
+                if dx and dy and not (ok((cur[0] + dx, cur[1])) and ok((cur[0], cur[1] + dy))):
+                    continue
+                prev[n] = cur
+                q.append(n)
+        return None
+
+    def walk_round(self, f):
+        """The party, cut off from the landing point, walks to it by the
+        land path.  Returns True once back aboard."""
+        path = self.land_path((f["x"] // 16, f["y"] // 16), (f["land_x"] // 16, f["land_y"] // 16))
+        if not path:
+            return False
+        for cx, cy in path[1:]:
+            for _ in range(60):
+                g = self.refresh()["fleet"]
+                if not g["ashore"]:
+                    return True
+                tx, ty = cx * 16 + 8, cy * 16 + 8
+                if abs(g["x"] - tx) < 6 and abs(g["y"] - ty) < 6:
+                    break
+                r = self.sim("march", dx=(tx > g["x"]) - (tx < g["x"]), dy=(ty > g["y"]) - (ty < g["y"]), ticks=4)
+                if r["stop"] == "boarded":
+                    return True
+                if r["stop"] == "crew":
+                    self.crew_stop()
+        return not self.refresh()["fleet"]["ashore"]
+
     def dig(self, mapi):
         s = self.refresh()
         m = s["maps"][mapi]
@@ -950,7 +997,7 @@ class Bot:
             self.stats["dug_" + str(item["map"])] += 1
         # back aboard
         wander = random.Random(tx * 1000 + ty)
-        still, last = 0, None
+        still, last, walks = 0, None, 0
         for _ in range(4000):
             f = self.refresh()["fleet"]
             if not f["ashore"]:
@@ -958,13 +1005,23 @@ class Bot:
             still = still + 1 if (f["x"], f["y"]) == last else 0
             last = (f["x"], f["y"])
             if still >= 3:
-                # walled in on the way: wander off in a random direction
-                ddx, ddy = wander.choice(((1, 0), (-1, 0), (0, 1), (0, -1),
-                                          (1, 1), (1, -1), (-1, 1), (-1, -1)))
-                for _ in range(wander.randrange(2, 12)):
-                    r = self.sim("march", dx=ddx, dy=ddy, ticks=8)
+                # walled in on the way (an inlet between the party and the
+                # landing point): walk round over the land
+                walks += 1
+                if walks <= 3 and self.walk_round(f):
+                    break
+                # else feel along the shore: a biased random walk
+                for _ in range(120):
+                    if wander.random() < 0.5:
+                        ddx = (f["land_x"] > f["x"]) - (f["land_x"] < f["x"])
+                        ddy = (f["land_y"] > f["y"]) - (f["land_y"] < f["y"])
+                    else:
+                        ddx, ddy = wander.choice(((1, 0), (-1, 0), (0, 1), (0, -1),
+                                                  (1, 1), (1, -1), (-1, 1), (-1, -1)))
+                    r = self.sim("march", dx=ddx, dy=ddy, ticks=4)
                     if r["stop"] != "ticks":
                         break
+                    f = dict(f, x=r["x"], y=r["y"])
                 if r["stop"] == "boarded":
                     break
                 still = 0
