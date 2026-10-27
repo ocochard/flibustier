@@ -51,6 +51,11 @@ Requirements:
 
 On FreeBSD: `pkg install cmake raylib freetype2`
 
+On macOS: install the Xcode command line tools (`xcode-select --install`)
+and CMake (`brew install cmake`). raylib and FreeType are optional
+(`brew install raylib freetype`); otherwise the first configure downloads
+and builds them, which needs network access and takes a minute or two.
+
 ```sh
 cmake -B build
 cmake --build build

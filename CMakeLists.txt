@@ -13,6 +13,11 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
 	set(FLIBUSTIER_WARNINGS -Wall -Wextra -Wpedantic)
 endif()
 
+# Strict C99 hides mkdtemp() and friends in the macOS headers.
+if(APPLE)
+	add_compile_definitions(_DARWIN_C_SOURCE)
+endif()
+
 # Engine core: data access and asset decoding, no raylib dependency, so
 # headless tools and tests can use it.
 add_library(flibustier_core STATIC
