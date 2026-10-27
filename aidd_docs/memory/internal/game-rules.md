@@ -2174,16 +2174,16 @@ retiring), or in prison (a famous expedition, or health 3). The cabin's
 
 ## Sound effects (VA `0x7d82`)
 
-The digitised effects of `DIGITAL.PIR`, by where the game plays them;
-without that driver it plays FM sounds through the music driver instead
-(not reproduced):
+The digitised effects of `DIGITAL.PIR`, by where the game plays them
+(the FM effects below stand in for the ones marked when the driver is
+missing):
 
 | Effect | When |
 |---|---|
 | 0 | after a named captain's hail (CSTR 121) is answered (VA `0xd1fc`) |
 | 1 | a broadside, the player's or the enemy's (sound request `0x1d`, VA `0x7db8`, `0x9551`) |
 | 2 | a land battle begins (end of VA `0x169b7`) |
-| 3 | the sword fight, with `0x44b88 == 1` (not identified) |
+| 3 | the sword fight: the opponent's last man falls to the player's blow (`0x44b88 == 1`) |
 | 4 | sailing into a harbour: the arrival on `arr_sea.pcx` (VA `0x18fa9`) |
 | 5 | a sail sighted, before the question (VA `0xd1fc`) |
 | 6 | the sword fight: blades meet (VA `0x2747c`) |
@@ -2191,6 +2191,51 @@ without that driver it plays FM sounds through the music driver instead
 | 8 | the sword fight: the opponent's blow lands |
 
 The sword fight's effect replaces its FM sound for that pass.
+
+### FM effects (VA `0x1b8a2`)
+
+Most of the game's sounds are FM effects: driver commands sent to the
+music driver (request word VA `0x49a7e`, the argument unused by its
+command entry, VA `cs:0x8f5`), played on its effect voices 6-8 over the
+tune. They play with or without the digitised driver, except where a
+digitised effect replaces them. Unless the sound is off (`0x4c0ec` 2 or
+more).
+
+- **Sea battle (VA `0x7db8`, sent by VA `0x9551`):** one request a tick,
+  cleared at its start; the last written wins, in this order: the
+  player's ship on the shallows (0x27, also running onto land), the
+  player's broadside (0x1d), the player's shot landing (0x1e on the
+  ship, 0x1f in the water), the hulls meeting (0x20, boarding), the
+  enemy on the shallows (0x27, not a fort), the enemy's broadside
+  (0x1d), the enemy's shot landing (0x1e, 0x1f). A broadside plays the
+  digitised effect 1 instead. Sails, wind, reloading and scrolling are
+  silent.
+- **Sword fight (VA `0x2747c`):** one request a pass, cleared at its
+  start, none on the first pass; the player's frame, then the
+  opponent's, then the crew's every 16 passes: the player's strike 0x21,
+  a miss 0x23, his blow landing 0x22 (digitised 7, or 3 when the
+  opponent's last man falls), blades meeting 0x21 (digitised 6); the
+  opponent's strike 0x22, a miss too, his blow landing 0x22 (digitised
+  8); the opponent's crew losing men 0x24, the player's 0x25. A
+  digitised effect set earlier in the pass plays instead of the FM
+  sound, even when the crew's sound came last.
+- **Land battle (VA `0x5a80`):** each fight at once: 0x25 for the
+  player's units, 0x24 for the town's.
+- **Trade boards (VA `0x20229`, `0x22c76`):** each unit that changes
+  hands 0x29 (the merchant's, the loot's and the shipwright's guns); the
+  merchant's board 0x2a when it opens (the first row, selling) and when
+  the row or the way changes. Up and Down stop at the first and last
+  rows.
+- **Sailing:** striking a reef 0x20, before the master's word (VA
+  `0x2849c`). Opening the cabin from the sea silences the music at once
+  (command 0, VA `cs:0x1ad`: every channel keyed off, every operator at
+  its quietest), not with the fade. Request 0x28 (exit code 6, VA
+  `0x24507`) is never reached.
+- **Not identified:** the sword fight's flag at VA `0x33ee9` (the
+  engine takes it as clear: the player's crew can lose men); after a
+  player's blow that does not end the fight, the original falls through
+  into the clash test, so a blow within 36 pixels may sound as blades
+  meeting (not modelled).
 
 ## Music
 

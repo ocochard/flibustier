@@ -28,6 +28,8 @@ void		 music_free(struct music *m);
 /* Start driver command "cmd": a tune stops the music first. */
 void		 music_command(struct music *m, int cmd);
 void		 music_stop(struct music *m);
+/* Silence at once, without the fade (command 0). */
+void		 music_silence(struct music *m);
 
 /* Fill "lr" with "frames" stereo frames at MUSIC_RATE. */
 void		 music_render(struct music *m, int16_t *lr, size_t frames);

@@ -235,6 +235,8 @@ sim_sword_tick(struct sim *s)
 		return (0);
 	t = &s->world->sword;
 	sw->counter++;
+	sw->sound = 0;
+	sw->effect = -1;
 	dist = y->x - e->x;
 
 	/* The player's frame. */
@@ -245,12 +247,16 @@ sim_sword_tick(struct sim *s)
 	strike = t->strike[idx];
 	if (strike != 0) {
 		y->guard = 0;
+		sw->sound = FM_SWING;
 		if ((strike & e->guard) == 0) {
+			sw->sound = FM_MISS;
 			if (dist <= t->reach_level[sw->level] +
 			    t->reach_weapon[y->weapon] &&
 			    t->hit[sw->level] <= rng_below(&s->rng, 256) +
 			    s->practice) {
 				ev |= SEV_HIT_FOE;
+				sw->sound = FM_BLOW;
+				sw->effect = 7;
 				e->x -= PUSH;
 				passes = y->weapon * 2;
 				for (i = 0; i <= passes; i++) {
@@ -264,10 +270,14 @@ sim_sword_tick(struct sim *s)
 				    e->move != SWM_FALL) {
 					e->move = SWM_FALL;
 					e->frame = 0;
+					sw->effect = 3;	/* the last man falls */
 				}
 			}
-		} else if (dist < CLASH_YOU)
+		} else if (dist < CLASH_YOU) {
 			ev |= SEV_CLASH;
+			sw->sound = FM_SWING;
+			sw->effect = 6;
+		}
 	}
 	if (dist > NO_STEP)
 		y->x += t->step_back[idx] - t->step_in[idx];
@@ -283,10 +293,12 @@ sim_sword_tick(struct sim *s)
 	strike = t->strike[idx];
 	if (strike != 0) {
 		e->guard = 0;
+		sw->sound = FM_BLOW;	/* his swing, a miss sounds the same */
 		if ((strike & y->guard) == 0) {
 			if (dist <= t->foe_reach[e->weapon] &&
 			    t->foe_hit[sw->level] <= rng_below(&s->rng, 256)) {
 				ev |= SEV_HIT_YOU;
+				sw->effect = 8;
 				y->x += PUSH;
 				for (i = 0; i <= e->weapon; i++) {
 					bar_to_foe(sw);
@@ -300,16 +312,26 @@ sim_sword_tick(struct sim *s)
 					y->frame = 0;
 				}
 			}
-		} else if (dist < CLASH_FOE)
+		} else if (dist < CLASH_FOE) {
 			ev |= SEV_CLASH;
+			sw->sound = FM_SWING;
+			sw->effect = 6;
+		}
 	}
 	if (dist > NO_STEP)
 		e->x += t->step_in[idx] - t->step_back[idx];
 	if (e->x <= t->foe_edge)
 		sw->result = SWORD_WON;
 
-	if (sw->kind == SWORD_CREW && (sw->counter & (MELEE_TICKS - 1)) == 0)
-		ev |= melee(s);
+	if (sw->kind == SWORD_CREW && (sw->counter & (MELEE_TICKS - 1)) == 0) {
+		i = melee(s);
+		ev |= i;
+		sw->sound = i == SEV_FOE_MEN ? FM_THEIR_MEN : FM_OUR_MEN;
+	}
+	if (sw->counter == 1) {		/* nothing on the first tick */
+		sw->sound = 0;
+		sw->effect = -1;
+	}
 
 	if (y->move == SWM_FALL && y->frame > FALL_END)
 		sw->result = SWORD_LOST;

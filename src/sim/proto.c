@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	31
+#define STATE_VERSION	32
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -245,6 +245,10 @@ sword_json(const struct sim_sword *sw, struct jbuf *out)
 	jb_int(out, sw->men_start);
 	jb_raw(out, ",\"scene\":");
 	jb_int(out, sw->scene);
+	jb_raw(out, ",\"sound\":");
+	jb_int(out, sw->sound);
+	jb_raw(out, ",\"effect\":");
+	jb_int(out, sw->effect);
 	jb_raw(out, ",\"you\":");
 	sword_side_json(&sw->you, out);
 	jb_raw(out, ",\"foe\":");
@@ -278,6 +282,8 @@ sword_from_json(struct sim_sword *sw, const struct json *j)
 	sw->foe_hits = (int)json_get_int(j, "foe_hits", 0);
 	sw->men_start = (int)json_get_int(j, "men_start", 0);
 	sw->scene = (int)json_get_int(j, "scene", 3);
+	sw->sound = (int)json_get_int(j, "sound", 0);
+	sw->effect = (int)json_get_int(j, "effect", -1);
 	if (sword_side_from_json(&sw->you, json_get(j, "you")) != 0 ||
 	    sword_side_from_json(&sw->foe, json_get(j, "foe")) != 0)
 		return (-1);

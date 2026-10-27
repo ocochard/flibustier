@@ -456,6 +456,12 @@ game_sfx(struct game *g, int n)
 }
 
 void
+game_fm(struct game *g, int cmd)
+{
+	g->fm_request = cmd;
+}
+
+void
 game_music(struct game *g, int cmd)
 {
 	g->music_request = cmd;

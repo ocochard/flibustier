@@ -264,7 +264,31 @@ struct sim_sword {
 	int		you_hits, foe_hits;	/* since the plan changed */
 	int		men_start;	/* the player's men at the start */
 	int		scene;		/* 0 alley, 1-2 fort, 3-4 deck */
+	/* This tick's sound (VA 0x2747c): the FM effect (FM_*, 0 none) and
+	 * the digitised effect that replaces it when the driver has it
+	 * (DIGITAL.PIR's number, -1 none). */
+	int		sound, effect;
 	struct sword_side you, foe;
+};
+
+/*
+ * The FM effects, driver commands the game sends to the music driver
+ * (VA 0x1b8a2) even when the digitised driver is present; the music
+ * driver plays them on its effect voices over the tune.
+ */
+enum fm_effect {
+	FM_BROADSIDE = 0x1d,	/* digitised effect 1 when available */
+	FM_SHOT_HIT = 0x1e,	/* a shot lands on a ship */
+	FM_SHOT_MISS = 0x1f,	/* a shot falls in the water */
+	FM_CRASH = 0x20,	/* a hull strikes: the ships meet, a reef */
+	FM_SWING = 0x21,	/* the player's blow, or blades meet */
+	FM_BLOW = 0x22,		/* a blow lands, or the opponent swings */
+	FM_MISS = 0x23,		/* the player's blow misses */
+	FM_THEIR_MEN = 0x24,	/* the opponent's men fall, or fight */
+	FM_OUR_MEN = 0x25,	/* the player's men fall, or fight */
+	FM_SCRAPE = 0x27,	/* a ship scrapes the shallows or the land */
+	FM_TRADE = 0x29,	/* a unit changes hands on a trade board */
+	FM_ROW = 0x2a		/* the trade board's row or way changes */
 };
 
 /* What a caller sets up for a fight. */
@@ -324,6 +348,11 @@ struct sim_battle {
 	int		decision;	/* the enemy's: 0 close, 1 broadside,
 					 * 2 flee */
 	int		outcome;	/* enum battle_outcome */
+	/* This tick's sound (FM_*, 0 none) and the rank of the event that
+	 * set it: the original's request word, cleared each tick, written
+	 * in its order (the player's ship, the collision, then the
+	 * enemy's), the last write winning (VA 0x7db8). */
+	int		sound, sound_rank;
 	int		news_town;	/* after a capture near a town, its
 					 * crew tells of villains there; or
 					 * -1 */
@@ -374,6 +403,7 @@ struct sim_land {
 	int		ahead;		/* the town outnumbers the open party */
 	int		held;		/* the button is held */
 	int		result;		/* 0, 2 won, 3 lost */
+	int		sound;		/* this pass's last fight (FM_*) */
 	struct land_unit u[LAND_UNITS];
 };
 

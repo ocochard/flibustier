@@ -466,6 +466,23 @@ hit(struct sim *s, struct battle_ship *t, int g, int bonus)
 		t->guns = 0;
 }
 
+/* Ranks of the tick's sounds, in the original's order of writing. */
+enum {
+	RANK_YOU_SCRAPE = 1, RANK_YOU_FIRE, RANK_YOU_SHOT, RANK_COLLIDE,
+	RANK_FOE_SCRAPE, RANK_FOE_FIRE, RANK_FOE_SHOT
+};
+
+static void
+sound(struct sim_battle *bt, int rank, int fm)
+{
+	if (rank >= bt->sound_rank) {
+		bt->sound = fm;
+		bt->sound_rank = rank;
+	}
+}
+
+/* A shot in flight: 0 still flying (or none), 1 it hits, -1 it falls in
+ * the water. */
 static int
 fly_shot(struct sim *s, struct battle_ship *from, struct battle_ship *to,
     int steps, int bonus)
@@ -479,7 +496,7 @@ fly_shot(struct sim *s, struct battle_ship *from, struct battle_ship *to,
 	if (--sh->ticks > 0)
 		return (0);
 	if (!shot_hits(s, sh, to, steps))
-		return (0);
+		return (-1);
 	hit(s, to, from->guns, bonus);
 	return (1);
 }
@@ -539,11 +556,12 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 {
 	struct sim_battle *bt = &s->battle;
 	struct battle_ship *y = &bt->you, *e = &bt->foe;
-	int ev = 0, bearing, lx, ly;
+	int ev = 0, bearing, lx, ly, landed;
 
 	if (!bt->active || bt->outcome != BAT_NONE || s->world == NULL)
 		return (0);
 	bt->tick++;
+	bt->sound = bt->sound_rank = 0;
 
 	/* Steering, sails and reloading. */
 	if (bt->tick % TURN_TICKS == 0 && turn != 0)
@@ -573,10 +591,14 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 		y->reload = abs(144 - 8 * clampi(s->fleet.mood / 2 + 4, 0,
 		    16));
 		ev |= BEV_FIRED;
+		sound(bt, RANK_YOU_FIRE, FM_BROADSIDE);
 	}
-	if (fly_shot(s, y, e, s->world->hit_steps[battle_level(s)],
-	    battle_level(s) == 0))
+	landed = fly_shot(s, y, e, s->world->hit_steps[battle_level(s)],
+	    battle_level(s) == 0);
+	if (landed > 0)
 		ev |= BEV_HIT_FOE;
+	if (landed != 0)
+		sound(bt, RANK_YOU_SHOT, landed > 0 ? FM_SHOT_HIT : FM_SHOT_MISS);
 
 	y->speed = ship_speed(s, y, 0);
 	move_ship(s, y, bt->fort);
@@ -584,12 +606,17 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	 * beaches it, unless the enemy is alongside. */
 	switch (field_terrain(s, px(y->x), px(y->y))) {
 	case TERRAIN_SHALLOWS:
-		if (scrape(s, y, &bt->you_scrape))
+		if (scrape(s, y, &bt->you_scrape)) {
 			ev |= BEV_AGROUND;
+			sound(bt, RANK_YOU_SCRAPE, FM_SCRAPE);
+		}
 		break;
 	case TERRAIN_LAND:
 		bt->outcome = !touching(s) ? BAT_BEACHED : bt->fort ?
 		    BAT_LANDED : BAT_BOARDING;
+		sound(bt, RANK_YOU_SCRAPE, FM_SCRAPE);
+		if (bt->outcome != BAT_BEACHED)
+			sound(bt, RANK_COLLIDE, FM_CRASH);
 		return (ev);
 	default:
 		break;
@@ -606,11 +633,15 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 			fire(bt, e, bearing, 1);
 			e->reload = abs(144 - 8 * e->role);
 			ev |= BEV_FOE_FIRED;
+			sound(bt, RANK_FOE_FIRE, FM_BROADSIDE);
 		}
-		if (fly_shot(s, e, y, 0, 0)) {
+		if ((landed = fly_shot(s, e, y, 0, 0)) > 0) {
 			ev |= BEV_HIT_YOU;
 			y->crew = clampi(y->crew, 1, 999);
 		}
+		if (landed != 0)
+			sound(bt, RANK_FOE_SHOT, landed > 0 ? FM_SHOT_HIT :
+			    FM_SHOT_MISS);
 		goto wind;
 	}
 	/* The enemy: decisions, steering, firing, moving. */
@@ -628,16 +659,22 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 		fire(bt, e, bearing, 1);
 		e->reload = abs(144 - 8 * e->role);
 		ev |= BEV_FOE_FIRED;
+		sound(bt, RANK_FOE_FIRE, FM_BROADSIDE);
 	}
-	if (fly_shot(s, e, y, 0, 0)) {
+	if ((landed = fly_shot(s, e, y, 0, 0)) > 0) {
 		ev |= BEV_HIT_YOU;
 		y->crew = clampi(y->crew, 1, 999);
 	}
+	if (landed != 0)
+		sound(bt, RANK_FOE_SHOT, landed > 0 ? FM_SHOT_HIT :
+		    FM_SHOT_MISS);
 	e->speed = ship_speed(s, e, 1);
 	move_ship(s, e, 0);
 	if (field_terrain(s, px(e->x), px(e->y)) == TERRAIN_SHALLOWS &&
-	    scrape(s, e, &bt->foe_scrape))
+	    scrape(s, e, &bt->foe_scrape)) {
 		ev |= BEV_FOE_AGROUND;
+		sound(bt, RANK_FOE_SCRAPE, FM_SCRAPE);
+	}
 
 	if (scroll(s))
 		ev |= BEV_SCROLLED;
@@ -668,8 +705,10 @@ wind:
 	} else if (sunk(e))
 		bt->outcome = BAT_ENEMY_SUNK;
 	else {
-		if (touching(s))
+		if (touching(s)) {
 			bt->outcome = BAT_BOARDING;
+			sound(bt, RANK_COLLIDE, FM_CRASH);
+		}
 		else if (abs(px(e->x) - px(y->x)) > ESCAPE_RANGE ||
 		    abs(px(e->y) - px(y->y)) > ESCAPE_RANGE)
 			bt->outcome = BAT_ESCAPED;

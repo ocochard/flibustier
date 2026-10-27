@@ -2645,9 +2645,11 @@ sail_event(struct game *g, const struct ui_event *ev)
 	else if (ev->type == EV_KEYUP &&
 	    (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT))
 		g->turn = 0;
-	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)
+	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE) {
+		if (!g->sim.fleet.ashore)
+			game_music(g, MUS_SILENCE);	/* VA 0x28789 */
 		game_goto(g, &screen_cabin);
-	else if (ev->type == EV_CHAR && (ev->ch == 't' || ev->ch == 'T'))
+	} else if (ev->type == EV_CHAR && (ev->ch == 't' || ev->ch == 'T'))
 		g->sail_fast = !g->sail_fast;	/* VA 0x1b6ef */
 }
 
@@ -3334,6 +3336,22 @@ battle_end_picture(int outcome)
 	}
 }
 
+/*
+ * A pass's sound as the game sends it: the digitised effect when the
+ * driver has it, else the FM effect (VA 0x2747c, 0x9551).
+ */
+static void
+play_sound(struct game *g, int fm, int digital)
+{
+	if (fm == 0)
+		return;
+	if (digital >= 0 && digital < DIGITAL_EFFECTS &&
+	    g->sfx.pcm[digital] != NULL)
+		game_sfx(g, digital);
+	else
+		game_fm(g, fm);
+}
+
 static void
 battle_tick(struct game *g)
 {
@@ -3343,9 +3361,9 @@ battle_tick(struct game *g)
 	}
 	if (g->fading != 0 || g->btl_stage != 0)
 		return;
-	if (sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails) &
-	    (BEV_FIRED | BEV_FOE_FIRED))
-		game_sfx(g, SFX_BROADSIDE);	/* VA 0x7db8 */
+	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
+	play_sound(g, g->sim.battle.sound, g->sim.battle.sound ==
+	    FM_BROADSIDE ? SFX_BROADSIDE : -1);	/* VA 0x9551 */
 	g->btl_fire = 0;
 	g->btl_sails = 0;
 	if (g->sim.battle.outcome == BAT_BOARDING) {
@@ -3909,14 +3927,10 @@ sword_tick(struct game *g)
 		g->sw_wait = 1;
 	{
 		/* The blow's effect (VA 0x2747c). */
-		int ev = sim_sword_tick(&g->sim);
+		const struct sim_sword *sw = &g->sim.sword;
 
-		if (ev & SEV_HIT_FOE)
-			game_sfx(g, SFX_HIT_FOE);
-		else if (ev & SEV_HIT_YOU)
-			game_sfx(g, SFX_HIT_YOU);
-		else if (ev & SEV_CLASH)
-			game_sfx(g, SFX_PARRY);
+		sim_sword_tick(&g->sim);
+		play_sound(g, sw->sound, sw->effect);
 	}
 	if (g->sim.sword.result != SWORD_NONE) {
 		sword_outcome_done(g);
@@ -4628,6 +4642,15 @@ board_number(struct game *g, long v, int x, int y, int first, int w,
 		board_frame(g, 0, first + buf[i] - '0', x, y);
 }
 
+/* The good and the way chosen, with its sound (VA 0x21122). */
+static void
+merchant_row(struct game *g, int row, int buy)
+{
+	g->selected = row;
+	g->shop_buying = buy;
+	game_fm(g, FM_ROW);
+}
+
 static void
 merchant_enter(struct game *g)
 {
@@ -4660,6 +4683,7 @@ merchant_enter(struct game *g)
 		/* A capture's cargo and guns (VA 0xdb7b, board mode 2). */
 		sim_plunder_open(&g->sim, g->sim.battle.loot);
 		g->shop_stage = 1;
+		merchant_row(g, 0, 1);
 	} else if (g->looting) {	/* the loot, for nothing (VA 0x2264f) */
 		int loot[BOARD_GOODS];
 
@@ -4667,6 +4691,7 @@ merchant_enter(struct game *g)
 		loot[3] = g->sack.cannon;	/* the forts' guns */
 		sim_plunder_open(&g->sim, loot);
 		g->shop_stage = 1;
+		merchant_row(g, 0, 1);
 	} else if (sim_merchant_refuses(&g->sim))
 		g->shop_stage = 2;
 	else {
@@ -4720,7 +4745,9 @@ merchant_trade(struct game *g, int row, int buy)
 {
 	g->selected = row;
 	g->shop_buying = buy;
-	sim_trade(&g->sim, row, buy ? 1 : -1);
+	/* Each unit that changes hands clicks (VA 0x20ad4, 0x20bcd). */
+	if (sim_trade(&g->sim, row, buy ? 1 : -1) != 0)
+		game_fm(g, FM_TRADE);
 }
 
 static void
@@ -4734,8 +4761,10 @@ merchant_event(struct game *g, const struct ui_event *ev)
 		if (go) {
 			if (g->shop_stage == 2)
 				game_goto(g, &screen_town);
-			else
+			else {
 				g->shop_stage = 1;
+				merchant_row(g, 0, 0);	/* the board opens */
+			}
 		}
 		return;
 	}
@@ -4758,20 +4787,20 @@ merchant_event(struct game *g, const struct ui_event *ev)
 		    ((x >= 169 && x <= 190) || (x >= 444 && x <= 465))) {
 			/* A row's arrow: the good and the way, no trade
 			 * yet (VA 0x21122). */
-			g->selected = row;
-			g->shop_buying = x >= 444;
+			merchant_row(g, row, x >= 444);
 		}
 		return;
 	}
 	if (ev->type != EV_KEY)
 		return;
 	switch (ev->key) {
-	case UI_KEY_UP:
-		g->selected = (g->selected + BOARD_ROWS(g) - 1) %
-		    BOARD_ROWS(g);
+	case UI_KEY_UP:		/* no wrapping (VA 0x206bb) */
+		if (g->selected > 0)
+			merchant_row(g, g->selected - 1, g->shop_buying);
 		break;
 	case UI_KEY_DOWN:
-		g->selected = (g->selected + 1) % BOARD_ROWS(g);
+		if (g->selected < BOARD_ROWS(g) - 1)
+			merchant_row(g, g->selected + 1, g->shop_buying);
 		break;
 	case UI_KEY_RIGHT:
 		merchant_trade(g, g->selected, 1);
@@ -6060,6 +6089,15 @@ cannon_enter(struct game *g)
 	sim_shipwright_gold(&g->sim);
 }
 
+/* A gun traded, with the board's click (VA 0x22c76). */
+static void
+cannon_trade(struct game *g, int buy)
+{
+	g->shop_buying = buy;
+	if (sim_trade_cannon(&g->sim, buy ? 1 : -1) != 0)
+		game_fm(g, FM_TRADE);
+}
+
 static void
 cannon_event(struct game *g, const struct ui_event *ev)
 {
@@ -6068,19 +6106,17 @@ cannon_event(struct game *g, const struct ui_event *ev)
 			game_goto(g, &screen_shipwright);
 		else if (ev->y >= 340) {
 			g->shop_buying = ev->x < FB_W / 2;
-			sim_trade_cannon(&g->sim, g->shop_buying ? 1 : -1);
+			cannon_trade(g, g->shop_buying);
 		}
 		return;
 	}
 	if (ev->type != EV_KEY)
 		return;
-	if (ev->key == UI_KEY_LEFT) {
-		g->shop_buying = 0;
-		sim_trade_cannon(&g->sim, -1);
-	} else if (ev->key == UI_KEY_RIGHT) {
-		g->shop_buying = 1;
-		sim_trade_cannon(&g->sim, 1);
-	} else if (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)
+	if (ev->key == UI_KEY_LEFT)
+		cannon_trade(g, 0);
+	else if (ev->key == UI_KEY_RIGHT)
+		cannon_trade(g, 1);
+	else if (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)
 		game_goto(g, &screen_shipwright);
 }
 
@@ -7176,6 +7212,7 @@ land_tick(struct game *g)
 	sim_land_tick(&g->sim, g->march_held & 1 ? -1 : g->march_held & 2 ?
 	    1 : 0, g->march_held & 4 ? -1 : g->march_held & 8 ? 1 : 0,
 	    g->land_button > 0);
+	play_sound(g, g->sim.land.sound, -1);
 	if (g->land_button > 0)
 		g->land_button--;
 	if (g->sim.land.result != 0)
@@ -7703,6 +7740,8 @@ const struct screen screen_contact = {
 static void
 crew_enter(struct game *g)
 {
+	if (g->sim.crew_event == CREW_WRECKED)
+		game_fm(g, FM_CRASH);	/* before the message (VA 0x2849c) */
 	game_background(g, g->sim.crew_event == CREW_MUTINY ? "pic/mutiny" :
 	    "pic/smaster");
 	game_portrait(g, NULL);

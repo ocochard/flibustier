@@ -197,8 +197,11 @@ jukebox_feed(struct game *g, struct jukebox *j)
 	if (j->m == NULL)
 		return;
 	g->music_request = -1;
-	if (req == MUS_STOP) {
-		music_stop(j->m);
+	if (req == MUS_STOP || req == MUS_SILENCE) {
+		if (req == MUS_STOP)
+			music_stop(j->m);
+		else
+			music_silence(j->m);
 		j->playing = -1;
 	} else if (req > 0 && !(req == j->playing && music_active(j->m))) {
 		/* A tune already playing goes on, as the title's handler
@@ -206,6 +209,10 @@ jukebox_feed(struct game *g, struct jukebox *j)
 		music_command(j->m, req);
 		j->playing = req;
 	}
+	/* An effect plays over the tune, on the driver's effect voices. */
+	if (g->fm_request > 0)
+		music_command(j->m, g->fm_request);
+	g->fm_request = 0;
 	while (IsAudioStreamProcessed(j->stream)) {
 		music_render(j->m, buf, MUSIC_CHUNK);
 		UpdateAudioStream(j->stream, buf, MUSIC_CHUNK);

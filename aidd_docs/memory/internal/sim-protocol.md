@@ -63,7 +63,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 31,
+  "version": 32,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -170,6 +170,9 @@ with a message. Numbers are integers only.
     food eaten into in 256ths (version 30);
   - `view` (the sailing view's origin), `clouds` (x, y, look, shown) and
     `storm` (distance to the nearest cloud) (version 31);
+  - the sword fight's `sound` (the tick's FM effect, a driver command, 0
+    none) and `effect` (the digitised effect replacing it, -1 none)
+    (version 32);
     `deserted` the men lost at the last roll call.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.

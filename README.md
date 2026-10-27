@@ -18,9 +18,10 @@ governors' missions and daughters, ransoms, prison, the crew's mood and
 food, reefs, and the world's monthly life (diplomacy, conquests, town
 events, the treasure fleet and the silver train).
 
-Music plays: the game's OPL3 arrangement, emulated. The digitised
-effects (cannon, swords, harbour, sightings) play; the FM ones not yet. The rules follow the original as traced
-so far; where a detail could not be traced,
+Music and sound play: the game's OPL3 arrangement and FM effects,
+emulated, with its digitised effects (cannon, swords, harbour,
+sightings). The rules follow the original as traced so far; where a
+detail could not be traced,
 `aidd_docs/memory/internal/game-rules.md` says so. Please report anything that plays differently
 from the original.
 

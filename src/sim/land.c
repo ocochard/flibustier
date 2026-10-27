@@ -170,10 +170,13 @@ fight(struct sim *s, int i, int engaged)
 		l->shown = best;
 	it = &l->u[best];
 	if (best != 0 && bestd < CLOSE) {
-		/* Muskets count only from afar: close up, men and morale. */
+		/* Men and morale fight; the muskets weigh only in the
+		 * town's choice below.  Each fight sounds at once (VA
+		 * 0x5a80): the player's men, or the town's. */
 		engaged = -1;
 		l->idle = 0;
 		ev |= LEV_FIRE;
+		l->sound = i < 4 ? FM_OUR_MEN : FM_THEIR_MEN;
 		bestd = SIGHT;
 		v = raw << 5;
 		tt = terrain(s, it->x, it->y);
@@ -254,6 +257,7 @@ sim_land_tick(struct sim *s, int dx, int dy, int button)
 
 	if (!l->active || l->result != 0 || s->world == NULL)
 		return (0);
+	l->sound = 0;
 	if (l->pass == 0) {			/* VA 0x7104 */
 		l->selected = 1;
 		l->shown = 4;

@@ -268,7 +268,9 @@ test_saves(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	CHECK(game_script(g, "wait:100 esc wait:40 click:560,170") == 0 &&
+	CHECK(game_script(g, "wait:100 esc") == 0 &&
+	    g->music_request == MUS_SILENCE);	/* the cabin cuts the music */
+	CHECK(game_script(g, "wait:40 click:560,170") == 0 &&
 	    g->screen == &screen_cabin);	/* Save game is off at sea */
 	CHECK(g->started && g->sim.day >= 1 && g->sim.fleet.ticks >= 100);
 	g->sim.player_town = g->sim.fleet.leaving >= 0 ?
@@ -828,12 +830,14 @@ test_merchant(void)
 	CHECK(game_script(g, "wait:40 enter wait:40 click:400,320 wait:40") == 0);
 	CHECK(g->screen == &screen_merchant && g->shop_stage == 0);
 	CHECK(g->sim.market.open && g->shop_spr[0].count == 93);
+	g->fm_request = 0;
 	CHECK(game_script(g, "enter") == 0 && g->shop_stage == 1);
+	CHECK(g->fm_request == FM_ROW);		/* the board opens */
 	/* Right buys a unit of the selected good; Left sells it back. */
 	gold = g->sim.fleet.gold;
 	food = g->sim.fleet.food;
 	price = g->sim.market.price[0];
-	CHECK(game_script(g, "right right") == 0);
+	CHECK(game_script(g, "right right") == 0 && g->fm_request == FM_TRADE);
 	CHECK(g->sim.fleet.food == food + 2 &&
 	    g->sim.fleet.gold == gold - 2 * price && g->shop_buying);
 	CHECK(game_script(g, "left") == 0 && g->sim.fleet.food == food + 1 &&

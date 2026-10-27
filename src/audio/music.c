@@ -639,12 +639,34 @@ music_stop(struct music *m)
 	m->fading = 1;
 }
 
+/* Silence at once (driver command 0, VA cs:0x1ad): every voice keyed off
+ * and ended, every operator at its quietest. */
+void
+music_silence(struct music *m)
+{
+	unsigned r;
+	int i;
+
+	for (i = 0; i < VOICES; i++) {
+		m->vi = i;
+		key_off(m);
+		memset(&m->v[i], 0, sizeof(m->v[i]));
+	}
+	for (r = 0x40; r <= 0x55; r++)
+		reg(m, 3, r, 0x3f);
+	m->fading = 0;
+}
+
 void
 music_command(struct music *m, int cmd)
 {
 	const struct fmmusic *d = &m->drv;
 	int k, i, want;
 
+	if (cmd == 0) {
+		music_silence(m);
+		return;
+	}
 	if (cmd < 0 || cmd >= FMMUSIC_COMMANDS || d->nstreams[cmd] == 0)
 		return;
 	if (d->voice[cmd][0] != FMMUSIC_EFFECT)

@@ -254,6 +254,9 @@ struct game {
 	/* The tune asked for (MUS_*), -1 none, until the front end takes
 	 * it. */
 	int			 music_request;
+	/* The FM effect asked for this pass (FM_*), 0 none: one a pass, the
+	 * last asked wins, as the original's request word (VA 0x49a7e). */
+	int			 fm_request;
 	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the
@@ -311,7 +314,7 @@ enum {
 	SFX_HAIL,		/* a named captain's "Arrgh!" (VA 0xd1fc) */
 	SFX_BROADSIDE,		/* either ship fires (VA 0x7db8) */
 	SFX_LAND_BATTLE,	/* a land battle begins (VA 0x169b7) */
-	SFX_DUEL_3,		/* the sword fight, not identified */
+	SFX_LAST_MAN,		/* the opponent's last man falls to a blow */
 	SFX_HARBOUR,		/* sailing into a harbour (VA 0x18fa9) */
 	SFX_SAIL_HO,		/* a sail sighted (VA 0xd1fc) */
 	SFX_PARRY,		/* blades meet (VA 0x2747c) */
@@ -322,6 +325,7 @@ enum {
 /* The music driver's commands, by where the original plays them (VA
  * 0x1b8cb calls; MUS_STOP is VA 0x1b8ee). */
 enum {
+	MUS_SILENCE = 0,	/* at once, no fade (opening the cabin) */
 	MUS_STOP = 1,
 	MUS_TITLE = 9,		/* the intro and the welcome menu */
 	MUS_LOST_TREASURE = 10,	/* the lost treasure dug up */
@@ -348,6 +352,9 @@ enum {
 
 /* Ask for driver command "cmd" (MUS_*). */
 void	game_music(struct game *g, int cmd);
+
+/* Ask for FM effect "cmd" (FM_*), played over the music. */
+void	game_fm(struct game *g, int cmd);
 
 /* Ask for digitised effect n (SFX_*) to play. */
 void	game_sfx(struct game *g, int n);

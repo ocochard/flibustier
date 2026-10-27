@@ -895,8 +895,12 @@ test_battles(void)
 	bt->foe.target = 0;
 	bt->foe.guns = 0;			/* she cannot answer */
 	sim_battle_tick(&s, 0, 1, 0);
+	CHECK(bt->sound == FM_BROADSIDE);	/* the tick's sound */
 	for (i = 0, hits = 0; i < 40 && bt->outcome == BAT_NONE; i++)
-		hits += (sim_battle_tick(&s, 0, 0, 0) & BEV_HIT_FOE) != 0;
+		if (sim_battle_tick(&s, 0, 0, 0) & BEV_HIT_FOE) {
+			hits++;
+			CHECK(bt->sound == FM_SHOT_HIT);
+		}
 	CHECK(hits == 1);
 	CHECK(s.player.difficulty == 0 && bt->foe.damage == 4);	/* 6, 3 */
 	CHECK(bt->foe.crew < 80);
@@ -1135,7 +1139,7 @@ test_sword(void)
 {
 	struct sim s, s2;
 	struct sim_sword *sw = &s.sword;
-	int i, ev, x;
+	int i, ev, x, snd, eff;
 
 	make_world(&test_world);
 
@@ -1171,8 +1175,12 @@ test_sword(void)
 	sword_game(&s, 25);
 	sim_sword_input(&s, SWM_SLASH + 2);
 	x = sw->foe.x;
-	for (i = 0, ev = 0; i < 4; i++)
-		ev |= sim_sword_tick(&s);
+	for (i = 0, ev = 0, snd = 0, eff = -1; i < 4; i++)
+		if ((ev |= sim_sword_tick(&s)) & SEV_HIT_FOE && snd == 0) {
+			snd = sw->sound;	/* the blow's sound, digitised 7 */
+			eff = sw->effect;
+		}
+	CHECK(snd == FM_BLOW && eff == 7);
 	CHECK((ev & SEV_HIT_FOE) && sw->you.move == SWM_SLASH + 2);
 	CHECK(sw->you.bar == 32 && sw->foe.bar == 15);
 	CHECK(sw->foe.x == x - 4 && sw->foe.wounds[0] == 1);
@@ -1180,14 +1188,22 @@ test_sword(void)
 	/* The middle line is guarded: a clash, no hit. */
 	sword_game(&s, 25);
 	sim_sword_input(&s, SWM_SLASH);
-	for (i = 0, ev = 0; i < 4; i++)
-		ev |= sim_sword_tick(&s);
+	for (i = 0, ev = 0, snd = 0, eff = -1; i < 4; i++)
+		if ((ev |= sim_sword_tick(&s)) & SEV_CLASH && snd == 0) {
+			snd = sw->sound;	/* blades meet, digitised 6 */
+			eff = sw->effect;
+		}
+	CHECK(snd == FM_SWING && eff == 6);
 	CHECK((ev & SEV_CLASH) && !(ev & SEV_HIT_FOE));
 	/* Out of reach (10 + 20): a miss. */
 	sword_game(&s, 31);
 	sim_sword_input(&s, SWM_SLASH + 2);
-	for (i = 0, ev = 0; i < 4; i++)
+	for (i = 0, ev = 0, snd = 0; i < 4; i++) {
 		ev |= sim_sword_tick(&s);
+		if (sw->sound == FM_MISS)
+			snd = FM_MISS;		/* FM only: nothing digitised */
+	}
+	CHECK(snd == FM_MISS);
 	CHECK(!(ev & SEV_HIT_FOE) && sw->foe.bar == 25);
 	/* A lunge strikes on frame 2 and moves the bar one step a pass. */
 	sword_game(&s, 25);
