@@ -997,7 +997,7 @@ class Bot:
             self.stats["dug_" + str(item["map"])] += 1
         # back aboard
         wander = random.Random(tx * 1000 + ty)
-        still, last, walks = 0, None, 0
+        still, last, stalls = 0, None, 0
         for _ in range(4000):
             f = self.refresh()["fleet"]
             if not f["ashore"]:
@@ -1005,23 +1005,32 @@ class Bot:
             still = still + 1 if (f["x"], f["y"]) == last else 0
             last = (f["x"], f["y"])
             if still >= 3:
-                # walled in on the way (an inlet between the party and the
-                # landing point): walk round over the land
-                walks += 1
-                if walks <= 3 and self.walk_round(f):
+                # walled in on the way: wander off in a random direction
+                stalls += 1
+                if stalls <= 3:
+                    ddx, ddy = wander.choice(((1, 0), (-1, 0), (0, 1), (0, -1),
+                                              (1, 1), (1, -1), (-1, 1), (-1, -1)))
+                    for _ in range(wander.randrange(2, 12)):
+                        r = self.sim("march", dx=ddx, dy=ddy, ticks=8)
+                        if r["stop"] != "ticks":
+                            break
+                # still shut in (an inlet between the party and the landing
+                # point): walk round over the land
+                elif stalls <= 6 and self.walk_round(f):
                     break
-                # else feel along the shore: a biased random walk
-                for _ in range(120):
-                    if wander.random() < 0.5:
-                        ddx = (f["land_x"] > f["x"]) - (f["land_x"] < f["x"])
-                        ddy = (f["land_y"] > f["y"]) - (f["land_y"] < f["y"])
-                    else:
-                        ddx, ddy = wander.choice(((1, 0), (-1, 0), (0, 1), (0, -1),
-                                                  (1, 1), (1, -1), (-1, 1), (-1, -1)))
-                    r = self.sim("march", dx=ddx, dy=ddy, ticks=4)
-                    if r["stop"] != "ticks":
-                        break
-                    f = dict(f, x=r["x"], y=r["y"])
+                else:
+                    # last resort, feel along the shore: a biased random walk
+                    for _ in range(120):
+                        if wander.random() < 0.5:
+                            ddx = (f["land_x"] > f["x"]) - (f["land_x"] < f["x"])
+                            ddy = (f["land_y"] > f["y"]) - (f["land_y"] < f["y"])
+                        else:
+                            ddx, ddy = wander.choice(((1, 0), (-1, 0), (0, 1), (0, -1),
+                                                      (1, 1), (1, -1), (-1, 1), (-1, -1)))
+                        r = self.sim("march", dx=ddx, dy=ddy, ticks=4)
+                        if r["stop"] != "ticks":
+                            break
+                        f = dict(f, x=r["x"], y=r["y"])
                 if r["stop"] == "boarded":
                     break
                 still = 0
