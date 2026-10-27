@@ -21,6 +21,7 @@ texture, so neighbouring tiles always meet without a seam while their
 middles vary.  Pure Python, no image library.
 """
 
+import math
 import random
 import struct
 import zlib
@@ -264,14 +265,47 @@ def distance(inside, side):
 
 # --- The tiles -----------------------------------------------------
 
+def tile_crests(terrain, tw, tile, n, side):
+    """Tile "tile"'s wave crests, as tile_land() gives its land: the
+    "shallows" pixels of a tile mostly of water, which the original
+    draws in the colours it rotates, as whitecaps."""
+    tx, ty = tile % (tw // n) * n, tile // (tw // n) * n
+    cls = [[terrain[(ty + y) * tw + tx + x] for x in range(n)]
+           for y in range(n)]
+    if sum(r.count(LAND) for r in cls) * 2 > n * n:
+        return None
+    if not any(SHALLOWS in r for r in cls):
+        return None
+    # Upscaled smoothly, as the coasts are, not in the original's blocks.
+    src = [[1.0 if v == SHALLOWS else 0.0 for v in row] for row in cls]
+    out = []
+    for y in range(side):
+        fy = min(n - 1.0, max(0.0, (y + 0.5) * n / side - 0.5))
+        y0 = int(fy)
+        y1 = min(n - 1, y0 + 1)
+        row = []
+        for x in range(side):
+            fx = min(n - 1.0, max(0.0, (x + 0.5) * n / side - 0.5))
+            x0 = int(fx)
+            x1 = min(n - 1, x0 + 1)
+            top = src[y0][x0] + (src[y0][x1] - src[y0][x0]) * (fx - x0)
+            bot = src[y1][x0] + (src[y1][x1] - src[y1][x0]) * (fx - x0)
+            row.append(top + (bot - top) * (fy - y0))
+        out.append(row)
+    return out
+
+
 def compose(terrain_pgm, textures, side, towns, seed, looks=None,
-            beach=0.06, shallows=0.22, band=0.25, town_size=0.95):
+            beach=0.06, shallows=0.22, band=0.25, town_size=0.95,
+            frames=1, drift=2):
     """The 256 tiles at "side" pixels as rows of RGBA bytes (16 tiles a
-    row).  "textures" maps sea, land, sand and town to PNG bytes;
-    "looks" maps them to their (colour, detail): the average colour each
-    takes and how much of its detail it keeps.  "beach" and "shallows"
-    are widths, "band" the edge fade and "town_size" the houses, in
-    tiles."""
+    row), "frames" sets of them one below the other: the sea's ripples
+    drift round a circle of "drift" pixels, its glints flash and its
+    wave crests roll over the frames, which loop.  "textures" maps sea,
+    land, sand and town to PNG bytes; "looks" maps them to their
+    (colour, detail): the average colour each takes and how much of its
+    detail it keeps.  "beach" and "shallows" are widths, "band" the edge
+    fade and "town_size" the houses, in tiles."""
     tw, th, terrain = pgm_read(terrain_pgm)
     n = tw // 16
     looks = looks or {}
@@ -283,7 +317,14 @@ def compose(terrain_pgm, textures, side, towns, seed, looks=None,
     beach_px, shallow_px, band_px = beach * side, shallows * side, \
         band * side
     turquoise = (64, 170, 170)
-    atlas = [bytearray(16 * side * 4) for _ in range(16 * side)]
+    foam = (225, 235, 235)
+    rows = 16 * side
+    atlas = [bytearray(16 * side * 4) for _ in range(rows * frames)]
+    # The sea's motion, the same for every tile so their edges still
+    # meet: a whole number of pixels each frame, back where it began.
+    shifts = [(round(drift * math.cos(2 * math.pi * f / frames)),
+               round(drift * math.sin(2 * math.pi * f / frames)))
+              for f in range(frames)]
     for t in range(256):
         land = tile_land(terrain, tw, t, n, side)
         is_land = [[v >= 0.5 for v in row] for row in land]
@@ -291,39 +332,63 @@ def compose(terrain_pgm, textures, side, towns, seed, looks=None,
         to_land = distance([[not v for v in row] for row in is_land], side)
         any_land = any(any(r) for r in is_land)
         any_water = not all(all(r) for r in is_land)
+        crests = tile_crests(terrain, tw, t, n, side)
         # Where this tile's middle samples each texture.
         # (inside it: a texture's own edges may be darker)
         ox = {k: rng.randrange(4, max(5, tex[k].w - side - 4)) for k in tex}
         oy = {k: rng.randrange(4, max(5, tex[k].h - side - 4)) for k in tex}
-        for y in range(side):
-            out = atlas[t // 16 * side + y]
-            for x in range(side):
-                e = edge_weight(x, y, side, band_px)
+        # A few glints in the tile's middle, each flashing in its frame.
+        glints = {}
+        for _ in range(side * side // 250):
+            gx = rng.randrange(round(band_px), side - round(band_px))
+            gy = rng.randrange(round(band_px), side - round(band_px))
+            glints[(gx, gy)] = rng.randrange(frames)
+        roll = rng.random() * 2 * math.pi
+        for f in range(frames):
+            dx, dy = shifts[f]
+            for y in range(side):
+                out = atlas[f * rows + t // 16 * side + y]
+                for x in range(side):
+                    e = edge_weight(x, y, side, band_px)
 
-                def sample(k):
-                    mid = tex[k].at(x + ox[k], y + oy[k])
-                    return mix(mid, shared[k][y][x], e)
+                    def sample(k, mx=0, my=0):
+                        mid = tex[k].at(x + mx + ox[k], y + my + oy[k])
+                        return mix(mid, shared[k][(y + my) % side]
+                                   [(x + mx) % side], e)
 
-                if is_land[y][x]:
-                    c = sample("land")
-                    if any_water and to_water[y][x] < beach_px:
-                        c = mix(sample("sand"), c,
-                                to_water[y][x] / beach_px)
-                else:
-                    c = sample("sea")
-                    if any_land and to_land[y][x] < shallow_px:
-                        c = mix(c, turquoise,
-                                0.6 * (1 - to_land[y][x] / shallow_px))
-                i = (t % 16 * side + x) * 4
-                out[i:i + 4] = bytes((*c, 255))
-        if t in towns and any_land:
-            place_town(atlas, t, side, is_land, tex["town"], town_size)
+                    if is_land[y][x]:
+                        c = sample("land")
+                        if any_water and to_water[y][x] < beach_px:
+                            c = mix(sample("sand"), c,
+                                    to_water[y][x] / beach_px)
+                    else:
+                        c = sample("sea", dx, dy)
+                        if any_land and to_land[y][x] < shallow_px:
+                            c = mix(c, turquoise,
+                                    0.6 * (1 - to_land[y][x] / shallow_px))
+                        if crests and crests[y][x]:
+                            # Rolling along: brighter where the wave's
+                            # phase is.
+                            a = 0.55 + 0.4 * math.cos(
+                                2 * math.pi * f / frames - x * 0.35 + roll)
+                            c = mix(c, foam, max(0.0, a) * 0.6 *
+                                    crests[y][x])
+                        g = glints.get((x, y))
+                        if g is not None:
+                            d = min((f - g) % frames, (g - f) % frames)
+                            if d < 2:
+                                c = mix(c, foam, 0.55 if d == 0 else 0.2)
+                    i = (t % 16 * side + x) * 4
+                    out[i:i + 4] = bytes((*c, 255))
+            if t in towns and any_land:
+                place_town(atlas, t, side, is_land, tex["town"], town_size,
+                           f * rows)
     return atlas
 
 
-def place_town(atlas, t, side, is_land, town, scale):
+def place_town(atlas, t, side, is_land, town, scale, top=0):
     """A house on a town tile: the town picture, scaled to "scale" of the
-    tile, centred on its land."""
+    tile, centred on its land, in the frame from atlas row "top"."""
     pts = [(x, y) for y in range(side) for x in range(side) if is_land[y][x]]
     cx = sum(p[0] for p in pts) / len(pts)
     cy = sum(p[1] for p in pts) / len(pts)
@@ -342,7 +407,7 @@ def place_town(atlas, t, side, is_land, town, scale):
             a = town.alpha(sx, sy) / 255
             if a <= 0:
                 continue
-            row = atlas[t // 16 * side + py]
+            row = atlas[top + t // 16 * side + py]
             i = (t % 16 * side + px) * 4
             under = tuple(row[i:i + 3])
             row[i:i + 3] = bytes(mix(under, town.at(sx, sy), a))

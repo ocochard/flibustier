@@ -1344,7 +1344,9 @@ file = "art/map.tiles"
 atlas = "art/map.png"
 seed = 1660
 source = "textures of this pack through the original tiles' coastlines"
-tiles = { tile = 16, towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 123, 124, 125, 126, 127, 255] }
+# The sea moves as the original's palette shimmer does: 8 frames, one
+# every 4 sailing passes.
+tiles = { tile = 16, frames = 8, period = 4, towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 123, 124, 125, 126, 127, 255] }
 prompt = ""
 [[asset.textures]]
 name = "sea"
