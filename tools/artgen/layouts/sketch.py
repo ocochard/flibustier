@@ -196,6 +196,23 @@ WPNSEL = [
 ]
 
 
+# Boarding: the call to board written on a framed panel at the lower
+# right (the frame from (245, 280) to (620, 475), the velvet inside from
+# (267, 300) to (600, 450), the text from (274, 306)); a boarder lunges
+# on the left, torn sails and rigging behind.
+BOARDING_FRAME = (245, 280, 620, 475)
+BOARDING_FIELD = (267, 300, 600, 450)
+BOARDING = [
+    ellipse(150, 75, 28, 32),				# the boarder's head
+    line((120, 110), (60, 250), (40, 470)),		# his back and leg
+    line((180, 110), (230, 230), (200, 470)),		# his front and leg
+    line((60, 140), (0, 170)), line((220, 170), (250, 120)),	# his arms
+    line((250, 120), (330, 20)),				# his cutlass
+    line((300, 0), (290, 270)), line((380, 0), (560, 260)),	# mast, sail
+    rect(*BOARDING_FRAME), rect(*BOARDING_FIELD),
+]
+
+
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
     rect(160, 80, 300, 150), rect(330, 80, 470, 150),	# stern windows
@@ -350,6 +367,11 @@ if __name__ == "__main__":
     draw("fort.png", FORT + [rect(*b) for b in DUEL_BOXES])
     draw("deck.png", DECK + [rect(*b) for b in DUEL_BOXES])
     draw("wpnsel.png", WPNSEL, WPNSEL_SIZE)
+    draw("boarding.png", BOARDING)
+    f, i = BOARDING_FRAME, BOARDING_FIELD
+    # The frame raised; its inner rim, two pixels in from the velvet.
+    bevel("boarding-panel", [f, (i[0] - 2, i[1] - 2, i[2] + 2, i[3] + 2)],
+          [])
     x0, y0, c = PAD
     cells = [(x0 + c * i + 1, y0 + c * j + 1, x0 + c * (i + 1) - 1,
               y0 + c * (j + 1) - 1) for i in range(3) for j in range(3)]

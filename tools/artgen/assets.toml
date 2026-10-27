@@ -260,14 +260,31 @@ id = "pic/boarding"
 file = "art/boarding.png"
 seed = 1660
 source = "layout described from the original screen"
+# The call to board is written on the panel at the lower right: a pewter
+# frame and a dark cloth field at their exact places.
+control = "layouts/boarding.png"
+control_strength = 0.7
+control_end = 0.5
+bevel = "layouts/boarding-panel"
 prompt = """
-Photograph of a boarding fight on a 17th-century ship in a storm. On the
-left, a fierce bearded pirate in a loose shirt lunges forward with a
-cutlass, torn sails and rigging behind him, dark storm clouds and sea
-spray. The lower right quarter of the frame is dark smoke and deep
-shadow, plain. Dramatic light, motion, historical reenactment
-photography, realistic.
+Photograph of a boarding fight on a 17th-century ship in a storm at
+night. On the left of the picture, close to the camera, a fierce bearded
+pirate in a loose stained shirt and a dark kerchief lunges forward,
+shouting, his cutlass raised high in his right hand. Behind him, a mast
+and torn sails flapping in the wind, tangled rigging, dark storm clouds
+and sea spray lit by lanterns. Dramatic light, motion, historical
+reenactment photography, realistic.
 """
+[[asset.pieces]]
+rect = [245, 280, 375, 195]	# the frame
+prompt = """
+Close-up photograph, straight on, of the flat surface of dark carved
+pewter with a fine repeating pattern of small scrolls, filling the whole
+image from edge to edge with no edge or border, even soft light.
+"""
+[[asset.pieces]]
+rect = [267, 300, 333, 150]	# the field the text is written on
+colour = "#2D0606"		# the original's
 
 [[asset]]
 id = "pic/bartenda"

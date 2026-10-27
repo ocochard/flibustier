@@ -182,6 +182,16 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             picture = ["pplace%d" % n, 0]
             g["save"]["inputs"]["images"] = picture
             continue
+        if "colour" in piece:
+            # A plain field (the panel text is written on), not drawn:
+            # the model puts an object on any cloth it is asked for.
+            g["presize%d" % n] = {"class_type": "EmptyImage", "inputs": {
+                "width": pw, "height": ph, "batch_size": 1,
+                "color": int(piece["colour"].lstrip("#"), 16)}}
+            place_piece(g, n, piece, picture, px, py, pw, ph)
+            picture = ["pplace%d" % n, 0]
+            g["save"]["inputs"]["images"] = picture
+            continue
         # "upright": rendered a quarter turn round and turned back (the
         # model draws wood grain running up far more readily).
         up = piece.get("upright")
