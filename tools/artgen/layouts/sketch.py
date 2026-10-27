@@ -213,6 +213,19 @@ BOARDING = [
 ]
 
 
+# The sea battle's panel (pic/sbat), right of the 480x480 battle area,
+# as measured on the original: for each side its name, its speed strip,
+# its men and guns, its sails, and its damage picture's window (the
+# frames drawn at (489, 137) and (489, 258)), the wind between them.
+SBAT_BOXES = [
+    (488, 6, 635, 39), (488, 48, 635, 72), (488, 78, 560, 100),
+    (564, 78, 635, 100), (488, 107, 635, 131), (488, 137, 634, 223),
+    (488, 229, 635, 252),
+    (488, 258, 634, 344), (488, 350, 635, 388), (488, 393, 635, 417),
+    (488, 422, 560, 446), (564, 422, 635, 446), (488, 451, 635, 475),
+]
+
+
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
     rect(160, 80, 300, 150), rect(330, 80, 470, 150),	# stern windows
@@ -368,6 +381,7 @@ if __name__ == "__main__":
     draw("deck.png", DECK + [rect(*b) for b in DUEL_BOXES])
     draw("wpnsel.png", WPNSEL, WPNSEL_SIZE)
     draw("boarding.png", BOARDING)
+    bevel("sbat-panel", SBAT_BOXES, [])
     f, i = BOARDING_FRAME, BOARDING_FIELD
     # The frame raised; its inner rim, two pixels in from the velvet.
     bevel("boarding-panel", [f, (i[0] - 2, i[1] - 2, i[2] + 2, i[3] + 2)],

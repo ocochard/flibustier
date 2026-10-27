@@ -295,11 +295,13 @@ def tile_crests(terrain, tw, tile, n, side):
     return out
 
 
-def compose(terrain_pgm, textures, side, towns, seed, looks=None,
+def compose(terrain_pgm, textures, side, placed, seed, looks=None,
             beach=0.06, shallows=0.22, band=0.25, town_size=0.95,
             frames=1, drift=2):
     """The 256 tiles at "side" pixels as rows of RGBA bytes (16 tiles a
-    row), "frames" sets of them one below the other: the sea's ripples
+    row), "frames" sets of them one below the other ("placed" maps a
+    cut-out texture, a house or a fort, to the tiles it stands on): the
+    sea's ripples
     drift round a circle of "drift" pixels, its glints flash and its
     wave crests roll over the frames, which loop.  "textures" maps sea,
     land, sand and town to PNG bytes; "looks" maps them to their
@@ -309,7 +311,7 @@ def compose(terrain_pgm, textures, side, towns, seed, looks=None,
     tw, th, terrain = pgm_read(terrain_pgm)
     n = tw // 16
     looks = looks or {}
-    tex = {k: Texture(v, 0, 1.0) if k == "town" else
+    tex = {k: Texture(v, 0, 1.0) if k in placed else
            Texture(v, 12, *looks.get(k, (None, 0.8))[::-1])
            for k, v in textures.items()}
     shared = {k: periodic(tex[k], side) for k in ("sea", "land", "sand")}
@@ -380,9 +382,10 @@ def compose(terrain_pgm, textures, side, towns, seed, looks=None,
                                 c = mix(c, foam, 0.55 if d == 0 else 0.2)
                     i = (t % 16 * side + x) * 4
                     out[i:i + 4] = bytes((*c, 255))
-            if t in towns and any_land:
-                place_town(atlas, t, side, is_land, tex["town"], town_size,
-                           f * rows)
+            for k, tiles in placed.items():
+                if t in tiles and any_land:
+                    place_town(atlas, t, side, is_land, tex[k], town_size,
+                               f * rows)
     return atlas
 
 

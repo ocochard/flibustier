@@ -1390,7 +1390,8 @@ def make_tiles(args, spec, a, profile, seed):
     """The sailing map's tiles: photographic textures laid through the
     coastline of each tile they replace (tilemaker.py)."""
     import tilemaker
-    terrain = os.path.join(os.path.expanduser(args.world), "map-terrain.pgm")
+    terrain = os.path.join(os.path.expanduser(args.world),
+                           a["tiles"].get("terrain", "map-terrain.pgm"))
     if not os.path.exists(terrain):
         print("%s: no %s: run flibustier --export-world %s first" % (
             a["id"], terrain, args.world), file=sys.stderr)
@@ -1432,8 +1433,13 @@ def make_tiles(args, spec, a, profile, seed):
                            tex.get("detail", 0.8))
              for tex in a["textures"]}
     frames = t.get("frames", 1)
-    atlas = tilemaker.compose(terrain, textures, side, set(t["towns"]),
-                              seed, looks, frames=frames)
+    # The cut-out textures and the tiles they stand on: "towns" the
+    # houses, "place" any others by texture.
+    placed = {"town": set(t.get("towns", []))}
+    for name, tiles in t.get("place", {}).items():
+        placed[name] = set(tiles)
+    atlas = tilemaker.compose(terrain, textures, side, placed, seed, looks,
+                              frames=frames)
     tilemaker.png_write(os.path.join(args.pack, a["atlas"]), 16 * side,
                         16 * side * frames, atlas)
     with open(os.path.join(args.pack, a["file"]), "w") as f:

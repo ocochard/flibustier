@@ -1612,3 +1612,169 @@ steps = [
     "The fort is crumbling: the watchtower half collapsed, wide breaches in the walls, thick black smoke and flames, the sky grey with smoke.",
     "The fort is a ruin: its walls and tower fallen into heaps of rubble, everything burning, a dark sky full of black smoke.",
 ]
+
+# The sea battle's tiles, 32x32 in the game, 72 pixels at 1080 lines: as
+# the map's, each keeps the coastline of the tile it replaces (the
+# battle tiles' terrain, from flibustier --export-world), with a house
+# on the town tiles, the fort on its tile and rocks on the reef's.
+[[asset]]
+id = "tiles/battle"
+file = "art/battle.tiles"
+atlas = "art/battle.png"
+seed = 1660
+source = "textures of this pack through the original tiles' coastlines"
+tiles = { tile = 32, frames = 8, period = 4, terrain = "battle-terrain.pgm", towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 124], place = { fort = [123], rock = [125] } }
+prompt = ""
+[[asset.textures]]
+name = "sea"
+size = 384
+colour = "#123A78"	# its average colour
+detail = 0.45
+prompt = """
+Aerial photograph taken straight down from very high above of calm deep
+open sea, an even deep blue with a very fine, faint, uniform texture of
+tiny ripples, low contrast, no foam, no glare, no sun reflection,
+nothing else, filling the whole image.
+"""
+[[asset.textures]]
+name = "land"
+size = 384
+colour = "#3C6E28"	# its average colour
+detail = 0.8
+prompt = """
+Satellite photograph taken straight down from very high above of a vast
+tropical rainforest, the canopy seen as a fine, even, uniform texture of
+countless tiny green tree crowns, low contrast, no clearings, no rivers,
+nothing else, filling the whole image.
+"""
+[[asset.textures]]
+name = "sand"
+size = 384
+colour = "#D2B478"	# its average colour
+detail = 0.6
+prompt = """
+Aerial photograph taken straight down of pale golden beach sand, fine,
+even and uniform, low contrast, nothing else, filling the whole image.
+"""
+[[asset.textures]]
+name = "town"
+size = 256
+cutout = true
+prompt = """
+Photograph from above at an angle of a single small 17th-century
+Caribbean colonial house with white plastered walls, a red clay tile
+roof, a dark door and two small windows, standing alone on a plain flat
+light grey ground, nothing else.
+"""
+
+# The sea battle's damage pictures: each class from the side, whole to
+# sinking, in five steps (the panel at (489, 137) for the foe and (489,
+# 258) for the player).  The model's damage gives the shape; the redraw
+# adds what each step says.
+[[asset.textures]]
+name = "fort"
+size = 256
+cutout = true
+prompt = """
+Photograph from above at an angle of a single squat round stone tower of
+a 17th-century Spanish fort, grey weathered stone with battlements on
+top and a dark doorway, standing alone on a plain flat light grey
+ground, nothing else.
+"""
+[[asset.textures]]
+name = "rock"
+size = 256
+cutout = true
+prompt = """
+Photograph from above of a single jagged grey rock outcrop of a reef,
+wet dark stone, standing alone on a plain flat light grey ground,
+nothing else.
+"""
+
+# The sea battle's screen: the battle area is the tiles (tiles/battle),
+# the panel on the right, where the game writes each side's name (y 14,
+# 358), men and guns (86, 430), sails (116, 460) and the wind (233),
+# and draws the damage pictures, is a board with its boxes at the
+# original's places (layouts/sbat-panel-*.png).
+[[asset]]
+id = "pic/sbat"
+file = "art/sbat.png"
+seed = 1660
+source = "layout described from the original screen"
+scene_area = [480, 0, 160, 480]	# the battle area is drawn over
+trim = 0.15			# the model darkens the board's edges
+bevel = "layouts/sbat-panel"
+grade = false
+prompt = """
+Close-up photograph, straight on and flat, of a tall board of polished
+honey-coloured oak, its fine straight grain running from top to bottom,
+filling the whole image with no seam, edge, border or shadow, warm even
+light.
+"""
+[[asset.pieces]]
+rect = [480, 0, 8, 480]		# the panel's dark left edge, as the original's
+colour = "#2A1A0C"
+[[asset.pieces]]
+rect = [489, 137, 145, 86]	# a damage picture's window
+prompt = """
+Photograph of a bright tropical sky with big white cumulus clouds over a
+calm deep blue sea, the sea's horizon low, a little above the bottom
+edge, nothing on the water.
+"""
+[[asset.pieces]]
+rect = [488, 48, 147, 24]	# the speed strip
+prompt = """
+Photograph of a long narrow strip of calm blue sea under a pale sky, a
+small sailing ship on it seen from the side sailing to the right, at the
+left of the strip.
+"""
+[[asset.pieces]]
+rect = [490, 79, 24, 21]	# the men
+prompt = """
+Photograph, straight on, of two crossed steel cutlasses with brass hilts
+lying on a polished honey-coloured oak board, filling the image.
+"""
+[[asset.pieces]]
+rect = [566, 79, 26, 21]	# the guns
+prompt = """
+Photograph from the side of a small black iron cannon on a wooden
+carriage, on a polished honey-coloured oak board, filling the image.
+"""
+[[asset.pieces]]
+rect = [488, 229, 147, 23]	# the wind
+prompt = """
+Photograph, straight on, of a narrow strip of old weathered parchment
+with faint stains, filling the image from edge to edge.
+"""
+[[asset.pieces]]
+rect = [604, 229, 31, 23]
+prompt = """
+Photograph, straight on, of a small round brass compass rose medallion
+with sixteen points, on old parchment, filling the image.
+"""
+[[asset.pieces]]
+rect = [489, 258, 145, 86]	# a damage picture's window
+prompt = """
+Photograph of a bright tropical sky with big white cumulus clouds over a
+calm deep blue sea, the sea's horizon low, a little above the bottom
+edge, nothing on the water.
+"""
+[[asset.pieces]]
+rect = [488, 393, 147, 24]	# the speed strip
+prompt = """
+Photograph of a long narrow strip of calm blue sea under a pale sky, a
+small sailing ship on it seen from the side sailing to the right, at the
+left of the strip.
+"""
+[[asset.pieces]]
+rect = [490, 423, 24, 21]	# the men
+prompt = """
+Photograph, straight on, of two crossed steel cutlasses with brass hilts
+lying on a polished honey-coloured oak board, filling the image.
+"""
+[[asset.pieces]]
+rect = [566, 423, 26, 21]	# the guns
+prompt = """
+Photograph from the side of a small black iron cannon on a wooden
+carriage, on a polished honey-coloured oak board, filling the image.
+"""
