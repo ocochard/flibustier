@@ -141,7 +141,8 @@ endif()
 # Some raylib builds (FreeBSD raylib-6.0 package) omit libm and pthreads
 # from their own dependencies, so link them explicitly.
 find_package(Threads REQUIRED)
-add_executable(flibustier src/main.c src/play.c src/crt.c src/viewer.c)
+add_executable(flibustier src/main.c src/play.c src/crt.c src/viewer.c
+    src/soundexport.c)
 target_link_libraries(flibustier PRIVATE flibustier_core ${FLIBUSTIER_RAYLIB}
 	Threads::Threads)
 if(UNIX)

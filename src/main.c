@@ -13,6 +13,7 @@
 #include "assets/worldfiles.h"
 #include "data/pack.h"
 #include "play.h"
+#include "soundexport.h"
 #include "view/view.h"
 #include "viewer.h"
 
@@ -44,6 +45,10 @@ usage(void)
 	    "  --viewer [--id ID] [--screenshot OUT.png [--frames N]]\n"
 	    "                browse assets\n"
 	    "  --list        print every asset ID\n"
+	    "  --export-sounds DIR\n"
+	    "                write the original's sound effects as WAV, named\n"
+	    "                as the pack IDs that replace them, to compare\n"
+	    "                (original data: do not share)\n"
 	    "  --export-world DIR\n"
 	    "                write the world grids as an open pack of Tiled\n"
 	    "                maps (from the original data: do not share)\n"
@@ -122,7 +127,8 @@ main(int argc, char **argv)
 {
 	const char *data, *pack[MAX_PACKS], *id = NULL, *out = NULL;
 	const char *shot = NULL, *lang = "eng", *script = NULL, *saves = NULL;
-	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT, EXPORT_WORLD } cmd = PLAY;
+	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT, EXPORT_WORLD,
+	    EXPORT_SOUNDS } cmd = PLAY;
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
@@ -155,6 +161,10 @@ main(int argc, char **argv)
 		} else if (strcmp(argv[a], "--export-world") == 0 &&
 		    a + 1 < argc) {
 			cmd = EXPORT_WORLD;
+			out = argv[++a];
+		} else if (strcmp(argv[a], "--export-sounds") == 0 &&
+		    a + 1 < argc) {
+			cmd = EXPORT_SOUNDS;
 			out = argv[++a];
 		} else if (strcmp(argv[a], "--id") == 0 && a + 1 < argc)
 			id = argv[++a];
@@ -211,6 +221,9 @@ main(int argc, char **argv)
 		break;
 	case EXPORT:
 		rc = export_png(packs, id, out, frame, tick);
+		break;
+	case EXPORT_SOUNDS:
+		rc = sounds_export(packs, out);
 		break;
 	case EXPORT_WORLD:
 		if ((rc = world_export(packs, out, err, sizeof(err))) != 0)
