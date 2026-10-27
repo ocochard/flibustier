@@ -35,6 +35,7 @@ import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCREEN_W, SCREEN_H = 640, 480
+SKETCH_W = 1472			# layouts/sketch.py's width
 
 MODELS = {
     # DiffSynth's Canny patch: lighter than the InstantX Union ControlNet,
@@ -96,6 +97,10 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
         if asset.get("gilded", True):
             prompt = prompt.strip() + " " + spec["pack"]["framed"].strip()
         rw, rh = fw, fh
+    elif asset.get("scene_area"):
+        # The scene rendered at the shape of the part of the screen it
+        # shows (the street above the duel panel), then put there.
+        sx_, sy_, rw, rh = (round(v * k) for v in asset["scene_area"])
     else:
         rw, rh = out_w, out_h
     if spec["pack"].get("style"):
@@ -141,6 +146,16 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "image": ["decode", 0], "width": gw - 2 * cx,
             "height": gh - 2 * cy, "x": cx, "y": cy}}
     picture = ["resize", 0]
+    if asset.get("scene_area"):
+        g["screen"] = {"class_type": "EmptyImage", "inputs": {
+            "width": out_w, "height": out_h, "batch_size": 1,
+            "color": 0}}
+        g["onscreen"] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["screen", 0], "source": picture,
+            "x": sx_, "y": sy_, "resize_source": False}}
+        picture = ["onscreen", 0]
+        g["save"]["inputs"]["images"] = picture
+        rw, rh = out_w, out_h
     # Pieces the screen needs at exact places (the board its title is
     # written on, page-turn arrows...), rendered on their own and placed
     # there: the scene's model will not put them there.  "plaque" is a
@@ -167,7 +182,11 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             picture = ["pplace%d" % n, 0]
             g["save"]["inputs"]["images"] = picture
             continue
-        pgw, pgh = generation_size(pw, ph, 0.25)
+        # "upright": rendered a quarter turn round and turned back (the
+        # model draws wood grain running up far more readily).
+        up = piece.get("upright")
+        pgw, pgh = generation_size(ph, pw, 0.25) if up else \
+            generation_size(pw, ph, 0.25)
         ptext = piece["prompt"].strip()
         if spec["pack"].get("style"):
             ptext += " " + spec["pack"]["style"].strip()
@@ -185,11 +204,36 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "samples": ["psample%d" % n, 0], "vae": ["vae", 0],
             "tile_size": 512, "overlap": 64, "temporal_size": 64,
             "temporal_overlap": 8}}
+        decoded = ["pdecode%d" % n, 0]
+        if up:
+            g["pturn%d" % n] = {"class_type": "ImageRotate", "inputs": {
+                "image": decoded, "rotation": "90 degrees"}}
+            decoded = ["pturn%d" % n, 0]
         g["presize%d" % n] = {"class_type": "ImageScale", "inputs": {
-            "image": ["pdecode%d" % n, 0], "upscale_method": "lanczos",
+            "image": decoded, "upscale_method": "lanczos",
             "width": pw, "height": ph, "crop": "center"}}
         place_piece(g, n, piece, picture, px, py, pw, ph)
         picture = ["pplace%d" % n, 0]
+        g["save"]["inputs"]["images"] = picture
+    for n, (shade, colour) in enumerate(asset.get("uploaded_bevel", [])):
+        # Exact edges the model will not draw where the game needs them
+        # (the duel panel's boxes, the arrow pad's arrows): light and
+        # shadow laid over the picture through a mask drawn from the
+        # measured layout.
+        g["bvfill%d" % n] = {"class_type": "EmptyImage", "inputs": {
+            "width": rw, "height": rh, "batch_size": 1, "color": colour}}
+        g["bvmask%d" % n] = {"class_type": "LoadImage", "inputs": {
+            "image": shade}}
+        g["bvfit%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["bvmask%d" % n, 0], "upscale_method": "bilinear",
+            "width": rw, "height": rh, "crop": "disabled"}}
+        g["bvm%d" % n] = {"class_type": "ImageToMask", "inputs": {
+            "image": ["bvfit%d" % n, 0], "channel": "red"}}
+        g["bvlay%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": picture, "source": ["bvfill%d" % n, 0],
+            "x": 0, "y": 0, "resize_source": False,
+            "mask": ["bvm%d" % n, 0]}}
+        picture = ["bvlay%d" % n, 0]
         g["save"]["inputs"]["images"] = picture
     if grade and grade.get("uploaded"):
         # One colour grade for the series: match the colours of the
@@ -222,10 +266,19 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             "name": MODELS["controlnet"]}}
         g["sketch"] = {"class_type": "LoadImage", "inputs": {
             "image": asset["uploaded_control"]}}
+        if asset.get("scene_area"):
+            # The sketch is of the whole screen: only the scene's part.
+            ks = SKETCH_W / SCREEN_W
+            ax, ay, aw, ah = (round(v * ks) for v in asset["scene_area"])
+            g["sketchpart"] = {"class_type": "ImageCrop", "inputs": {
+                "image": ["sketch", 0], "width": aw, "height": ah,
+                "x": ax, "y": ay}}
         g["control"] = {"class_type": "QwenImageDiffsynthControlnet",
                         "inputs": {
                             "model": model, "model_patch": ["cpatch", 0],
-                            "vae": ["vae", 0], "image": ["sketch", 0],
+                            "vae": ["vae", 0], "image":
+                            ["sketchpart", 0] if asset.get("scene_area")
+                            else ["sketch", 0],
                             "strength": asset.get("control_strength", 0.7),
                             "start_percent": 0.0,
                             "end_percent": asset.get("control_end", 0.6)}}
@@ -1101,6 +1154,15 @@ def main():
         ow = round(lw * height / SCREEN_H)
         oh = round(lh * height / SCREEN_H)
         seed = args.seed if args.seed is not None else a["seed"]
+        if a.get("bevel"):
+            # Its light and its shadow, in that order.
+            a["uploaded_bevel"] = [
+                (upload(args.server, os.path.join(HERE, a["bevel"] + side
+                                                  + ".png"),
+                        "flibustier-bevel-" + os.path.basename(a["bevel"])
+                        + side + ".png"), colour)
+                for side, colour in (("-light", 0xFFE7A8),
+                                     ("-dark", 0x241204))]
         if a.get("inpaint_mask"):
             a["uploaded_inpaint"] = upload(
                 args.server, os.path.join(HERE, a["inpaint_mask"]),
@@ -1249,6 +1311,10 @@ def main():
             if grade and grade.get("uploaded") and a.get("grade", True)
             else None,
             "source": a.get("source", "text"),
+            "bevel": {"masks": a["bevel"], "sha256": [hashlib.sha256(open(
+                os.path.join(HERE, a["bevel"] + side + ".png"), "rb")
+                .read()).hexdigest() for side in ("-light", "-dark")]}
+            if a.get("bevel") else None,
             "cast": cast or None,
             "finish": [{"mask": f["mask"], "sha256": hashlib.sha256(open(
                 os.path.join(HERE, f["mask"]), "rb").read()).hexdigest(),

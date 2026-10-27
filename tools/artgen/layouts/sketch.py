@@ -140,6 +140,44 @@ INFOMAN = [ellipse(178, 280, 15, 18),
            "polygon 162,364 204,364 210,446 158,446"]
 
 
+# Alley: a street of a port town at night, where two men fight; the
+# fighters stand on the street from y 140 to about 320, the panel below.
+ALLEY = [
+    line((0, 214), (640, 214)),				# the street's far side
+    rect(100, 0, 500, 214), rect(500, 0, 640, 214),	# the houses
+    rect(250, 120, 300, 214), rect(325, 120, 370, 214),	# their doors
+    rect(385, 125, 480, 215),				# a cart by them
+    line((40, 0), (130, 214)),				# a leaning palm
+    line((0, 320), (640, 320)),				# the panel's top
+]
+
+
+# Fort: the walkway along a fort's rampart, the sea beyond the
+# battlements; the fighters stand on the walkway, in front of its rail.
+FORT = [
+    line((0, 120), (640, 120)),				# the sea's horizon
+    line((0, 140), (640, 140)),				# the battlements' top
+    rect(60, 120, 120, 140), rect(200, 120, 260, 140),	# merlons
+    rect(340, 120, 400, 140), rect(480, 120, 540, 140),
+    line((0, 214), (640, 214)),				# the walkway's rail
+    line((30, 214), (30, 60), (80, 60)),			# a gallows
+    line((560, 214), (600, 320)), line((580, 214), (620, 320)),	# a ladder
+    line((0, 320), (640, 320)),
+]
+
+# Deck: a ship's main deck, the quarterdeck across the back with its
+# rail, stairs at each side and doors under it; the fighters on the deck.
+DECK = [
+    line((130, 140), (510, 140)),			# the quarterdeck's rail
+    line((60, 214), (580, 214)),			# the deck at its foot
+    line((60, 214), (130, 140)), line((580, 214), (510, 140)),	# stairs
+    rect(180, 150, 240, 214), rect(300, 150, 360, 214),	# doors
+    rect(420, 150, 480, 214),
+    line((320, 0), (320, 140)),				# the mizzen mast
+    line((0, 320), (640, 320)),
+]
+
+
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
     rect(160, 80, 300, 150), rect(330, 80, 470, 150),	# stern windows
@@ -189,13 +227,80 @@ TOWN_HARBOUR = ["polygon 56,160 128,160 128,262 56,262",
 TOWN_GATE = ["polygon 598,220 628,220 628,258 598,258"]
 
 
+# The duel screens' lower panel (the alley, the fort, the deck), as
+# measured on the original: the panel from y 320, the flags' columns, the
+# names' and the crews' boxes; and the arrow pad clicked at (283, 291),
+# three cells of 24 each way.
+DUEL_BOXES = [(7, 326, 62, 473), (68, 326, 250, 364), (68, 370, 250, 473),
+              (388, 326, 570, 364), (390, 370, 570, 473),
+              (575, 326, 630, 473), (283, 291, 355, 363)]
+PAD = (283, 291, 24)
+
+
+def pad_arrows():
+    """The pad's eight arrows and its middle square, as polygons."""
+    x0, y0, c = PAD
+    ops = []
+    for row in range(3):
+        for col in range(3):
+            cx, cy = x0 + c * col + c / 2, y0 + c * row + c / 2
+            dx, dy = col - 1, row - 1
+            if dx == 0 and dy == 0:
+                ops.append("polygon %s" % " ".join(
+                    "%g,%g" % (cx + u, cy + v)
+                    for u, v in ((-4, -4), (4, -4), (4, 4), (-4, 4))))
+                continue
+            n = (dx * dx + dy * dy) ** 0.5
+            ux, uy = dx / n, dy / n		# along the arrow
+            px, py = -uy, ux			# across it
+            pts = [(8, 0), (1, 6), (1, 2.5), (-8, 2.5), (-8, -2.5),
+                   (1, -2.5), (1, -6)]
+            ops.append("polygon " + " ".join(
+                "%g,%g" % (cx + ux * a + px * b, cy + uy * a + py * b)
+                for a, b in pts))
+    return ops
+
+
 def scaled(op):
     """A polygon given in 640x480 pixels, at the render size."""
     if not op.startswith("polygon "):
         return op
     pts = [p.split(",") for p in op.split()[1:]]
-    return "polygon " + " ".join("%d,%d" % (sx(int(x)), sx(int(y)))
+    return "polygon " + " ".join("%d,%d" % (sx(float(x)), sx(float(y)))
                                  for x, y in pts)
+
+
+def bevel(name, boxes, arrows):
+    """The light and the shadow of raised boxes and of arrows engraved
+    in the pad, as two masks at 640x480 times 3 (grey is how strong):
+    a box is lit on its top and left, shaded on its bottom and right; an
+    engraved arrow is dark, lit along its lower right edge."""
+    m = 3
+    for side, edges in (("-light", "tl"), ("-dark", "br")):
+        cmd = ["magick", "-size", "%dx%d" % (640 * m, 480 * m), "xc:black",
+               "-fill", "none", "-stroke",
+               "gray40" if edges == "tl" else "gray85", "-strokewidth",
+               str((3 if edges == "tl" else 4) * m)]
+        for x0, y0, x1, y1 in boxes:
+            x0, y0, x1, y1 = x0 * m, y0 * m, x1 * m, y1 * m
+            if edges == "tl":
+                cmd += ["-draw", "polyline %d,%d %d,%d %d,%d" % (
+                    x0, y1, x0, y0, x1, y0)]
+            else:
+                cmd += ["-draw", "polyline %d,%d %d,%d %d,%d" % (
+                    x1, y0, x1, y1, x0, y1)]
+        for op in arrows:
+            pts = " ".join("%g,%g" % (float(x) * m + (1.5 if edges == "tl"
+                                                       else 0),
+                                       float(y) * m + (1.5 if edges == "tl"
+                                                       else 0))
+                           for x, y in (p.split(",") for p in op.split()[1:]))
+            cmd += ["-stroke", "none", "-fill",
+                    "gray55" if edges == "tl" else "gray85",
+                    "-draw", "polygon " + pts]
+        cmd += ["-blur", "0x2"] + SAME + [os.path.join(HERE, name + side
+                                                         + ".png")]
+        subprocess.run(cmd, check=True)
 
 
 def mask(name, ops, blur=4):
@@ -222,6 +327,13 @@ if __name__ == "__main__":
     draw("town.png", TOWN)
     draw("tavern.png", TAVERN)
     draw("cabin.png", CABIN)
+    draw("alley.png", ALLEY + [rect(*b) for b in DUEL_BOXES])
+    draw("fort.png", FORT + [rect(*b) for b in DUEL_BOXES])
+    draw("deck.png", DECK + [rect(*b) for b in DUEL_BOXES])
+    x0, y0, c = PAD
+    cells = [(x0 + c * i + 1, y0 + c * j + 1, x0 + c * (i + 1) - 1,
+              y0 + c * (j + 1) - 1) for i in range(3) for j in range(3)]
+    bevel("duel-panel", DUEL_BOXES + cells, pad_arrows())
     # All of them for the repaint, and each alone for the cast pass to
     # know where that person is.
     mask("tavern-people.png", sum(TAVERN_PEOPLE.values(), []))

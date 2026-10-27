@@ -953,6 +953,138 @@ realistic.
 rect = [348, 196, 80, 164]	# the doorway, nobody in it; on whole art pixels
 at = [349, 199]
 
+# The duel in a town's street.  The game draws the fighters on the street
+# (from y 140 to about 320), and writes on the panel below: the names in
+# its upper boxes, the crews in the lower ones, the flags in the side
+# columns; the arrow pad is clicked.  The panel and the pad are pieces at
+# their exact places, their edges and arrows drawn from the measured
+# layout (layouts/duel-panel-*.png); the fort and the deck share them.
+[[asset]]
+id = "pic/alley"
+file = "art/alley.png"
+seed = 1660
+source = "layout described from the original screen"
+control = "layouts/alley.png"
+control_strength = 0.85
+control_end = 0.6
+bevel = "layouts/duel-panel"
+scene_area = [0, 0, 640, 320]	# the panel covers the rest
+prompt = """
+Photograph at night of a wide street in a Spanish port town of the
+Caribbean in the 1650s, seen from a little above, the houses standing
+well back: they fill the upper two thirds of the picture, and the lower
+third is the open street. Along the back, a row of two-storey houses of rough plastered stone, with
+heavy timber doors, small barred windows, a wooden balcony and iron
+lanterns burning on the walls; on the left, a palm tree leaning over
+the roofs, and a glimpse of smaller houses with red tile roofs beyond;
+on the right, a handcart loaded with sacks against a wall. Above, a deep
+blue night sky with stars. The street in front, from the foot of the
+houses to the bottom of the picture, is wide empty packed earth with
+cart ruts and scattered straw, lit by the lanterns and the moon, open
+for two men to fight on. Nobody is in the street. Historical reenactment
+photography, sharp focus, realistic.
+"""
+[[asset.pieces]]
+rect = [0, 320, 640, 176]	# past the bottom edge: its own edge falls off screen
+upright = true
+prompt = """
+Close-up photograph, straight on and flat, of a single wide board of
+polished honey-coloured oak, its fine straight grain running from the
+top edge to the bottom edge, filling the whole image with no seam,
+joint, edge, border or shadow, warm even light.
+"""
+[[asset.pieces]]
+rect = [283, 291, 72, 72]
+prompt = """
+Close-up photograph, straight on, of the flat surface of a square
+plate of worn polished golden brass, brushed, filling the whole image
+from edge to edge with no edge, rim, ring or dial, warm even light,
+plain and flat.
+"""
+
+[[asset]]
+id = "pic/fort"
+file = "art/fort.png"
+seed = 1660
+source = "layout described from the original screen"
+control = "layouts/fort.png"
+control_strength = 0.85
+control_end = 0.6
+bevel = "layouts/duel-panel"
+scene_area = [0, 0, 640, 320]	# the panel covers the rest
+prompt = """
+Photograph in bright daylight along the top of the stone rampart of a
+Spanish fort in the Caribbean in the 1650s, seen from a little above
+on the walkway. Across the back, a low wall of rough grey stone
+battlements; beyond it, the deep blue sea to the horizon with a green
+island on the right, under a blue sky with white clouds. On the left,
+a wooden gallows post rises against the sky; on the right, a wooden
+ladder leans against the rampart. In front of the battlements, a long
+wooden rail on posts with coiled rope and a hanging bucket. The walkway
+in front, from the foot of the rail to the bottom of the picture, is
+wide empty flagstones, open for two men to fight on. Nobody is on it.
+Historical reenactment photography, sharp focus, realistic.
+"""
+[[asset.pieces]]
+rect = [0, 320, 640, 176]	# past the bottom edge: its own edge falls off screen
+upright = true
+prompt = """
+Close-up photograph, straight on and flat, of a single wide board of
+polished honey-coloured oak, its fine straight grain running from the
+top edge to the bottom edge, filling the whole image with no seam,
+joint, edge, border or shadow, warm even light.
+"""
+[[asset.pieces]]
+rect = [283, 291, 72, 72]
+prompt = """
+Close-up photograph, straight on, of the flat surface of a square
+plate of worn polished golden brass, brushed, filling the whole image
+from edge to edge with no edge, rim, ring or dial, warm even light,
+plain and flat.
+"""
+
+
+[[asset]]
+id = "pic/shipdeck"
+file = "art/shipdeck.png"
+seed = 1660
+source = "layout described from the original screen"
+control = "layouts/deck.png"
+control_strength = 0.7
+control_end = 0.5
+bevel = "layouts/duel-panel"
+scene_area = [0, 0, 640, 320]	# the panel covers the rest
+prompt = """
+Photograph in late afternoon sun on the main deck of a 17th-century
+Spanish galleon, looking aft from a little above. Across the back, the
+raised quarterdeck with a carved wooden balustrade along its edge, a
+wooden stair up to it at each side, and three plank doors with small
+windows under it; behind and above, the mizzen mast, rigging and furled
+sails against an orange and blue evening sky with clouds, and lanterns
+on the stern. The deck in front, from the foot of the quarterdeck to
+the bottom of the picture, is wide empty planking with ropes coiled at
+its sides, open for two men to fight on. Nobody is on it. Historical
+reenactment photography, sharp focus, realistic.
+"""
+[[asset.pieces]]
+rect = [0, 320, 640, 176]	# past the bottom edge: its own edge falls off screen
+upright = true
+prompt = """
+Close-up photograph, straight on and flat, of a single wide board of
+polished honey-coloured oak, its fine straight grain running from the
+top edge to the bottom edge, filling the whole image with no seam,
+joint, edge, border or shadow, warm even light.
+"""
+[[asset.pieces]]
+rect = [283, 291, 72, 72]
+prompt = """
+Close-up photograph, straight on, of the flat surface of a square
+plate of worn polished golden brass, brushed, filling the whole image
+from edge to edge with no edge, rim, ring or dial, warm even light,
+plain and flat.
+"""
+
+
 [[asset]]
 id = "pic/cabin"
 file = "art/cabin.png"
