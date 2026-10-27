@@ -267,7 +267,7 @@ The first 512 bytes of the matching PCX, presumably a backup for the
       distance, < 150).
     - f3: nation: 0 Spain, 1 England, 2 France, 3 Holland (conquest
       copies it).
-    - f4: forts, 0-4. A guess, from values and the " %s fort%s" string.
+    - f4: forts, 0-4 (a fort battle's guns are `f4 x 12`).
     - f5: soldiers.
       - Halved by "Indians attack" and "Malaria".
       - The conquest attacker needs more than twice the defender's value.
@@ -279,24 +279,38 @@ The first 512 bytes of the matching PCX, presumably a backup for the
     - f8: wealth, 0-255.
       - +0x40 on a gold mine; -1/4 when plundered; +10 when the treasure
         fleet visits.
-      - The 4 wealth words probably map to `f8 >> 6`; not confirmed in
-        code.
-    - f9: reset to 0 by "New governor". Perhaps the governor's attitude.
-    - f10: set on the town a fleet currently targets (VA `0xcba7`).
-    - f11: re-rolled 0-15 by "New governor" unless bit `0x40` is set.
-    - f14: town ID, stable across eras.
-    - f24-f27: approach points. f26, f27 is on the water outside the
-      harbour (Port Royale: (341, 269), open sea south of the town); it is
-      zero for inland towns.
-    - f29, f30: about 0.75 x (x, y). Probably coordinates on a smaller
-      map.
-    - f12, f13, f15-f23, f28, f31: unknown.
+      - Its word in the city information is CSTN 9 by `f8 / 64`.
+    - f9: the town's word for the player, its standing (reset to 0 by
+      "New governor"; see "Governor", "Missions", sneaking in and the
+      governor's daughter in game-rules.md).
+    - f10: a villain hides there (VA `0xcba7`); a land battle meets
+      `f10 x 128` more men.
+    - f11: the governor (re-rolled 0-15 by "New governor" unless bit
+      `0x40`): bit 0 a niece, 0x80 the player's informant, 0x40 his
+      wife.
+    - f12: the merchant's family (`& 0xe0`, set by marrying his
+      daughter).
+    - f13: the barmaid's fondness, 0-11.
+    - f14: town ID, stable across eras; also the town's battle screen
+      (LBTL and SBTL index).
+    - f15, f16: the town's own cell on its land battle field (the fort).
+    - f17, f18: the fort's cell in a fort battle.
+    - f19, f20, f21: the player's ship in a fort battle (`x 32 + 16`)
+      and its heading.
+    - f22, f23: the landing party's place on the land battle field
+      (`x 32`).
+    - f24, f25: never read by the Gold program.
+    - f26, f27, f28: the harbour mouth (a cell on the water outside the
+      harbour; 0 for inland towns) and the heading leaving it (`x 32`).
+    - f29, f30: the town on the Map of the Caribbean (about 0.75 x its
+      cell).
+    - f31: never read by the Gold program.
   - **Towns per nation** (Spain, England, France, Holland):
     1560: 27/2/5/0, 1600: 30/2/2/0, 1620: 30/4/3/3, 1640: 28/7/5/3,
     1660: 26/8/6/3, 1680: 25/11/7/3. There are no Dutch towns before
     1620.
 - Career start and famous-expedition scenarios: 90-byte records at
-  `0x3a337`. Fields not decoded.
+  `0x3a337`, decoded in game-rules.md ("Start scenarios").
 - Coordinate triplet lists at `0x43000`-`0x45800`. Meaning unverified.
 - Ship stats: not found as a data table. They are probably code
   immediates. The manual gives max guns, crew, cargo and speed per ship.
