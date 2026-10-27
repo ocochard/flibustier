@@ -16,7 +16,7 @@ What it does, roughly in this order of priority:
   relative's map;
 - attacks the town holding the silver train once strong enough;
 - otherwise cruises off Spanish towns, boarding the ships it can beat,
-  ransoming captains, courting governors' daughters and fighting their
+  ransoming captains, courting governors' nieces (a daughter after six years) and fighting their
   suitors.
 
 It needs the build (`flibustier-sim` and `flibustier-seamap`, the sea map

@@ -17,6 +17,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 DATA = os.environ.get("FLIBUSTIER_DATA")
 BUILD = os.path.join(REPO, "build")
 OUT = "."
+FALLBACK_YEARS = 6	# after this, a governor's daughter will do instead of his niece
 NATIONS = ["spain", "england", "france", "holland"]
 
 
@@ -526,6 +527,8 @@ class Bot:
             return
         if m["result"] == 2:
             return  # already the wife
+        if not m["niece"] and self.refresh()["year"] < self.start_year + FALLBACK_YEARS:
+            return  # holding out for a governor's niece
         self.stats["daughter_meetings"] += 1
         self.sim("daughter", action="talk")
         p = self.sim("daughter", action="propose")
@@ -783,10 +786,19 @@ class Bot:
         res = self.go(best[0], best[1])
         if res != "arrived":
             return False
-        # steer into the land toward the spot
+        # steer into the land toward the spot, or its nearest land when the
+        # spot itself lies in the shallows
+        lx, ly = tx, ty
+        for r in range(0, 40):
+            hits = [(tx + dx, ty + dy) for dy in range(-r, r + 1) for dx in range(-r, r + 1)
+                    if max(abs(dx), abs(dy)) == r and 0 <= tx + dx < self.W
+                    and 0 <= ty + dy < self.H and self.grid[ty + dy][tx + dx] == "#"]
+            if hits:
+                lx, ly = min(hits, key=lambda c: (c[0] - tx) ** 2 + (c[1] - ty) ** 2)
+                break
         for _ in range(400):
             f = self.refresh()["fleet"]
-            want = (self.bearing(tx * 16 + 8 - f["x"], ty * 16 + 8 - f["y"]) + 8) & 0xF0
+            want = (self.bearing(lx * 16 + 8 - f["x"], ly * 16 + 8 - f["y"]) + 8) & 0xF0
             diff = ((want - f["heading"] + 128) & 0xFF) - 128
             turn = 0 if abs(diff) < 8 else (1 if diff > 0 else -1)
             r = self.sim("sail", turn=turn, ticks=4)
@@ -868,7 +880,7 @@ class Bot:
         self.married_town = None
         self.last_town = None
         seen_jail = 0
-        start = self.refresh()["year"]
+        start = self.start_year = self.refresh()["year"]
         self.note("career starts: %s, %s, %d gold, crew %d" % (
             self.scenario, NATIONS[self.mynation()], self.st["fleet"]["gold"], self.st["fleet"]["crew"]))
         home = self.st["fleet"]["leaving"]
