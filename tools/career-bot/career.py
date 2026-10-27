@@ -903,6 +903,23 @@ class Bot:
                 q.append(n)
         return None
 
+    def retrace(self, crumbs):
+        """Walk back along the positions the party marched through.
+        Returns True once back aboard."""
+        for px, py in reversed(crumbs):
+            for _ in range(40):
+                g = self.refresh()["fleet"]
+                if not g["ashore"]:
+                    return True
+                if abs(g["x"] - px) <= 3 and abs(g["y"] - py) <= 3:
+                    break
+                r = self.sim("march", dx=(px > g["x"]) - (px < g["x"]), dy=(py > g["y"]) - (py < g["y"]), ticks=2)
+                if r["stop"] == "boarded":
+                    return True
+                if r["stop"] == "crew":
+                    self.crew_stop()
+        return not self.refresh()["fleet"]["ashore"]
+
     def walk_round(self, f):
         """The party, cut off from the landing point, walks to it by the
         land path.  Returns True once back aboard."""
@@ -970,10 +987,13 @@ class Bot:
         else:
             self.odd("could not land near map %d spot" % mapi)
             return False
-        # march to the spot
+        # march to the spot, leaving breadcrumbs to walk back by
+        crumbs = []
         for _ in range(3000):
             f = self.refresh()["fleet"]
             cx, cy = f["x"] // 16, f["y"] // 16
+            if f["ashore"] and (not crumbs or abs(crumbs[-1][0] - f["x"]) + abs(crumbs[-1][1] - f["y"]) >= 6):
+                crumbs.append((f["x"], f["y"]))
             if abs(cx - tx) < 2 and abs(cy - ty) < 2:
                 break
             if not f["ashore"]:
@@ -1014,9 +1034,11 @@ class Bot:
                         r = self.sim("march", dx=ddx, dy=ddy, ticks=8)
                         if r["stop"] != "ticks":
                             break
-                # still shut in (an inlet between the party and the landing
-                # point): walk round over the land
-                elif stalls <= 6 and self.walk_round(f):
+                # still shut in: walk back the way the party came
+                elif stalls <= 6 and self.retrace(crumbs):
+                    break
+                # or round an inlet over the land
+                elif stalls <= 9 and self.walk_round(f):
                     break
                 else:
                     # last resort, feel along the shore: a biased random walk
