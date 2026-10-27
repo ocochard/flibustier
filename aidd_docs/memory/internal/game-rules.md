@@ -631,7 +631,8 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     tale of the lost treasure of the people CSTN 93 (Incan, Aztec,
     Olmec, Mayan) numbered as the relative; then map 2's piece (and its
     page); log code 26 with the relative, who becomes the next one. The
-    original also clears the 4 fleets at VA `0x471da` (not modelled).
+    four villains (VA `0x471da`) are cleared: every slot freed, no towns
+    behind them.
   - Map 2: the people's picture (`inca`, `aztec`, `olmec`, `maya.pcx`),
     "You have found the lost %s treasure!" (CSTR 185 at (100, 320) up
     to x 560), 100000 gold; log code 7.

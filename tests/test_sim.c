@@ -2605,8 +2605,12 @@ test_treasure(void)
 	/* The relative rescued tells of a lost treasure. */
 	s.fleet.x = s.maps[MAP_RELATIVE].x * WORLD_TILE + 8;
 	s.fleet.y = s.maps[MAP_RELATIVE].y * WORLD_TILE + 8;
+	s.villains[2].active = 1;		/* a villain on the trail */
+	s.villains[2].trail[0] = 5;
 	CHECK(sim_search(&s, found) == 1 && found[0].map == MAP_RELATIVE &&
 	    found[0].value == 0 && s.relative == 1);
+	/* Every villain is let go, his trail forgotten (VA 0xa801). */
+	CHECK(!s.villains[2].active && s.villains[2].trail[0] == -1);
 	CHECK(s.maps[MAP_LOST].pieces != 0 && s.maps[MAP_LOST].value == 0);
 	CHECK(news_abs(&s, s.nnews - 1)->code == NEWS_RESCUED);
 	gold = s.fleet.gold;
