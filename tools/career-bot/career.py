@@ -17,7 +17,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 DATA = os.environ.get("FLIBUSTIER_DATA")
 BUILD = os.path.join(REPO, "build")
 OUT = "."
-FALLBACK_YEARS = 6	# after this, a governor's daughter will do instead of his niece
+FALLBACK_YEARS = 9	# after this, a governor's daughter will do instead of his niece
 NATIONS = ["spain", "england", "france", "holland"]
 
 
@@ -838,10 +838,26 @@ class Bot:
         for item in found:
             self.stats["dug_" + str(item["map"])] += 1
         # back aboard
+        wander = random.Random(tx * 1000 + ty)
+        still, last = 0, None
         for _ in range(4000):
             f = self.refresh()["fleet"]
             if not f["ashore"]:
                 break
+            still = still + 1 if (f["x"], f["y"]) == last else 0
+            last = (f["x"], f["y"])
+            if still >= 3:
+                # walled in on the way: wander off in a random direction
+                ddx, ddy = wander.choice(((1, 0), (-1, 0), (0, 1), (0, -1),
+                                          (1, 1), (1, -1), (-1, 1), (-1, -1)))
+                for _ in range(wander.randrange(2, 12)):
+                    r = self.sim("march", dx=ddx, dy=ddy, ticks=8)
+                    if r["stop"] != "ticks":
+                        break
+                if r["stop"] == "boarded":
+                    break
+                still = 0
+                continue
             lx, ly = f["land_x"], f["land_y"]
             dx = (lx > f["x"] + 1) - (lx < f["x"] - 1)
             dy = (ly > f["y"] + 1) - (ly < f["y"] - 1)
