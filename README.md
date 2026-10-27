@@ -124,6 +124,8 @@ echo '{"cmd":"new_game","era":1660,"seed":7}
 
 The protocol is described in
 `aidd_docs/memory/internal/sim-protocol.md`.
+`tools/career-bot/` holds a bot that plays a whole career through it and
+writes a journal, as a long regression test.
 
 ## Methodology and legal
 

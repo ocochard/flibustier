@@ -149,6 +149,11 @@ add_executable(flibustier-sim src/sim_main.c)
 target_link_libraries(flibustier-sim PRIVATE flibustier_core)
 target_compile_options(flibustier-sim PRIVATE ${FLIBUSTIER_WARNINGS})
 
+# The career bot's sea map (tools/career-bot).
+add_executable(flibustier-seamap tools/career-bot/seamap.c)
+target_link_libraries(flibustier-seamap PRIVATE flibustier_core)
+target_compile_options(flibustier-seamap PRIVATE ${FLIBUSTIER_WARNINGS})
+
 # Tests.  test_original needs the game data: set FLIBUSTIER_DATA to the GOG
 # DATA.DAT (or an install directory) in the environment, otherwise it is
 # reported as skipped.

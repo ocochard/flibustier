@@ -1431,6 +1431,19 @@ test_towns(void)
 	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"enter\"}", &out);
 	CHECK(out.s != NULL && strstr(out.s, "\"player_town\":2") != NULL);
 	jb_free(&out);
+	/* The map seller: a piece for 50 gold, only while he is there. */
+	ss.sim.tavern_spots = 0;
+	proto_handle(&ss, "{\"cmd\":\"tavern\",\"action\":\"buy_map\"}",
+	    &out);
+	CHECK(out.s != NULL && strstr(out.s, "no map seller") != NULL);
+	jb_free(&out);
+	ss.sim.tavern_spots = TAVERN_MAPS;
+	ss.sim.fleet.gold = 60;
+	proto_handle(&ss, "{\"cmd\":\"tavern\",\"action\":\"buy_map\"}",
+	    &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":true") != NULL &&
+	    ss.sim.fleet.gold == 10 && (ss.sim.maps[MAP_PIRATE].pieces & 0xF));
+	jb_free(&out);
 	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"leave\"}", &out);
 	CHECK(out.s != NULL && strstr(out.s, "\"player_town\":-1") != NULL);
 	jb_free(&out);
@@ -2778,6 +2791,16 @@ test_prison(void)
 	CHECK(world_terrain(&test_world, s.fleet.x, s.fleet.y) !=
 	    TERRAIN_LAND && s.fleet.x / WORLD_TILE == 109 &&
 	    s.fleet.heading == 0xC0);
+	/* A shore facing south: out on the sea below it, heading south
+	 * (the original stepped onto the land). */
+	test_world.coast[1] = 0x22;
+	s.fleet.x = 120 * WORLD_TILE + 8;
+	s.fleet.y = 53 * WORLD_TILE + 8;	/* south of the test land */
+	sim_imprison(&s, JAIL_MAROONED, -1);
+	CHECK(world_terrain(&test_world, s.fleet.x, s.fleet.y) !=
+	    TERRAIN_LAND && s.fleet.y / WORLD_TILE == 50 &&
+	    s.fleet.heading == 0x80);
+	test_world.coast[1] = 0x33;
 	/* A famous expedition ends in prison; so does health 3. */
 	s.player.expedition = 2;
 	sim_imprison(&s, JAIL_SHIP, -1);

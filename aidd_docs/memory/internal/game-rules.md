@@ -345,6 +345,10 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     reads 0x11, 0x22 or 0x33 in the table at VA `0x33b18` (0x80 and 0
     elsewhere) wins: 0x11 steps x + 1 heading 0x40, 0x22 y - 1 heading
     0x80, 0x33 x - 1 heading 0xC0.
+  - **Engine fix:** 0x22 marks shores with the sea to the south (the
+    step north lands on land for 80% of them, the step south on sea for
+    93%), so the original's step (`dec` at VA `0x1c010`) leaves the new
+    ship on land for good, a soft lock. The engine steps y + 1 instead.
 - **The stay (VA `0x1f803`):** months set to -16, then `reputation / 2 +
   7` spells of 27 days (none when that is not positive); a fresh start
   from the fortune (VA `0x1ef87` with no gold: the fortune loses a

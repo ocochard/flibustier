@@ -2115,8 +2115,18 @@ cmd_tavern(struct session *ss, const struct json *cmd, struct jbuf *out)
 			return;
 		}
 		sim_recruit(s, json_get_int(cmd, "accept", 1) != 0);
+	} else if (action != NULL && strcmp(action, "buy_map") == 0) {
+		if (!(s->tavern_spots & TAVERN_MAPS)) {
+			reply_error(out, "no map seller");
+			return;
+		}
+		if (!sim_buy_map(s)) {
+			reply_error(out, "not enough gold");
+			return;
+		}
 	} else {
-		reply_error(out, "tavern needs \"action\": open or recruit");
+		reply_error(out, "tavern needs \"action\": open, recruit or "
+		    "buy_map");
 		return;
 	}
 	jb_raw(out, "{\"ok\":true,\"recruits\":");

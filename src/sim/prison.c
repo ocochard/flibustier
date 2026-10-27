@@ -68,7 +68,10 @@ put_ashore(struct sim *s, int px, int py)
 		x++;
 		h = 0x40;
 	} else if (c == 0x22) {
-		y--;
+		/* The original steps north (y - 1), onto the land of a shore
+		 * facing south, and the ship never floats again: the engine
+		 * steps south to the sea it heads for. */
+		y++;
 		h = 0x80;
 	} else if (c == 0x33) {
 		x--;
