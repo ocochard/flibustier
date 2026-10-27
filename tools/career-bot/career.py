@@ -71,6 +71,8 @@ class Bot:
         self.no_repair_until = 0
         self.food_town = None
         self.reefs = set()	# cells where a ship was lost on shallows
+        self.wrecks = 0	# ships lost on shallows so far
+        self.dig_fails = collections.Counter()	# failed trips, per map
         self.visited = {}
         self.dead_ends = set()
         self.bumps = collections.Counter()
@@ -339,6 +341,7 @@ class Bot:
                 self.note("wrecked on a reef at %d,%d (cell %s, %d ships)" % (
                     cx, cy, self.grid[cy][cx], len(f["ships"])))
                 self.reefs.add((cx, cy))	# plan around it from now on
+                self.wrecks += 1
                 self.fields.clear()
             self.sim("crew", action="heard")
         self.check_fleet()
@@ -624,7 +627,11 @@ class Bot:
         dest = self.st["towns"][town]["name"] if isinstance(town, int) else "%d,%d" % (tx, ty)
         self.note("sailing from %d,%d to %s (food %d, crew %d, gold %d)" % (
             f["x"] // 16, f["y"] // 16, dest, f["food"], f["crew"], f["gold"]))
+        wrecks0 = self.wrecks
         while self.refresh()["day"] - t0 < max_days:
+            if town is None and self.wrecks - wrecks0 >= 3:
+                self.odd("voyage to %s wrecked three times" % dest)
+                return "slow"
             r = self.sail_to(tx, ty, town=town, max_days=max_days)
             stop = r["stop"]
             if stop == "stuck" and self.ship_on_land():
@@ -931,8 +938,9 @@ class Bot:
                         continue
             # 2. the lost relative's map, then the lost treasure
             for mapi in (1, 2, 0):
-                if s["maps"][mapi]["pieces"] & 0xF:
-                    self.dig(mapi)
+                if s["maps"][mapi]["pieces"] & 0xF and self.dig_fails[mapi] < 3:
+                    if not self.dig(mapi):
+                        self.dig_fails[mapi] += 1
                     break
             else:
                 mapi = None
