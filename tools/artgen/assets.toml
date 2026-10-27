@@ -1242,15 +1242,18 @@ file = "art/ship0.sheet"
 atlas = "art/ship0.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
-ship = { size = 0, headings = 16, frame = [78, 58] }	# the small ships
+ship = { size = 0, headings = 16, frame = [78, 58] }	# the small ships: a pinnace (ships/ships.md)
 denoise = 0.75
 prompt = """
-Photograph of a real small 17th-century two-masted sloop under sail, seen
-from above at an angle: low weathered dark oak hull with a small raised
-stern, a few gun ports, tarred rigging, patched cream canvas sails all
-set and full. It floats on the water, its hull cut at the waterline.
-Plain flat blue background. Historical reenactment photography, sharp
-focus, realistic.
+Photograph of a small, slim Dutch three-masted pinnace in dark oiled
+oak: a low single-deck hull with a modest raised stern ending in a flat,
+square transom, a short beakhead, square course and topsail on the fore
+and main masts, a triangular lateen sail on the small mizzen, a square
+spritsail under the bowsprit, a few gun ports, under sail, seen from
+above at an angle. It floats on the water, its hull cut at the
+waterline. Plain flat blue background. Historical reenactment
+photography, sharp focus, realistic. The whole ship is built of planked
+wood: no tower, nothing of stone.
 """
 [[asset]]
 id = "cur/ship0a"
@@ -1272,18 +1275,19 @@ file = "art/ship1.sheet"
 atlas = "art/ship1.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
-ship = { size = 1, headings = 16, frame = [78, 58] }	# the medium ships
+ship = { size = 1, headings = 16, frame = [78, 58] }	# the medium ships: a merchantman (ships/ships.md)
 denoise = 0.75
 prompt = """
-Photograph of a real 17th-century three-masted merchantman, a plain
-working cargo ship under sail, seen from above at an angle: a plain
-brown oak hull, low and flat-sided, with a low stern and no castle, a
-single row of a few small gun ports, no gilding, no carving, no painted
-bands; two square sails on each of its fore and main masts and a
-triangular lateen sail on the mizzen, patched cream canvas, tarred
-rigging. It floats on the
-water, its hull cut at the waterline. Plain flat blue background.
-Historical reenactment photography, sharp focus, realistic.
+Photograph of a sturdy English merchant ship of about 1620 with a broad,
+deep hull, a raised wooden stern two decks high, its poop and
+quarterdeck planked like the rest of the hull, and a smaller raised bow
+deck: square course and topsail on the fore and main masts, a lateen
+sail on the mizzen, a square spritsail under the steeply raked bowsprit,
+weathered buff and black paint, simple trim and a few small gun ports,
+under sail, seen from above at an angle. It floats on the water, its
+hull cut at the waterline. Plain flat blue background. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
 """
 [[asset]]
 id = "cur/ship1a"
@@ -1305,18 +1309,19 @@ file = "art/ship2.sheet"
 atlas = "art/ship2.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
-ship = { size = 2, headings = 16, frame = [78, 58] }
+ship = { size = 2, headings = 16, frame = [78, 58] }	# the large ships: a galleon (ships/ships.md)
 denoise = 0.75
 prompt = """
-Photograph of a real 17th-century Spanish war galleon under sail, seen
-from above at an angle: a large weathered dark oak hull whose deck
-rises in steps to a raised sterncastle two decks high, its stern a
-carved and gilded transom with open stern galleries, part of the hull
-and of the same wood; painted bands along its side, two rows of gun
-ports, tarred rigging,
-patched cream canvas sails all set and full. It floats on the water,
-its hull cut at the waterline. Plain flat blue background. Historical
-reenactment photography, sharp focus, realistic.
+Photograph of a Spanish treasure galleon of about 1600 with a broad
+hull, a high wooden stern rising three decks, its flat planked transom
+painted with saints and quarter galleries, a lower raised bow deck and a
+long, low beakhead: square courses and topsails on the fore and main
+masts, a lateen mizzen, two square sails on the bowsprit, an ochre and
+dark red hull with gilded trim and gun ports, under sail, seen from
+above at an angle. It floats on the water, its hull cut at the
+waterline. Plain flat blue background. Historical reenactment
+photography, sharp focus, realistic. The whole ship is built of planked
+wood: no tower, nothing of stone.
 """
 [[asset]]
 id = "cur/ship2a"
@@ -1389,3 +1394,221 @@ Caribbean colonial house with white plastered walls, a red clay tile
 roof, a dark door and two small windows, standing alone on a plain flat
 light grey ground, nothing else.
 """
+
+# The sea battle's damage pictures: each class from the side, whole to
+# sinking, in five steps (the panel at (489, 137) for the foe and (489,
+# 258) for the player).  The model's damage gives the shape; the redraw
+# adds what each step says.
+[damage]
+denoise = 0.6		# from the third step on, so the masts stay gone
+levels = [
+    "Whole and undamaged, under full sail.",
+    "Lightly damaged: a few holes shot through its sails.",
+    "Badly damaged: its topmasts shot away, its aftmost mast gone, only a broken stump left, its sails torn with many holes, smoke drifting from its side.",
+    "Crippled: its mainmast and aftmost mast gone, broken off as stumps, the mainmast fallen over the side, its last sails in rags, holes in its hull, flames and thick smoke.",
+    "Sinking: all its masts gone, only broken stumps, listing heavily and down by the bow, low in the water, a burning dismasted wreck.",
+]
+
+[[asset]]
+id = "cur/pinnabtl"
+file = "art/pinnabtl.sheet"
+atlas = "art/pinnabtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "pinnace", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a small, slim Dutch three-masted pinnace in dark oiled
+oak: a low single-deck hull with a modest raised stern ending in a flat,
+square transom, a short beakhead, square course and topsail on the fore
+and main masts, a triangular lateen sail on the small mizzen, a square
+spritsail under the bowsprit, a few gun ports, at sea, seen exactly from
+its side, its bow to the left, in daylight. Plain flat blue background.
+Historical reenactment photography, sharp focus, realistic. The whole
+ship is built of planked wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/sloopbtl"
+file = "art/sloopbtl.sheet"
+atlas = "art/sloopbtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "sloop", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a low, sleek single-masted Caribbean sloop of the 1670s
+with a flush deck and a small square transom: one tall mast raked aft
+with a large gaff mainsail on a long boom, two triangular jibs on a
+long, nearly level bowsprit, a small square topsail high on the mast, a
+bare cedar hull with a black wale and a handful of small cannon along
+the rail, at sea, seen exactly from its side, its bow to the left, in
+daylight. Plain flat blue background. Historical reenactment
+photography, sharp focus, realistic. The whole ship is built of planked
+wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/barqubtl"
+file = "art/barqubtl.sheet"
+atlas = "art/barqubtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "barque", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a small three-masted Elizabethan bark with a stout, plain
+wooden hull, a modest raised bow deck and a raised square stern: square
+course and topsail on the fore and main masts, a single lateen sail on
+the short mizzen, a spritsail under the raked bowsprit, a tarred brown
+hull with a few red gun-port lids, at sea, seen exactly from its side,
+its bow to the left, in daylight. Plain flat blue background. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/cargobtl"
+file = "art/cargobtl.sheet"
+atlas = "art/cargobtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "fluyt", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a Dutch fluyt of the 1650s, a long narrow cargo ship whose
+sides curve sharply inward above the waterline, a rounded stern topped
+by a tall, narrow, flat transom with a small carved panel, almost no
+raised bow deck, three tall masts with square sails on the fore and
+main, a lateen mizzen and a spritsail, a dark varnished hull with green
+and ochre trim and few gun ports, at sea, seen exactly from its side,
+its bow to the left, in daylight. Plain flat blue background. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/merchbtl"
+file = "art/merchbtl.sheet"
+atlas = "art/merchbtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "merchantman", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a sturdy English merchant ship of about 1620 with a broad,
+deep hull, a raised wooden stern two decks high, its poop and
+quarterdeck planked like the rest of the hull, and a smaller raised bow
+deck: square course and topsail on the fore and main masts, a lateen
+sail on the mizzen, a square spritsail under the steeply raked bowsprit,
+weathered buff and black paint, simple trim and a few small gun ports,
+at sea, seen exactly from its side, its bow to the left, in daylight.
+Plain flat blue background. Historical reenactment photography, sharp
+focus, realistic. The whole ship is built of planked wood: no tower,
+nothing of stone.
+"""
+
+[[asset]]
+id = "cur/frigabtl"
+file = "art/frigabtl.sheet"
+atlas = "art/frigabtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "frigate", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a sleek Dutch light frigate of about 1665, a low-slung,
+fine-lined hull with one continuous row of gun ports and a short raised
+bow deck, a modest raised quarterdeck ending in a flat carved transom
+with light gilding: square courses, topsails and topgallants, a lateen
+mizzen under a small square topsail, a spritsail and spritsail topsail,
+a black hull with yellow-ochre bands and red gun-port lids, at sea, seen
+exactly from its side, its bow to the left, in daylight. Plain flat blue
+background. Historical reenactment photography, sharp focus, realistic.
+The whole ship is built of planked wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/wargabtl"
+file = "art/wargabtl.sheet"
+atlas = "art/wargabtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "war galleon", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a massive war galleon of the 1620s with two full rows of
+red-lidded gun ports, a high wooden stern several decks tall, heavily
+carved with galleries, deep red and covered in gilded and painted
+sculpture, a long ornate beakhead with a lion figurehead: square
+courses, topsails and topgallants, a lateen mizzen with a small topsail,
+two square sails on the raked bowsprit, at sea, seen exactly from its
+side, its bow to the left, in daylight. Plain flat blue background.
+Historical reenactment photography, sharp focus, realistic. The whole
+ship is built of planked wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/gallebtl"
+file = "art/gallebtl.sheet"
+atlas = "art/gallebtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "galleon", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a Spanish treasure galleon of about 1600 with a broad
+hull, a high wooden stern rising three decks, its flat planked transom
+painted with saints and quarter galleries, a lower raised bow deck and a
+long, low beakhead: square courses and topsails on the fore and main
+masts, a lateen mizzen, two square sails on the bowsprit, an ochre and
+dark red hull with gilded trim and gun ports, at sea, seen exactly from
+its side, its bow to the left, in daylight. Plain flat blue background.
+Historical reenactment photography, sharp focus, realistic. The whole
+ship is built of planked wood: no tower, nothing of stone.
+"""
+
+[[asset]]
+id = "cur/fastgbtl"
+file = "art/fastgbtl.sheet"
+atlas = "art/fastgbtl.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+damage = { class = "fast galleon", levels = 5, frame = [145, 86] }
+denoise = 0.75
+prompt = """
+Photograph of a sleek English race-built galleon of the 1580s, a low,
+long hull with a low stern and bow, a small raised bow deck and a
+moderately raised stern with a square transom and a small gallery, one
+row of gun ports: square courses and topsails on the fore and main
+masts, a lateen mizzen, a spritsail, the hull painted in bold red, gold
+and black bands, red below and black above, at sea, seen exactly from
+its side, its bow to the left, in daylight. Plain flat blue background.
+Historical reenactment photography, sharp focus, realistic. The whole
+ship is built of planked wood: no tower, nothing of stone.
+"""
+
+# The fort under fire in a sea battle, on the battle panel: whole, then
+# each frame the one before shot to more pieces, darker and smokier.
+[[asset]]
+id = "cur/fortbtl"
+file = "art/fortbtl.sheet"
+atlas = "art/fortbtl.png"
+size = [145, 86]
+seed = 1660
+source = "layout described from the original screen"
+scene = "a Spanish fort on a Caribbean shore"
+prompt = """
+Photograph seen from the sea of a Spanish stone fort of the 1650s on a
+Caribbean shore: whitewashed stone walls with battlements and a square
+watchtower on the left, a long rampart running down a green grassy
+slope to the water at the bottom left, two palm trees on the right,
+under a clear turquoise sky. Historical reenactment photography, sharp
+focus, realistic.
+"""
+steps = [
+    "Cannon balls have hit the fort: a few holes and chipped stones in its walls, a little smoke rising.",
+    "The fort is badly damaged: battlements shot away, a breach in the wall, fires burning and smoke darkening the sky.",
+    "The fort is crumbling: the watchtower half collapsed, wide breaches in the walls, thick black smoke and flames, the sky grey with smoke.",
+    "The fort is a ruin: its walls and tower fallen into heaps of rubble, everything burning, a dark sky full of black smoke.",
+]
