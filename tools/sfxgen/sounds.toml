@@ -14,19 +14,23 @@
 # battle's "En garde!", the cries of the hit in sword fights, the beaten
 # opponent's surrender)
 #
-# Left out as well because no take sounded right: the crash (hulls
-# meeting, a reef struck) and the shot falling in the sea.  The game
-# keeps the original's.
+#
+# The model is Stable Audio 3 since the crash and the splash came out
+# wrong with Stable Audio Open 1.0.
 # are left out, so the game keeps the original's; the other sounds are
 # asked without voices.
 
+# Stable Audio 3 Small-SFX (distilled): 8 steps at CFG 1 as its model card
+# says; its "pingpong" sampler, which re-noises at each step, is
+# euler_ancestral in ComfyUI.  (Stable Audio Open 1.0 took 100 steps of
+# dpmpp_3m_sde_gpu, exponential, at CFG 7, with t5_base.)
 [render]
-checkpoint = "stable-audio-open-1.0.safetensors"
-text_encoder = "t5_base.safetensors"
-steps = 100
-cfg = 7.0
-sampler = "dpmpp_3m_sde_gpu"
-scheduler = "exponential"
+checkpoint = "stable_audio_3_small_sfx.safetensors"
+text_encoder = "t5gemma_b_b_ul2.safetensors"
+steps = 8
+cfg = 1.0
+sampler = "euler_ancestral"
+scheduler = "simple"
 negative = "music, melody, singing, speech, voice, vocals, shouting, screaming, talking, low quality, distorted, noise, hiss, static"
 
 # The digitised effects (DIGITAL.PIR's) that are not voices.
@@ -48,6 +52,18 @@ id = "sound/shot-hit"
 length = 1.19
 seconds = 1.7
 prompt = "an iron cannonball striking a thick wooden ship's hull, one hard heavy impact and a splintering crack"
+
+[[sound]]
+id = "sound/shot-miss"
+length = 1.01
+seconds = 1.5
+prompt = "a heavy iron ball plunging into the sea, a loud water splash and spray, waves"
+
+[[sound]]
+id = "sound/crash"
+length = 1.64
+seconds = 2.1
+prompt = "a heavy wooden ship ramming into another, one deep hollow crunch of thick oak timbers, then a creak"
 
 [[sound]]
 id = "sound/swing"

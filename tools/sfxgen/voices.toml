@@ -1,0 +1,43 @@
+# The open pack's voices, for tools/sfxgen/voicegen.py.
+#
+# The sound effects that are voices in the original, spoken anew by Dia2
+# (Nari Labs, Apache 2.0) from the lines below alone: never from the
+# original's recordings.  [S1] is the speaker; Dia2 also reads
+# non-verbal cues such as (screams), (groans), (gasps).  "length" is the
+# original's; a take longer than 1.5 times that is cut, a shorter one is
+# kept whole.
+
+[render]
+repo = "nari-labs/Dia2-2B"
+cfg = 2.0
+temperature = 0.8
+
+[[voice]]
+id = "sound/hail"
+length = 0.89
+text = "[S1] Arrgh!"
+
+[[voice]]
+id = "sound/sail-ho"
+length = 1.15
+text = "[S1] Sail ho!"
+
+[[voice]]
+id = "sound/land-battle"
+length = 0.81
+text = "[S1] En garde!"
+
+[[voice]]
+id = "sound/last-man"
+length = 0.97
+text = "[S1] Oh! I surrender!"
+
+[[voice]]
+id = "sound/hit-foe"
+length = 0.52
+text = "[S1] Argh! (groans)"
+
+[[voice]]
+id = "sound/hit-you"
+length = 0.37
+text = "[S1] Ugh! (gasps)"
