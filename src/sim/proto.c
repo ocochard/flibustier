@@ -2594,6 +2594,37 @@ cmd_assault(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * The reckoning at the end of a career (VA 0x45d0), as retiring or the
+ * last prison would make it: the game itself goes on.
+ */
+static void
+cmd_career_end(struct session *ss, struct jbuf *out)
+{
+	struct career_end e;
+
+	sim_career_end(&ss->sim, &e);
+	jb_raw(out, "{\"ok\":true,\"points\":");
+	jb_int(out, e.points);
+	jb_raw(out, ",\"score\":");
+	jb_int(out, e.score);
+	jb_raw(out, ",\"rating\":");
+	jb_int(out, e.rating);
+	jb_raw(out, ",\"ranks\":");
+	jb_int(out, e.ranks);
+	jb_raw(out, ",\"member\":");
+	jb_int(out, e.member);
+	jb_raw(out, ",\"wealth\":");
+	jb_int(out, e.wealth);
+	jb_raw(out, ",\"repute\":");
+	jb_int(out, e.repute);
+	jb_raw(out, ",\"mood\":");
+	jb_int(out, e.mood);
+	jb_raw(out, ",\"age\":");
+	jb_int(out, e.age);
+	jb_raw(out, "}");
+}
+
 /* The bank: "divide" the plunder, then "continue" ("advance": 0 or 1). */
 static void
 cmd_bank(struct session *ss, const struct json *cmd, struct jbuf *out)
@@ -2762,6 +2793,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_assault(ss, cmd, out);
 	else if (strcmp(name, "bank") == 0)
 		cmd_bank(ss, cmd, out);
+	else if (strcmp(name, "career_end") == 0)
+		cmd_career_end(ss, out);
 	else if (strcmp(name, "board") == 0)
 		cmd_board(ss, cmd, out);
 	else if (strcmp(name, "sword") == 0)

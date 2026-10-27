@@ -796,6 +796,16 @@ class Bot:
                 dx, dy = ((f["ship_x"] > lx) - (f["ship_x"] < lx),
                           (f["ship_y"] > ly) - (f["ship_y"] < ly))
             near = abs(lx - f["x"]) + abs(ly - f["y"]) < 24
+            if abs(lx - f["x"]) < 8 and abs(ly - f["y"]) < 8:
+                # by the landing point: the water is one of the eight ways
+                for ddx, ddy in ((dx, dy), (1, 0), (-1, 0), (0, 1), (0, -1),
+                                 (1, 1), (1, -1), (-1, 1), (-1, -1)):
+                    r = self.sim("march", dx=ddx, dy=ddy, ticks=2)
+                    if r["stop"] == "boarded":
+                        break
+                    self.sim("march", dx=-ddx, dy=-ddy, ticks=2)
+                if r["stop"] == "boarded":
+                    break
             r = self.sim("march", dx=dx, dy=dy, ticks=1 if near else 8)
             if r["stop"] == "boarded":
                 break
@@ -888,6 +898,7 @@ class Bot:
                 ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][s["month"]],
                 s["year"], s["player"]["title"], s["rank"], f["gold"], s["fortune"], s["acres"], f["crew"],
                 f["ships"], s["married"], s["relative"], s["reputation"]),
+            "Reckoning: " + json.dumps({k: v for k, v in self.sim("career_end").items() if k != "ok"}),
             "Stats: " + json.dumps(dict(self.stats), sort_keys=True),
             "Calls: " + json.dumps(dict(self.sim.calls), sort_keys=True),
         ]

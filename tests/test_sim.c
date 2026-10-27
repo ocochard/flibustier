@@ -1431,6 +1431,12 @@ test_towns(void)
 	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"enter\"}", &out);
 	CHECK(out.s != NULL && strstr(out.s, "\"player_town\":2") != NULL);
 	jb_free(&out);
+	/* The reckoning: a fresh captain, 25, of no rank. */
+	proto_handle(&ss, "{\"cmd\":\"career_end\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":true") != NULL &&
+	    strstr(out.s, "\"age\":25") != NULL &&
+	    strstr(out.s, "\"ranks\":0") != NULL);
+	jb_free(&out);
 	/* The map seller: a piece for 50 gold, only while he is there. */
 	ss.sim.tavern_spots = 0;
 	proto_handle(&ss, "{\"cmd\":\"tavern\",\"action\":\"buy_map\"}",

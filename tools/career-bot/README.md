@@ -30,8 +30,9 @@ python3 tools/career-bot/career.py --data ~/games/pirates_gold --seed 3
 Options: `--era` (1560 to 1680), `--nation`, `--seed`, `--years` (12 by
 default), `--out DIR` for the journal (`journal-<era>-<nation>-seed<N>.txt`,
 written as the career goes, so `tail -f` follows it), `--build DIR`, and
-`-v` to print the journal live. At the end it prints the final state, its
-counters (captures, duels, maps dug, ...), the protocol calls made and the
+`-v` to print the journal live. At the end it prints the final state, the
+reckoning retiring would give (`career_end`: score and Hall of Fame
+rating), its counters (captures, duels, maps dug, ...), the protocol calls made and the
 anomalies. It exits 1 when a protocol command failed.
 
 The bot is a mediocre captain: it runs onto reefs, takes some fights it
