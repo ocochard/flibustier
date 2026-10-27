@@ -36,6 +36,7 @@ import uuid
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCREEN_W, SCREEN_H = 640, 480
 SKETCH_W = 1472			# layouts/sketch.py's width
+SHIP_RENDER = (832, 624)	# a ship model's heading as rendered
 
 MODELS = {
     # DiffSynth's Canny patch: lighter than the InstantX Union ControlNet,
@@ -1106,6 +1107,217 @@ def git_rev():
         return "unknown"
 
 
+def ship_frame_workflow(spec, profile, seed, render, prompt, denoise, out_w,
+                        out_h, prefix):
+    """One rendered heading of a ship model made a photograph: laid on a
+    plain sea blue, redrawn at "denoise" with the render's own edges
+    holding its shape, cut out again and brought to the frame's size,
+    with its alpha."""
+    p = PROFILES[profile]
+    text = prompt.strip()
+    if spec["pack"].get("style"):
+        text += " " + spec["pack"]["style"].strip()
+    g = {
+        "unet": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": MODELS["unet"], "weight_dtype": "fp8_e4m3fn"}},
+        "clip": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": MODELS["clip"], "type": "qwen_image"}},
+        "vae": {"class_type": "VAELoader", "inputs": {
+            "vae_name": MODELS["vae"]}},
+        "pos": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": text, "clip": ["clip", 0]}},
+        "neg": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": DEFAULT_NEGATIVE, "clip": ["clip", 0]}},
+        "render": {"class_type": "LoadImage", "inputs": {"image": render}},
+        "shape": {"class_type": "InvertMask", "inputs": {
+            "mask": ["render", 1]}},
+        "sea": {"class_type": "EmptyImage", "inputs": {
+            "width": SHIP_RENDER[0], "height": SHIP_RENDER[1],
+            "batch_size": 1, "color": 0x2A5A7A}},
+    }
+    g.update({
+        "onsea": {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["sea", 0], "source": ["render", 0],
+            "x": 0, "y": 0, "resize_source": False, "mask": ["shape", 0]}},
+        "edges": {"class_type": "Canny", "inputs": {
+            "image": ["onsea", 0], "low_threshold": 0.2,
+            "high_threshold": 0.5}},
+        "enc": {"class_type": "VAEEncodeTiled", "inputs": {
+            "pixels": ["onsea", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}},
+        "cpatch": {"class_type": "ModelPatchLoader", "inputs": {
+            "name": MODELS["controlnet"]}},
+        "control": {"class_type": "QwenImageDiffsynthControlnet",
+                    "inputs": {
+                        "model": ["unet", 0], "model_patch": ["cpatch", 0],
+                        "vae": ["vae", 0], "image": ["edges", 0],
+                        "strength": 0.9, "start_percent": 0.0,
+                        "end_percent": 0.8}},
+        "decode": {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["sample", 0], "vae": ["vae", 0], "tile_size": 512,
+            "overlap": 64, "temporal_size": 64, "temporal_overlap": 8}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["decode", 0], "filename_prefix": prefix}},
+    })
+    model = ["control", 0]
+    if p["lora"]:
+        g["lora"] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": model, "lora_name": MODELS["lightning"],
+            "strength_model": 1.0}}
+        model = ["lora", 0]
+    g["shift"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {
+        "model": model, "shift": SHIFT}}
+    g["sample"] = {"class_type": "KSampler", "inputs": {
+        "model": ["shift", 0], "seed": seed, "steps": p["steps"],
+        "cfg": p["cfg"], "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["pos", 0], "negative": ["neg", 0],
+        "latent_image": ["enc", 0], "denoise": denoise}}
+    return g
+
+
+def cutout_workflow(image, out_w, out_h, prefix):
+    """The ship of a redrawn heading cut out of its sea and brought to the
+    frame's size, with its alpha (a job of its own: the matte does not
+    fit beside the scene model)."""
+    return {
+        "image": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "matter": {"class_type": "LoadBackgroundRemovalModel", "inputs": {
+            "bg_removal_name": MODELS["matte"]}},
+        "matte": {"class_type": "RemoveBackground", "inputs": {
+            "bg_removal_model": ["matter", 0], "image": ["image", 0]}},
+        "small": {"class_type": "ImageScale", "inputs": {
+            "image": ["image", 0], "upscale_method": "lanczos",
+            "width": out_w, "height": out_h, "crop": "disabled"}},
+        "mimg": {"class_type": "MaskToImage", "inputs": {
+            "mask": ["matte", 0]}},
+        "msmall": {"class_type": "ImageScale", "inputs": {
+            "image": ["mimg", 0], "upscale_method": "bilinear",
+            "width": out_w, "height": out_h, "crop": "disabled"}},
+        "alpha": {"class_type": "ImageToMask", "inputs": {
+            "image": ["msmall", 0], "channel": "red"}},
+        # JoinImageWithAlpha takes a mask (1 = clear), as LoadImage gives.
+        "clear": {"class_type": "InvertMask", "inputs": {
+            "mask": ["alpha", 0]}},
+        "rgba": {"class_type": "JoinImageWithAlpha", "inputs": {
+            "image": ["small", 0], "alpha": ["clear", 0]}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["rgba", 0], "filename_prefix": prefix}},
+    }
+
+
+def rgba_atlas_workflow(images, sizes, prefix):
+    """Frames with alpha side by side, left to right, top aligned, the
+    atlas keeping their alpha."""
+    tw, th = sum(w for w, _ in sizes), max(h for _, h in sizes)
+    g = {"canvas": {"class_type": "EmptyImage", "inputs": {
+        "width": tw, "height": th, "batch_size": 1, "color": 0}},
+        "clear": {"class_type": "SolidMask", "inputs": {
+            "value": 1.0, "width": tw, "height": th}}}
+    img, msk, x = ["canvas", 0], ["clear", 0], 0
+    for n, (image, (w, _)) in enumerate(zip(images, sizes)):
+        g["f%d" % n] = {"class_type": "LoadImage", "inputs": {
+            "image": image}}
+        g["p%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": img, "source": ["f%d" % n, 0], "x": x, "y": 0,
+            "resize_source": False}}
+        # Masks are 1 where clear: the frame's over the clear canvas.
+        g["m%d" % n] = {"class_type": "MaskComposite", "inputs": {
+            "destination": msk, "source": ["f%d" % n, 1], "x": x, "y": 0,
+            "operation": "multiply"}}
+        img, msk, x = ["p%d" % n, 0], ["m%d" % n, 0], x + w
+    g["rgba"] = {"class_type": "JoinImageWithAlpha", "inputs": {
+        "image": img, "alpha": msk}}
+    g["save"] = {"class_type": "SaveImage", "inputs": {
+        "images": ["rgba", 0], "filename_prefix": prefix}}
+    return g
+
+
+def write_sheet(path, atlas, sizes, comment):
+    """A .sheet naming "atlas" and frames side by side of "sizes"."""
+    lines = ["# " + comment, "[sheet]", "image = " + atlas, "", "[frames]"]
+    x = 0
+    for n, (w, h) in enumerate(sizes):
+        lines.append("%d = %d 0 %d %d" % (n, x, w, h))
+        x += w
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def make_ship(args, spec, a, profile, seed):
+    """A ship's headings: its model rendered by Blender on the render
+    host, each heading made a photograph and cut out, laid in one atlas
+    with its .sheet."""
+    k = spec["pack"]["art_height"] / SCREEN_H
+    sh = a["ship"]
+    heads = sh.get("headings", 16)
+    fw, fh = (round(v * k) for v in sh.get("frame", [78, 58]))
+    host = args.render_host
+    work = "flibustier-ships/%s" % a["id"].replace("/", "-")
+    local = os.path.join(args.pack, a["atlas"] + ".frames")
+    script = os.path.join(HERE, "ships", "ship.py")
+    try:
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "mkdir -p %s" % work], check=True,
+                       stdin=subprocess.DEVNULL)
+        subprocess.run(["scp", "-q", script, "%s:%s/" % (host, work)],
+                       check=True)
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "cd %s && rm -rf out && blender -b -P ship.py -- "
+                        "--size %d --out out --frame %dx%d --headings %d "
+                        "> blender.log 2>&1" % (work, sh["size"],
+                                                 SHIP_RENDER[0],
+                                                 SHIP_RENDER[1], heads)],
+                       check=True, stdin=subprocess.DEVNULL)
+        os.makedirs(local, exist_ok=True)
+        subprocess.run(["scp", "-q", "%s:%s/out/*.png" % (host, work),
+                        local + "/"], check=True)
+    except subprocess.CalledProcessError as e:
+        print("%s: blender on %s failed: %s" % (a["id"], host, e),
+              file=sys.stderr)
+        return None
+    free(args.server)
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    try:
+        # Every heading redrawn first, the scene model loaded once; one
+        # seed for all, so they look alike.
+        for n in range(heads):
+            up = upload(args.server, os.path.join(local, "%d.png" % n),
+                        "flibustier-ship-render.png")
+            png = render(args.server, ship_frame_workflow(
+                spec, profile, seed, up, a["prompt"],
+                a.get("denoise", 0.75), fw, fh, prefix))
+            with open(os.path.join(local, "photo-%d.png" % n), "wb") as f:
+                f.write(png)
+        free(args.server)
+        frames = []
+        for n in range(heads):
+            up = upload(args.server, os.path.join(local, "photo-%d.png" % n),
+                        "flibustier-ship-photo.png")
+            path = os.path.join(local, "frame-%d.png" % n)
+            with open(path, "wb") as f:
+                f.write(render(args.server, cutout_workflow(
+                    up, fw, fh, prefix + "-cut")))
+            frames.append(upload(args.server, path,
+                                 "flibustier-ship-frame-%d.png" % n))
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    sizes = [(fw, fh)] * heads
+    atlas = render(args.server, rgba_atlas_workflow(
+        frames, sizes, "flibustier/" + a["id"].replace("/", "-") +
+        "-atlas"))
+    with open(os.path.join(args.pack, a["atlas"]), "wb") as f:
+        f.write(atlas)
+    write_sheet(os.path.join(args.pack, a["file"]),
+                os.path.basename(a["atlas"]), sizes,
+                "Generated by tools/artgen/artgen.py from a ship model.")
+    shutil.rmtree(local)
+    return {"headings": heads, "frame": [fw, fh], "size": sh["size"],
+            "denoise": a.get("denoise", 0.75),
+            "model_sha256": hashlib.sha256(
+                open(script, "rb").read()).hexdigest()}
+
+
 def write_manifest(pack, spec):
     """pack.ini: every asset that has art in the pack."""
     lines = ["# Generated by tools/artgen/artgen.py; see provenance/.",
@@ -1132,6 +1344,8 @@ def main():
     ap.add_argument("--keep-loaded", action="store_true",
                     help="do not unload ComfyUI's models first (for runs "
                     "back to back)")
+    ap.add_argument("--render-host", default="framework2",
+                    help="where Blender renders the ship models (ssh)")
     ap.add_argument("ids", nargs="*")
     args = ap.parse_args()
     args.server = reachable(args.server)
@@ -1191,6 +1405,52 @@ def main():
                 args.server, os.path.join(HERE, a["control"]),
                 "flibustier-control-" + os.path.basename(a["control"]))
         name = os.path.splitext(a["file"])[0]
+        if a.get("frames_of"):
+            # Some headings of another asset's ship (the sea battle's two
+            # banks): a .sheet on that asset's atlas, nothing rendered.
+            src = [r for r in spec["asset"] if r["id"] == a["frames_of"]][0]
+            if not os.path.exists(os.path.join(args.pack, src["atlas"])):
+                print("%s: no %s yet" % (a["id"], src["atlas"]),
+                      file=sys.stderr)
+                failed.append(a["id"])
+                continue
+            fw, fh = (round(v * height / SCREEN_H)
+                      for v in src["ship"].get("frame", [78, 58]))
+            first, count = a["frames"]
+            lines = ["# Headings %d to %d of %s." % (
+                first, first + count - 1, src["id"]), "[sheet]",
+                "image = " + os.path.basename(src["atlas"]), "", "[frames]"]
+            for n in range(count):
+                lines.append("%d = %d 0 %d %d" % (n, (first + n) * fw, fw,
+                                                   fh))
+            with open(os.path.join(args.pack, a["file"]), "w") as f:
+                f.write("\n".join(lines) + "\n")
+            print("%s: headings %d-%d of %s" % (a["id"], first,
+                                                first + count - 1, src["id"]))
+            continue
+        if a.get("ship"):
+            t0 = time.time()
+            record = make_ship(args, spec, a, profile, seed)
+            if record is None:
+                failed.append(a["id"])
+                continue
+            pdir = os.path.join(args.pack, "provenance")
+            os.makedirs(pdir, exist_ok=True)
+            with open(os.path.join(pdir, a["id"].replace("/", "-") +
+                                   ".json"), "w") as f:
+                json.dump(dict(record, id=a["id"], file=a["file"],
+                               atlas=a["atlas"], profile=profile, seed=seed,
+                               prompt=a["prompt"].strip(),
+                               model="ships/ship.py",
+                               comfyui=system.get("comfyui_version"),
+                               generator=git_rev(),
+                               date=datetime.datetime.now(
+                                   datetime.timezone.utc)
+                               .isoformat(timespec="seconds")), f, indent=2)
+                f.write("\n")
+            print("%s: %s ship, %d headings, %.0f s" % (
+                a["id"], profile, record["headings"], time.time() - t0))
+            continue
         if a.get("from"):
             t0 = time.time()
             record = derive_sheet(args, spec, a, profile, seed)

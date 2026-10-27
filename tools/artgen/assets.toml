@@ -1230,3 +1230,105 @@ Take the treasure map away from the table and pull the dagger out: the
 dagger now lies flat on the bare wooden table, and the bare planks show
 where the map was.
 """
+
+# The ships, as the game draws them at sea and in battle: a model built
+# and rendered at the sixteen headings by ships/ship.py (the same ship at
+# every heading), each heading then made a photograph, its shape held by
+# the render's own edges.  The sea battle's two banks are the sailing
+# sprite's first and last eight headings.
+[[asset]]
+id = "spr/ship0"
+file = "art/ship0.sheet"
+atlas = "art/ship0.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+ship = { size = 0, headings = 16, frame = [78, 58] }	# the small ships
+denoise = 0.75
+prompt = """
+Photograph of a real small 17th-century two-masted sloop under sail, seen
+from above at an angle: low weathered dark oak hull with a small raised
+stern, a few gun ports, tarred rigging, patched cream canvas sails all
+set and full. It floats on the water, its hull cut at the waterline.
+Plain flat blue background. Historical reenactment photography, sharp
+focus, realistic.
+"""
+[[asset]]
+id = "cur/ship0a"
+file = "art/ship0a.sheet"
+frames_of = "spr/ship0"
+frames = [0, 8]
+seed = 1660
+prompt = ""
+[[asset]]
+id = "cur/ship0b"
+file = "art/ship0b.sheet"
+frames_of = "spr/ship0"
+frames = [8, 8]
+seed = 1660
+prompt = ""
+[[asset]]
+id = "spr/ship1"
+file = "art/ship1.sheet"
+atlas = "art/ship1.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+ship = { size = 1, headings = 16, frame = [78, 58] }	# the medium ships
+denoise = 0.75
+prompt = """
+Photograph of a real 17th-century three-masted merchantman, a plain
+working cargo ship under sail, seen from above at an angle: a plain
+brown oak hull, low and flat-sided, with a low stern and no castle, a
+single row of a few small gun ports, no gilding, no carving, no painted
+bands; two square sails on each of its fore and main masts and a
+triangular lateen sail on the mizzen, patched cream canvas, tarred
+rigging. It floats on the
+water, its hull cut at the waterline. Plain flat blue background.
+Historical reenactment photography, sharp focus, realistic.
+"""
+[[asset]]
+id = "cur/ship1a"
+file = "art/ship1a.sheet"
+frames_of = "spr/ship1"
+frames = [0, 8]
+seed = 1660
+prompt = ""
+[[asset]]
+id = "cur/ship1b"
+file = "art/ship1b.sheet"
+frames_of = "spr/ship1"
+frames = [8, 8]
+seed = 1660
+prompt = ""
+[[asset]]
+id = "spr/ship2"
+file = "art/ship2.sheet"
+atlas = "art/ship2.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+ship = { size = 2, headings = 16, frame = [78, 58] }
+denoise = 0.75
+prompt = """
+Photograph of a real 17th-century Spanish war galleon under sail, seen
+from above at an angle: a large weathered dark oak hull whose deck
+rises in steps to a raised sterncastle two decks high, its stern a
+carved and gilded transom with open stern galleries, part of the hull
+and of the same wood; painted bands along its side, two rows of gun
+ports, tarred rigging,
+patched cream canvas sails all set and full. It floats on the water,
+its hull cut at the waterline. Plain flat blue background. Historical
+reenactment photography, sharp focus, realistic.
+"""
+[[asset]]
+id = "cur/ship2a"
+file = "art/ship2a.sheet"
+frames_of = "spr/ship2"
+frames = [0, 8]
+seed = 1660
+prompt = ""
+[[asset]]
+id = "cur/ship2b"
+file = "art/ship2b.sheet"
+frames_of = "spr/ship2"
+frames = [8, 8]
+seed = 1660
+prompt = ""
