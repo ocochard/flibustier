@@ -4489,7 +4489,7 @@ wright_note(struct game *g, int cstr)
 static void
 shipwright_enter(struct game *g)
 {
-	game_music(g, MUS_TRADE);
+	game_music_as(g, MUS_TRADE, "music/shipwright");
 	game_background(g, "pic/swright");
 	game_portrait(g, NULL);
 	g->ink[0] = 240;	/* light, on the dark blue */

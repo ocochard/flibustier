@@ -49,6 +49,13 @@ game-rules.md):
 | `music/news-titled` | the same, titled by his nation (18) | `music/harbour` | arriving in a town (44) |
 | `music/promotion` | a promotion (19) | | |
 
+- **Variants:** `music/<tune>-2` to `music/<tune>-9` are other
+  recordings of the same tune; each time the tune starts, one of those
+  present (with `music/<tune>`) is picked at random.
+- **The shipwright's own:** the game plays the trade tune for the
+  merchant and the shipwright alike; a pack may give the shipwright
+  `music/shipwright` (with its variants), preferred there over
+  `music/trade`.
 - The recording plays once, as the driver's tunes do, in place of the FM
   arrangement; asked again while it plays, it goes on.
 - A stop fades it out over 3 seconds (the driver's fade); opening the
@@ -89,6 +96,12 @@ pic/town = art/town.png
 ```
 
 - File paths are relative to the pack directory and may not contain `..`.
+- **Fragments:** after `pack.ini`, every `pack.d/*.ini` is read in name
+  order, with the same syntax, so that each tool keeps its own list (the
+  art generator writes `pack.ini`, `tools/music_pack.py` writes
+  `pack.d/music.ini`). A fragment's `[pack]` keys are ignored: the
+  pack's name and licence are `pack.ini`'s. The first entry for an ID
+  wins, `pack.ini`'s first.
 - Unknown `[pack]` keys are ignored, for forward compatibility.
 - `art_height`: the screen height the pack's art is drawn for, 240 to
   4320 (default 480, the original). A full-screen picture for 1080p is

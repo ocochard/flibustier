@@ -215,15 +215,45 @@ tune_stop(struct jukebox *j)
 	j->tune_on = 0;
 }
 
-/* Start a pack's recording of tune "cmd"; 0 when no pack has one. */
-static int
-tune_start(struct game *g, struct jukebox *j, int cmd)
-{
-	const char *id = game_tune_id(cmd);
-	struct blob b;
-	char type[16];
+#define TUNE_VARIANTS	9	/* "music/tavern", then "-2" to "-9" */
 
-	if (id == NULL || packs_load(g->packs, id, &b) != 0)
+/*
+ * The recording to play for "base": one of its variants ("music/tavern",
+ * "music/tavern-2"...) at random.  Returns 0 and the ID in "id", or -1
+ * when no pack has any.
+ */
+static int
+tune_pick(struct game *g, const char *base, char *id, size_t len)
+{
+	char found[TUNE_VARIANTS][64];
+	int n = 0, k;
+
+	for (k = 1; k <= TUNE_VARIANTS; k++) {
+		if (k == 1)
+			snprintf(found[n], sizeof(found[n]), "%s", base);
+		else
+			snprintf(found[n], sizeof(found[n]), "%s-%d", base, k);
+		if (packs_provides(g->packs, found[n]))
+			n++;
+	}
+	if (n == 0)
+		return (-1);
+	snprintf(id, len, "%s", found[GetRandomValue(0, n - 1)]);
+	return (0);
+}
+
+/* Start a pack's recording of tune "cmd" (or of the screen's "alt");
+ * 0 when no pack has one. */
+static int
+tune_start(struct game *g, struct jukebox *j, int cmd, const char *alt)
+{
+	const char *base = game_tune_id(cmd);
+	struct blob b;
+	char id[64], type[16];
+
+	if (base == NULL || ((alt == NULL || tune_pick(g, alt, id,
+	    sizeof(id)) != 0) && tune_pick(g, base, id, sizeof(id)) != 0) ||
+	    packs_load(g->packs, id, &b) != 0)
 		return (0);
 	snprintf(type, sizeof(type), ".%s", b.ext);
 	tune_stop(j);
@@ -248,10 +278,12 @@ jukebox_feed(struct game *g, struct jukebox *j)
 {
 	static int16_t buf[2 * MUSIC_CHUNK];
 	int req = g->music_request;
+	const char *alt = g->music_alt;
 
 	if (!j->ready)
 		return;
 	g->music_request = -1;
+	g->music_alt = NULL;
 	if (req == MUS_STOP || req == MUS_SILENCE) {
 		if (j->m != NULL) {
 			if (req == MUS_STOP)
@@ -268,7 +300,7 @@ jukebox_feed(struct game *g, struct jukebox *j)
 	    !j->tune_fading) || (j->m != NULL && music_active(j->m))))) {
 		/* A tune already playing goes on, as the title's handler
 		 * checks (driver VA 0x82b). */
-		if (tune_start(g, j, req)) {
+		if (tune_start(g, j, req, alt)) {
 			if (j->m != NULL)
 				music_stop(j->m);
 		} else {

@@ -25,6 +25,8 @@
 #define MIN_ART_H	240
 #define MAX_ART_H	4320
 #define MANIFEST	"pack.ini"
+#define FRAGMENTS	"pack.d"	/* more [assets], one file per tool */
+#define MAX_FRAGMENTS	64
 #define ORIGINAL_EXE	"PIRATESG.EXE"
 #define CD_DIR		"PIRATESG.CD"
 
@@ -419,7 +421,8 @@ valid_file(const char *file)
 }
 
 static int
-parse_manifest(struct packs *packs, struct pack *pk, char *text)
+parse_manifest(struct packs *packs, struct pack *pk, char *text,
+    const char *file, int fragment)
 {
 	char *line, *next, *eq, *key, *val, *end;
 	long height;
@@ -448,6 +451,9 @@ parse_manifest(struct packs *packs, struct pack *pk, char *text)
 		key = trim(line);
 		val = trim(eq + 1);
 		if (section == PACK) {
+			/* The pack's identity is pack.ini's alone. */
+			if (fragment)
+				continue;
 			if (strcmp(key, "name") == 0)
 				snprintf(pk->name, sizeof(pk->name), "%s", val);
 			else if (strcmp(key, "license") == 0)
@@ -483,20 +489,89 @@ parse_manifest(struct packs *packs, struct pack *pk, char *text)
 	}
 	return (0);
 bad:
-	seterr(packs, "%s/%s:%d: syntax error", pk->root, MANIFEST, lineno);
+	seterr(packs, "%s/%s:%d: syntax error", pk->root, file, lineno);
 	return (-1);
 nomem:
 	seterr(packs, "out of memory");
 	return (-1);
 }
 
+/* Read and parse the manifest file "file", relative to the pack. */
+static int
+read_manifest(struct packs *packs, struct pack *pk, const char *file,
+    int fragment)
+{
+	char path[MAX_PATH];
+	uint8_t *data, *text;
+	size_t len;
+	int rc;
+
+	if ((size_t)snprintf(path, sizeof(path), "%s/%s", pk->root, file) >=
+	    sizeof(path) || read_file(path, &data, &len) != 0) {
+		seterr(packs, "%s: cannot read %s", pk->root, file);
+		return (-1);
+	}
+	if ((text = realloc(data, len + 1)) == NULL) {
+		free(data);
+		seterr(packs, "out of memory");
+		return (-1);
+	}
+	text[len] = '\0';
+	rc = parse_manifest(packs, pk, (char *)text, file, fragment);
+	free(text);
+	return (rc);
+}
+
+static int
+cmp_names(const void *a, const void *b)
+{
+	return (strcmp(*(char *const *)a, *(char *const *)b));
+}
+
+/*
+ * The fragments in pack.d/, "*.ini" in name order, after pack.ini: so
+ * that each tool (the art generator, the music) owns its own list.
+ */
+static int
+read_fragments(struct packs *packs, struct pack *pk)
+{
+	char dir[MAX_PATH], file[MAX_PATH], *names[MAX_FRAGMENTS];
+	struct dirent *de;
+	size_t n = 0, i, len;
+	DIR *d;
+	int rc = 0;
+
+	if ((size_t)snprintf(dir, sizeof(dir), "%s/%s", pk->root,
+	    FRAGMENTS) >= sizeof(dir) || (d = opendir(dir)) == NULL)
+		return (0);		/* none */
+	while ((de = readdir(d)) != NULL && n < MAX_FRAGMENTS) {
+		len = strlen(de->d_name);
+		if (de->d_name[0] == '.' || len < 5 ||
+		    strcmp(de->d_name + len - 4, ".ini") != 0)
+			continue;
+		if ((names[n] = strdup(de->d_name)) == NULL) {
+			rc = -1;
+			seterr(packs, "out of memory");
+			break;
+		}
+		n++;
+	}
+	closedir(d);
+	qsort(names, n, sizeof(names[0]), cmp_names);
+	for (i = 0; i < n; i++) {
+		if (rc == 0 && ((size_t)snprintf(file, sizeof(file), "%s/%s",
+		    FRAGMENTS, names[i]) >= sizeof(file) ||
+		    read_manifest(packs, pk, file, 1) != 0))
+			rc = -1;
+		free(names[i]);
+	}
+	return (rc);
+}
+
 int
 packs_add_dir(struct packs *packs, const char *path)
 {
 	struct pack *pk;
-	char manifest[MAX_PATH];
-	uint8_t *data, *text;
-	size_t len;
 
 	if ((pk = calloc(1, sizeof(*pk))) == NULL) {
 		seterr(packs, "out of memory");
@@ -507,26 +582,11 @@ packs_add_dir(struct packs *packs, const char *path)
 	snprintf(pk->root, sizeof(pk->root), "%s", path);
 	snprintf(pk->name, sizeof(pk->name), "%s", path);
 	snprintf(pk->license, sizeof(pk->license), "unknown");
-	if ((size_t)snprintf(manifest, sizeof(manifest), "%s/%s", path,
-	    MANIFEST) >= sizeof(manifest) ||
-	    read_file(manifest, &data, &len) != 0) {
-		seterr(packs, "%s: cannot read %s", path, MANIFEST);
+	if (read_manifest(packs, pk, MANIFEST, 0) != 0 ||
+	    read_fragments(packs, pk) != 0) {
 		pack_free(pk);
 		return (-1);
 	}
-	if ((text = realloc(data, len + 1)) == NULL) {
-		free(data);
-		seterr(packs, "out of memory");
-		pack_free(pk);
-		return (-1);
-	}
-	text[len] = '\0';
-	if (parse_manifest(packs, pk, (char *)text) != 0) {
-		free(text);
-		pack_free(pk);
-		return (-1);
-	}
-	free(text);
 	return (push(packs, pk));
 }
 
@@ -534,6 +594,29 @@ int
 packs_load(struct packs *packs, const char *id, struct blob *out)
 {
 	return (packs_load_ext(packs, id, NULL, out));
+}
+
+int
+packs_provides(struct packs *packs, const char *id)
+{
+	struct pack *pk;
+	struct blob b;
+	size_t i, j;
+
+	for (i = 0; i < packs->count; i++) {
+		pk = packs->pack[i];
+		if (pk->kind != PACK_DIR) {
+			if (original_load(pk, id, &b) == 0) {
+				blob_free(&b);
+				return (1);
+			}
+			continue;
+		}
+		for (j = 0; j < pk->nentries; j++)
+			if (strcmp(pk->entries[j].id, id) == 0)
+				return (1);
+	}
+	return (0);
 }
 
 int

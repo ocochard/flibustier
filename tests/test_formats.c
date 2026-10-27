@@ -178,6 +178,34 @@ test_packs(void)
 	CHECK(packs_load(packs, "Pic/Town", &b) == -1);
 	packs_free(packs);
 
+	/* Fragments in pack.d/ add assets after pack.ini, which keeps its
+	 * name and its entries first. */
+	snprintf(path, sizeof(path), "%s/pack.d", low);
+	CHECK(mkdir(path, 0755) == 0);
+	CHECK(write_text(path, "music.ini", "[pack]\nname = Ignored\n"
+	    "[assets]\nmusic/harbour = town.png\npic/town = title.ogg\n") == 0);
+	CHECK(write_text(path, "notes.txt", "[assets]\nbad line\n") == 0);
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, low) == 0);
+	CHECK(strcmp(packs_name(packs, 0), "Low") == 0);
+	CHECK(packs_load(packs, "music/harbour", &b) == 0 && b.len == 8);
+	blob_free(&b);
+	CHECK(packs_load(packs, "pic/town", &b) == 0 &&
+	    memcmp(b.data, "low-town", 8) == 0);	/* pack.ini first */
+	blob_free(&b);
+	packs_free(packs);
+	CHECK(write_text(path, "music.ini", "[assets]\nno equals\n") == 0);
+	packs = packs_new();
+	CHECK(packs_add_dir(packs, low) == -1 &&
+	    strstr(packs_error(packs), "pack.d/music.ini:2") != NULL);
+	packs_free(packs);
+	snprintf(path, sizeof(path), "%s/pack.d/music.ini", low);
+	unlink(path);
+	snprintf(path, sizeof(path), "%s/pack.d/notes.txt", low);
+	unlink(path);
+	snprintf(path, sizeof(path), "%s/pack.d", low);
+	rmdir(path);
+
 	/* Manifests may not point outside their pack. */
 	CHECK(write_text(high, "pack.ini",
 	    "[assets]\npic/town = ../town.png\n") == 0);

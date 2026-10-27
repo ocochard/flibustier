@@ -33,7 +33,10 @@ To play, you will need a legally obtained copy of the original game; the
 engine will load its data files at runtime.
 
 Assets are organized in layered packs: any original asset can be replaced
-by a pack using modern formats (PNG, OGG, ...), for example remixed music.
+by a pack using modern formats (PNG, OGG, ...), for example remixed music
+(`--pack DIR`; see `aidd_docs/memory/internal/asset-packs.md`).
+`tools/music_pack.py` turns the "Pirates! Gold (HQ Remake)" album by
+[Pieces of 8-bit](https://soundcloud.com/piecesof8bit) into such music.
 The long-term goal is a complete set of assets released under an open
 license, so the game can run without any original data.
 

@@ -501,5 +501,12 @@ game_fm(struct game *g, int cmd)
 void
 game_music(struct game *g, int cmd)
 {
+	game_music_as(g, cmd, NULL);
+}
+
+void
+game_music_as(struct game *g, int cmd, const char *alt)
+{
 	g->music_request = cmd;
+	g->music_alt = alt;
 }

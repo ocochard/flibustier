@@ -49,6 +49,9 @@ void		 blob_free(struct blob *blob);
 
 /* Whether some pack provides "id" (it is loaded to find out). */
 int		 packs_has(struct packs *packs, const char *id);
+/* The same from the manifests alone, without reading a directory pack's
+ * file: for large files such as recordings. */
+int		 packs_provides(struct packs *packs, const char *id);
 
 /*
  * The same, from the highest-priority pack whose file for "id" has

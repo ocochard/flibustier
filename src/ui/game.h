@@ -255,6 +255,9 @@ struct game {
 	/* The tune asked for (MUS_*), -1 none, until the front end takes
 	 * it. */
 	int			 music_request;
+	/* A recording that screen would rather have for that tune, such as
+	 * "music/shipwright" for the trade tune, or NULL. */
+	const char		*music_alt;
 	/* The FM effect asked for this pass (FM_*), 0 none: one a pass, the
 	 * last asked wins, as the original's request word (VA 0x49a7e). */
 	int			 fm_request;
@@ -362,6 +365,8 @@ const char	*game_tune_id(int cmd);
 
 /* Ask for driver command "cmd" (MUS_*). */
 void	game_music(struct game *g, int cmd);
+/* The same, with the recording "alt" preferred when a pack has one. */
+void	game_music_as(struct game *g, int cmd, const char *alt);
 
 /* Ask for FM effect "cmd" (FM_*), played over the music. */
 void	game_fm(struct game *g, int cmd);
