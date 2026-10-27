@@ -2208,9 +2208,23 @@ title's handler checks, VA `0x82b`).
 | 44 | arriving in a town (`0x18fa9`) |
 | stop | setting sail (`0x28789`), sword fights (`0x16205`), a sea battle's end (`0xe245`), leaving some screens |
 
-Not yet: the percussion instruments' noise bursts (played as plain
-notes), the fade when a tune stops (it stops at once), the daughter's
-two tunes and the barmaid's second one.
+- **Stopping** (command 1, VA `0x72d`; also the first step of every
+  tune) marks the playing voices fading, their start the silent stream
+  `ds:0xadd6`; each tick (VA `0x784`) a fading voice's volume falls a
+  step every 4 ticks until -40, then it plays that stream and ends. A
+  new tune takes free voices, else fading ones (VA `0x541`).
+- **Percussion instruments** (byte `+0x38`: 28, 30, 34, 35, used by the
+  stingers 29, 30, 32, 36, 37, 39) do not key a pitch: they switch the
+  timer to divisor `0xf88` (VA `0x484`); each fast tick (VA `0x401`) gives
+  such a voice the frequency `(random & mask) + base` (words `+0x3a`,
+  `+0x3c`) with key-on, every fifth steps the music (VA `0x383`) and moves
+  the base by the step (`+0x3e`) while the countdown lasts, then leaves
+  it at the base. With none left the normal timer returns (the music
+  runs 1.4% slower meanwhile).
+- Commands 0-8 are controls (stop variants, a voices-playing query,
+  pause), not effects.
+
+Not yet: the daughter's two tunes and the barmaid's second one.
 
 ## Open questions
 

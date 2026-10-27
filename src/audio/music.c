@@ -22,8 +22,12 @@
 #define T_INST		0xaeba	/* 64-byte instruments */
 #define T_VARS		0xb882	/* the scripts' variables */
 
+#define SILENCE		0xadd6	/* a stream that ends the voice */
+
 #define VOICES		9
 #define TICK_DIV	0x4c90	/* the timer's divisor: 60.9 Hz */
+#define NOISE_DIV	0x0f88	/* while percussion plays: 300 Hz */
+#define NOISE_STEPS	5	/* fast ticks per music tick */
 #define PIT_HZ		1193182u
 #define DATA_LEN	0x10000
 
@@ -41,7 +45,8 @@ struct voice {
 	int8_t		lvl[4];		/* operator levels, 63 loud */
 	uint16_t	ptr, aux, loop1, loop2, start, ret;
 	int16_t		rep1, rep2;
-	uint8_t		perc;
+	uint8_t		perc;		/* percussion ticks left */
+	uint16_t	noise_mask, noise_base, noise_step;
 	int8_t		detune, transpose;
 	uint8_t		fading, relfix;
 };
@@ -55,6 +60,9 @@ struct music {
 	uint16_t	 seed;
 	uint32_t	 acc;		/* timer phase, PIT counts */
 	int		 vi;		/* the voice being stepped */
+	int		 noisy;		/* the fast timer, for percussion */
+	int		 steps;		/* fast ticks to the next music tick */
+	int		 fading;	/* the fade runs */
 };
 
 static unsigned
@@ -221,8 +229,14 @@ key_on(struct music *m, struct voice *v)
 	unsigned r = 0xb0 + channel(m);
 
 	levels(m, v);
-	/* The percussion instruments' noise (VA 0x484) is not played; their
-	 * note sounds as a plain one. */
+	if (v->perc != 0) {
+		/* Percussion: noise from the fast timer (VA 0x484). */
+		if (!m->noisy) {
+			m->noisy = 1;
+			m->steps = NOISE_STEPS;
+		}
+		return;
+	}
 	pitch(m, v);
 	reg(m, chips(m), r, readback(m, r) | 0x20);
 }
@@ -285,6 +299,9 @@ instrument(struct music *m, struct voice *v)
 		    (v->algo == 3 ? 0x3f : 0x3f - byte(m, in + 0x22)));
 	}
 	v->perc = (uint8_t)byte(m, in + 0x38);
+	v->noise_mask = (uint16_t)word(m, in + 0x3a);
+	v->noise_base = (uint16_t)word(m, in + 0x3c);
+	v->noise_step = (uint16_t)word(m, in + 0x3e);
 }
 
 /* Commands until a note; 1 when the voice was stopped. */
@@ -517,11 +534,83 @@ voice_tick(struct music *m, struct voice *v)
 		levels(m, v);
 }
 
+/* A frequency with key-on, as the percussion writes it (VA 0x30b). */
+static void
+noise_write(struct music *m, unsigned f)
+{
+	unsigned ch = channel(m);
+
+	reg(m, chips(m), 0xa0 + ch, f);
+	reg(m, chips(m), 0xb0 + ch, (f >> 8) | 0x20);
+}
+
+/* A fast tick: each percussion voice at a random frequency (VA
+ * 0x401). */
+static void
+noise(struct music *m)
+{
+	struct voice *v;
+
+	for (m->vi = 0; m->vi < VOICES; m->vi++) {
+		v = &m->v[m->vi];
+		if (v->perc == 0)
+			continue;
+		(void)rnd(m, 0);
+		noise_write(m, ((m->seed & v->noise_mask) + v->noise_base) &
+		    0xffff);
+	}
+}
+
+/*
+ * The fade (VA 0x784): a fading voice's volume falls a step every 4
+ * ticks; at -40 it plays the silent stream.
+ */
+static void
+fade(struct music *m)
+{
+	struct voice *v;
+	int i;
+
+	if (!m->fading)
+		return;
+	for (i = 0; i < VOICES; i++) {
+		v = &m->v[i];
+		if (v->dur == 0 || !v->fading)
+			continue;
+		if (v->volume == (int8_t)0xd8) {
+			v->ptr = SILENCE;
+			v->fading = 0;
+			continue;
+		}
+		v->vstep = -1;
+		v->vrate = 4;
+		if (v->vcnt == 0)
+			v->vcnt = 1;
+	}
+}
+
+/* A music tick (VA 0x383): the voices, the fade, the percussion's
+ * sweep. */
 static void
 tick(struct music *m)
 {
+	struct voice *v;
+	int any = 0;
+
 	for (m->vi = 0; m->vi < VOICES; m->vi++)
 		voice_tick(m, &m->v[m->vi]);
+	fade(m);
+	for (m->vi = 0; m->vi < VOICES; m->vi++) {
+		v = &m->v[m->vi];
+		if (v->perc == 0)
+			continue;
+		any = 1;
+		v->noise_base = (uint16_t)(v->noise_base + v->noise_step);
+		if (--v->perc == 0)
+			noise_write(m, v->noise_base);
+	}
+	if (!any)
+		m->noisy = 0;		/* back to the normal timer */
 }
 
 static void
@@ -535,14 +624,19 @@ voice_start(struct music *m, int i, uint16_t stream)
 	v->dur = 1;
 }
 
+/* Stop with a fade (VA 0x72d): the voices playing fade out, then end
+ * on the silent stream. */
 void
 music_stop(struct music *m)
 {
-	for (m->vi = 0; m->vi < 6; m->vi++)
-		if (m->v[m->vi].dur != 0) {
-			key_off(m);
-			m->v[m->vi].dur = 0;
+	int i;
+
+	for (i = 0; i < VOICES; i++)
+		if (m->v[i].dur != 0) {
+			m->v[i].fading = 0xff;
+			m->v[i].start = SILENCE;
 		}
+	m->fading = 1;
 }
 
 void
@@ -562,8 +656,13 @@ music_command(struct music *m, int cmd)
 		else {
 			int lo = want == FMMUSIC_EFFECT ? 6 : 0;
 
+			/* A free voice, else a fading one (VA 0x541). */
 			for (i = lo; i < lo + (lo ? 3 : 6) && m->v[i].dur; i++)
 				;
+			if (i == lo + (lo ? 3 : 6))
+				for (i = lo; i < lo + (lo ? 3 : 6) &&
+				    m->v[i].fading != 0xff; i++)
+					;
 			if (i == lo + (lo ? 3 : 6))
 				continue;
 		}
@@ -615,11 +714,24 @@ music_render(struct music *m, int16_t *lr, size_t frames)
 {
 	/* A tick every TICK_DIV PIT counts; a sample every PIT_HZ /
 	 * MUSIC_RATE of them. */
+	uint32_t div;
+
 	while (frames-- > 0) {
 		m->acc += PIT_HZ;
-		while (m->acc >= (uint32_t)TICK_DIV * MUSIC_RATE) {
-			m->acc -= (uint32_t)TICK_DIV * MUSIC_RATE;
-			tick(m);
+		for (;;) {
+			div = m->noisy ? NOISE_DIV : TICK_DIV;
+			if (m->acc < div * MUSIC_RATE)
+				break;
+			m->acc -= div * MUSIC_RATE;
+			if (!m->noisy)
+				tick(m);
+			else {
+				noise(m);
+				if (--m->steps == 0) {
+					m->steps = NOISE_STEPS;
+					tick(m);
+				}
+			}
 		}
 		opl3_generate(m->chip, lr, 1);
 		lr += 2;

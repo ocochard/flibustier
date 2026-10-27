@@ -292,7 +292,7 @@ Status (2026-10-26): first slice.
 - **Sound effects:** the digitised effects at the original's moments.
 - **Music:** the OPL3 driver's tunes on an emulated YMF262, at the
   original's moments.
-- **Next:** percussion noise, the fade between tunes, the FM effects.
+- **Music details:** the fade on stopping, the percussion noise.
 - **A capture's plunder:** gold, the loot board with cannon, the
   volunteers.
 - **Near a town:** the hunted pirate off his town; a battle's heat, a

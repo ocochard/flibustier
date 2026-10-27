@@ -842,8 +842,14 @@ test_music(struct packs *packs)
 		if (labs(buf[i]) > peak)
 			peak = labs(buf[i]);
 	CHECK(peak > 1000 && music_active(m) == 8);
+	/* Stopped, the voices fade to -40 a step every 4 ticks, then end
+	 * on the silent stream (about 3 s here). */
 	music_stop(m);
-	CHECK(music_active(m) == 2);	/* voices 6-7 are not the tune's */
+	music_render(m, buf, MUSIC_RATE / 2);
+	CHECK(music_active(m) == 8);
+	for (i = 0; i < 10 && music_active(m) > 0; i++)
+		music_render(m, buf, MUSIC_RATE);
+	CHECK(music_active(m) == 0 && i <= 6);
 	free(buf);
 	music_free(m);
 	fmmusic_free(&d);
