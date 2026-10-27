@@ -11,7 +11,8 @@
 #
 # ORIGINALS is a directory written by "flibustier --export-sounds DIR";
 # PACK is the pack (~/flibustier-openpack); NAMEs are the sounds to hear
-# (broadside, swing...), all of them when none is given.  Needs ffplay.
+# (broadside, swing...), all of them when none is given.  Plays with the
+# first of mpv, sox's play or ffplay found.
 
 set -eu
 if [ $# -lt 2 ]; then
@@ -24,9 +25,16 @@ shift 2
 if [ $# -eq 0 ]; then
 	set -- $(cd "$orig" && ls *.wav | sed 's/\.wav$//')
 fi
-play() {
-	ffplay -nodisp -autoexit -loglevel quiet "$1"
-}
+if command -v mpv >/dev/null; then
+	play() { mpv --really-quiet --no-video "$1"; }
+elif command -v play >/dev/null; then
+	play() { command play -q "$1"; }
+elif command -v ffplay >/dev/null; then
+	play() { ffplay -nodisp -autoexit -loglevel quiet "$1"; }
+else
+	echo "compare.sh: needs mpv, sox's play or ffplay" >&2
+	exit 1
+fi
 for name in "$@"; do
 	new=$(ls "$pack/sound/$name".* 2>/dev/null | head -1 || true)
 	printf '%-12s original' "$name"
