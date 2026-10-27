@@ -2256,11 +2256,13 @@ more).
   (command 0, VA `cs:0x1ad`: every channel keyed off, every operator at
   its quietest), not with the fade. Request 0x28 (exit code 6, VA
   `0x24507`) is never reached.
+  - A player's blow that lands without felling the opponent's last man
+    then goes through the clash test (VA `0x279c0`): within 36 pixels
+    (the reach runs to 65: VA `0x389b8` 15, 10, 5, 0, 0 by level, plus
+    `0x389bd` 50, 40, 30, 20 by weapon) it sounds as blades meeting,
+    0x21 and digitised 6, the hit kept.
 - **Not identified:** the sword fight's flag at VA `0x33ee9` (the
-  engine takes it as clear: the player's crew can lose men); after a
-  player's blow that does not end the fight, the original falls through
-  into the clash test, so a blow within 36 pixels may sound as blades
-  meeting (not modelled).
+  engine takes it as clear: the player's crew can lose men).
 
 ## Music
 

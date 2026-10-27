@@ -1180,11 +1180,29 @@ test_sword(void)
 			snd = sw->sound;	/* the blow's sound, digitised 7 */
 			eff = sw->effect;
 		}
-	CHECK(snd == FM_BLOW && eff == 7);
+	/* Within 36 the original goes on to the clash test: the blow
+	 * sounds as blades meeting (VA 0x279c0). */
+	CHECK(snd == FM_SWING && eff == 6);
 	CHECK((ev & SEV_HIT_FOE) && sw->you.move == SWM_SLASH + 2);
 	CHECK(sw->you.bar == 32 && sw->foe.bar == 15);
 	CHECK(sw->foe.x == x - 4 && sw->foe.wounds[0] == 1);
 	CHECK(sw->input == SWM_GUARD);		/* taken once */
+	/* From further, with a longer reach, the blow's own sound. */
+	{
+		int reach = test_world.sword.reach_weapon[2];
+
+		test_world.sword.reach_weapon[2] = 40;
+		sword_game(&s, 40);
+		sim_sword_input(&s, SWM_SLASH + 2);
+		for (i = 0, ev = 0, snd = 0, eff = -1; i < 4; i++)
+			if ((ev |= sim_sword_tick(&s)) & SEV_HIT_FOE &&
+			    snd == 0) {
+				snd = sw->sound;
+				eff = sw->effect;
+			}
+		CHECK(snd == FM_BLOW && eff == 7);
+		test_world.sword.reach_weapon[2] = (uint8_t)reach;
+	}
 	/* The middle line is guarded: a clash, no hit. */
 	sword_game(&s, 25);
 	sim_sword_input(&s, SWM_SLASH);

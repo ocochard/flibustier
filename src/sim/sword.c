@@ -271,6 +271,13 @@ sim_sword_tick(struct sim *s)
 					e->move = SWM_FALL;
 					e->frame = 0;
 					sw->effect = 3;	/* the last man falls */
+				} else if (dist < CLASH_YOU) {
+					/* The original falls into the clash
+					 * test (VA 0x279c0): close in, the
+					 * blow sounds as blades meeting. */
+					ev |= SEV_CLASH;
+					sw->sound = FM_SWING;
+					sw->effect = 6;
 				}
 			}
 		} else if (dist < CLASH_YOU) {
