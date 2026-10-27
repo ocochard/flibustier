@@ -114,7 +114,8 @@ struct world {
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];
 	/* Ships met at sea: per nation, 5 records of type, nation, crew,
-	 * guns, role and two bytes not decoded (game-rules.md). */
+	 * guns, role, and the loot's gold and goods factors (game-rules.md,
+	 * "Speed table" for the era block). */
 	uint8_t		encounter[ENCOUNTER_NATIONS][ENCOUNTER_SHIPS]
 			    [ENCOUNTER_LEN];
 	/* The treasure galleon met off the treasure fleet's town (the

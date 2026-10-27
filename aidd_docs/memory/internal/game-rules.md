@@ -807,7 +807,17 @@ Where the original's behaviour is not traced yet, the engine does this:
   the wind 3. Rows 4-7 have -1 into the wind.
 - **Scale:** with the x3 multiplier and the 4..12 clamp, most entries
   give full speed. The table matters mostly near the wind.
-- **Rest of the block:** the bytes after the table are not decoded.
+- **The whole block (copied to VA `0x46f86`), by what reads it:**
+
+  | Offset | Content |
+  |---|---|
+  | 0x00-0x7F | the speed table (above; read through VA `0x4d35c` while sailing, VA `0x44a78` in sea battles) |
+  | 0x80-0x9A | the enemy's decision per comparison total (see "Enemy decisions", VA `0x44a78` + 0x80) |
+  | 0xF8, 0xF9 | the diplomacy range and the Spanish shipwright's tolerance |
+  | 0x100-0x18B | the ships met: 4 nations x 5 records of 7 bytes (type, nation, crew, guns, role, the loot's gold and goods factors; VA `0x47086`) |
+  | 0x18C-0x192 | the treasure galleon's record (VA `0x47112`; its byte 5 also sizes a convoy's sack) |
+  | 0x193-0x199 | room for the fort's record, built when a fort battle starts (VA `0x18b3f`) |
+  | 0x9B-0xF7, 0xFA-0xFF, 0x19A-0x1FF | never read |
 
 ## Encounters at sea
 
