@@ -8,6 +8,8 @@
  * test is skipped (exit code 77) when it is not set.
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

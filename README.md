@@ -57,6 +57,11 @@ Requirements:
 
 On FreeBSD: `pkg install cmake raylib freetype2`
 
+On Ubuntu/Debian: `apt install build-essential cmake git libxrandr-dev
+libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libasound2-dev`
+(the X11, GL and ALSA headers are needed when CMake builds raylib itself;
+tested on Ubuntu 26.04).
+
 On macOS: install the Xcode command line tools (`xcode-select --install`)
 and CMake (`brew install cmake`). raylib and FreeType are optional
 (`brew install raylib freetype`); otherwise the first configure downloads
