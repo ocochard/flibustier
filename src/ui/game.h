@@ -333,7 +333,10 @@ enum {
 	MUS_TITLE = 9,		/* the intro and the welcome menu */
 	MUS_LOST_TREASURE = 10,	/* the lost treasure dug up */
 	MUS_FAMILY = 11,	/* dinner with the merchant's family */
+	MUS_NIECE = 12,		/* meeting the governor's niece */
+	MUS_DAUGHTER = 13,	/* ... or his daughter */
 	MUS_BANK = 14,
+	MUS_BARMAID = 15,	/* while the barmaid talks */
 	MUS_TREASURE = 16,	/* a pirate's treasure dug up */
 	MUS_NEWS = 17,		/* the governor's political news */
 	MUS_NEWS_TITLED = 18,	/* the same, titled by his nation */

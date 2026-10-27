@@ -2192,9 +2192,9 @@ title's handler checks, VA `0x82b`).
 | 9 | the intro (`0x3022`), the welcome menu (`0x132f8`) |
 | 10, 16, 22 | the lost treasure, a pirate's treasure, a relative found (`0xa801`) |
 | 11 | dinner with the merchant's wife or daughter (`0x21e56`) |
-| 12, 13 | the governor's daughter, by town (`0x128c1`; not wired yet) |
+| 12, 13 | meeting the governor's niece, or his daughter (town field 11 bit 0, `0x128c1`) |
 | 14 | the bank (`0x180c8`) |
-| 15, 23 | the barmaid's two outcomes; 23 also the tavern and its bartender (`0x114d4`, `0x11867`) |
+| 15, 23 | the barmaid while she talks, then the tavern again; 23 also the tavern and its bartender (`0x114d4`, `0x11867`) |
 | 17, 18 | the governor's news; 18 with standing 2 or more with his nation (`0x11d64`) |
 | 19 | a promotion (`0x12549`) |
 | 20 | the merchant, the shipwright (`0x21e56`, `0x218c2`) |
@@ -2223,8 +2223,6 @@ title's handler checks, VA `0x82b`).
   runs 1.4% slower meanwhile).
 - Commands 0-8 are controls (stop variants, a voices-playing query,
   pause), not effects.
-
-Not yet: the daughter's two tunes and the barmaid's second one.
 
 ## Open questions
 

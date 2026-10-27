@@ -1012,7 +1012,9 @@ test_governor(void)
 		    g->gov_stage != 13; n++)
 			CHECK(game_script(g, "enter wait:2") == 0);
 		CHECK(g->screen == &screen_governor && g->gov_stage == 13 &&
-		    g->daughter.charm >= 4);
+		    g->daughter.charm >= 4 &&
+		    g->music_request == (g->daughter.niece ? MUS_NIECE :
+		    MUS_DAUGHTER));
 		CHECK(game_script(g, "down enter") == 0 &&
 		    g->gov_stage == 15);
 		CHECK(game_script(g, "enter wait:40") == 0 &&
@@ -1250,7 +1252,8 @@ test_tavern_people(void)
 	/* The barmaid: some company. */
 	g->sim.towns[g->sim.player_town].barmaid = 2;
 	CHECK(game_script(g, "click:450,250 wait:40") == 0 &&
-	    g->screen == &screen_barmaid && g->talk == 1);
+	    g->screen == &screen_barmaid && g->talk == 1 &&
+	    g->music_request == MUS_BARMAID);
 	CHECK(game_script(g, "down down enter") == 0 && g->talk == 2 &&
 	    g->sim.towns[g->sim.player_town].barmaid == 3);
 	CHECK(game_script(g, "enter wait:40") == 0 &&

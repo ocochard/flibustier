@@ -5542,6 +5542,8 @@ governor_next(struct game *g)
 			if (met != 0) {
 				governor_inks(g, g->daughter.niece ?
 				    "pic/niece" : "pic/daughter");
+				game_music(g, g->daughter.niece ? MUS_NIECE :
+				    MUS_DAUGHTER);		/* VA 0x128c1 */
 				g->gov_stage = met == 1 ? GOV_DAUGHTER :
 				    GOV_INFORM;
 				g->selected = 0;
@@ -6893,7 +6895,7 @@ barmaid_enter(struct game *g)
 {
 	char id[96];
 
-	game_music(g, MUS_TAVERN);
+	game_music(g, MUS_BARMAID);	/* VA 0x114d4 */
 	game_background(g, game_town_asset(g, "pic/barmaid", id,
 	    sizeof(id)));
 	game_portrait(g, NULL);
