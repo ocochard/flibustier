@@ -238,6 +238,13 @@ class Bot:
             cx, cy = x // 16, y // 16
             if abs(cx - tx) <= 1 and abs(cy - ty) <= 1 and town is None:
                 return {"stop": "arrived"}
+            # drift can carry the ship past points it never came near: resync
+            # on the nearest upcoming point (later one on ties)
+            bd = None
+            for k in range(idx, min(len(route), idx + 40)):
+                d = max(abs(route[k][0] - cx), abs(route[k][1] - cy))
+                if bd is None or d <= bd:
+                    idx, bd = k, d
             # advance along the route while we are close to its points
             while idx < len(route) - 1 and max(abs(route[idx][0] - cx), abs(route[idx][1] - cy)) <= 2:
                 idx += 1
@@ -931,7 +938,10 @@ class Bot:
                 continue
             # cruise toward a random Spanish town to meet ships
             sp = [i for i, t in enumerate(s["towns"]) if t["nation"] == 0 and t["sea_x"]]
-            ti = random.Random(loops).choice(sp)
+            # one of the nearest, so the voyage fits its time cap
+            sp.sort(key=lambda i: max(abs(s["towns"][i]["sea_x"] - f["x"] // 16),
+                                      abs(s["towns"][i]["sea_y"] - f["y"] // 16)))
+            ti = random.Random(loops).choice(sp[:5])
             t = s["towns"][ti]
             gx, gy = t["sea_x"] + 6, t["sea_y"] + 6
             if not self.water(gx, gy):
