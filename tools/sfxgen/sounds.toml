@@ -8,8 +8,11 @@
 # sounds").
 #
 # No voices: the model cannot speak or shout, a voice prompt comes out as
-# vocal noise.  The hail (the original's "Arrgh!") is left out, so the
-# game keeps the original's; the other sounds are asked without voices.
+# vocal noise.  The sounds that are voices in the original (the hail's
+# "Arrgh!", the harbour's call, the land battle's "En garde!", the
+# cries of the hit in sword fights)
+# are left out, so the game keeps the original's; the other sounds are
+# asked without voices.
 
 [render]
 checkpoint = "stable-audio-open-1.0.safetensors"
@@ -29,22 +32,10 @@ seconds = 2
 prompt = "a ship's broadside, several heavy old cannons firing in quick succession at sea, deep booms, rolling echo"
 
 [[sound]]
-id = "sound/land-battle"
-length = 0.86
-seconds = 1.4
-prompt = "a volley of 17th-century muskets fired together, outdoor, echo across a field"
-
-[[sound]]
 id = "sound/last-man"
 length = 1.00
 seconds = 1.5
 prompt = "a heavy body and a steel sword falling onto a wooden deck, a dull thud and a clatter"
-
-[[sound]]
-id = "sound/harbour"
-length = 1.06
-seconds = 1.6
-prompt = "a busy old harbour, gulls crying, a church bell ringing in the distance, waves lapping on wooden piers"
 
 [[sound]]
 id = "sound/sail-ho"
@@ -57,20 +48,6 @@ id = "sound/parry"
 length = 0.45
 seconds = 1
 prompt = "two steel swords clashing once, a sharp metallic ring"
-
-[[sound]]
-id = "sound/hit-foe"
-length = 0.57
-seconds = 1.1
-prompt = "a sword blade slashing through thick cloth and leather, a sharp cut"
-
-[[sound]]
-id = "sound/hit-you"
-length = 0.40
-seconds = 1
-prompt = "a heavy sword blow landing on leather armour, a dull impact"
-
-# The FM effects (sent to the music driver).
 
 [[sound]]
 id = "sound/shot-hit"
@@ -88,7 +65,7 @@ prompt = "a cannonball plunging into the sea, a deep splash of water"
 id = "sound/crash"
 length = 2.60
 seconds = 3.1
-prompt = "two large wooden sailing ships colliding, hulls grinding and timbers creaking and cracking"
+prompt = "a heavy wooden ship ramming into another, one deep hollow crunch of thick oak timbers, then a creak"
 
 [[sound]]
 id = "sound/swing"
