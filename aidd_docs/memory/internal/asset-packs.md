@@ -39,7 +39,8 @@ each plays.
 - **The digitised effects** (`DIGITAL.PIR`): `sound/hail` (a pirate's
   "Arrgh!"), `sound/broadside`, `sound/land-battle` (a voice: "En
   garde!"), `sound/last-man` (the beaten opponent's voice, surrendering),
-  `sound/harbour` (a voice), `sound/sail-ho`, `sound/parry`,
+  `sound/harbour` (a voice), `sound/sail-ho` (a voice: "Sail ho!"),
+  `sound/parry`,
   `sound/hit-foe` and `sound/hit-you` (cries of the man hit). A recording plays even without the original driver,
   and wins over the driver's where the game prefers a digitised effect
   to an FM one.

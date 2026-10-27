@@ -2,15 +2,17 @@
 #
 # Each sound is rendered from its text prompt alone, never from the
 # original's sounds, so the result carries no original data.  "length"
-# is the original's length, which the result is cut to (its leading
+# is the original's length as heard (within 20 dB of its peak, the FM
+# effects' faint release left out), which the result is cut to (its leading
 # silence trimmed, its end faded); "seconds", what the model is asked
 # for, is a little longer so that the sound is not cut short.  The IDs are the engine's (asset-packs.md, "Replacement
 # sounds").
 #
 # No voices: the model cannot speak or shout, a voice prompt comes out as
 # vocal noise.  The sounds that are voices in the original (the hail's
-# "Arrgh!", the harbour's call, the land battle's "En garde!", the
-# cries of the hit in sword fights, the beaten opponent's surrender)
+# "Arrgh!", the harbour's call, the lookout's "Sail ho!", the land
+# battle's "En garde!", the cries of the hit in sword fights, the beaten
+# opponent's surrender)
 # are left out, so the game keeps the original's; the other sounds are
 # asked without voices.
 
@@ -23,19 +25,13 @@ sampler = "dpmpp_3m_sde_gpu"
 scheduler = "exponential"
 negative = "music, melody, singing, speech, voice, vocals, shouting, screaming, talking, low quality, distorted, noise, hiss, static"
 
-# The digitised effects (DIGITAL.PIR's nine).
+# The digitised effects (DIGITAL.PIR's) that are not voices.
 
 [[sound]]
 id = "sound/broadside"
 length = 1.46
 seconds = 2
 prompt = "a ship's broadside, several heavy old cannons firing in quick succession at sea, deep booms, rolling echo"
-
-[[sound]]
-id = "sound/sail-ho"
-length = 1.21
-seconds = 1.7
-prompt = "a ship's brass bell rung quickly as an alarm, on a wooden sailing ship, wind"
 
 [[sound]]
 id = "sound/parry"
@@ -45,9 +41,9 @@ prompt = "two steel swords clashing once, a sharp metallic ring"
 
 [[sound]]
 id = "sound/shot-hit"
-length = 2.18
-seconds = 2.7
-prompt = "a cannonball smashing into a wooden ship's hull, timber cracking and splintering"
+length = 1.19
+seconds = 1.7
+prompt = "an iron cannonball striking a thick wooden ship's hull, one hard heavy impact and a splintering crack"
 
 [[sound]]
 id = "sound/shot-miss"
@@ -57,8 +53,8 @@ prompt = "a cannonball plunging into the sea, a deep splash of water"
 
 [[sound]]
 id = "sound/crash"
-length = 2.60
-seconds = 3.1
+length = 1.64
+seconds = 2.1
 prompt = "a heavy wooden ship ramming into another, one deep hollow crunch of thick oak timbers, then a creak"
 
 [[sound]]
@@ -81,20 +77,20 @@ prompt = "a sword slicing through empty air, a thin quick swish"
 
 [[sound]]
 id = "sound/their-men"
-length = 1.03
-seconds = 1.5
+length = 0.46
+seconds = 1
 prompt = "steel swords clashing repeatedly in a skirmish at a distance"
 
 [[sound]]
 id = "sound/our-men"
-length = 1.03
-seconds = 1.5
+length = 0.64
+seconds = 1.1
 prompt = "many steel swords clashing close by in a fierce melee"
 
 [[sound]]
 id = "sound/scrape"
-length = 2.60
-seconds = 3.1
+length = 1.64
+seconds = 2.1
 prompt = "a wooden ship's hull scraping and grinding along rocks and sand in shallow water"
 
 [[sound]]
