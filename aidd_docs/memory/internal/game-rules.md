@@ -1689,8 +1689,8 @@ same town only bits 1 and 2 are kept.
   guns. Otherwise the merchant's trading board, lower on the
   shipwright's picture, with "I pay 50 gold pieces per cannon" (CSTR
   313) above it:
-  - One row: the shipwright's stock, from 0 each visit, and the
-    player's guns, at 50 gold either way. The merchant's steps apply
+  - One row: the shipwright's stock, from 0 each time the board opens
+    (VA `0x22e12`), and the player's guns, at 50 gold either way. The merchant's steps apply
     (VA `0x20ad4` sell, `0x20bcd` buy).
   - Selling needs the shipwright's gold to cover the price.
   - Buying back needs the player's gold, his stock, and room in the
@@ -1826,8 +1826,13 @@ sign, the texts at (40, 280) up to x 620.
       good's price is below the gold. The original then loops for ever
       when the player cannot pay; the engine stops.
     - The exit (252, 433)-(391, 479).
-  - The slider itself (VA `0x20ff3`) is not traced; the engine places
-    it by the hold's fill, a guess.
+  - **The slider (VA `0x20ff3`, frame 0x4d):** at `x0 + trunc(held x
+    (x1 - x0) / (stock + held))` in single floats, for the selected row:
+    the merchant's stock and the player's holding (the words at VA
+    `0x33f74 + 4 x row`, +2). The track runs from x 249 to 374 at y 72
+    (VA `0x34adc`), for the shipwright's guns (row 4) at y 318 (VA
+    `0x34aec`); with no units it rests at x0 (the original divides by
+    zero).
 
 ### Reputation (VA `0x45e76`)
 

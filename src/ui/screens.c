@@ -4663,6 +4663,12 @@ const struct screen screen_shipwright = {
 #define BOARD_ROW_H		50
 #define BOARD_SIGN		82	/* "Sell", then "Buy" */
 #define BOARD_GAUGE		77
+/* The slider's tracks (VA 0x34adc, 0x34aec): the board's rows, and the
+ * shipwright's guns (row 4). */
+#define TRACK_X0		249
+#define TRACK_X1		374
+#define BOARD_TRACK_Y		72
+#define CANNON_TRACK_Y		318
 #define GLYPH_BIG		0	/* 0-9, then highlighted 10-19 */
 #define GLYPH_SMALL		20	/* '/', 0-9; 31 and 42: other inks */
 
@@ -4885,12 +4891,30 @@ merchant_event(struct game *g, const struct ui_event *ev)
 	}
 }
 
+/*
+ * The slider (VA 0x20ff3): along the track, the share of the row's
+ * units on the player's side, in the original's single floats: the
+ * track's width over the units, times the player's, truncated.
+ */
+static void
+board_slider(struct game *g, int stock, int held, int y)
+{
+	float step;
+	int x = 0;
+
+	if (stock + held > 0) {
+		step = (float)(TRACK_X1 - TRACK_X0) / (float)(stock + held);
+		x = (int)((float)held * step);
+	}
+	board_frame(g, 0, BOARD_GAUGE, TRACK_X0 + x, y);
+}
+
 static void
 merchant_draw(struct game *g)
 {
 	const struct sim_market *m = &g->sim.market;
 	const struct sim_fleet *f = &g->sim.fleet;
-	int i, r[4], row, sel, held, used, room;
+	int i, r[4], row, sel, held, room;
 
 	if (g->shop_stage != 1) {
 		/* On the picture, no box, in ink 0 (VA 0x21e56): at (160,
@@ -4946,10 +4970,11 @@ merchant_draw(struct game *g)
 	    GLYPH_SMALL + 1, 8, 6, 1);
 	room = sim_hold_space(&g->sim);
 	board_number(g, room, 336, 138, GLYPH_SMALL + 23, 8, 4, 1);
-	/* The hold gauge: an engine guess at the original's formula. */
-	used = f->capacity * 10 - room;
-	board_frame(g, 0, BOARD_GAUGE, 249 + (f->capacity > 0 ?
-	    used * 113 / (f->capacity * 10) : 0), 72);
+	/* The slider: the selected good's share on the player's side. */
+	sel = g->selected;
+	held = sel == 0 ? f->food : sel == 1 ? f->goods : sel == 2 ?
+	    f->sugar : f->guns;
+	board_slider(g, m->stock[sel], held, BOARD_TRACK_Y);
 }
 
 const struct screen screen_merchant = {
@@ -6154,6 +6179,9 @@ cannon_enter(struct game *g)
 	for (i = 0; i < 3; i++)
 		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
 	g->shop_buying = 0;
+	/* Each opening starts his side at none (VA 0x22e12): guns sold
+	 * before can no longer be bought back. */
+	g->sim.wright_cannon = 0;
 	sim_shipwright_gold(&g->sim);
 }
 
@@ -6191,8 +6219,7 @@ cannon_event(struct game *g, const struct ui_event *ev)
 static void
 cannon_draw(struct game *g)
 {
-	const struct sim_fleet *f = &g->sim.fleet;
-	int room, used;
+	int room;
 
 	board_frame(g, 1, 0, 204, 265);
 	board_frame(g, 0, 84, 71, 326);		/* the gold boxes */
@@ -6213,9 +6240,8 @@ cannon_draw(struct game *g)
 	/* The space in the hold and its gauge, as the merchant's, lower. */
 	room = sim_hold_space(&g->sim);
 	board_number(g, room, 336, 386, GLYPH_SMALL + 23, 8, 4, 1);
-	used = f->capacity * 10 - room;
-	board_frame(g, 0, BOARD_GAUGE, 249 + (f->capacity > 0 ?
-	    used * 113 / (f->capacity * 10) : 0), 320);
+	board_slider(g, g->sim.wright_cannon, g->sim.fleet.guns,
+	    CANNON_TRACK_Y);
 	draw(g, FONT_BODY, 150, 20, 470, game_str(g, S_CANNON_PRICE), 0);
 }
 
