@@ -486,7 +486,7 @@ sim_governor_promote(struct sim *s, int *acres)
 	s->rank[n] = (uint8_t)r;
 	s->standing[n] = (int8_t)(s->standing[n] - surplus);
 	sim_log_news(s, NEWS_TITLED, n * 64 + r, 0);
-	land = surplus + t->standing;
+	land = surplus + (int16_t)t->standing;
 	if (land > 0) {
 		s->acres += land;
 		*acres = land * ACRE_STEP;

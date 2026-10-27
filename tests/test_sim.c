@@ -1852,6 +1852,13 @@ test_governor(void)
 	s.standing[NATION_ENGLAND] = 6;			/* rank 2: 6 */
 	t->standing = 0;
 	CHECK(sim_governor_promote(&s, &acres) == 2 && acres == 0);
+	/* A town's disfavour (negative) eats the surplus; it never wraps
+	 * into a grant of tens of thousands of acres. */
+	s.standing[NATION_ENGLAND] = 12;		/* rank 3: 11 */
+	t->standing = (uint16_t)(int16_t)-3;
+	CHECK(sim_governor_promote(&s, &acres) == 3 && acres == 0 &&
+	    s.acres == 3);
+	s.rank[NATION_ENGLAND] = 2;
 	s.rank[NATION_ENGLAND] = 9;			/* the top */
 	s.standing[NATION_ENGLAND] = 120;
 	CHECK(sim_governor_promote(&s, &acres) == 0 &&
