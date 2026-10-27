@@ -211,10 +211,12 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
      numbers the abilities from 1 in the order of CSTN group 83:
      fencing 1, navigation 3 and gunnery 4 are each tested where they
      belong.
-   - The multiplier is 6 instead of 3 while a value at VA `0x4d292` is
-     below 100; that value starts at 999 and is not traced.
-   - When that value is below `d x 64`, the speed is halved and, every
-     16 ticks, the heading turns 16 toward the wind. Not traced either.
+   - **Storms (VA `0x4d292`, the distance to the nearest cloud, see
+     "Clouds"):** the multiplier is 6 instead of 3 within 100 pixels of a
+     cloud; within `d x 64` the ship is caught: every 16 ticks its
+     heading turns 16 toward the wind, and the target speed is halved.
+     The distance is measured after the clouds move, so it applies to
+     the next tick.
 3. **Current speed:** moves 2 toward the target, then is clamped to
    4..12.
 4. **Movement:**
@@ -749,8 +751,12 @@ inside the town, on land.
 - **Drawing:** first the shadow, 30 pixels left and 30 down, which
   replaces each covered pixel through the 256-byte table at VA
   `0x3400c`; then the cloud.
-- **Engine choice:** the clouds are drawing only, not simulation state;
-  their positions use the engine's own random numbers.
+- **Storms:** each pass after the move, the distance from the fleet to
+  the nearest of these clouds, `max(|dx|, |dy|) + min / 2` in pixels
+  (9999 with none, 999 when sailing starts), drives the speed (see "Each
+  tick"). The clouds are simulation state: their random heights and
+  looks use the game's random numbers, and the view they come back
+  around is the sailing view (VA `0x231b8`), kept by the simulation.
 
 ### Engine choices (not traced)
 

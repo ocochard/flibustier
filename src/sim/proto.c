@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	30
+#define STATE_VERSION	31
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -612,6 +612,28 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.land_y);
 	jb_raw(b, "},\"wind\":");
 	jb_int(b, s->wind);
+	jb_raw(b, ",\"view\":[");
+	jb_int(b, s->view_x);
+	jb_raw(b, ",");
+	jb_int(b, s->view_y);
+	jb_raw(b, "],\"storm\":");
+	jb_int(b, s->storm);
+	{
+		int k;
+
+		for (k = 0; k < 3; k++) {
+			jb_raw(b, k == 0 ? ",\"clouds\":[[" : ",[");
+			jb_int(b, s->clouds[k].x);
+			jb_raw(b, ",");
+			jb_int(b, s->clouds[k].y);
+			jb_raw(b, ",");
+			jb_int(b, s->clouds[k].frame);
+			jb_raw(b, ",");
+			jb_int(b, s->clouds[k].shown);
+			jb_raw(b, "]");
+		}
+		jb_raw(b, "]");
+	}
 	jb_raw(b, ",\"encounters\":");
 	jb_int(b, s->encounters);
 	jb_raw(b, ",\"heat\":");
@@ -1005,6 +1027,28 @@ sim_from_json(struct sim *s, const struct json *j, char *err, size_t errlen)
 	    errlen) != 0)
 		return (-1);
 	tmp.wind = (uint8_t)json_get_int(j, "wind", 0);
+	tmp.storm = (int)json_get_int(j, "storm", 999);
+	{
+		const struct json *vw = json_get(j, "view");
+		const struct json *cl = json_get(j, "clouds");
+		size_t k;
+
+		if (vw != NULL && vw->type == JSON_ARRAY && vw->count == 2) {
+			tmp.view_x = (int)vw->items[0]->num;
+			tmp.view_y = (int)vw->items[1]->num;
+		}
+		for (k = 0; cl != NULL && cl->type == JSON_ARRAY &&
+		    k < cl->count && k < 3; k++) {
+			const struct json *c = cl->items[k];
+
+			if (c->type != JSON_ARRAY || c->count != 4)
+				continue;
+			tmp.clouds[k].x = (int)c->items[0]->num;
+			tmp.clouds[k].y = (int)c->items[1]->num;
+			tmp.clouds[k].frame = (int)c->items[2]->num & 3;
+			tmp.clouds[k].shown = c->items[3]->num != 0;
+		}
+	}
 	tmp.encounters = json_get_int(j, "encounters", 1) != 0;
 	tmp.heat = (int)json_get_int(j, "heat", 0);
 	tmp.heat_town = (int)json_get_int(j, "heat_town", -1);

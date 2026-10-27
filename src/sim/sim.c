@@ -193,6 +193,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	s->era_year = era->year;
 	s->year = era->year;
 	s->villain_duel = -1;
+	s->storm = 9999;		/* no cloud near */
 	s->ransom_slot = -1;
 	s->player_town = SIM_NO_TOWN;
 	s->visit_town = SIM_NO_TOWN;
@@ -709,6 +710,15 @@ target_speed(const struct sim *s)
 	return ((s->world->speed[ship_class(&s->fleet)][sector] + bonus) * 3);
 }
 
+/* How near a cloud catches the ship: the navigator's difficulty x 64. */
+static int
+storm_reach(const struct sim *s)
+{
+	int d = s->player.difficulty - (s->player.ability == ABILITY_NAVIGATION);
+
+	return ((d < 0 ? 0 : d > 4 ? 4 : d) * 64);
+}
+
 static void
 shift_wind(struct sim *s)
 {
@@ -831,6 +841,121 @@ reef(struct sim *s, int terrain)
 	return (1);
 }
 
+/*
+ * The view (VA 0x231b8): tile aligned, it jumps when the fleet nears an
+ * edge, looking ahead the way it heads.
+ */
+#define VIEW_W		640
+#define VIEW_H		480
+#define VIEW_EDGE	50
+#define VIEW_RIGHT	570
+#define VIEW_BOTTOM	432
+#define VIEW_AHEAD_X	192
+#define VIEW_AHEAD_Y	128
+#define VIEW_MAX_X	(600 * WORLD_TILE)
+#define VIEW_MAX_Y	(450 * WORLD_TILE)
+#define STORM_NONE	9999
+#define STORM_NEAR	100	/* nearer, the wind blows twice as hard */
+
+static int
+clampi(int v, int lo, int hi)
+{
+	return (v < lo ? lo : v > hi ? hi : v);
+}
+
+/* sine x v / 256, the sign put back after (VA 0x297c4's drift). */
+static int
+drift(const struct sim *s, int h, int v)
+{
+	int a = s->world->sine[h & 0x7F] * v >> 8;
+
+	return ((h & 0x80) ? -a : a);
+}
+
+static int
+lookahead(int angle, int amount)
+{
+	int a = (int)(signed char)(uint8_t)angle;
+
+	if (a > 0x60 || a < -0x60 || (a > -0x20 && a < 0x20))
+		return (0);
+	return (a > 0 ? amount : -amount);
+}
+
+static void
+follow(struct sim *s, int force)
+{
+	const struct sim_fleet *f = &s->fleet;
+	int sx = f->x - s->view_x, sy = f->y - s->view_y;
+
+	if (force || sx > VIEW_RIGHT || sx < VIEW_EDGE) {
+		s->view_x = (f->x - VIEW_W / 2 + lookahead(f->heading,
+		    VIEW_AHEAD_X)) / WORLD_TILE * WORLD_TILE;
+		s->view_x = clampi(s->view_x, 0, VIEW_MAX_X);
+	}
+	if (force || sy > VIEW_BOTTOM || sy < VIEW_EDGE) {
+		s->view_y = (f->y - VIEW_H / 2 + lookahead(f->heading - 0x40,
+		    VIEW_AHEAD_Y)) / WORLD_TILE * WORLD_TILE;
+		s->view_y = clampi(s->view_y, 0, VIEW_MAX_Y);
+	}
+}
+
+int
+sim_clouds(const struct sim *s)
+{
+	int m = s->day_of_year / 30 - 5;
+
+	return (((m < 0 ? -m : m) + 1) / 2);
+}
+
+void
+sim_voyage_start(struct sim *s)
+{
+	static const int frames[4] = { 0, 1, 2, 0 };
+	int i;
+
+	follow(s, 1);
+	for (i = 0; i < 3; i++) {
+		s->clouds[i].frame = frames[rng_below(&s->rng, 4)];
+		s->clouds[i].x = s->clouds[i].y = 0;	/* off the view */
+		s->clouds[i].shown = 0;
+	}
+	s->storm = 999;
+}
+
+/*
+ * The clouds' move (VA 0x231b8): cloud i drifts with the wind by (4i +
+ * 6) x 2 eighths; out of -100..640 across or -40..480 down from the view
+ * it comes back at the right edge at a random height.  The storm is the
+ * nearest one's distance, max(|dx|, |dy|) + min / 2.
+ */
+static void
+clouds_move(struct sim *s)
+{
+	struct sim_cloud *c;
+	int i, n = sim_clouds(s), sx, sy, dx, dy;
+
+	s->storm = STORM_NONE;
+	for (i = 0; i < n && i < 3; i++) {
+		c = &s->clouds[i];
+		c->x += drift(s, s->wind, (4 * i + 6) * 2) >> 3;
+		c->y -= drift(s, s->wind + 0x40, (4 * i + 6) * 2) >> 3;
+		sx = c->x - s->view_x;
+		sy = c->y - s->view_y;
+		c->shown = !(sx < -100 || sx > VIEW_W || sy < -40 ||
+		    sy > VIEW_H);
+		if (!c->shown) {
+			c->x = s->view_x + VIEW_W;
+			c->y = s->view_y + rng_below(&s->rng, 440);
+		}
+		dx = abs(s->fleet.x - c->x);
+		dy = abs(s->fleet.y - c->y);
+		dx = dx > dy ? dx + dy / 2 : dy + dx / 2;
+		if (dx < s->storm)
+			s->storm = dx;
+	}
+}
+
 enum sail_stop
 sim_sail(struct sim *s, int turn, int ticks, int *town)
 {
@@ -849,6 +974,18 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		if (turn != 0 && (f->ticks & 4) == 0)
 			f->heading = (uint8_t)(f->heading + 16 * turn);
 		target = target_speed(s);
+		/* Near a cloud the wind blows twice as hard; caught in it
+		 * (within difficulty x 64), the ship is turned toward the
+		 * wind every 16 ticks at half speed (VA 0x231b8). */
+		if (s->storm < STORM_NEAR)
+			target *= 2;
+		if (s->storm < storm_reach(s)) {
+			if ((f->ticks & 15) == 0 && f->heading != s->wind)
+				f->heading = (uint8_t)(f->heading + 16 *
+				    ((int8_t)(s->wind - f->heading) < 0 ?
+				    -1 : 1));
+			target >>= 1;
+		}
 		step = target > f->speed ? 2 : target < f->speed ? -2 : 0;
 		f->speed += step;
 		f->speed = f->speed < SPEED_MIN ? SPEED_MIN :
@@ -892,6 +1029,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		f->y = ny;
 		f->fx = (uint8_t)(x8 & 7);
 		f->fy = (uint8_t)(y8 & 7);
+		follow(s, 0);
+		clouds_move(s);
 		if (reef(s, world_terrain(s->world, nx, ny)))
 			return (SAIL_CREW);
 		if ((t = town_at(s)) >= 0) {
@@ -1004,6 +1143,8 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 			return (SAIL_CREW);
 		if (f->ticks % TICKS_PER_DAY == 0)
 			sim_advance(s, 1);
+		follow(s, 0);
+		clouds_move(s);		/* standing still too */
 		if (dx == 0 && dy == 0)
 			continue;
 		x8 = f->x * 8 + f->fx + dx * 4;

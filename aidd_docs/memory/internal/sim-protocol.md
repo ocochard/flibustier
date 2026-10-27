@@ -62,7 +62,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 30,
+  "version": 31,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -167,6 +167,8 @@ with a message. Numbers are integers only.
     word waiting to be heard (0 none, 1 restless, 2 anxious, 3 mutiny,
     4 hungry, 5 starving, 6 wrecked), `food_days` for 4; the fleet's `food_frac`,
     food eaten into in 256ths (version 30);
+  - `view` (the sailing view's origin), `clouds` (x, y, look, shown) and
+    `storm` (distance to the nearest cloud) (version 31);
     `deserted` the men lost at the last roll call.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.

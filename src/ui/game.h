@@ -113,7 +113,6 @@ struct game {
 	struct sprite_bank	 ship;		/* sailing ship, 16 headings */
 	struct sea		 sea;
 	struct tileset		 map_art;	/* tiles/map, for its art */
-	int			 view_x, view_y;	/* sailing view origin, pixels */
 	int			 turn;		/* steering input: -1, 0, +1 */
 	int			 enc_result;	/* -1 while the dialogs go on */
 	struct sprite_bank	 btl_ship[2][2];	/* [you, foe][A, B] */
@@ -209,12 +208,6 @@ struct game {
 	const struct screen	*cave_back;	/* where the cave returns */
 	struct sprite_bank	 cabin_spr;
 	struct sprite_bank	 cloud_spr;	/* cloud.cur */
-	struct {
-		int		 x, y;		/* world pixels */
-		int		 frame;
-		int		 shown;		/* in view at its last move */
-	}			 clouds[3];
-	uint32_t		 cloud_rand;	/* the engine's own, not the sim's */
 	unsigned		 sail_wait;	/* frames to the next pass */
 	unsigned		 sail_passes;	/* passes of the sailing loop */
 	struct plunder		 plunder;

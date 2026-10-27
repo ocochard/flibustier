@@ -3478,6 +3478,45 @@ test_reef(void)
 	    TERRAIN_SEA, WORLD_TILE * WORLD_TILE);
 }
 
+/* A cloud over the ship: caught within difficulty x 64, it turns toward
+ * the wind every 16 ticks; without clouds nothing turns it. */
+static void
+test_storm(void)
+{
+	struct sim s;
+	int town, h0, i;
+
+	for (i = 0; i < 2; i++) {
+		sea_game(&s, 300, 300, 0x00);
+		s.encounters = 0;
+		s.fleet.food = 1000;
+		s.player.difficulty = 2;	/* caught within 128 */
+		s.day_of_year = 0;		/* January: three clouds */
+		s.wind = 0x80;
+		s.fleet.heading = 0x00;
+		sim_voyage_start(&s);
+		CHECK(s.storm == 999 && sim_clouds(&s) == 3);
+		h0 = s.fleet.heading;
+		if (i == 0) {
+			/* The clouds kept on the ship. */
+			int t, k;
+
+			for (t = 0; t < 33; t++) {
+				for (k = 0; k < 3; k++) {
+					s.clouds[k].x = s.fleet.x;
+					s.clouds[k].y = s.fleet.y;
+				}
+				sim_sail(&s, 0, 1, &town);
+			}
+			CHECK(s.storm < 100);
+			CHECK(s.fleet.heading != h0);	/* swung by the wind */
+		} else {
+			sim_sail(&s, 0, 33, &town);
+			CHECK(s.fleet.heading == h0);	/* clouds far off */
+		}
+	}
+}
+
 /* Removes every ',"key":<number>' from a JSON text. */
 static void
 strip_key(char *text, const char *key)
@@ -3594,6 +3633,7 @@ main(void)
 	test_fleet_calendar();
 	test_food();
 	test_reef();
+	test_storm();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

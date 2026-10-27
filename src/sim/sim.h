@@ -397,6 +397,16 @@ struct sim {
 	struct sim_fleet fleet;
 	uint8_t		wind;		/* direction it blows toward */
 	int		encounters;	/* 1: sails may be sighted (0 for tests) */
+	/* The sailing view's origin and the clouds, storms that sway the
+	 * ship (see "Clouds" in game-rules.md); "storm" is the distance to
+	 * the nearest. */
+	int		view_x, view_y;
+	struct sim_cloud {
+		int	x, y;		/* world pixels */
+		int	frame;		/* cloud.cur frame */
+		int	shown;		/* in view at its last move */
+	}		clouds[3];
+	int		storm;
 	int		heat;		/* lingering counter (VA 0x4c09e) */
 	int		heat_town;	/* nearest town it counts for */
 	struct sim_encounter encounter;
@@ -536,6 +546,15 @@ void	sim_advance(struct sim *s, int32_t days);
  * Returns why it stopped; "town" receives the town index on SAIL_TOWN.
  */
 enum sail_stop sim_sail(struct sim *s, int turn, int ticks, int *town);
+
+/*
+ * Sailing starts (VA 0x24523): the view placed around the fleet, the
+ * clouds off it with a random look, no storm near.  The number of
+ * clouds by the month, for drawing.
+ */
+void	sim_voyage_start(struct sim *s);
+int	sim_clouds(const struct sim *s);
+
 
 /*
  * Answer the current encounter's dialog.  A battle result starts a sea

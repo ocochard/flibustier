@@ -46,7 +46,7 @@ static char saves_tmp[] = "/tmp/flibustier-ui-XXXXXX";
  * from the welcome menu.
  */
 static struct game *
-play_in(const char *saves, const char *lang, const char *script)
+play_raw(const char *saves, const char *lang, const char *script)
 {
 	static struct game g;
 	static char full[2048];
@@ -72,6 +72,33 @@ play_in(const char *saves, const char *lang, const char *script)
 		failures++;
 	}
 	return (&g);
+}
+
+/*
+ * Play a script, with no sail sighted once the fleet leaves port (its
+ * "click:60,300"): sightings draw on the same random numbers as
+ * everything else, so a career's first days vary.  The encounter tests
+ * turn them back on.
+ */
+static struct game *
+play_in(const char *saves, const char *lang, const char *script)
+{
+	static char head[2048];
+	const char *leave = strstr(script, "click:60,300");
+	struct game *g;
+
+	if (leave == NULL || (size_t)(leave - script) >= sizeof(head))
+		return (play_raw(saves, lang, script));
+	memcpy(head, script, (size_t)(leave - script));
+	head[leave - script] = '\0';
+	if ((g = play_raw(saves, lang, head)) == NULL)
+		return (NULL);
+	g->sim.encounters = 0;
+	if (game_script(g, leave) != 0) {
+		fprintf(stderr, "script: %s\n", g->err);
+		failures++;
+	}
+	return (g);
 }
 
 static struct game *
@@ -344,8 +371,9 @@ test_sailing(void)
 	struct game *g;
 	int y0, h0;
 
-	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Low enter enter esc enter enter click:60,300 wait:40 esc");	/* at Port Royale */
+	g = play_in(saves_tmp, "eng", "enter enter down down down down "
+	    "enter down enter right enter enter type:Low enter enter esc "
+	    "enter enter click:60,300 wait:40 esc");	/* at Port Royale */
 	if (g == NULL)
 		return;
 	CHECK(g->started && g->world != NULL && g->sim.world == g->world);
@@ -380,6 +408,7 @@ test_encounter_screens(void)
 	if (g == NULL)
 		return;
 	/* Sail until a sail is sighted. */
+	g->sim.encounters = 1;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
 		CHECK(game_script(g, "wait:32") == 0);
 	CHECK(g->sim.encounter.stage == ENC_SIGHTED);
@@ -429,6 +458,7 @@ test_battle_screen(void)
 	    "right enter enter type:Lo enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
+	g->sim.encounters = 1;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
 		CHECK(game_script(g, "wait:32") == 0);
 	CHECK(game_script(g, "enter enter") == 0);	/* investigate twice */
@@ -535,6 +565,7 @@ test_sword_screen(void)
 	    "right enter enter type:Lo enter enter esc enter enter click:60,300");
 	if (g == NULL)
 		return;
+	g->sim.encounters = 1;
 	for (i = 0; i < 200 && g->sim.encounter.stage == ENC_NONE; i++)
 		CHECK(game_script(g, "wait:32") == 0);
 	CHECK(game_script(g, "enter enter") == 0);
@@ -677,8 +708,9 @@ test_town(void)
 	const struct sim_town *t;
 	int i;
 
-	g = play("eng", "enter enter down down down down enter down enter "
-	    "right enter enter type:Lo enter enter esc enter enter click:60,300 wait:30");
+	g = play_in(saves_tmp, "eng", "enter enter down down down down "
+	    "enter down enter right enter enter type:Lo enter enter esc "
+	    "enter enter click:60,300 wait:30");
 	if (g == NULL)
 		return;
 	CHECK(g->screen == &screen_sail);

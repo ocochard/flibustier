@@ -2490,50 +2490,6 @@ const struct screen screen_hof = {
  * is tile aligned and jumps when the ship nears an edge, looking ahead in
  * the direction of travel (VA 0x231b8).  One simulation tick per frame.
  */
-#define VIEW_EDGE	50	/* pixels from the left or top edge */
-#define VIEW_RIGHT	570
-#define VIEW_BOTTOM	432
-#define VIEW_AHEAD_X	192
-#define VIEW_AHEAD_Y	128
-#define VIEW_MAX_X	(600 * WORLD_TILE)	/* last origin, pixels */
-#define VIEW_MAX_Y	(450 * WORLD_TILE)
-
-/* Lookahead toward the side the heading points at, or 0 when it points
- * mostly along the other axis (within 0x20 of it). */
-static int
-lookahead(int angle, int amount)
-{
-	int a = (int)(signed char)(uint8_t)angle;
-
-	if (a > 0x60 || a < -0x60 || (a > -0x20 && a < 0x20))
-		return (0);
-	return (a > 0 ? amount : -amount);
-}
-
-static int
-clampi(int v, int lo, int hi)
-{
-	return (v < lo ? lo : v > hi ? hi : v);
-}
-
-static void
-follow_ship(struct game *g, int force)
-{
-	const struct sim_fleet *f = &g->sim.fleet;
-	int sx = f->x - g->view_x, sy = f->y - g->view_y;
-
-	if (force || sx > VIEW_RIGHT || sx < VIEW_EDGE) {
-		g->view_x = (f->x - FB_W / 2 +
-		    lookahead(f->heading, VIEW_AHEAD_X)) / WORLD_TILE;
-		g->view_x = clampi(g->view_x * WORLD_TILE, 0, VIEW_MAX_X);
-	}
-	if (force || sy > VIEW_BOTTOM || sy < VIEW_EDGE) {
-		g->view_y = (f->y - FB_H / 2 +
-		    lookahead(f->heading - 0x40, VIEW_AHEAD_Y)) / WORLD_TILE;
-		g->view_y = clampi(g->view_y * WORLD_TILE, 0, VIEW_MAX_Y);
-	}
-}
-
 /*
  * Clouds over the sea (VA 0x24523, 0x231b8, 0x297c4): (|month - 5| + 1)
  * / 2 of them, none in June, three in winter, each a random cloud.cur
@@ -2546,64 +2502,13 @@ follow_ship(struct game *g, int force)
  */
 #define CLOUD_SHADOW		30
 
-static int
-cloud_random(struct game *g, int n)
-{
-	g->cloud_rand = g->cloud_rand * 1103515245u + 12345u;
-	return ((int)((g->cloud_rand >> 16) % (uint32_t)n));
-}
-
 static void
 clouds_start(struct game *g)
 {
-	static const int frames[4] = { 0, 1, 2, 0 };
-	int i;
-
 	load_bank(g, "cur/cloud", 1, &g->cloud_spr);
 	load_bank(g, "spr/sailmisc", 0, &g->party_spr);
 	g->march_held = 0;
-	if (g->cloud_rand == 0)
-		g->cloud_rand = (uint32_t)g->sim.day * 2654435761u + 1;
-	for (i = 0; i < 3; i++) {
-		g->clouds[i].frame = frames[cloud_random(g, 4)];
-		g->clouds[i].x = g->clouds[i].y = 0;	/* off the view */
-		g->clouds[i].shown = 0;
-	}
-}
-
-static int
-clouds_count(const struct game *g)
-{
-	int m = g->sim.day_of_year / 30 - 5;
-
-	return (((m < 0 ? -m : m) + 1) / 2);
-}
-
-static int
-cloud_sine(const struct game *g, int h, int v)
-{
-	int s = g->world->sine[h & 0x7F] * v >> 8;
-
-	return ((h & 0x80) ? -s : s);
-}
-
-static void
-clouds_move(struct game *g)
-{
-	int i, n = clouds_count(g), sx, sy, w = g->sim.wind;
-
-	for (i = 0; i < n && i < 3; i++) {
-		g->clouds[i].x += cloud_sine(g, w, (4 * i + 6) * 2) >> 3;
-		g->clouds[i].y -= cloud_sine(g, w + 0x40, (4 * i + 6) * 2) >> 3;
-		sx = g->clouds[i].x - g->view_x;
-		sy = g->clouds[i].y - g->view_y;
-		g->clouds[i].shown = !(sx < -100 || sx > FB_W || sy < -40 ||
-		    sy > FB_H);
-		if (!g->clouds[i].shown) {
-			g->clouds[i].x = g->view_x + FB_W;
-			g->clouds[i].y = g->view_y + cloud_random(g, 440);
-		}
-	}
+	sim_voyage_start(&g->sim);
 }
 
 static void
@@ -2612,15 +2517,16 @@ clouds_draw(struct game *g)
 	const uint8_t *shade = exe_at(g->layout, g->exe, g->exe_len,
 	    g->layout->shade_va, 256);
 	const struct frame *f;
-	int i, n = clouds_count(g), x, y, sx, sy, px, py;
+	const struct sim_cloud *c;
+	int i, n = sim_clouds(&g->sim), x, y, sx, sy, px, py;
 
 	for (i = 0; i < n && i < 3; i++) {
-		if (!g->clouds[i].shown ||
-		    (size_t)g->clouds[i].frame >= g->cloud_spr.count)
+		c = &g->sim.clouds[i];
+		if (!c->shown || (size_t)c->frame >= g->cloud_spr.count)
 			continue;
-		f = &g->cloud_spr.frames[g->clouds[i].frame];
-		sx = g->clouds[i].x - g->view_x;
-		sy = g->clouds[i].y - g->view_y;
+		f = &g->cloud_spr.frames[c->frame];
+		sx = c->x - g->sim.view_x;
+		sy = c->y - g->sim.view_y;
 		if (shade != NULL)
 			for (y = 0; y < f->h; y++)
 				for (x = 0; x < f->w; x++) {
@@ -2690,7 +2596,6 @@ sail_enter(struct game *g)
 		tileset_free(&g->map_art);
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
-	follow_ship(g, 1);
 	clouds_start(g);
 }
 
@@ -2767,7 +2672,6 @@ sail_tick(struct game *g)
 	if (g->ashore_prompt)
 		return;
 	g->sail_passes++;
-	clouds_move(g);
 	switch (g->sim.fleet.ashore ? sim_march(&g->sim, g->march_held & 1 ?
 	    -1 : g->march_held & 2 ? 1 : 0, g->march_held & 4 ? -1 :
 	    g->march_held & 8 ? 1 : 0, 1, &town) :
@@ -2795,7 +2699,6 @@ sail_tick(struct game *g)
 	case SAIL_TICKS:
 		break;
 	}
-	follow_ship(g, 0);
 }
 
 static void
@@ -2805,7 +2708,7 @@ sail_draw(struct game *g)
 	const uint8_t *t;
 	const struct frame *fr;
 	char buf[128], from[64];
-	int cx, cy, x0 = g->view_x / WORLD_TILE, y0 = g->view_y / WORLD_TILE;
+	int cx, cy, x0 = g->sim.view_x / WORLD_TILE, y0 = g->sim.view_y / WORLD_TILE;
 	uint8_t cell;
 
 	sea_animate(&g->sea, g->sail_passes, g->fb.pal);
@@ -2832,8 +2735,8 @@ sail_draw(struct game *g)
 	if (g->ship.count == 16) {
 		fr = &g->ship.frames[f->heading >> 4];
 		fb_frame(&g->fb, fr, (f->ashore ? f->ship_x : f->x) -
-		    g->view_x - fr->w / 2, (f->ashore ? f->ship_y : f->y) -
-		    g->view_y - fr->h / 2);
+		    g->sim.view_x - fr->w / 2, (f->ashore ? f->ship_y : f->y) -
+		    g->sim.view_y - fr->h / 2);
 	}
 	if (f->ashore) {
 		/* The party: sailmisc.spr, four frames a direction (VA
@@ -2845,8 +2748,8 @@ sail_draw(struct game *g)
 
 		if ((size_t)k < g->party_spr.count) {
 			fr = &g->party_spr.frames[k];
-			fb_frame(&g->fb, fr, f->x - g->view_x - fr->w / 2,
-			    f->y - g->view_y - fr->h / 2);
+			fb_frame(&g->fb, fr, f->x - g->sim.view_x - fr->w / 2,
+			    f->y - g->sim.view_y - fr->h / 2);
 		}
 	}
 	clouds_draw(g);
