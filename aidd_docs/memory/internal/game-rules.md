@@ -664,7 +664,15 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     of its men flee.
   - The town's units then choose: the fort rallies the others; any
     other advances on the foe, holds, or falls back to the fort (and
-    joins it) by comparing strengths (see VA `0x66f0`). A unit below 16
+    joins it) by comparing strengths (VA `0x5d40`, `0x66f0`): it wants
+    to close in when the foe has fewer than half its men (horsemen
+    count double), and falls back when its firepower, `(men x muskets
+    / 16) x morale / 65`, halved when the foe stands in cover, is below
+    the foe's `men x muskets / 16`. This is the only use of the
+    muskets besides the panel (VA `0x6c9a`): nobody fires from afar,
+    and moving or standing still does not change a fight (the 1987
+    game's rule that muskets fire only when standing still is not in
+    Pirates! Gold). A unit below 16
     morale near a foe backs away.
 - **Afterwards:** the crew is the party's men (at least 1), the town's
   soldiers a tenth of its men; heat rises by `passes / 99`. Won: the
