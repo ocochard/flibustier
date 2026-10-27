@@ -13,6 +13,9 @@
 # "Arrgh!", the harbour's call, the lookout's "Sail ho!", the land
 # battle's "En garde!", the cries of the hit in sword fights, the beaten
 # opponent's surrender)
+#
+# Left out as well because no take sounded right: the crash (hulls
+# meeting, a reef struck).  The game keeps the original's.
 # are left out, so the game keeps the original's; the other sounds are
 # asked without voices.
 
@@ -52,12 +55,6 @@ seconds = 1.5
 prompt = "a cannonball plunging into the sea, a deep splash of water"
 
 [[sound]]
-id = "sound/crash"
-length = 1.64
-seconds = 2.1
-prompt = "a heavy wooden ship ramming into another, one deep hollow crunch of thick oak timbers, then a creak"
-
-[[sound]]
 id = "sound/swing"
 length = 0.51
 seconds = 1
@@ -91,7 +88,7 @@ prompt = "many steel swords clashing close by in a fierce melee"
 id = "sound/scrape"
 length = 1.64
 seconds = 2.1
-prompt = "a wooden ship's hull scraping and grinding along rocks and sand in shallow water"
+prompt = "the wooden keel of a sailing ship grinding over a sandbar, a short low rough scraping rumble"
 
 [[sound]]
 id = "sound/trade"
