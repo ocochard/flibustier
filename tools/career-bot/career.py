@@ -114,6 +114,7 @@ class Bot:
         self.journal = open(os.path.join(OUT, "journal-%d-%s-seed%d.txt" % (
             era, nation, seed)), "w", buffering=1)
         self.unreachable = set()
+        self.main_sea = None
         self.fields = {}
         self.no_repair_until = 0
         self.food_town = None
@@ -269,6 +270,9 @@ class Bot:
         if (tx, ty) in self.dead_ends:
             return {"stop": "noroute"}
         route = self.path((f["x"] // 16, f["y"] // 16), (tx, ty))
+        if route is None and self.rescue_pond():
+            f = self.refresh()["fleet"]
+            route = self.path((f["x"] // 16, f["y"] // 16), (tx, ty))
         if route is None:
             self.odd("no sea route to %d,%d" % (tx, ty))
             self.dead_ends.add((tx, ty))
@@ -279,7 +283,10 @@ class Bot:
         while True:
             x, y = f["x"], f["y"]
             cx, cy = x // 16, y // 16
-            if abs(cx - tx) <= 1 and abs(cy - ty) <= 1 and town is None:
+            if town is None and (abs(cx - tx) <= 1 and abs(cy - ty) <= 1 or
+                                 # the route ends short when the target lies
+                                 # beyond the open sea (a lagoon)
+                                 max(abs(cx - route[-1][0]), abs(cy - route[-1][1])) <= 1):
                 return {"stop": "arrived"}
             # drift can carry the ship past points it never came near: resync
             # on the nearest upcoming point (later one on ties)
@@ -316,6 +323,9 @@ class Bot:
                     self.stats["land_bumps"] += 1
                     self.bumps[(f["x"] // 16, f["y"] // 16, tx, ty)] += 1
                     bumps += 1
+                    if town is None and bumps >= 8 and max(
+                            abs(f["x"] // 16 - tx), abs(f["y"] // 16 - ty)) <= 10:
+                        return {"stop": "arrived"}	# close enough: go on by land
                     if bumps > 30:
                         self.odd("kept running aground near %d,%d" % (f["x"] // 16, f["y"] // 16))
                         return {"stop": "stuck"}
@@ -742,7 +752,31 @@ class Bot:
         self.sim("load", state=s)
         return True
 
+    def rescue_pond(self):
+        """Test-mode rescue: the marooned ship can be set down in a pond with
+        no way out (the original's nearest-shore rule does not check).  Moves
+        it to the nearest cell of the main sea.  Returns True when it did."""
+        s = self.refresh()
+        f = s["fleet"]
+        cx, cy = f["x"] // 16, f["y"] // 16
+        if self.main_sea is None:
+            self.main_sea = collections.Counter(self.comp.values()).most_common(1)[0][0]
+        if self.comp.get((cx, cy)) == self.main_sea:
+            return False
+        best = min(((x - cx) ** 2 + (y - cy) ** 2, (x, y)) for (x, y), c in self.comp.items()
+                   if c == self.main_sea)[1]
+        self.odd("ship trapped in a pond at %d,%d: rescued to %d,%d" % (cx, cy, best[0], best[1]))
+        f["x"], f["y"], f["fx"], f["fy"] = best[0] * 16 + 8, best[1] * 16 + 8, 4, 4
+        self.sim("load", state=s)
+        self.unreachable.clear()
+        self.dead_ends.clear()
+        return True
+
     def go_town(self, ti, attack=False):
+        if ti is None:
+            self.unreachable.clear()
+            self.rescue_pond()
+            return "noroute"
         t = self.refresh()["towns"][ti]
         if ti in self.unreachable:
             return "noroute"
