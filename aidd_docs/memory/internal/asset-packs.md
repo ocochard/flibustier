@@ -26,8 +26,37 @@ the [roadmap](../../plans/roadmap.md).
 | `driver/<name>` | sound driver (music, effects) | `<NAME>.PIR` |
 | `text/<lang>/<name>` | string table | `<NAME>.<LANG>`, e.g. `CSTR.ENG` |
 | `program/main` | original executable (data tables) | `PIRATESG.EXE` |
+| `music/<tune>` | a recording that replaces a tune (packs only) | none |
 
-Planned: `music/<tune>`, keyed by the 20 tunes of the original jukebox.
+## Replacement music (`music/`)
+
+A pack may replace any of the game's tunes with a recording, in any
+format raylib streams (OGG, MP3, WAV, FLAC, QOA, XM, MOD), detected by
+its file extension. The IDs, by driver command (see "Music" in
+game-rules.md):
+
+| ID | When | ID | When |
+|---|---|---|---|
+| `music/title` | intro, welcome menu (9) | `music/trade` | merchant, shipwright (20) |
+| `music/lost-treasure` | lost treasure found (10) | `music/plunder` | a capture's or sack's loot (21) |
+| `music/family` | dinner with the merchant's family (11) | `music/rescue` | a relative found (22) |
+| `music/niece` | the governor's niece (12) | `music/tavern` | the tavern (23) |
+| `music/daughter` | the governor's daughter (13) | `music/wedding` | a wedding (24) |
+| `music/bank` | the bank (14) | `music/sail-ho` | a sail sighted (25) |
+| `music/barmaid` | the barmaid talking (15) | `music/verdict` | a career's end (27) |
+| `music/treasure` | a pirate's treasure found (16) | `music/prize` | "Shall we keep her?" (28) |
+| `music/news` | the governor's news (17) | `music/prison` | prison, marooned (43) |
+| `music/news-titled` | the same, titled by his nation (18) | `music/harbour` | arriving in a town (44) |
+| `music/promotion` | a promotion (19) | | |
+
+- The recording plays once, as the driver's tunes do, in place of the FM
+  arrangement; asked again while it plays, it goes on.
+- A stop fades it out over 3 seconds (the driver's fade); opening the
+  cabin at sea cuts it at once.
+- The FM sound effects (battles, swords, trade boards) still play over
+  it from the driver.
+- A tune without a recording plays from the FM driver as usual; a file
+  raylib cannot read is reported on stderr and the FM tune plays.
 
 ## Pack stack
 

@@ -356,6 +356,10 @@ enum {
 	MUS_HARBOUR = 44	/* arriving in a town */
 };
 
+/* The asset ID a pack replaces tune "cmd" (MUS_*) with, such as
+ * "music/title", or NULL for commands that are not tunes. */
+const char	*game_tune_id(int cmd);
+
 /* Ask for driver command "cmd" (MUS_*). */
 void	game_music(struct game *g, int cmd);
 

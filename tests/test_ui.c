@@ -398,6 +398,15 @@ test_sailing(void)
 	game_free(g);
 }
 
+/* The tunes a pack can replace, by driver command. */
+static void
+test_tune_ids(void)
+{
+	CHECK(strcmp(game_tune_id(MUS_TITLE), "music/title") == 0);
+	CHECK(strcmp(game_tune_id(MUS_HARBOUR), "music/harbour") == 0);
+	CHECK(game_tune_id(MUS_STOP) == NULL && game_tune_id(26) == NULL);
+}
+
 /* The original's debug mode (--debug): the keys at sea, and a right
  * click on the cabin's map moving the ship. */
 static void
@@ -1992,6 +2001,7 @@ main(void)
 	test_sailing();
 	test_encounter_screens();
 	test_debug_mode();
+	test_tune_ids();
 	test_battle_screen();
 	test_sword_screen();
 	test_pointer();

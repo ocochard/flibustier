@@ -455,6 +455,43 @@ game_sfx(struct game *g, int n)
 	g->sfx_last = n;
 }
 
+const char *
+game_tune_id(int cmd)
+{
+	static const struct {
+		int		 cmd;
+		const char	*id;
+	} tunes[] = {
+		{ MUS_TITLE, "music/title" },
+		{ MUS_LOST_TREASURE, "music/lost-treasure" },
+		{ MUS_FAMILY, "music/family" },
+		{ MUS_NIECE, "music/niece" },
+		{ MUS_DAUGHTER, "music/daughter" },
+		{ MUS_BANK, "music/bank" },
+		{ MUS_BARMAID, "music/barmaid" },
+		{ MUS_TREASURE, "music/treasure" },
+		{ MUS_NEWS, "music/news" },
+		{ MUS_NEWS_TITLED, "music/news-titled" },
+		{ MUS_PROMOTION, "music/promotion" },
+		{ MUS_TRADE, "music/trade" },
+		{ MUS_PLUNDER, "music/plunder" },
+		{ MUS_RESCUE, "music/rescue" },
+		{ MUS_TAVERN, "music/tavern" },
+		{ MUS_WEDDING, "music/wedding" },
+		{ MUS_SAIL_HO, "music/sail-ho" },
+		{ MUS_VERDICT, "music/verdict" },
+		{ MUS_PRIZE, "music/prize" },
+		{ MUS_PRISON, "music/prison" },
+		{ MUS_HARBOUR, "music/harbour" },
+	};
+	size_t i;
+
+	for (i = 0; i < sizeof(tunes) / sizeof(tunes[0]); i++)
+		if (tunes[i].cmd == cmd)
+			return (tunes[i].id);
+	return (NULL);
+}
+
 void
 game_fm(struct game *g, int cmd)
 {

@@ -158,15 +158,25 @@ sounds_unload(Sound sfx[DIGITAL_EFFECTS])
 
 /*
  * The music: the FM driver's tunes rendered as the stream asks, the
- * game's requests taken each frame.  Without the driver or a device,
- * no music.
+ * game's requests taken each frame.  A pack may replace a tune with a
+ * recording ("music/title" as OGG, MP3, WAV or another format raylib
+ * reads), streamed in its place; the FM effects still play.  Without a
+ * device, no music; without the driver, only the replacements.
  */
 #define MUSIC_CHUNK	2048	/* frames per stream buffer */
+#define TUNE_FADE	3.0f	/* seconds, about the driver's fade */
 
 struct jukebox {
+	int		 ready;		/* an audio device */
 	struct music	*m;
 	AudioStream	 stream;
 	int		 playing;	/* the last tune started */
+	/* A pack's recording of that tune, while it plays. */
+	struct blob	 tune_data;	/* raylib streams from it */
+	Music		 tune;
+	int		 tune_on;
+	float		 tune_volume;
+	int		 tune_fading;
 };
 
 static void
@@ -177,8 +187,10 @@ jukebox_open(struct game *g, struct jukebox *j)
 
 	memset(j, 0, sizeof(*j));
 	j->playing = -1;
-	if (!IsAudioDeviceReady() ||
-	    packs_load(g->packs, "driver/psound", &b) != 0)
+	if (!IsAudioDeviceReady())
+		return;
+	j->ready = 1;
+	if (packs_load(g->packs, "driver/psound", &b) != 0)
 		return;
 	if (fmmusic_decode(b.data, b.len, &d) == 0) {
 		j->m = music_new(&d);
@@ -193,25 +205,92 @@ jukebox_open(struct game *g, struct jukebox *j)
 }
 
 static void
+tune_stop(struct jukebox *j)
+{
+	if (!j->tune_on)
+		return;
+	StopMusicStream(j->tune);
+	UnloadMusicStream(j->tune);
+	blob_free(&j->tune_data);
+	j->tune_on = 0;
+}
+
+/* Start a pack's recording of tune "cmd"; 0 when no pack has one. */
+static int
+tune_start(struct game *g, struct jukebox *j, int cmd)
+{
+	const char *id = game_tune_id(cmd);
+	struct blob b;
+	char type[16];
+
+	if (id == NULL || packs_load(g->packs, id, &b) != 0)
+		return (0);
+	snprintf(type, sizeof(type), ".%s", b.ext);
+	tune_stop(j);
+	j->tune = LoadMusicStreamFromMemory(type, b.data, (int)b.len);
+	if (!IsMusicValid(j->tune)) {
+		fprintf(stderr, "%s: cannot play this %s file\n", id, b.ext);
+		blob_free(&b);
+		return (0);
+	}
+	j->tune_data = b;
+	j->tune.looping = false;	/* as the driver's tunes, once */
+	j->tune_volume = 1.0f;
+	j->tune_fading = 0;
+	SetMusicVolume(j->tune, 1.0f);
+	PlayMusicStream(j->tune);
+	j->tune_on = 1;
+	return (1);
+}
+
+static void
 jukebox_feed(struct game *g, struct jukebox *j)
 {
 	static int16_t buf[2 * MUSIC_CHUNK];
 	int req = g->music_request;
 
-	if (j->m == NULL)
+	if (!j->ready)
 		return;
 	g->music_request = -1;
 	if (req == MUS_STOP || req == MUS_SILENCE) {
-		if (req == MUS_STOP)
-			music_stop(j->m);
+		if (j->m != NULL) {
+			if (req == MUS_STOP)
+				music_stop(j->m);
+			else
+				music_silence(j->m);
+		}
+		if (req == MUS_SILENCE)
+			tune_stop(j);
 		else
-			music_silence(j->m);
+			j->tune_fading = j->tune_on;
 		j->playing = -1;
-	} else if (req > 0 && !(req == j->playing && music_active(j->m))) {
+	} else if (req > 0 && !(req == j->playing && ((j->tune_on &&
+	    !j->tune_fading) || (j->m != NULL && music_active(j->m))))) {
 		/* A tune already playing goes on, as the title's handler
 		 * checks (driver VA 0x82b). */
-		music_command(j->m, req);
+		if (tune_start(g, j, req)) {
+			if (j->m != NULL)
+				music_stop(j->m);
+		} else {
+			tune_stop(j);
+			if (j->m != NULL)
+				music_command(j->m, req);
+		}
 		j->playing = req;
+	}
+	if (j->tune_on) {
+		UpdateMusicStream(j->tune);
+		if (j->tune_fading) {
+			j->tune_volume -= GetFrameTime() / TUNE_FADE;
+			SetMusicVolume(j->tune, j->tune_volume > 0 ?
+			    j->tune_volume : 0);
+		}
+		if (j->tune_volume <= 0 || !IsMusicStreamPlaying(j->tune))
+			tune_stop(j);
+	}
+	if (j->m == NULL) {
+		g->fm_request = 0;
+		return;
 	}
 	/* An effect plays over the tune, on the driver's effect voices. */
 	if (g->fm_request > 0)
@@ -226,6 +305,7 @@ jukebox_feed(struct game *g, struct jukebox *j)
 static void
 jukebox_close(struct jukebox *j)
 {
+	tune_stop(j);
 	if (j->m == NULL)
 		return;
 	UnloadAudioStream(j->stream);

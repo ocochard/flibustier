@@ -31,7 +31,8 @@ The engine runs from asset packs:
 - Rules that only exist as code are unknown: sailing, wind, combat,
   fencing, economy, events, AI, and saves. The sea palette and the
   sailing world grid are now known.
-- The music is a per-driver bytecode, not yet decoded.
+- The music is a per-driver bytecode, decoded for the OPL3 driver
+  (`PSOUND.PIR`), which the engine plays.
 
 ## Key design decisions
 
@@ -127,7 +128,8 @@ Each phase ends with something visible and a test.
 ### Phase 1: data access and asset viewer
 
 Status (2026-10-26): done, apart from native-format loaders for packs.
-PNG pictures (`pic/`) and sprite sheets load; OGG does not yet.
+PNG pictures (`pic/`) and sprite sheets load, and recordings replace
+tunes (`music/`, OGG and the other formats raylib streams).
 
 
 - `src/data/`: the pack system (manifest parser, priority stack, logical
