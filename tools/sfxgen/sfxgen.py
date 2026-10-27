@@ -134,11 +134,14 @@ def fetch(server, pid):
         time.sleep(1)
 
 
-def finish(raw, out):
-    """Trim the silence at both ends, fade the last 50 ms, OGG Vorbis."""
+def finish(raw, out, length):
+    """Trim the leading silence, cut to "length" seconds with a short
+    fade out, normalise, OGG Vorbis."""
+    fade = min(0.05, length / 4)
     trim = ("silenceremove=start_periods=1:start_threshold=-45dB,"
-            "areverse,silenceremove=start_periods=1:start_threshold=-45dB,"
-            "afade=t=in:d=0.05,areverse,loudnorm=I=-16:TP=-1.5")
+            "loudnorm=I=-16:TP=-1.5,"
+            "atrim=0:%.3f,afade=t=out:st=%.3f:d=%.3f" % (
+                length, length - fade, fade))
     with tempfile.NamedTemporaryFile(suffix=".flac") as f:
         f.write(raw)
         f.flush()
@@ -198,12 +201,13 @@ def main():
         jobs.append((s, out, name, graph, queue(a.server, graph)))
     t0 = time.time()
     for s, out, name, graph, pid in jobs:
-        finish(fetch(a.server, pid), out)
+        finish(fetch(a.server, pid), out, float(s["length"]))
         rec = {"id": s["id"], "file": s["id"] + ".ogg",
                "model": spec["render"]["checkpoint"],
                "text_encoder": spec["render"]["text_encoder"],
                "prompt": s["prompt"], "seed": a.seed,
-               "seconds": s["seconds"], "workflow": graph,
+               "seconds": s["seconds"], "length": s["length"],
+               "workflow": graph,
                "tool": "tools/sfxgen/sfxgen.py@" + git_rev(),
                "date": datetime.date.today().isoformat()}
         with open(os.path.join(a.pack, "provenance", name + ".json"),
