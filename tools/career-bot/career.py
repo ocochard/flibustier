@@ -49,6 +49,46 @@ class Sim:
         return self("state")["state"]
 
 
+class Search:
+    """Dijkstra over a flat grid padded by one cell, run only as far as the
+    cells asked for.  Costs: shallows and shores are dear (in base), cells
+    that wrecked us dearer still."""
+
+    def __init__(self, base, w2, reefs, goal, far):
+        self.base, self.w2, self.reefs = base, w2, reefs
+        self.dist = [far] * len(base)
+        self.dist[goal] = 0
+        self.q = [(0, goal)]
+        self.steps = ((1, 0, 10), (-1, 0, 10), (w2, 0, 10), (-w2, 0, 10),
+                      (w2 + 1, 1, 14), (w2 - 1, 2, 14), (-w2 + 1, 3, 14), (-w2 - 1, 4, 14))
+
+    def reach(self, target):
+        """Settle every cell at most as costly as target; returns the
+        distances (final for those cells, which is all a descent needs)."""
+        dist, q, base, w2, reefs = self.dist, self.q, self.base, self.w2, self.reefs
+        pop, push = heapq.heappop, heapq.heappush
+        while q and (not q[0][0] > dist[target] or dist[target] >= (1 << 40)):
+            d0, cur = pop(q)
+            if d0 > dist[cur]:
+                continue
+            for o, diag, cost in self.steps:
+                n = cur + o
+                m = base[n]
+                if not m:
+                    continue
+                if diag:
+                    # no cutting a corner: both orthogonal cells must be water
+                    ox = 1 if diag in (1, 3) else -1
+                    oy = w2 if diag in (1, 2) else -w2
+                    if not (base[cur + ox] and base[cur + oy]):
+                        continue
+                d = d0 + cost * m * (40 if n in reefs else 1)
+                if d < dist[n]:
+                    dist[n] = d
+                    push(q, (d, n))
+        return dist
+
+
 class Bot:
     def __init__(self, era=1660, nation="england", seed=1, verbose=False):
         self.events = []
@@ -64,6 +104,13 @@ class Bot:
             check=True).stdout.splitlines()
         self.H, self.W = len(self.grid), len(self.grid[0])
         self.components()
+        # per-cell cost factor on a grid padded by one cell; 0 is not water
+        self.base = [0] * ((self.W + 2) * (self.H + 2))
+        for y in range(self.H):
+            for x in range(self.W):
+                if self.grid[y][x] in ".,":
+                    self.base[(y + 1) * (self.W + 2) + x + 1] = (
+                        (40 if self.grid[y][x] == "," else 1) * (4 if (x, y) in self.shore else 1))
         self.journal = open(os.path.join(OUT, "journal-%d-%s-seed%d.txt" % (
             era, nation, seed)), "w", buffering=1)
         self.unreachable = set()
@@ -158,42 +205,35 @@ class Bot:
             if not near:
                 return None
             goal = min(near)[1]
-        field = self.fields.get(goal)
-        if field is None:
-            field = {goal: 0}
-            q = [(0, goal)]
-            while q:
-                d0, cur = heapq.heappop(q)
-                if d0 > field[cur]:
-                    continue
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1),
-                               (1, -1), (-1, 1), (-1, -1)):
-                    n = (cur[0] + dx, cur[1] + dy)
-                    if not self.water(*n):
-                        continue
-                    if dx and dy and not (self.water(cur[0] + dx, cur[1]) and
-                                          self.water(cur[0], cur[1] + dy)):
-                        continue
-                    d = d0 + (14 if dx and dy else 10) * (40 if self.grid[n[1]][n[0]] == "," else 1) * (40 if n in self.reefs else 1) * (4 if n in self.shore else 1)
-                    if d < field.get(n, 1 << 30):
-                        field[n] = d
-                        heapq.heappush(q, (d, n))
-            self.fields[goal] = field
-        if start not in field:
+        W2 = self.W + 2
+        sp = (start[1] + 1) * W2 + start[0] + 1
+        gp = (goal[1] + 1) * W2 + goal[0] + 1
+        search = self.fields.get(goal)
+        if search is None:
+            search = self.fields[goal] = self.search(goal)
+        field = search.reach(sp)
+        if field[sp] >= self.FAR:
             return None
         out = [start]
-        cur = start
-        while cur != goal:
+        cur = sp
+        while cur != gp:
             best = None
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1),
-                           (1, -1), (-1, 1), (-1, -1)):
-                n = (cur[0] + dx, cur[1] + dy)
-                if field.get(n, 1 << 30) < field[cur] and (
-                        best is None or field[n] < field[best]):
+            for o in (1, -1, W2, -W2, W2 + 1, W2 - 1, -W2 + 1, -W2 - 1):
+                n = cur + o
+                if field[n] < field[cur] and (best is None or field[n] < field[best]):
                     best = n
             cur = best
-            out.append(cur)
+            out.append((cur % W2 - 1, cur // W2 - 1))
         return out
+
+    FAR = 1 << 40
+
+    def search(self, goal):
+        """A resumable Dijkstra from goal: cost of sailing from each cell to
+        it (see Search.reach)."""
+        reefs = {(y + 1) * (self.W + 2) + x + 1 for x, y in self.reefs}
+        gp = (goal[1] + 1) * (self.W + 2) + goal[0] + 1
+        return Search(self.base, self.W + 2, reefs, gp, self.FAR)
 
     def los(self, a, b):
         n = max(abs(b[0] - a[0]), abs(b[1] - a[1]), 1)
