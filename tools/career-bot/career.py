@@ -363,13 +363,20 @@ class Bot:
         self.battle_day = self.st["day"]
         b = self.sim("battle", ticks=1)["battle"]
         n = 0
+        fleeing = False
         while b["outcome"] == "none" and n < 20000:
             you, foe = b["you"], b["foe"]
+            # run from a fight being lost (escape: over 240 pixels apart)
+            if not b.get("fort") and (foe["guns"] >= 2 * you["guns"] or
+                                      (you["damage"] >= 2 and foe["damage"] < you["damage"])):
+                fleeing = True
             want = self.bearing(foe["x"] - you["x"], foe["y"] - you["y"])
+            if fleeing:
+                want = (want + 128) & 0xFF
             diff = ((want - you["heading"] + 128) & 0xFF) - 128
             turn = 0 if abs(diff) < 6 else (1 if diff > 0 else -1)
             dist = math.hypot(foe["x"] - you["x"], foe["y"] - you["y"]) / 256
-            fire = 1 if (b.get("fort") or dist > 60) and you["reload"] == 0 and abs(diff) > 40 else 0
+            fire = 1 if not fleeing and (b.get("fort") or dist > 60) and you["reload"] == 0 and abs(diff) > 40 else 0
             b = self.sim("battle", ticks=4, turn=turn, fire=fire, sails=1)["battle"]
             n += 1
         out = b["outcome"]
@@ -435,7 +442,11 @@ class Bot:
             s = self.refresh()
             nation = enc["nation"]
             enemy = nation == 4 or (nation < 4 and s["relations"][s["player"]["nation"]][nation] < 0)
-            strong = s["fleet"]["crew"] > max(25, enc["crew"] * 3 // 2)
+            f = s["fleet"]
+            # never pick a fight with a much bigger or better armed ship
+            outclassed = (enc["type"] > max(t & 7 for t in f["ships"]) + 1 or
+                          enc["guns"] * 2 > f["guns"] * 3)
+            strong = f["crew"] > max(25, enc["crew"] * 3 // 2) and not outclassed
             act = "battle" if enemy and strong and enc["stage"] == "colours" else (
                 "investigate" if enc["stage"] != "colours" else "ignore")
             if enemy and strong and enc["stage"] == "identified":
