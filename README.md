@@ -36,7 +36,9 @@ Assets are organized in layered packs: any original asset can be replaced
 by a pack using modern formats (PNG, OGG, ...), for example remixed music
 (`--pack DIR`; see `aidd_docs/memory/internal/asset-packs.md`).
 `tools/music_pack.py` turns the "Pirates! Gold (HQ Remake)" album by
-[Pieces of 8-bit](https://soundcloud.com/piecesof8bit) into such music.
+[Pieces of 8-bit](https://soundcloud.com/piecesof8bit) into such music,
+and `tools/sfxgen/` renders new sound effects from text prompts with
+Stable Audio Open.
 The long-term goal is a complete set of assets released under an open
 license, so the game can run without any original data.
 

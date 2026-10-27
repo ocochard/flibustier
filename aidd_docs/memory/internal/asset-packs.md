@@ -49,6 +49,13 @@ each plays.
   `sound/row` (the trade board's row). A recording plays instead of the
   driver's sound.
 - An effect without a recording plays as before.
+- **The open set:** `tools/sfxgen/sfxgen.py` renders all twenty with
+  Stable Audio Open 1.0 on a ComfyUI server, from the text prompts of
+  `tools/sfxgen/sounds.toml` alone (never an original sound as input),
+  trims and normalises them with ffmpeg, and writes them to the open
+  pack with a provenance record each and the `pack.d/sound.ini`
+  fragment. The model needs a Hugging Face account that accepted
+  Stability AI's licence; its text encoder is `t5_base.safetensors`.
 
 ## Replacement music (`music/`)
 

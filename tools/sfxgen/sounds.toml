@@ -1,0 +1,120 @@
+# The open pack's sound effects, for tools/sfxgen/sfxgen.py.
+#
+# Each sound is rendered from its text prompt alone, never from the
+# original's sounds, so the result carries no original data.  "seconds"
+# is the length asked of the model; the silence around the sound is cut
+# afterwards.  The IDs are the engine's (asset-packs.md, "Replacement
+# sounds").
+
+[render]
+checkpoint = "stable-audio-open-1.0.safetensors"
+text_encoder = "t5_base.safetensors"
+steps = 100
+cfg = 7.0
+sampler = "dpmpp_3m_sde_gpu"
+scheduler = "exponential"
+negative = "music, melody, singing, speech, low quality, distorted, noise, hiss, static"
+
+# The digitised effects (DIGITAL.PIR's nine).
+
+[[sound]]
+id = "sound/hail"
+seconds = 3
+prompt = "a gruff pirate captain bellowing a single defiant shout across open water, short, outdoor"
+
+[[sound]]
+id = "sound/broadside"
+seconds = 4
+prompt = "a ship's broadside, several heavy old cannons firing in quick succession at sea, deep booms, rolling echo"
+
+[[sound]]
+id = "sound/land-battle"
+seconds = 4
+prompt = "a volley of 17th-century muskets fired together, then men shouting a charge, outdoor battle"
+
+[[sound]]
+id = "sound/last-man"
+seconds = 2
+prompt = "a man groaning as he falls, his body and sword dropping onto a wooden deck"
+
+[[sound]]
+id = "sound/harbour"
+seconds = 5
+prompt = "a busy old harbour, gulls crying, a church bell ringing in the distance, waves lapping on wooden piers"
+
+[[sound]]
+id = "sound/sail-ho"
+seconds = 3
+prompt = "a ship's brass bell rung quickly as an alarm, on a wooden sailing ship, wind"
+
+[[sound]]
+id = "sound/parry"
+seconds = 1
+prompt = "two steel swords clashing once, a sharp metallic ring"
+
+[[sound]]
+id = "sound/hit-foe"
+seconds = 1
+prompt = "a sword slash cutting through cloth, a man's short pained grunt"
+
+[[sound]]
+id = "sound/hit-you"
+seconds = 1
+prompt = "a heavy sword blow landing, a man gasping in pain"
+
+# The FM effects (sent to the music driver).
+
+[[sound]]
+id = "sound/shot-hit"
+seconds = 2
+prompt = "a cannonball smashing into a wooden ship's hull, timber cracking and splintering"
+
+[[sound]]
+id = "sound/shot-miss"
+seconds = 2
+prompt = "a cannonball plunging into the sea, a deep splash of water"
+
+[[sound]]
+id = "sound/crash"
+seconds = 3
+prompt = "two large wooden sailing ships colliding, hulls grinding and timbers creaking and cracking"
+
+[[sound]]
+id = "sound/swing"
+seconds = 1
+prompt = "a sword swung fast through the air, a short whoosh"
+
+[[sound]]
+id = "sound/blow"
+seconds = 1
+prompt = "a blade striking a wooden shield, a dull thud"
+
+[[sound]]
+id = "sound/miss"
+seconds = 1
+prompt = "a sword slicing through empty air, a thin quick swish"
+
+[[sound]]
+id = "sound/their-men"
+seconds = 2
+prompt = "a group of enemy soldiers shouting and clashing swords at a distance"
+
+[[sound]]
+id = "sound/our-men"
+seconds = 2
+prompt = "a crowd of sailors shouting as they fight, swords clashing close by"
+
+[[sound]]
+id = "sound/scrape"
+seconds = 2
+prompt = "a wooden ship's hull scraping and grinding along rocks and sand in shallow water"
+
+[[sound]]
+id = "sound/trade"
+seconds = 1
+prompt = "a few gold coins dropped onto a wooden counter, a single clink"
+
+[[sound]]
+id = "sound/row"
+seconds = 1
+prompt = "a short wooden click, a counter sliding on an abacus"
