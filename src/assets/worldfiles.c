@@ -47,6 +47,38 @@ flush(const char *dir, const char *name, struct jbuf *b, char *err,
 	return (rc);
 }
 
+/*
+ * The terrain of every map tile pixel, for tools drawing replacement
+ * tiles that keep it: a 256x256 PGM, tiles in rows of 16, grey 85 for
+ * shallows, 170 for land, 255 for sea (TERRAIN_* times 85).
+ */
+static int
+write_terrain(const char *dir, const struct world *w, char *err,
+    size_t errlen)
+{
+	char path[1024];
+	FILE *fp;
+	int t, x, y;
+
+	snprintf(path, sizeof(path), "%s/map-terrain.pgm", dir);
+	if ((fp = fopen(path, "wb")) == NULL) {
+		snprintf(err, errlen, "cannot write %s", path);
+		return (-1);
+	}
+	fprintf(fp, "P5\n%d %d\n255\n", 16 * WORLD_TILE, 16 * WORLD_TILE);
+	for (y = 0; y < 16 * WORLD_TILE; y++)
+		for (x = 0; x < 16 * WORLD_TILE; x++) {
+			t = y / WORLD_TILE * 16 + x / WORLD_TILE;
+			fputc(85 * w->map_terrain[(t * WORLD_TILE + y %
+			    WORLD_TILE) * WORLD_TILE + x % WORLD_TILE], fp);
+		}
+	if (fclose(fp) != 0) {
+		snprintf(err, errlen, "cannot write %s", path);
+		return (-1);
+	}
+	return (0);
+}
+
 int
 world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 {
@@ -99,6 +131,8 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	tiled_write_tileset(&b, "battle", BATTLE_TILE, 256, "battle.png",
 	    16 * BATTLE_TILE, 16 * BATTLE_TILE);
 	if (flush(dir, "battle.tsj", &b, err, errlen) != 0)
+		goto out;
+	if (write_terrain(dir, w, err, errlen) != 0)
 		goto out;
 	/* Towns per era, treasure spots, battle sets. */
 	for (era = 0; era < EXE_ERAS; era++) {

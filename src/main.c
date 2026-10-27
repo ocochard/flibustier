@@ -51,7 +51,8 @@ usage(void)
 	    "                (original data: do not share)\n"
 	    "  --export-world DIR\n"
 	    "                write the world grids as an open pack of Tiled\n"
-	    "                maps (from the original data: do not share)\n"
+	    "                maps, and the map tiles' terrain for tools\n"
+	    "                (from the original data: do not share)\n"
 	    "  --export ID OUT.png [--frame N] [--tick N]\n"
 	    "                render one asset frame to a PNG, no window\n");
 	exit(2);
