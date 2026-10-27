@@ -908,7 +908,8 @@ seed = 1660
 source = "derived from pic/tavern"
 prompt = ""
 [[asset.frames]]
-rect = [0, 255, 122, 188]
+rect = [0, 252, 124, 192]	# the original frame; on whole art pixels
+at = [0, 255]
 mode = "replace"
 shape = "layouts/tavern-mapman.png"
 character = "mapman"
@@ -927,7 +928,8 @@ legs in breeches and boots reach the floor. Warm amber light,
 historical reenactment photography, sharp focus, realistic.
 """
 [[asset.frames]]
-rect = [142, 259, 90, 190]	# taller than the original, for his legs
+rect = [140, 256, 92, 196]	# taller than the original, for his legs; on whole art pixels
+at = [142, 259]
 mode = "replace"
 shape = "layouts/tavern-infoman.png"
 reach = 3	# the edit turns the bar behind him into shelves
@@ -948,7 +950,8 @@ Warm amber light, historical reenactment photography, sharp focus,
 realistic.
 """
 [[asset.frames]]
-rect = [349, 199, 79, 161]	# the doorway, nobody in it
+rect = [348, 196, 80, 164]	# the doorway, nobody in it; on whole art pixels
+at = [349, 199]
 
 [[asset]]
 id = "pic/cabin"
@@ -1039,7 +1042,8 @@ seed = 1660
 source = "derived from pic/cabin"
 prompt = ""
 [[asset.frames]]
-rect = [325, 229, 200, 106]
+rect = [324, 228, 204, 108]	# the original frame; on whole art pixels
+at = [325, 229]
 scene = "a sea captain's cabin, the top of a wooden table"
 instruction = """
 Take the treasure map away from the table and pull the dagger out: the
