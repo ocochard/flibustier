@@ -7,10 +7,16 @@
 # original's; a take longer than 1.5 times that is cut, a shorter one is
 # kept whole.
 
+# Without a reference, Dia2 picks a new speaker for every take (women,
+# singing...).  "voice", on the GPU host, gives every line one low male
+# voice: 10 s from 0:40 of chapters 1-2 of LibriVox's public-domain
+# Treasure Island, read by Squiddhartha ("voice_source").
 [render]
 repo = "nari-labs/Dia2-2B"
 cfg = 2.0
 temperature = 0.8
+voice = "ref/pirate.wav"
+voice_source = "https://archive.org/download/treasureisland_librivox/treasure_island_01-02_stevenson_64kb.mp3 (0:40-0:50; LibriVox, public domain)"
 
 [[voice]]
 id = "sound/hail"

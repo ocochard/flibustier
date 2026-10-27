@@ -9,7 +9,8 @@
 Each line of voices.toml is spoken by Dia2 (Nari Labs, Apache 2.0) from
 its text alone, never from the original's recordings, on a GPU host
 reached by ssh (Dia2 runs outside ComfyUI, in its own Python environment
-there: DIR/venv, with dia2 installed).  The takes come back, their
+there: DIR/venv, with dia2, whisper-timestamped and an ffmpeg in its
+bin/ for the reference voice).  The takes come back, their
 silence trimmed, normalised, cut only past 1.5 times the original's
 length, converted to OGG Vorbis, and written to the pack with a
 provenance record each and the pack.d/voice.ini fragment.
@@ -99,11 +100,13 @@ def main():
                             os.path.join(tmp, "jobs.json"),
                             "%s:%s/" % (a.host, REMOTE)], check=True)
             subprocess.run(["ssh", "-o", "BatchMode=yes", a.host,
-                            "cd %s && HF_TOKEN=$(cat ~/.cache/huggingface/"
+                            "cd %s && PATH=$PWD/venv/bin:$PATH "
+                            "HF_TOKEN=$(cat ~/.cache/huggingface/"
                             "token 2>/dev/null) venv/bin/python %s/dia_say.py"
-                            " %s %s %s %s/jobs.json" % (
+                            " %s %s %s %s/jobs.json %s" % (
                                 a.dir, REMOTE, r["repo"], r["cfg"],
-                                r["temperature"], REMOTE)], check=True)
+                                r["temperature"], REMOTE,
+                                r.get("voice", ""))], check=True)
             for v, j in zip(todo, jobs):
                 wav = os.path.join(tmp, os.path.basename(j["out"]))
                 subprocess.run(["scp", "-q", "%s:%s" % (a.host, j["out"]),
@@ -115,6 +118,8 @@ def main():
                        "model": r["repo"], "text": v["text"],
                        "seed": a.seed, "cfg": r["cfg"],
                        "temperature": r["temperature"],
+                       "voice": r.get("voice"),
+                       "voice_source": r.get("voice_source"),
                        "length": v["length"],
                        "tool": "tools/sfxgen/voicegen.py@" + git_rev(),
                        "date": datetime.date.today().isoformat()}
