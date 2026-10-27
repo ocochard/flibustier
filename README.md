@@ -125,6 +125,11 @@ the palette of sprites, and typing filters the list. Besides the
 original files, `world/<year>` shows the sailing world of an era with
 its animated sea, and `towns/<year>` the era's towns on a terrain map.
 
+Sounds play when selected (Enter replays): `audio/digital/N` are the
+digitised effects, `audio/fm/N` the FM driver's tunes and effects
+rendered by the music engine, and any `sound/` or `music/` recording a
+pack provides is listed and played too. Filter on `audio/` to find them.
+
 `--list` prints every asset ID. `--export ID out.png` renders one asset
 without opening a window. Use `--frame N` to pick the frame and
 `--tick N` the animation step. `--pack DIR` adds an asset pack on top of
