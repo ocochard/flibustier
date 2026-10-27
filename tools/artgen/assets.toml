@@ -928,8 +928,11 @@ photography, sharp focus, realistic.
 rect = [345, 245, 145, 65]	# inside the chart frame, with a margin
 scene = "a sea captain's cabin, the top of a wooden table"
 thing = """
-an old hand-drawn treasure map of a Caribbean island on yellowed
-parchment lying flat on the table, a dagger stuck upright through it
+a real sheet of old, creased and stained parchment lying flat on the
+table, photographed as it is: on it, the coastline of an island traced
+in faded brown ink with a small cross, the ink worn and blotched as on
+a 17th-century document; a real steel dagger stuck upright through it,
+casting a shadow
 """
 
 # The chart frame: while no treasure map is held, the game draws the
