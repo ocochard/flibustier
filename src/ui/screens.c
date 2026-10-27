@@ -2790,17 +2790,86 @@ static const char *nation_colours[5] = {
 	"pic/fjolly01",
 };
 
+#define FLAG_FRAME	200
+#define FLAG_FRAMES	8
+#define FLAG_KEY	0	/* the flags' see-through colour */
+#define FLAG_SHIFT	24	/* their colours 8-15 go to 32-39 */
+
+/*
+ * The colours shown (VA 0xd1fc): a named captain's Jolly Roger, by his
+ * id's nation and surname (table at VA 0x32f90, pictures 0x5d-0x70),
+ * else the nation's flag (pictures 0x43-0x46).  The original's picture
+ * for an unnamed pirate is "null.pcx", which the game lacks; the engine
+ * shows the first Jolly Roger.
+ */
+static const char *
+encounter_flag(struct game *g, char *buf, size_t len)
+{
+	const struct sim_encounter *e = &g->sim.encounter;
+	const uint8_t *p;
+	int n;
+
+	if (e->captain != 0 && (p = exe_at(g->layout, g->exe, g->exe_len,
+	    g->layout->jolly_va + ((e->captain >> 6) & 3) * 32 +
+	    ((e->captain >> 3) & 7) * 2, 2)) != NULL &&
+	    (n = p[0] | p[1] << 8) >= 1 && n <= 20) {
+		snprintf(buf, len, "pic/fjolly%02d", n);
+		return (buf);
+	}
+	return (nation_colours[e->nation % 5]);
+}
+
+/*
+ * The flag over the spyglass's sky (VA 0x108cf): each frame's
+ * see-through pixels take BASEFLAG's, the others move up 24 colours,
+ * and the flag's colours 8-15 join the base's palette at 32-39.
+ */
+static void
+flag_composite(struct game *g)
+{
+	struct image base;
+	int f, x, y;
+	uint8_t *px;
+
+	memset(&base, 0, sizeof(base));
+	if (g->bg.pixels == NULL || g->bg.rgba != NULL ||
+	    g->bg.w < 4 * FLAG_FRAME || g->bg.h < 2 * FLAG_FRAME ||
+	    pic_load(g->packs, "pic/baseflag", &base) != 0)
+		return;
+	if (base.pixels != NULL && base.rgba == NULL && base.w >= FLAG_FRAME &&
+	    base.h >= FLAG_FRAME) {
+		for (f = 0; f < FLAG_FRAMES; f++)
+			for (y = 0; y < FLAG_FRAME; y++) {
+				px = g->bg.pixels + ((f / 4) * FLAG_FRAME + y) *
+				    g->bg.w + (f % 4) * FLAG_FRAME;
+				for (x = 0; x < FLAG_FRAME; x++)
+					px[x] = px[x] == FLAG_KEY ?
+					    base.pixels[y * base.w + x] :
+					    (uint8_t)(px[x] + FLAG_SHIFT);
+			}
+		memcpy(base.palette + (8 + FLAG_SHIFT) * 3, g->bg.palette + 8 * 3,
+		    8 * 3);
+		memcpy(g->bg.palette, base.palette, sizeof(g->bg.palette));
+		memcpy(g->fb.pal, g->bg.palette, sizeof(g->fb.pal));
+		g->flag_composed = 1;
+	}
+	image_free(&base);
+}
+
 static void
 encounter_background(struct game *g)
 {
 	const struct sim_encounter *e = &g->sim.encounter;
+	char flag[32];
 
+	g->flag_composed = 0;
 	switch (e->stage) {
 	case ENC_IDENTIFIED:
 		game_background(g, ship_portrait[e->type % 9]);
 		break;
 	case ENC_COLOURS:
-		game_background(g, nation_colours[e->nation % 5]);
+		game_background(g, encounter_flag(g, flag, sizeof(flag)));
+		flag_composite(g);
 		break;
 	default:
 		game_background(g, "pic/sail-ho");
@@ -2893,8 +2962,6 @@ encounter_event(struct game *g, const struct ui_event *ev)
  * of -1..+1).
  */
 #define PORTRAIT_VIEW	200
-#define FLAG_FRAME	200
-#define FLAG_FRAMES	8
 
 static void
 encounter_picture(struct game *g)
@@ -2915,7 +2982,8 @@ encounter_picture(struct game *g)
 		return;
 	}
 	f = (int)(g->ticks / 2) % FLAG_FRAMES;
-	key = fb_nearest(&g->fb, 0, 255, 0);
+	/* Composed over the sky; a replacement flag keeps its key. */
+	key = g->flag_composed ? -1 : fb_nearest(&g->fb, 0, 255, 0);
 	fb_image_part(&g->fb, &g->bg, (f % 4) * FLAG_FRAME,
 	    (f / 4) * FLAG_FRAME, FLAG_FRAME, FLAG_FRAME,
 	    (FB_W - FLAG_FRAME) / 2, 10, key);

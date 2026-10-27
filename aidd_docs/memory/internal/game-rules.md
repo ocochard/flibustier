@@ -891,10 +891,27 @@ Where the original's behaviour is not traced yet, the engine does this:
     `0x32d90`), each for 11 ticks of the 60.9 Hz clock; the ship rocks.
   - The flag uses the same window, 8 frames, each for 1 + rand jitter
     (-1..+1) + 1 ticks (VA `0xfc0a`, table at VA `0x32dc0`).
-  - Flags (`F-*.PCX`, and `FJOLLY*` for pirates) hold 8 frames of
-    200x200 on a pure green key; the engine waves them in turn. The
-    original composites them with `BASEFLAG.PCX` (VA `0x108cf`), not
-    reproduced yet.
+  - **Which flag (VA `0xd1fc`):** a named captain flies a Jolly Roger,
+    `FJOLLYnn.PCX` with nn the word at VA `0x32f90` + `(id >> 6 & 3) x
+    32 + (id >> 3 & 7) x 2` (pictures 0x5d-0x70 from the name table at
+    VA `0x31dd0`; the ids' surnames 0-4 reach all 20); anyone else the
+    nation's flag (pictures 0x43-0x46, `F-SPAN`, `F-ENGL`, `F-FRENCH`,
+    `F-DUTCH`). An unnamed pirate would get picture 0x47, `null.pcx`,
+    which the game does not have; the engine shows `FJOLLY01`.
+  - **Over the sky (VA `0x108cf`):** flags hold 8 frames of 200x200 in a
+    4 x 2 sheet, drawn in colours 8-15 with 0 see-through (green, red
+    in `F-FRENCH`). Each frame is laid over `BASEFLAG.PCX` (picture 3,
+    the spyglass's sky and mast, colours 0 and 64 up): a see-through
+    pixel takes the base's, the others move up 24; the base's palette
+    takes the flag's colours 8-15 at 32-39 (the palette at VA
+    `0x45ac8`). In 16 colours the flag keeps its colours.
+  - **The first named pirate's quiz (VA `0x10747`, flag `0x449be`):** the
+    first time a named captain is met, the original shows a random flag
+    and asks which pirate it belongs to; a wrong answer sets the
+    difficulty to 4 (VA `0x45e6f`), the guns to 0 (player block +0x0a),
+    the gold to 8 (+0x28) and the injuries to 8 (VA `0x45e88`). That is
+    the game's copy protection. **Project decision: it stays disabled**;
+    the engine never asks and never applies the penalties.
 
 ## Sea battles (VA `0xe245`; loop at VA `0x7db8`)
 
@@ -1915,8 +1932,11 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - every other nation's by `d x relation(N, k)` (+1 alliance, -1 war);
   - but such changes cannot lift a standing above 1, nor drop one that
     is above 1 below 2.
-- **Capturing a ship** of a nation (not pirates) is an attack with d =
-  -1 (VA `0xdb7b`). Other callers (town attacks) are not traced yet.
+- **The callers:** capturing a ship of a nation (not pirates), d = -1
+  (VA `0xdb7b`); a repelled or beaten assault, -1 (VA `0x18b3f`); a
+  sack, -1, and -2 more when it yields 100 gold or more (VA `0x22764`);
+  a governor installed for another nation, -2 against the old one,
+  while the new one's standing rises by 3 (VA `0x22764`).
 
 ### Governor (VA `0x13269`)
 

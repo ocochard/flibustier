@@ -53,6 +53,8 @@ struct exe_layout {
 						 * spots, in map cells */
 	uint32_t	 coast_va;		/* 256 bytes: a map tile's shore
 						 * side (0x11, 0x22, 0x33) */
+	uint32_t	 jolly_va;		/* 4 x 16 u16: a named captain's
+						 * Jolly Roger, 1-20 */
 };
 
 /* Returns the layout of a known build, or NULL. */

@@ -257,6 +257,7 @@ struct game {
 	/* The FM effect asked for this pass (FM_*), 0 none: one a pass, the
 	 * last asked wins, as the original's request word (VA 0x49a7e). */
 	int			 fm_request;
+	int			 flag_composed;	/* the flag is over the sky */
 	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the

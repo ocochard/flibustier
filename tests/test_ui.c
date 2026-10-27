@@ -420,8 +420,22 @@ test_encounter_screens(void)
 	CHECK(game_script(g, "enter") == 0);	/* investigate */
 	CHECK(g->sim.encounter.stage == ENC_IDENTIFIED);
 	if (!g->sim.encounter.hostile) {
-		/* Peaceful: investigate again, then hail for news. */
-		CHECK(game_script(g, "enter down enter") == 0);
+		/* Peaceful: investigate again: her colours over the
+		 * spyglass's sky, no see-through green left; then hail. */
+		CHECK(game_script(g, "enter wait:4") == 0 &&
+		    g->sim.encounter.stage == ENC_COLOURS && g->flag_composed);
+		{
+			int x, y, green = 0;
+			uint8_t key = fb_nearest(&g->fb, 0, 255, 0);
+
+			for (y = 10; y < 210; y++)
+				for (x = 220; x < 420; x++)
+					green += g->fb.px[y * FB_W + x] == key &&
+					    g->fb.pal[key * 3 + 1] == 255 &&
+					    g->fb.pal[key * 3] == 0;
+			CHECK(green == 0);
+		}
+		CHECK(game_script(g, "down enter") == 0);
 		CHECK(g->sim.encounter.stage == ENC_NONE &&
 		    g->enc_result == RES_NEWS);
 	} else {
