@@ -799,8 +799,9 @@ void	sim_abandon_last(struct sim *s);
  * (married + relatives found - injuries) x 1000; the score is
  * (int)(points / 330 x (25 - years) / 20), and its rating 0 (best) to
  * 21 (hof_rating).  The summary's words: CSTN 38 entry "member", 39
- * "wealth", 40 "repute", 42 "mood" (each already offset as the game
- * reads them), the age, and the ranks' sum.
+ * "wealth", 40 "repute" (for a famous expedition, its share), 42
+ * "mood" (each already offset as the game reads them), the age, and the
+ * ranks' sum.
  */
 struct career_end {
 	long	points;

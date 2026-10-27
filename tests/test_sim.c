@@ -3170,6 +3170,16 @@ test_career_end(void)
 	    e.member == 4 && e.wealth == 2 && e.repute == 2);
 	/* (0 + 1 - 3/6) x 3 = 1.5: 1, + 1 */
 	CHECK(e.mood == 2);
+	/* A famous expedition tells its share: 200 x 0.7 / 40 = 3.5, kept
+	 * at 3; a large one stops at 6. */
+	s.player.expedition = 1;
+	s.fortune = 200;
+	sim_career_end(&s, &e);
+	CHECK(e.repute == 3 + 2 && e.mood == 6);
+	s.fortune = 5000;
+	sim_career_end(&s, &e);
+	CHECK(e.repute == 6 + 2);
+	s.player.expedition = -1;
 }
 
 /* Can the crew sail the fleet? */

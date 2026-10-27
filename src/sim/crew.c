@@ -85,6 +85,12 @@ sim_career_end(const struct sim *s, struct career_end *out)
 	out->wealth = (k > 6 ? 6 : k) + 2;
 	k = s->reputation / 4 + 1;
 	out->repute = (k < 0 ? 0 : k > 6 ? 6 : k) + 2;
+	/* A famous expedition's share (VA 0x4938): the fortune x 0.7 / 40,
+	 * in doubles, truncated. */
+	if (s->player.expedition >= 0) {
+		k = (int)((double)s->fortune * 0.7 / 40.0);
+		out->repute = (k > 6 ? 6 : k) + 2;
+	}
 	/* Family, wounds and the years make the old captain's mood. */
 	e = s->relative / 8.0 + (s->married / 8.0 + 1.0) - s->injuries / 6.0;
 	h = e * ((double)(25 - years) / 20.0);

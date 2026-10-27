@@ -340,10 +340,10 @@ people:
 			s->tavern_spots &= ~TAVERN_NEWS;
 	}
 	/* The map seller (VA 0x112b1): one time in five, and never once
-	 * the pirate's map is whole. */
+	 * the pirate's map is whole; the draw is made either way. */
 	if ((s->tavern_spots & TAVERN_MAPS) &&
-	    (s->maps[MAP_PIRATE].pieces == (MAP_WHOLE | MAP_SHOWN) ||
-	    rng_below(&s->rng, 5) != 0))
+	    (rng_below(&s->rng, 5) != 0 ||
+	    s->maps[MAP_PIRATE].pieces == (MAP_WHOLE | MAP_SHOWN)))
 		s->tavern_spots &= ~TAVERN_MAPS;
 }
 

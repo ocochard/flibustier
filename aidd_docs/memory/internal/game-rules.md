@@ -1863,9 +1863,9 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
     and a random town, again while that town's information is current
     and the price is not 50. He stays away when the price is 50 or the
     town is the one the player is in. Drawing sets visit flag 2.
-  - The map seller (VA `0x112b1`) is there one time in five, and never
-    once the pirate's map is whole (its slot reads `0x1f`; another
-    condition, the flag at VA `0x44ae2`, is not identified).
+  - The map seller (VA `0x112b1`) is there one time in five (the draw,
+    `rand(5) == 0`, kept at VA `0x44ae2`), and never once the pirate's
+    map is whole and shown (its slot reads `0x1f`).
   - The mystery man (VA `0x10ffe`) is there while a villain hides in
     the town or the mission's contact lives there (see "Villains" and
     "Missions"). Clicking him meets the villain, else hands over the
@@ -2180,8 +2180,8 @@ retiring), or in prison (a famous expedition, or health 3). The cabin's
      `h = max((relatives / 8 + married / 8 + 1 - injuries / 6) x (25 -
      years) / 20, -1)`, 2 for an expedition).
    - A famous expedition instead tells its share (CSTN 40.1, VA
-     `0x4938`; its word's formula is not traced, the engine uses the
-     reputation's).
+     `0x4938`): the fortune, and CSTN 40 entry `min(trunc(fortune x 0.7
+     / 40), 6) + 2` (in doubles).
 5. **Verdict (VA `0x51c2`):** "Your pirating days are over. Your
    seafaring adventures have made you a %s in %s, where %s" (CSTR 82):
    CSTN 43 entry `r` (King's advisor... Beggar), the place (left over by
