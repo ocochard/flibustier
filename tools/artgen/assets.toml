@@ -935,6 +935,36 @@ a 17th-century document; a real steel dagger stuck upright through it,
 casting a shadow
 """
 
+# The log book and the telescope, put back on their click spots.
+[[asset.finish]]
+mask = "layouts/cabin-corner.png"
+rect = [60, 140, 240, 170]
+scene = "a sea captain's cabin, the wall under the stern windows"
+instruction = """
+Remove the telescope with its tripod and the book on the shelf: show the
+wooden wall, the window, the bare shelf and the floor that were behind
+them.
+"""
+[[asset.finish]]
+rect = [126, 160, 90, 62]	# the Logbook spot left of the wall post, the shelf at its bottom
+scene = "a sea captain's cabin, a wooden shelf under the stern windows"
+thing = """
+a thick old leather-bound log book lying closed flat on the shelf,
+wholly resting on it, its worn brown leather and brass corners
+"""
+[[asset.finish]]
+rect = [236, 130, 92, 165]	# the Search spot
+scene = "a sea captain's cabin, by the stern windows"
+thing = """
+a 17th-century marine spyglass on a tall wooden tripod standing on the
+floor, seen exactly from the side so that neither end faces the camera:
+a slim, long tapered tube of leather-wrapped wood with brass draw tubes
+and brass rings, nearly level, aimed at the sea through the stern window
+on its left. Its thicker objective end is at the left, touching the
+window glass; its thin eyepiece end is at the right, towards the room.
+Nobody is there
+"""
+
 # The chart frame: while no treasure map is held, the game draws the
 # table without them over the picture's maps (the original frame's place
 # and size).

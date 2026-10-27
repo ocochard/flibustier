@@ -708,6 +708,31 @@ def match_workflow(image, edited, rect, k, prefix):
     }
 
 
+def edit_paste_workflow(image, edited, mask, rect, k, prefix):
+    """Paste an edited crop of rect (640x480 pixels) back onto an
+    uploaded picture, colours matched, only inside "mask" (a whole-
+    picture mask at the generation size)."""
+    x, y, w, h = (round(v * k) for v in rect)
+    g = match_workflow(image, edited, rect, k, prefix)
+    g.update({
+        "mask": {"class_type": "LoadImage", "inputs": {"image": mask}},
+        "mfit": {"class_type": "ImageScale", "inputs": {
+            "image": ["mask", 0], "upscale_method": "bilinear",
+            "width": round(SCREEN_W * k), "height": round(SCREEN_H * k),
+            "crop": "center"}},
+        "mcrop": {"class_type": "ImageCrop", "inputs": {
+            "image": ["mfit", 0], "width": w, "height": h, "x": x,
+            "y": y}},
+        "cmask": {"class_type": "ImageToMask", "inputs": {
+            "image": ["mcrop", 0], "channel": "red"}},
+        "paste": {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["image", 0], "source": ["match", 0],
+            "x": x, "y": y, "resize_source": False, "mask": ["cmask", 0]}},
+    })
+    g["save"]["inputs"]["images"] = ["paste", 0]
+    return g
+
+
 def atlas_workflow(images, sizes, prefix):
     """Lay uploaded frames side by side, left to right, top aligned."""
     g = {"canvas": {"class_type": "EmptyImage", "inputs": {
@@ -1119,7 +1144,37 @@ def main():
             os.remove(plate)
         # Last touches the rest of the picture is kept around: repaint
         # each step's mask (the left table widened into a sprite frame).
+        k_art = height / SCREEN_H
         for m, step in enumerate(a.get("finish", []) if ok else []):
+            if step.get("instruction"):
+                # The edit model changes that part (it keeps what is
+                # around better than a repaint), pasted inside the mask.
+                free(args.server)
+                up = upload(args.server, out, "flibustier-finish-source.png")
+                try:
+                    png = render(args.server, cast_workflow(
+                        step, spec, profile, seed + 400 + m, up, None,
+                        "flibustier/" + name.replace("/", "-") + "-edit"))
+                    edited = out + ".edit.png"
+                    with open(edited, "wb") as f:
+                        f.write(png)
+                    free(args.server)
+                    eup = upload(args.server, edited, "flibustier-edit.png")
+                    os.remove(edited)
+                    mask = upload(args.server, os.path.join(
+                        HERE, step["mask"]), "flibustier-finish-" +
+                        os.path.basename(step["mask"]))
+                    png = render(args.server, edit_paste_workflow(
+                        up, eup, mask, step["rect"], k_art,
+                        "flibustier/" + name.replace("/", "-") + "-edit"))
+                except RuntimeError as e:
+                    print("%s: finish failed: %s" % (a["id"], e),
+                          file=sys.stderr)
+                    failed.append(a["id"])
+                    break
+                with open(out, "wb") as f:
+                    f.write(png)
+                continue
             if step.get("thing"):
                 # An object added by the edit model and cut out, so it
                 # keeps its own edges.
@@ -1172,7 +1227,10 @@ def main():
             "finish": [{"mask": f["mask"], "sha256": hashlib.sha256(open(
                 os.path.join(HERE, f["mask"]), "rb").read()).hexdigest(),
                         "rect": f["rect"], "prompt": f["prompt"].strip()}
-                       if f.get("mask") else
+                       if f.get("prompt") else
+                       {"mask": f["mask"], "rect": f["rect"],
+                        "instruction": " ".join(f["instruction"].split())}
+                       if f.get("instruction") else
                        {"thing": " ".join(f["thing"].split()),
                         "rect": f["rect"]}
                        for f in a.get("finish", [])] or None,

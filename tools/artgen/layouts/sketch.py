@@ -174,6 +174,12 @@ CABIN = sign(212, 0, 436, 66) + [
 CABIN_TABLE_TOP = ["polygon 262,250 488,250 494,306 256,306"]
 
 
+# The cabin's log book and telescope came out off their spots: that
+# corner is cleared, for them to be put back on the spots.
+CABIN_CORNER = ["polygon 162,172 272,172 278,298 158,298",
+                "polygon 78,196 152,196 152,230 78,230"]
+
+
 def scaled(op):
     """A polygon given in 640x480 pixels, at the render size."""
     if not op.startswith("polygon "):
@@ -215,4 +221,5 @@ if __name__ == "__main__":
     mask("tavern-table-end.png", TABLE_END)
     mask("tavern-mapman.png", MAPMAN)
     mask("cabin-table-top.png", CABIN_TABLE_TOP)
+    mask("cabin-corner.png", CABIN_CORNER)
     mask("tavern-infoman.png", INFOMAN)
