@@ -303,7 +303,8 @@ test_png(void)
 static void
 test_pic(void)
 {
-	static const char *const low_files[] = { "pack.ini", "town.pcx", NULL };
+	static const char *const low_files[] = { "pack.ini", "town.pcx",
+	    "panel.img", NULL };
 	static const char *const high_files[] = { "pack.ini", "town.png",
 	    NULL };
 	static const uint8_t want_orig[] = { 7, 7, 7, 7, 0xC5, 2 };
@@ -359,6 +360,33 @@ test_pic(void)
 	    img.palette[3 * 180 + 1] == 0);
 	image_free(&img);
 	packs_free(packs);
+
+	/* An img/ picture: the original IMG's pixels, none of its own
+	 * palette; the PNG's true colours. */
+	{
+		static const uint8_t raw_img[] = { 3, 0, 2, 0, 0, 0,
+		    1, 2, 3, 4, 5, 6 };
+
+		CHECK(write_bytes(low, "panel.img", raw_img, sizeof(raw_img))
+		    == 0);
+		CHECK(write_text(low, "pack.ini",
+		    "[assets]\npic/town = town.pcx\nimg/panel = panel.img\n")
+		    == 0);
+		CHECK(write_text(high, "pack.ini", "[pack]\nart_height = 960\n"
+		    "[assets]\nimg/panel = town.png\n") == 0);
+		packs = packs_new();
+		CHECK(packs_add_dir(packs, low) == 0);
+		CHECK(pic_load(packs, "img/panel", &img) == 0);
+		CHECK(img.w == 3 && img.h == 2 && img.rgba == NULL &&
+		    img.pixels[5] == 6);
+		image_free(&img);
+		CHECK(packs_add_dir(packs, high) == 0);
+		CHECK(pic_load(packs, "img/panel", &img) == 0);
+		CHECK(img.w == 3 && img.h == 2 && img.rgba != NULL &&
+		    memcmp(img.pixels, raw_img + 6, 6) == 0);
+		image_free(&img);
+		packs_free(packs);
+	}
 
 	/* An art height is a whole number from 240 to 4320. */
 	packs = packs_new();

@@ -6,9 +6,19 @@
 
 #include <string.h>
 
+#include "img.h"
 #include "pcx.h"
 #include "pic.h"
 #include "png.h"
+
+/* An original picture: an IMG for img/ IDs, else a PCX. */
+static int
+orig_decode(const char *id, const struct blob *b, struct image *out)
+{
+	if (strncmp(id, "img/", 4) == 0)
+		return (img_decode(b->data, b->len, out));
+	return (pcx_decode(b->data, b->len, out));
+}
 
 int
 pic_decode(struct packs *packs, const char *id, const struct blob *b,
@@ -18,13 +28,18 @@ pic_decode(struct packs *packs, const char *id, const struct blob *b,
 	struct image orig;
 
 	if (strcmp(b->ext, "png") != 0)
-		return (pcx_decode(b->data, b->len, out));
+		return (orig_decode(id, b, out));
 	if (png_decode(b->data, b->len, b->art_height, out) != 0)
 		return (-1);
-	if (packs_load_ext(packs, id, "pcx", &ob) == 0) {
-		if (pcx_decode(ob.data, ob.len, &orig) == 0) {
-			memcpy(out->palette, orig.palette, sizeof(out->palette));
-			out->has_palette = 1;
+	if (packs_load_ext(packs, id, strncmp(id, "img/", 4) == 0 ? "img" :
+	    "pcx", &ob) == 0) {
+		if (orig_decode(id, &ob, &orig) == 0) {
+			/* An IMG has no palette: it is drawn in the screen's. */
+			if (orig.has_palette) {
+				memcpy(out->palette, orig.palette,
+				    sizeof(out->palette));
+				out->has_palette = 1;
+			}
 			if (orig.w == out->w && orig.h == out->h) {
 				out->pixels = orig.pixels;
 				orig.pixels = NULL;

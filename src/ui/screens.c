@@ -3702,7 +3702,7 @@ sword_enter(struct game *g)
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 	image_free(&g->sw_weapons);
 	if (packs_load(g->packs, "img/wpnsel", &b) == 0) {
-		img_decode(b.data, b.len, &g->sw_weapons);
+		pic_decode(g->packs, "img/wpnsel", &b, &g->sw_weapons);
 		blob_free(&b);
 	}
 	load_bank(g, "spr/miscswrd", 0, &g->sw_misc);

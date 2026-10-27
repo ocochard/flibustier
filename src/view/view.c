@@ -521,7 +521,7 @@ open_decoded(struct view *v, const struct blob *b, char *err, size_t errlen)
 		v->nframes = 1;
 	} else if (starts(id, "img/")) {
 		v->kind = K_PICTURE;
-		rc = img_decode(b->data, b->len, &v->img);
+		rc = pic_decode(v->packs, id, b, &v->img);
 		guess_palette(v);
 		v->nframes = 1;
 	} else if (starts(id, "spr/") || starts(id, "ui/")) {
