@@ -38,6 +38,7 @@ static const struct {
 	{ "delivered_papers", NEWS_DELIVERED_PAPERS },
 	{ "pirate_taken", NEWS_PIRATE_TAKEN }, { "son_freed", NEWS_SON_FREED },
 	{ "displeased", NEWS_DISPLEASED },
+	{ "fleet_taken", NEWS_FLEET_TAKEN }, { "train_taken", NEWS_TRAIN_TAKEN },
 };
 
 /* Town fields addressable by name in state and "set" commands. */

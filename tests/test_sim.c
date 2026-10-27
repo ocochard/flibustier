@@ -388,6 +388,23 @@ test_snapshot(void)
 	jb_free(&out);
 	sim_advance(&s1.sim, 30 * 80);	/* fill and wrap the news ring */
 	CHECK(s1.sim.nnews > 0);
+	/* every kind of news survives a round trip (the last events kept) */
+	{
+		static const int codes[] = { NEWS_VISITED, NEWS_TITLED,
+		    NEWS_PLUNDERED, NEWS_CAPTURED, NEWS_ENGAGED,
+		    NEWS_LOST_TREASURE, NEWS_TREASURE, NEWS_VILLAIN,
+		    NEWS_AMNESTY, NEWS_INDIANS, NEWS_GOLD_MINE, NEWS_MALARIA,
+		    NEWS_GOVERNOR, NEWS_PLUNDER, NEWS_WAR, NEWS_PEACE,
+		    NEWS_ALLIANCE, NEWS_CAPTURE, NEWS_TAKEN, NEWS_NOT_TAKEN,
+		    NEWS_FLEET_TAKEN, NEWS_TRAIN_TAKEN, NEWS_RESCUED,
+		    NEWS_LETTER, NEWS_PAPERS, NEWS_PIRATE_OFF, NEWS_RESCUE,
+		    NEWS_DELIVERED_LETTER, NEWS_DELIVERED_PAPERS,
+		    NEWS_PIRATE_TAKEN, NEWS_SON_FREED, NEWS_DISPLEASED };
+		size_t k;
+
+		for (k = 0; k < sizeof(codes) / sizeof(codes[0]); k++)
+			sim_log_news(&s1.sim, codes[k], 0, 0);
+	}
 	sim_to_json(&s1.sim, &st1);
 
 	jb_raw(&cmd, "{\"cmd\":\"load\",\"state\":");
