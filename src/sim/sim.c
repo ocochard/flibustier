@@ -220,7 +220,12 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	}
 	s->fleet.leaving = -1;
 	s->wind = WIND_START;
-	s->standing[NATION_PIRATE] = -1;	/* pirates are always hostile */
+	/* The start's standings and ranks; pirates always hostile; a
+	 * fortune of 200 (VA 0x1386c). */
+	memcpy(s->standing, scn->standing, sizeof(s->standing));
+	memcpy(s->rank, scn->rank, sizeof(s->rank));
+	s->standing[NATION_PIRATE] = -1;
+	s->fortune = 200;
 	s->encounters = 1;
 	s->heat_town = -1;
 	s->ntowns = era->count;
@@ -262,6 +267,13 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	if (s->fleet.leaving >= 0)
 		sim_harbour_mouth(s, s->fleet.leaving);
 	start_log(s);
+	/* A famous expedition starts on its own date (VA 0x15bc6): the
+	 * years past the era's first, and the day (VA 0x13679). */
+	if (scn->date > 0) {
+		s->year = s->era_year + scn->date / DAYS_PER_YEAR;
+		s->day_of_year = scn->date % DAYS_PER_YEAR;
+		s->month = s->day_of_year / DAYS_PER_MONTH;
+	}
 	convoys_start(s, era);
 	/* The expeditions start months at sea (scenario byte 0x58). */
 	s->months = (int8_t)scn->raw[0x58];

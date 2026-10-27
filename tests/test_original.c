@@ -434,8 +434,18 @@ test_scenarios(struct packs *packs)
 	CHECK(strcmp(scn.name, "English Seahawk") == 0);
 	CHECK(scn.relations[NATION_SPAIN][NATION_ENGLAND] == -1 &&
 	    scn.relations[NATION_SPAIN][NATION_FRANCE] == -1);
+	/* A career starts with standing and rank: the Seahawk is an
+	 * English captain (rank 2) of standing 10; no date. */
+	CHECK(scn.standing[NATION_ENGLAND] == 10 &&
+	    scn.rank[NATION_ENGLAND] == 2 && scn.date == 0);
 	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_CAREERS, &scn) == 0);
 	CHECK(strcmp(scn.name, "John Hawkins") == 0);
+	/* The expeditions start on their dates: Hawkins 9 years and a day
+	 * into 1560, Morgan in 1670 (1660 + 10), day 234. */
+	CHECK(scn.date == 9 * 360 + 1 && scn.standing[NATION_SPAIN] == -6);
+	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_CAREERS + 4,
+	    &scn) == 0 && strcmp(scn.name, "Henry Morgan") == 0 &&
+	    scn.date == 10 * 360 + 234 && scn.rank[NATION_ENGLAND] == 5);
 	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_COUNT, &scn) == -1);
 	blob_free(&b);
 }

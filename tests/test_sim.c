@@ -155,6 +155,22 @@ test_rules(void)
 
 	make_era(&era, &scn);
 
+	/* The start: the scenario's standings and ranks, pirates hostile,
+	 * a fortune of 200; a dated one (an expedition) starts on its
+	 * date. */
+	scn.standing[NATION_ENGLAND] = 10;
+	scn.standing[NATION_PIRATE] = 5;
+	scn.rank[NATION_ENGLAND] = 2;
+	scn.date = 2 * 360 + 95;
+	sim_new_game(&s, &era, &scn, 7);
+	CHECK(s.standing[NATION_ENGLAND] == 10 && s.rank[NATION_ENGLAND] == 2 &&
+	    s.standing[NATION_PIRATE] == -1 && s.fortune == 200);
+	CHECK(s.year == era.year + 2 && s.start_year == s.year &&
+	    s.day_of_year == 95 && s.month == 3);
+	memset(scn.standing, 0, sizeof(scn.standing));
+	memset(scn.rank, 0, sizeof(scn.rank));
+	scn.date = 0;
+
 	/*
 	 * Conquest, with the conditions pinned before every update so that
 	 * diplomacy and growth cannot drift them: England (Gamma, strong) is

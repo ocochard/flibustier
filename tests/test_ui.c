@@ -1011,6 +1011,10 @@ test_governor(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
+	/* The English Buccaneer starts at standing 2 with England (the
+	 * scenario's): back to 0 for the Letter of Marque. */
+	CHECK(g->sim.standing[NATION_ENGLAND] == 2);
+	g->sim.standing[NATION_ENGLAND] = 0;
 	t = &g->sim.towns[g->sim.fleet.leaving];
 	g->sim.fleet.x = t->sea_x * 16 + 8;
 	g->sim.fleet.y = t->sea_y * 16 + 8;
@@ -1683,8 +1687,9 @@ test_bank(void)
 	g->sim.fleet.nships = 2;
 	CHECK(game_script(g, "click:540,320 wait:40") == 0 &&
 	    g->screen == &screen_bank);
+	/* 3000 more to the fortune, which starts at 200. */
 	CHECK(game_script(g, "enter") == 0 && g->plunder.share == 960 &&
-	    g->plunder.mood == 1 && g->sim.fortune == 3000);
+	    g->plunder.mood == 1 && g->sim.fortune == 3200);
 	CHECK(game_script(g, "enter enter wait:40") == 0 &&
 	    g->screen == &screen_cave);
 	CHECK(game_script(g, "enter wait:40") == 0 &&

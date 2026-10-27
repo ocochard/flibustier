@@ -159,8 +159,23 @@ Fields, as the scenario loader (VA `0x1386c`) uses them:
 | Offset | Content |
 |---|---|
 | 0x00 | name, NUL-terminated (at most 20 bytes) |
+| 0x14 | crew (word) |
+| 0x16, 0x17 | guns, nation |
+| 0x18 | gold in tens (word) |
+| 0x1a, 0x1b, 0x1c | food, goods, sugar (tons) |
+| 0x1e | food eaten into, 256ths (VA `0x45fa2`) |
+| 0x1f | the hold, in tens of tons |
+| 0x20, 0x21 | ships, then 8 ship types |
+| 0x2a | 5 signed standings (Spain, England, France, Holland, pirates; the pirates' then set to -1), VA `0x45e7a`: the Seahawk 10 with England, Morgan 34, De Pointis 40 with France, -6 with Spain for the expeditions |
+| 0x2f | 5 ranks (CSTN 78), VA `0x45e7f`: the Seahawk 2 (Captain), the Costa Garda 1, Heyn 5, Morgan 5, De Pointis 6 |
 | 0x34 | 4x4 table of signed bytes: initial relations, indexed `[a * 4 + b]` with the town nation order (Spain, England, France, Holland) |
-| 0x14-0x33, 0x44-0x59 | other values copied into game state; meaning not traced |
+| 0x44 | 4 start positions (x, y words, map cells), one drawn |
+| 0x54 | an expedition's era code (word, VA `0x15bc6`; 0 for careers) |
+| 0x56 | an expedition's start date (word): years after the era's first x 360 + the day of the year, stored as the day (VA `0x46052`) and rolled over by the calendar: Hawkins 1569, Drake 1572, Heyn 1628, L'Ollonais 1666, Morgan 1670, De Pointis 1697; the career's start year is `date / 360` (VA `0x13679`); 0 for careers, which start on day 65 + rand(150) (VA `0x132f8`) |
+| 0x58 | an expedition's months since the plunder was divided |
+| 0x1d, 0x29, 0x55, 0x57, 0x59 | 0 or high bytes of the words above |
+
+The loader also sets the fortune to 200 (VA `0x45efe`).
 
 ## Sailing (main loop at VA `0x231b8`)
 
@@ -461,7 +476,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 
 - **Four slots (VA `0x471da`, 12 bytes each):** +0 the nation of the
   towns he moves through, plus 1 (always 1: Spain; 0 a free slot), +1 6
-  (not identified), +2 surname (0-15), +3 rank (0-7), +4 nationality for
+  (written when he is named, VA `0x12178`, and never read), +2 surname (0-15), +3 rank (0-7), +4 nationality for
   his name (0-3), +5 the town he hides in, +6..+9 the towns before,
   latest first ("none" at first).
 - **Each month (VA `0xcba7`):** among the towns of his nation (all but
@@ -2135,8 +2150,8 @@ the oval at (237, 66).
     by the script's other branch after its first 0.
   - In this build the comparison overwrites the expected answer with
     the given one (VA `0x14695`), so it always passes. The engine keeps
-    the pass branch, and since standings start at 0, it applies neither
-    the -16 nor the +16.
+    the pass branch: the -16 and the +16 cancel, so the standings stay
+    the scenario's, and it applies neither.
 - **Engine choices:**
   - The career starts when the player confirms, before the story.
   - The story's fight uses the boarding fight's screen, with no weapon

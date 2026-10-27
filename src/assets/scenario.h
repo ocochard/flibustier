@@ -43,6 +43,12 @@ struct scenario {
 	int		 capacity;	/* hold, tens of tons */
 	int		 nships;
 	uint8_t		 ships[SCENARIO_SHIPS];	/* ship types, 0 = pinnace */
+	int8_t		 standing[5];	/* per nation, then pirates (VA
+					 * 0x45e7a) */
+	uint8_t		 rank[5];	/* CSTN 78 per nation (VA 0x45e7f) */
+	int		 date;		/* an expedition's start: years after
+					 * the era's first x 360 + the day of
+					 * the year; 0 for careers */
 	uint16_t	 start[SCENARIO_STARTS][2];	/* x, y in map cells */
 	uint8_t		 raw[SCENARIO_LEN];
 };

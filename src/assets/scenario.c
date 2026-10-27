@@ -20,8 +20,11 @@
 #define CAPACITY_OFF	0x1f	/* hold, in tens of tons */
 #define NSHIPS_OFF	0x20
 #define SHIPS_OFF	0x21
+#define STANDING_OFF	0x2a	/* 5 signed: the nations, then pirates */
+#define RANK_OFF	0x2f	/* 5 */
 #define RELATIONS_OFF	0x34
 #define STARTS_OFF	0x44
+#define DATE_OFF	0x56	/* an expedition's: years x 360 + day */
 
 static unsigned
 le16(const uint8_t *p)
@@ -62,6 +65,11 @@ scenario_load(const struct exe_layout *layout, const uint8_t *exe,
 	out->capacity = r[CAPACITY_OFF];
 	out->nships = r[NSHIPS_OFF];
 	memcpy(out->ships, r + SHIPS_OFF, SCENARIO_SHIPS);
+	for (a = 0; a < 5; a++) {
+		out->standing[a] = (int8_t)r[STANDING_OFF + a];
+		out->rank[a] = r[RANK_OFF + a];
+	}
+	out->date = (int)le16(r + DATE_OFF);
 	for (a = 0; a < SCENARIO_STARTS; a++) {
 		out->start[a][0] = (uint16_t)le16(r + STARTS_OFF + 4 * a);
 		out->start[a][1] = (uint16_t)le16(r + STARTS_OFF + 4 * a + 2);
