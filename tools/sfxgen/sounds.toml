@@ -15,7 +15,8 @@
 # opponent's surrender)
 #
 # Left out as well because no take sounded right: the crash (hulls
-# meeting, a reef struck).  The game keeps the original's.
+# meeting, a reef struck) and the shot falling in the sea.  The game
+# keeps the original's.
 # are left out, so the game keeps the original's; the other sounds are
 # asked without voices.
 
@@ -47,13 +48,6 @@ id = "sound/shot-hit"
 length = 1.19
 seconds = 1.7
 prompt = "an iron cannonball striking a thick wooden ship's hull, one hard heavy impact and a splintering crack"
-
-[[sound]]
-id = "sound/shot-miss"
-length = 1.01
-seconds = 1.5
-prompt = "a heavy iron ball plunging into the sea, a loud water splash and spray, waves"
-negative = "explosion, gunshot, cannon fire, boom, music, speech, voice, low quality, distorted, hiss"
 
 [[sound]]
 id = "sound/swing"
