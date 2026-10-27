@@ -2649,6 +2649,24 @@ sail_event(struct game *g, const struct ui_event *ev)
 		if (!g->sim.fleet.ashore)
 			game_music(g, MUS_SILENCE);	/* VA 0x28789 */
 		game_goto(g, &screen_cabin);
+	} else if (ev->type == EV_CHAR && g->debug &&
+	    strchr("NnEeRrFf", ev->ch) != NULL && ev->ch != 0) {
+		/* The debug mode's keys (VA 0x1b3ed-0x1b43b): N no sails
+		 * sighted, E sightings again, R invulnerable, F not. */
+		switch (ev->ch | 0x20) {
+		case 'n':
+			g->sim.encounters = 0;
+			break;
+		case 'e':
+			g->sim.encounters = 1;
+			break;
+		case 'r':
+			g->sim.invulnerable = 1;
+			break;
+		default:
+			g->sim.invulnerable = 0;
+			break;
+		}
 	} else if (ev->type == EV_CHAR && (ev->ch == 't' || ev->ch == 'T'))
 		g->sail_fast = !g->sail_fast;	/* VA 0x1b6ef */
 }
@@ -8001,6 +8019,7 @@ citymap_enter(struct game *g)
 			g->cm_y[i] = e.towns[i].citymap_y;
 		}
 	g->cm_scroll = 0;
+	g->cm_move = 0;
 	if ((size_t)g->cm_sel >= g->sim.ntowns)
 		g->cm_sel = 0;
 	if (here(g) != NULL) {
@@ -8012,15 +8031,43 @@ citymap_enter(struct game *g)
 	}
 }
 
+/*
+ * Leaving the map: in the debug mode, the ship goes to the spot last
+ * right-clicked, cell = pixel / 0.75, with 10 more food (VA 0xb6d3).
+ * The engine moves it only at sea.
+ */
+static void
+citymap_done(struct game *g)
+{
+	struct sim_fleet *f = &g->sim.fleet;
+
+	if (g->debug && g->cm_move && here(g) == NULL && !f->ashore) {
+		f->x = (int)(g->cm_mx / 0.75) * WORLD_TILE;
+		f->y = (int)(g->cm_my / 0.75) * WORLD_TILE;
+		f->fx = f->fy = 0;
+		f->speed = 0;
+		f->leaving = -1;
+		f->food += 10;
+	}
+	g->cm_move = 0;
+	game_goto(g, &screen_cabin);
+}
+
 static void
 citymap_event(struct game *g, const struct ui_event *ev)
 {
 	int x = ev->x, y = ev->y, max = (int)g->sim.ntowns - CM_ROWS;
 	size_t i;
 
+	if (ev->type == EV_RCLICK && g->debug && x < 480 && y < 480) {
+		g->cm_move = 1;
+		g->cm_mx = g->cm_px = x;
+		g->cm_my = g->cm_py = y;
+		return;
+	}
 	if (ev->type == EV_KEY) {
 		if (ev->key == UI_KEY_ESCAPE || ev->key == UI_KEY_ENTER)
-			game_goto(g, &screen_cabin);
+			citymap_done(g);
 		else if (ev->key == UI_KEY_UP && g->cm_sel > 0)
 			citymap_show_town(g, g->cm_sel - 1);
 		else if (ev->key == UI_KEY_DOWN)
@@ -8028,13 +8075,13 @@ citymap_event(struct game *g, const struct ui_event *ev)
 		return;
 	}
 	if (ev->type == EV_CHAR && ev->ch == ' ') {
-		game_goto(g, &screen_cabin);
+		citymap_done(g);
 		return;
 	}
 	if (ev->type != EV_CLICK)
 		return;
 	if (cm_in(x, y, 348, 315, 479, 359))		/* DONE */
-		game_goto(g, &screen_cabin);
+		citymap_done(g);
 	else if (cm_in(x, y, 0, 0, 479, 359)) {		/* the map */
 		for (i = 0; i < g->sim.ntowns; i++)
 			if (abs(g->cm_x[i] - x) <= 2 && abs(g->cm_y[i] - y) <= 2) {

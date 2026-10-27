@@ -14,17 +14,17 @@
  * save_dir()); saved games are disabled if it cannot be created.
  *
  * Run the game in a window.  With "shot" set, the screen is saved to that
- * PNG after "shot_frames" frames and the game exits.  Returns an exit
- * status.
+ * PNG after "shot_frames" frames and the game exits.  "debug" turns on the
+ * original's debug mode.  Returns an exit status.
  */
 int	play_run(struct packs *packs, const char *lang, const char *saves,
-	    const char *shot, int shot_frames, int crt);
+	    const char *shot, int shot_frames, int crt, int debug);
 
 /*
  * Run the game without a window: play "script" (see src/ui/script.h),
  * then save the screen to "out".  Returns an exit status.
  */
 int	play_headless(struct packs *packs, const char *lang,
-	    const char *saves, const char *script, const char *out);
+	    const char *saves, const char *script, const char *out, int debug);
 
 #endif

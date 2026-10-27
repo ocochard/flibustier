@@ -90,7 +90,10 @@ The mouse works everywhere; the keys are the original's:
 - Menus and boards: the arrows and Enter, or click.
 
 `--crt` (or F2 while playing) gives the window a CRT look, like
-dosbox-staging's default shader. Careers end by retiring at the bank
+dosbox-staging's default shader. `--debug` turns on the original's debug
+mode (its `RDM` argument): while sailing, N stops sightings and E brings
+them back, R makes you near invulnerable and F ends it, and a right click
+on the cabin's map moves the ship there. Careers end by retiring at the bank
 (after dividing the plunder) or in prison; the cabin's "Exit game" only
 quits. Saves (one JSON file per slot) and the Hall of Fame (a
 tab-separated text file) go to `~/.local/share/flibustier/saves`, or

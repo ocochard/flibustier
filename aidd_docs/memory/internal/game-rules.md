@@ -1418,8 +1418,21 @@ move) and `0x38a1a` to `0x38b99`.
   same holds the other way for the player.
 - **Speed:** a tick lasts 12, 11, 10 or 9 units of the game clock
   (60.9 Hz, see the game clock) by `level & 3` (VA `0x389c4`).
-- **Debug flag:** a byte at VA `0x33ee9`, 0 in the shipped game, would
-  make the player invulnerable. No code sets it.
+- **Debug mode:** the command-line argument `RDM` (compared exactly
+  with the string at VA `0x31fe8`, VA `0x3bd`) sets the debug flag (VA
+  `0x45e6c`). Then, while sailing (key table VA `0x33c74`, handlers from
+  VA `0x1b2e6`; a second table at VA `0x33df0` does the same on foot):
+  N stops sightings and E brings them back (byte VA `0x33ee8`, read at
+  VA `0x23ef3`); R makes the player near invulnerable and F ends it
+  (byte VA `0x33ee9`: the enemy never fires, VA `0x8ecd`; a hit is not
+  doubled and the crew loses no men in sword fights, VA `0x2747c`); a
+  right click on the cabin's map moves the ship there. Both bytes are 0
+  in the program, so normal play has them off.
+  - **In the engine:** `--debug` turns the mode on, with the same keys
+    (on foot too) and the map's right click; the ship moves when the map
+    is left, to the cell `pixel / 0.75` of the last right click, with 10
+    more food, as the original does (VA `0xb6d3`), but only at sea (not
+    in town nor ashore, an engine choice).
 
 ### Engine choices for sword fights
 
@@ -1612,8 +1625,8 @@ same town only bits 1 and 2 are kept.
     within 2 pixels; in the list, its row. Escape and Space leave; the
     arrow keys move a bar over the list rows (VA `0xb3ef`), which the
     engine replaces by selecting the previous or next town.
-  - A debug flag (VA `0x45e6c`) lets a right click move the ship there;
-    not reproduced.
+  - In the debug mode (VA `0x45e6c`, see "Sword fights"), a right click
+    moves the ship there.
 - **Divide and join (dead in Pirates! Gold):** each time the cabin
   opens (VA `0x9ffc`) the flags of spots 7 and 8 (VA `0x32824`,
   `0x3282e`) are set to 0 before the picker, and nothing else sets
@@ -1963,9 +1976,10 @@ order:
      (140, 35) and (113, 262)).
    - When the surplus plus the town's word 9 is positive, that many
      times 50 acres are granted (CSTR 135, total at VA `0x45f02`).
-   - After a promotion, while a relative is still lost (and a flag at
-     VA `0x45e84` bit 0, not identified, is clear), a new villain is
-     named (VA `0x12178`, see "Villains").
+   - After a promotion, while a relative is still lost and not in a
+     famous expedition (VA `0x45e84` bit 0, set when one is chosen, VA
+     `0x15bc6`, cleared by a new career's era menu, VA `0x15a3c`), a new
+     villain is named (VA `0x12178`, see "Villains").
 4. **Ransoms (VA `0x127da`, see "Named captains").**
 5. **His offer, by standing s:**
    - With `s > -4`, the price is `(4 - s^3) x 200` gold.
@@ -2261,8 +2275,6 @@ more).
     (the reach runs to 65: VA `0x389b8` 15, 10, 5, 0, 0 by level, plus
     `0x389bd` 50, 40, 30, 20 by weapon) it sounds as blades meeting,
     0x21 and digitised 6, the hit kept.
-- **Not identified:** the sword fight's flag at VA `0x33ee9` (the
-  engine takes it as clear: the player's crew can lose men).
 
 ## Music
 

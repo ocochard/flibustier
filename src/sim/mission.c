@@ -35,8 +35,10 @@ sim_villain_appear(struct sim *s)
 	struct sim_villain *v;
 	int k, t, tries = 0;
 
-	if (s->relative >= RELATIVES || s->villains[SIM_VILLAINS - 1].active ||
-	    s->ntowns == 0)
+	/* None in a famous expedition (VA 0x12549: bit 0 of VA 0x45e84,
+	 * set by its choice, VA 0x15bc6). */
+	if (s->relative >= RELATIVES || s->player.expedition >= 0 ||
+	    s->villains[SIM_VILLAINS - 1].active || s->ntowns == 0)
 		return (-1);
 	for (k = 0; s->villains[k].active; k++)
 		;

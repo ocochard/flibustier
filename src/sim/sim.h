@@ -426,7 +426,12 @@ struct sim {
 	struct sim_player player;
 	struct sim_fleet fleet;
 	uint8_t		wind;		/* direction it blows toward */
-	int		encounters;	/* 1: sails may be sighted (0 for tests) */
+	int		encounters;	/* 1: sails may be sighted (0 for tests,
+					 * and the debug mode's N) */
+	int		invulnerable;	/* the debug mode's R (VA 0x33ee9):
+					 * the enemy never fires, the player
+					 * loses neither bar nor men in sword
+					 * fights, his hits are not doubled */
 	/* The sailing view's origin and the clouds, storms that sway the
 	 * ship (see "Clouds" in game-rules.md); "storm" is the distance to
 	 * the nearest. */

@@ -35,6 +35,10 @@ usage(void)
 	    "commands:\n"
 	    "  (none)        play [--crt] [--screenshot OUT.png [--frames N]]\n"
 	    "                (--crt, or F2 while playing: a CRT look)\n"
+	    "  --debug       the original's debug mode: while sailing N stops\n"
+	    "                sightings, E brings them back, R makes you near\n"
+	    "                invulnerable, F ends it; a right click on the\n"
+	    "                cabin's map moves the ship there\n"
 	    "  --script STEPS OUT.png\n"
 	    "                play without a window, then save the screen\n"
 	    "  --viewer [--id ID] [--screenshot OUT.png [--frames N]]\n"
@@ -122,7 +126,7 @@ main(int argc, char **argv)
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
-	int shot_frames = 30, rc, a, crt = 0;
+	int shot_frames = 30, rc, a, crt = 0, debug = 0;
 	char err[256];
 
 	data = getenv("FLIBUSTIER_DATA");
@@ -160,6 +164,8 @@ main(int argc, char **argv)
 			tick = (unsigned)strtoul(argv[++a], NULL, 10);
 		else if (strcmp(argv[a], "--crt") == 0)
 			crt = 1;
+		else if (strcmp(argv[a], "--debug") == 0)
+			debug = 1;
 		else if (strcmp(argv[a], "--screenshot") == 0 && a + 1 < argc)
 			shot = argv[++a];
 		else if (strcmp(argv[a], "--frames") == 0 && a + 1 < argc)
@@ -194,10 +200,11 @@ main(int argc, char **argv)
 	}
 	switch (cmd) {
 	case PLAY:
-		rc = play_run(packs, lang, saves, shot, shot_frames, crt);
+		rc = play_run(packs, lang, saves, shot, shot_frames, crt,
+		    debug);
 		break;
 	case SCRIPT:
-		rc = play_headless(packs, lang, saves, script, out);
+		rc = play_headless(packs, lang, saves, script, out, debug);
 		break;
 	case LIST:
 		rc = list_ids(packs);

@@ -104,6 +104,10 @@ feed_input(struct game *g, Vector2 *last_mouse)
 		ev.type = EV_CLICK;
 		game_event(g, &ev);
 	}
+	if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+		ev.type = EV_RCLICK;
+		game_event(g, &ev);
+	}
 }
 
 /*
@@ -230,7 +234,7 @@ jukebox_close(struct jukebox *j)
 
 int
 play_run(struct packs *packs, const char *lang, const char *saves,
-    const char *shot, int shot_frames, int crt_on)
+    const char *shot, int shot_frames, int crt_on, int debug)
 {
 	static struct game g;
 	uint8_t *rgb;
@@ -251,6 +255,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		game_free(&g);
 		return (1);
 	}
+	g.debug = debug;
 	tw = g.fb.out_w;	/* the frame, at the art's resolution */
 	th = g.fb.out_h;
 	if ((rgb = malloc((size_t)tw * th * 3)) == NULL) {
@@ -341,7 +346,7 @@ shown:
 
 int
 play_headless(struct packs *packs, const char *lang, const char *saves,
-    const char *script, const char *out)
+    const char *script, const char *out, int debug)
 {
 	static struct game g;
 	uint8_t *rgb;
@@ -350,8 +355,13 @@ play_headless(struct packs *packs, const char *lang, const char *saves,
 	int rc = 0;
 
 	resolve_saves(saves, dir, sizeof(dir));
-	if (game_init(&g, packs, lang, dir) != 0 ||
-	    game_script(&g, script) != 0) {
+	if (game_init(&g, packs, lang, dir) != 0) {
+		fprintf(stderr, "%s\n", g.err);
+		game_free(&g);
+		return (1);
+	}
+	g.debug = debug;
+	if (game_script(&g, script) != 0) {
 		fprintf(stderr, "%s\n", g.err);
 		game_free(&g);
 		return (1);

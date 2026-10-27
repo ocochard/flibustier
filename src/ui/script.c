@@ -64,8 +64,10 @@ game_script(struct game *g, const char *script)
 				game_event(g, &ev);
 			}
 		} else if (sscanf(step, "click:%d,%d", &x, &y) == 2 ||
+		    sscanf(step, "rclick:%d,%d", &x, &y) == 2 ||
 		    sscanf(step, "move:%d,%d", &x, &y) == 2) {
-			ev.type = step[0] == 'c' ? EV_CLICK : EV_MOVE;
+			ev.type = step[0] == 'c' ? EV_CLICK : step[0] == 'r' ?
+			    EV_RCLICK : EV_MOVE;
 			ev.x = x;
 			ev.y = y;
 			game_event(g, &ev);

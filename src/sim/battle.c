@@ -627,7 +627,8 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	if (bt->fort) {
 		if (e->reload > 0)
 			e->reload--;
-		if (e->shot.ticks == 0 && e->guns > 0 && e->reload == 0) {
+		if (e->shot.ticks == 0 && e->guns > 0 && e->reload == 0 &&
+		    !s->invulnerable) {
 			e->heading = (uint8_t)(rng_below(&s->rng, 8) +
 			    bearing + 0x3C);
 			fire(bt, e, bearing, 1);
@@ -654,7 +655,10 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 		    sign(heading_diff(e->target, e->heading)));
 	if (e->reload > 0)
 		e->reload--;
+	/* The debug mode's invulnerability holds the enemy's fire (VA
+	 * 0x8ecd). */
 	if (e->shot.ticks == 0 && e->guns > 0 && e->reload == 0 &&
+	    !s->invulnerable &&
 	    abs(abs(heading_diff(bearing, e->heading)) - 0x40) < 6) {
 		fire(bt, e, bearing, 1);
 		e->reload = abs(144 - 8 * e->role);

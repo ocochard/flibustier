@@ -871,6 +871,14 @@ test_battles(void)
 	CHECK(bt->you.shot.ticks > 0);
 	CHECK((sim_battle_tick(&s, 0, 1, 0) & BEV_FIRED) == 0);
 
+	/* The debug mode's invulnerability: the enemy holds his fire. */
+	battle_game(&s);
+	s.invulnerable = 1;
+	for (i = 0, ev = 0; i < 2000 && bt->outcome == BAT_NONE; i++)
+		ev |= sim_battle_tick(&s, 0, 0, 0);
+	CHECK(!(ev & BEV_FOE_FIRED));
+	s.invulnerable = 0;
+
 	/* Sails take 160 ticks to change; the guns wait meanwhile. */
 	battle_game(&s);
 	CHECK(sim_battle_tick(&s, 0, 0, 1) == 0 && bt->you.sail_timer == 160);
@@ -1139,7 +1147,7 @@ test_sword(void)
 {
 	struct sim s, s2;
 	struct sim_sword *sw = &s.sword;
-	int i, ev, x, snd, eff;
+	int i, k, ev, x, snd, eff;
 
 	make_world(&test_world);
 
@@ -1223,6 +1231,23 @@ test_sword(void)
 	}
 	CHECK(snd == FM_MISS);
 	CHECK(!(ev & SEV_HIT_FOE) && sw->foe.bar == 25);
+	/* The debug mode's invulnerability (VA 0x27f9c, 0x27d50): the
+	 * same melee that costs the player men leaves them standing. */
+	for (k = 0; k < 2; k++) {
+		int bar;
+
+		sword_game(&s, 25);
+		s.invulnerable = k;
+		bar = sw->you.bar;
+		for (i = 0, ev = 0; i < 400 && sw->result == SWORD_NONE; i++)
+			ev |= sim_sword_tick(&s);
+		if (k == 0)
+			CHECK((ev & SEV_YOU_MEN) && sw->you.men < 40);
+		else
+			CHECK(!(ev & SEV_YOU_MEN) && sw->you.men == 40 &&
+			    sw->you.bar >= bar);
+	}
+	s.invulnerable = 0;
 	/* A lunge strikes on frame 2 and moves the bar one step a pass. */
 	sword_game(&s, 25);
 	sim_sword_input(&s, SWM_LUNGE + 1);
@@ -2622,9 +2647,15 @@ test_villains(void)
 	s.tavern_spots = TAVERN_MYSTERY;
 	sim_tavern_open(&s);
 	CHECK(!(s.tavern_spots & TAVERN_MYSTERY));
-	/* No more villains once the relatives are all found. */
+	/* No more villains once the relatives are all found, nor in a
+	 * famous expedition. */
 	s.relative = 4;
 	CHECK(sim_villain_appear(&s) == -1);
+	s.relative = 0;
+	s.player.expedition = 2;
+	CHECK(sim_villain_appear(&s) == -1);
+	s.player.expedition = -1;
+	CHECK(sim_villain_appear(&s) >= 0);
 }
 
 /* Governors' missions: offered, done, reported. */

@@ -398,6 +398,48 @@ test_sailing(void)
 	game_free(g);
 }
 
+/* The original's debug mode (--debug): the keys at sea, and a right
+ * click on the cabin's map moving the ship. */
+static void
+test_debug_mode(void)
+{
+	struct game *g;
+	int food;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 "
+	    "wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_sail);
+	/* Off by default: the keys do nothing. */
+	g->sim.encounters = 0;
+	CHECK(game_script(g, "type:er") == 0 && g->sim.encounters == 0 &&
+	    !g->sim.invulnerable);
+	g->debug = 1;
+	CHECK(game_script(g, "type:r") == 0 && g->sim.invulnerable);
+	CHECK(game_script(g, "type:F") == 0 && !g->sim.invulnerable);
+	/* E brings sightings back, N stops them again before a sail can
+	 * be seen (one step: no time passes between the keys). */
+	CHECK(game_script(g, "type:En") == 0 && g->sim.encounters == 0 &&
+	    g->screen == &screen_sail);
+	g->sim.encounters = 0;
+	CHECK(game_script(g, "type:E") == 0 && g->sim.encounters == 1);
+	g->sim.encounters = 0;
+	memset(&g->sim.encounter, 0, sizeof(g->sim.encounter));
+	game_goto(g, &screen_sail);
+	/* The map: right click at (300, 200), then DONE: cell 400, 266,
+	 * 10 more food. */
+	food = g->sim.fleet.food;
+	CHECK(game_script(g, "wait:40 esc wait:40 click:200,400 wait:40") ==
+	    0 && g->screen == &screen_citymap);
+	CHECK(game_script(g, "rclick:300,200 click:400,335 wait:40") == 0 &&
+	    g->screen == &screen_cabin);
+	CHECK(g->sim.fleet.x == 400 * 16 && g->sim.fleet.y == 266 * 16 &&
+	    g->sim.fleet.food == food + 10);
+	game_free(g);
+}
+
 /* An encounter on the real map: sighted, identified, hailed. */
 static void
 test_encounter_screens(void)
@@ -1944,6 +1986,7 @@ main(void)
 	test_hall_of_fame();
 	test_sailing();
 	test_encounter_screens();
+	test_debug_mode();
 	test_battle_screen();
 	test_sword_screen();
 	test_pointer();

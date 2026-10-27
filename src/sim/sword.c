@@ -63,8 +63,12 @@ bar_to_you(struct sim_sword *sw)
 }
 
 static void
-bar_to_foe(struct sim_sword *sw)
+bar_to_foe(struct sim *s)
 {
+	struct sim_sword *sw = &s->sword;
+
+	if (s->invulnerable)
+		return;		/* VA 0x27f9c */
 	if (sw->you.bar > 0) {
 		sw->foe.bar++;
 		if (--sw->you.bar < 1)
@@ -216,10 +220,12 @@ melee(struct sim *s)
 		bar_to_you(sw);
 		return (SEV_FOE_MEN);
 	}
+	if (s->invulnerable)
+		return (0);	/* the player's men stand (VA 0x27d50) */
 	sw->you.men = clampi(sw->you.men - lost, 1, MAX_MEN);
 	if (sw->you.men == 1)
 		sw->beaten = BEATEN_YOU;
-	bar_to_foe(sw);
+	bar_to_foe(s);
 	return (SEV_YOU_MEN);
 }
 
@@ -258,7 +264,8 @@ sim_sword_tick(struct sim *s)
 				sw->sound = FM_BLOW;
 				sw->effect = 7;
 				e->x -= PUSH;
-				passes = y->weapon * 2;
+				passes = s->invulnerable ? y->weapon :
+				    y->weapon * 2;
 				for (i = 0; i <= passes; i++) {
 					bar_to_you(sw);
 					if (!is_lunge(y->move))
@@ -308,9 +315,9 @@ sim_sword_tick(struct sim *s)
 				sw->effect = 8;
 				y->x += PUSH;
 				for (i = 0; i <= e->weapon; i++) {
-					bar_to_foe(sw);
+					bar_to_foe(s);
 					if (!is_lunge(e->move))
-						bar_to_foe(sw);
+						bar_to_foe(s);
 				}
 				sw->foe_hits++;
 				wound(y, t->area[e->move]);
@@ -333,7 +340,9 @@ sim_sword_tick(struct sim *s)
 	if (sw->kind == SWORD_CREW && (sw->counter & (MELEE_TICKS - 1)) == 0) {
 		i = melee(s);
 		ev |= i;
-		sw->sound = i == SEV_FOE_MEN ? FM_THEIR_MEN : FM_OUR_MEN;
+		if (i != 0)
+			sw->sound = i == SEV_FOE_MEN ? FM_THEIR_MEN :
+			    FM_OUR_MEN;
 	}
 	if (sw->counter == 1) {		/* nothing on the first tick */
 		sw->sound = 0;

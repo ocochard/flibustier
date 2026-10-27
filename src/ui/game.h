@@ -51,7 +51,8 @@ enum ui_event_type {
 	EV_KEYUP,	/* key released */
 	EV_CHAR,	/* ch: a typed character, Unicode */
 	EV_MOVE,	/* x, y: pointer position on the 640x480 screen */
-	EV_CLICK	/* x, y */
+	EV_CLICK,	/* x, y */
+	EV_RCLICK	/* x, y: the right button */
 };
 
 struct ui_event {
@@ -258,6 +259,10 @@ struct game {
 	 * last asked wins, as the original's request word (VA 0x49a7e). */
 	int			 fm_request;
 	int			 flag_composed;	/* the flag is over the sky */
+	/* The original's debug mode (its "RDM" argument; --debug): keys
+	 * while sailing, and a right click on the map moves the ship. */
+	int			 debug;
+	int			 cm_move, cm_mx, cm_my;	/* the map's right click */
 	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */
 	/* News of villains (VA 0x1eba6): who tells, of which town, the
