@@ -1819,7 +1819,7 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 	}
 	o = sim_battle_finish(&ss->sim, json_get_int(cmd, "keep", 0) != 0);
 	/* Landed by the fort: the garrison left to face the assault (VA
-	 * 0x18c2c); the men who stayed with the fleet do not fight. */
+	 * 0x18e3d); the men who stayed with the fleet do not fight. */
 	if (o == BAT_LANDED && ss->sim.battle.fort)
 		sim_fort_battle_garrison(&ss->sim, ss->sim.encounter.town);
 	jb_raw(out, "{\"ok\":true,\"outcome\":");
