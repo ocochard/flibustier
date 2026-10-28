@@ -15,7 +15,8 @@ What it does, roughly in this order of priority:
 - hunts the villains named after each promotion, which gives the next
   relative's map;
 - attacks the town holding the silver train once strong enough;
-- otherwise cruises off Spanish towns, boarding the ships it can beat,
+- otherwise cruises off Spanish towns (or, at peace with Spain, off its
+  enemies' towns, as when playing Spain), boarding the ships it can beat,
   ransoming captains, courting governors' nieces (a daughter after nine years) and fighting their
   suitors.
 

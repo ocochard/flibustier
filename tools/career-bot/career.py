@@ -899,6 +899,14 @@ class Bot:
     def at_war(self, nation):
         return nation < 4 and self.st["relations"][self.mynation()][nation] < 0
 
+    def hunted(self):
+        """The nations whose towns the bot cruises off and conquers:
+        Spain while at war with it, else the nations at war with the
+        bot (Spain's own enemies when playing Spain), else Spain."""
+        if self.at_war(0):
+            return [0]
+        return [n for n in range(1, 4) if self.at_war(n)] or [0]
+
     def town_index(self, name):
         return next(i for i, t in enumerate(self.st["towns"]) if t["name"] == name)
 
@@ -1048,7 +1056,8 @@ class Bot:
                 need.append(2 * s["towns"][tt]["soldiers"] + 30)
         if CONQUER:
             for i, t in enumerate(s["towns"]):
-                if t["nation"] == 0 and t["sea_x"] and i not in self.unreachable and t["forts"] <= CONQUER_FORTS:
+                if t["nation"] in self.hunted() and self.at_war(t["nation"]) and t["sea_x"] and \
+                        i not in self.unreachable and t["forts"] <= CONQUER_FORTS:
                     need.append(max(2 * t["soldiers"] + 30, t["citizens"] * CONQUER_MEN))
         need = [n for n in need if n <= CREW_MAX]
         if need:
@@ -1698,11 +1707,12 @@ class Bot:
             if convoy is not None:
                 self.go_town(convoy, attack=True)
                 continue
-            # 4b. a small Spanish town the crew can hold: a conquest is
+            # 4b. a small enemy town the crew can hold: a conquest is
             # +3 standing with the nation, which is what promotions cost
-            if CONQUER and self.at_war(0):
+            if CONQUER:
                 prey = [i for i, t in enumerate(s["towns"])
-                        if t["nation"] == 0 and t["sea_x"] and i not in self.unreachable and
+                        if t["nation"] in self.hunted() and self.at_war(t["nation"]) and
+                        t["sea_x"] and i not in self.unreachable and
                         t["forts"] <= CONQUER_FORTS and f["crew"] >= 2 * t["soldiers"] + 30 and
                         f["crew"] >= t["citizens"] * CONQUER_MEN]
                 if prey:
@@ -1732,8 +1742,9 @@ class Bot:
                     self.go_town(ti)
                     continue
                 # none at all: cruise on, so the months still pass
-            # cruise toward a random Spanish town to meet ships
-            sp = [i for i, t in enumerate(s["towns"]) if t["nation"] == 0 and t["sea_x"]]
+            # cruise toward a random town of a hunted nation to meet ships
+            sp = [i for i, t in enumerate(s["towns"]) if t["nation"] in self.hunted() and t["sea_x"]] or \
+                [i for i, t in enumerate(s["towns"]) if t["nation"] == 0 and t["sea_x"]]
             # one of the nearest, so the voyage fits its time cap
             sp.sort(key=lambda i: max(abs(s["towns"][i]["sea_x"] - f["x"] // 16),
                                       abs(s["towns"][i]["sea_y"] - f["y"] // 16)))
