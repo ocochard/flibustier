@@ -19,7 +19,7 @@
 #define DUEL_FOE_X	240
 #define FAR		59	/* beyond: attacks become advances */
 #define CLOSE		20	/* the opponent fights from its script */
-#define NO_STEP		9	/* steps apply above this distance */
+#define NO_STEP		9	/* steps in apply above this distance */
 #define CLASH_YOU	36
 #define CLASH_FOE	35
 #define PUSH		4	/* a hit pushes the target back */
@@ -181,7 +181,8 @@ you_choose(struct sim *s)
 	struct sim_sword *sw = &s->sword;
 	int m = sw->input;
 
-	if (sw->you.x - sw->foe.x > FAR)
+	/* An unsigned test (VA 0x27758): a negative distance is far. */
+	if ((unsigned)(sw->you.x - sw->foe.x) > FAR)
 		m = t->far_move[m];
 	if (sw->foe.move == SWM_FALL)
 		m = SWM_GUARD + 1;
@@ -263,6 +264,9 @@ sim_sword_tick(struct sim *s)
 				ev |= SEV_HIT_FOE;
 				sw->sound = FM_BLOW;
 				sw->effect = 7;
+				/* The hitter guards every line for the rest of
+				 * the tick (VA 0x278dd). */
+				y->guard = 7;
 				e->x -= PUSH;
 				passes = s->invulnerable ? y->weapon :
 				    y->weapon * 2;
@@ -293,8 +297,9 @@ sim_sword_tick(struct sim *s)
 			sw->effect = 6;
 		}
 	}
-	if (dist > NO_STEP)
-		y->x += t->step_back[idx] - t->step_in[idx];
+	/* Stepping back always; stepping in only from 10 apart (VA
+	 * 0x27a2c). */
+	y->x += t->step_back[idx] - (dist > NO_STEP ? t->step_in[idx] : 0);
 	if (y->x >= t->player_edge)
 		sw->result = SWORD_REPELLED;
 	dist = y->x - e->x;
@@ -313,6 +318,10 @@ sim_sword_tick(struct sim *s)
 			    t->foe_hit[sw->level] <= rng_below(&s->rng, 256)) {
 				ev |= SEV_HIT_YOU;
 				sw->effect = 8;
+				/* Guarding every line until his next frame,
+				 * the player's next strike included (VA
+				 * 0x27b7d). */
+				e->guard = 7;
 				y->x += PUSH;
 				for (i = 0; i <= e->weapon; i++) {
 					bar_to_foe(s);
@@ -332,8 +341,7 @@ sim_sword_tick(struct sim *s)
 			sw->effect = 6;
 		}
 	}
-	if (dist > NO_STEP)
-		e->x += t->step_in[idx] - t->step_back[idx];
+	e->x += (dist > NO_STEP ? t->step_in[idx] : 0) - t->step_back[idx];
 	if (e->x <= t->foe_edge)
 		sw->result = SWORD_WON;
 
@@ -368,9 +376,18 @@ sim_board(struct sim *s, int weapon)
 	in.you_factor = 7 - bt->you.damage / 16;
 	in.foe_men = bt->foe.crew;
 	in.foe_factor = bt->foe.role - bt->foe.damage / 16;
-	in.title = 4;			/* "Captain" */
-	in.nation = s->encounter.nation;
-	in.extra = 0;			/* named captains are not modelled */
+	/* A named captain fights under his name, a level or two harder
+	 * (VA 0xf1df): his id as the title, nation -1. */
+	if (s->encounter.captain != 0) {
+		int id = s->encounter.captain;
+
+		in.title = id & 0xFF;
+		in.nation = -1;
+		in.extra = id & 0x80 ? 1 : (id & 7) / 3;
+	} else {
+		in.title = 4;		/* "Captain" */
+		in.nation = s->encounter.nation;
+	}
 	in.weapon = weapon;
 	sim_sword_start(s, &in);
 	s->sword.scene = 3;			/* the deck */

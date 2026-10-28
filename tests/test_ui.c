@@ -686,6 +686,14 @@ test_sword_screen(void)
 	CHECK(sword_keys(g, UI_KEY_SHIFT, UI_KEY_DOWN_LEFT, 0) ==
 	    SWM_SLASH + 1);
 	CHECK(sword_keys(g, UI_KEY_DOWN_RIGHT, 0, 0) == SWM_BACK + 1);
+	/* The mouse, anywhere: left of the pad lunges, the right button
+	 * slashes, above it high, right of it steps back. */
+	CHECK(game_script(g, "rclick:100,100") == 0 &&
+	    g->sim.sword.input == SWM_SLASH + 2);
+	CHECK(game_script(g, "click:600,400") == 0 &&
+	    g->sim.sword.input == SWM_BACK + 1);
+	CHECK(game_script(g, "click:320,323") == 0 &&
+	    g->sim.sword.input == SWM_GUARD);
 	/* Fight until it is decided. */
 	for (i = 0; i < 600 && g->sim.sword.result == SWORD_NONE; i++)
 		CHECK(game_script(g, i % 2 ? "up left wait:10" :

@@ -1354,29 +1354,36 @@ words and four bytes:
 | byte 8 | opponent's title, CSTN group 74 (0 guard … 3 enemy captain, 4 captain, 5 first mate) |
 | byte 9 | opponent's nation, CSTN group 71; -1 a named captain |
 | byte 10 | level `extra` (see the sea battle level) |
-| byte 11 | kind: 0 crew fight, 1 duel, -2 practice |
+| byte 11 | kind: 0 crew fight, 1 duel, -1 the career story's fight, -2 practice |
 
 The routine returns 1 when the player wins, 0 when the player is driven
-back, -1 when the player loses. For a crew fight, both men counts come
-back reduced.
+back, -1 when the player loses (VA `0x16989`: `2 - result`). Both men
+counts come back reduced, for every kind (VA `0x16974`).
 
 ### Callers
 
 - **Boarding (VA `0xf10a`, outcome code 5 of the sea battle):**
-  - Before the fight, CSTR 171 is shown.
+  - Before the fight, CSTR 171 is shown, boxed, at (274, 306) up to x
+    560 (VA `0xf170`); its `%s` is a named captain's name, else CSTN
+    30.7.
   - Player: the crew aboard, factor `7 - player damage / 16`.
   - Opponent: the enemy crew (record byte 2 x 4), factor
     `record byte 4 - enemy damage / 16`.
   - The opponent is title 4 ("Captain") of the record's nation, with
-    `extra` 0 for an ordinary ship.
+    `extra` 0, for an ordinary ship. A named captain (VA `0xf1df`,
+    word `0x449d2`) fights as title = his id, nation -1 (labelled with
+    his name), `extra` = 1 when his id has bit 0x80, else `(id & 7) /
+    3`.
   - A win leads to the capture (VA `0xdb7b`, CSTR 164). Being driven
     back ends the battle with no capture: the reputation (VA `0x45e76`)
     drops by 2 and the heat (VA `0x4c09e`) rises by 16 (VA `0xe775`). A
     loss does the same once its prison is over (the fight's routine, VA
     `0x16205`, returns 0 after VA `0x16647`).
   - A loss (VA `0x16647`): CSTR 175, "Your men flee in panic…
-    imprisoned in %s", then CSTR 190. Not traced further.
-  - After a win or a repulse, the fleet loses the men who fell.
+    imprisoned in %s", then CSTR 190, an injury (VA `0x45e88`) and
+    music 43. Not traced further.
+  - After a win or a repulse, the fleet loses the men who fell (VA
+    `0x1661d`, kind 0 only).
 - **Duels (VA `0x161ba`, `FUN_161ba(scene, title, nation, extra)`):**
   one man each, factors 9 and 9.
   - Scenes (table at VA `0x3361c`): 0 alley, 1 and 2 fort, 3 and 4 the
@@ -1384,14 +1391,27 @@ back reduced.
     `HeHead2` in the alley and `HeHead3` at the fort (VA `0x15f84`).
   - The weapon is chosen on the scene's picture.
   - The opponent is labelled with his title alone; crew fights add the
-    nation.
-  - A loss or being driven back (VA `0x16384`): the captain's portrait
+    nation (never nation 5). Nation -1 gives a named captain's name (VA
+    `0x19fbb`), -2 a villain's (bytes VA `0x4722c`-`0x4722e`, caller VA
+    `0x18a49`). The label is centred at (160, 336), the player's name
+    at (480, 336), in font 1. In French the title comes first (title 4),
+    in German nation and title are joined without a space (VA
+    `0x16439`, the language at `0x33ef0`); the engine keeps the English
+    order.
+  - A loss or being driven back (VA `0x165b8`): the captain's portrait
     in its frame (VA `0x159df`), "You have disgraced yourself in
     personal combat!" (CSTR 174, at (100, 350) up to x 560), and the
     reputation becomes -1.
 - **Practice (VA `0xbdae`):** 200 men each, factors 32, against a
   first mate. No consequences. Afterwards a fencing practice value
   (VA `0x45e90`, 0..30) rises by 5.
+- **The assault (VA `0x18f4b`):** see "The assault".
+- **The career story's fight (kind -1, block filled at VA `0x14630`,
+  called from VA `0x13a2b`, `0x13ba4`):** title 3, nation 5, no weapon
+  choice (the rapier, VA `0x16568`), the flags not moved (VA
+  `0x16944`). Two variants: 10 men of factor 16 against 200 of factor
+  32 (which also sets difficulty 4), or 200 of 32 against 20 of 16; the
+  engine has only the second.
 
 ### Setup
 
@@ -1399,8 +1419,8 @@ back reduced.
   is 1 with the fencing ability.
 - **Weapons (CSTN group 70):** 0 rapier, 1 longsword, 2 cutlass.
   - The player chooses first on `img/wpnsel` (CSTR 85), with the
-    cutlass preselected. Only a kind of -1, which no traced caller
-    uses, skips the choice.
+    cutlass preselected (VA `0x16e5d`). Only the story's fight (kind
+    -1) skips the choice.
   - The choice (VA `0x16e56`): the blades left to right are the rapier,
     the cutlass and the longsword (rectangles at VA `0x33628`).
     Pointing at a blade writes its name in PIRATE1, centred at x 426,
@@ -1412,9 +1432,9 @@ back reduced.
 - **Strength bar:** `B = 31 x Pm x Pf / (Pm x Pf + Om x Of) + 8`, in
   integer arithmetic, for the player; `O = 47 - B` for the opponent.
   `B / 8` places the two flags on the screen (table at VA `0x338a0`).
-- **Positions on a line:** the player at x 340, the opponent at x 220.
-  In other fights they start at 320 and 240. The distance is
-  `player x - opponent x`.
+- **Positions:** in crew fights (kind 0, VA `0x28018`) the player at x
+  340, the opponent at x 220; in other fights 320 and 240. The distance
+  is `player x - opponent x`.
 - **Moves:** the opponent starts on guard with one of 8 scripts picked
   at random. The player starts with no move, so the first input counts
   at once.
@@ -1437,7 +1457,8 @@ move) and `0x38a1a` to `0x38b99`.
 
 - **Lines** are bits: 1 low, 2 middle, 4 high. A guard frame holds the
   bits it covers, and a strike frame holds the bit it attacks.
-- **Steps** apply only while the distance is above 9.
+- **Steps:** stepping back always applies; stepping in only while the
+  distance is 10 or more (VA `0x27a2c`, `0x27cb6`).
 
 ### The player's input
 
@@ -1448,10 +1469,19 @@ move) and `0x38a1a` to `0x38b99`.
   - Toward the opponent picks an attack in the line given by up or
     down.
 - **Lunge or slash:** with the keyboard, an attack is a lunge unless a
-  shift key is held, which makes it a slash.
+  shift key is held, which makes it a slash. Each key sets one pad
+  position (tables VA `0x3879c`, `0x3889c`: the arrows, Home, PgUp,
+  End, PgDn and the keypad's 5), so the last key pressed replaces the
+  one before.
+- **Mouse (VA `0x248d1`, `0x27638`):** the pointer anywhere on the
+  screen, by its side of the pad's centre: x up to 308 toward the
+  opponent, from 331 away, y up to 313 up, from 334 down. The left
+  button lunges, the right button alone slashes; the input lasts while
+  a button is held, and letting go gives guard 0.
 - **New moves:** a new move starts only when the current one ends.
-  Guards and attacks (moves 0-2 and 6-11) take the input once; holding
-  it does not repeat them.
+  Guards and attacks (moves 0-2 and 6-11) take the input once (table
+  VA `0x38a0a`): a held mouse button does not repeat them, a held key
+  does, through the keyboard's own repeat.
 - **At a distance:** beyond 59, attacks become advances (12) and the
   steps back become move 13.
 - **When the opponent falls,** the player stands on guard 1.
@@ -1467,6 +1497,9 @@ move) and `0x38a1a` to `0x38b99`.
    - It hits when `threshold[level] <= (rand & 255) + practice` (VA
      `0x389e4`).
    - A hit:
+     - leaves the player guarding every line (guard 7) for the rest of
+       the tick, so the opponent's strike then is covered (VA
+       `0x278dd`);
      - pushes the opponent back 4;
      - moves the strength bar toward the player `2 x weapon + 1`
        times, each time by 2 steps (1 for a lunge);
@@ -1480,7 +1513,9 @@ move) and `0x38a1a` to `0x38b99`.
    differences:
    - reach by weapon only (VA `0x389c1`);
    - it hits when `threshold[level] <= rand & 255` (VA `0x389e9`);
-   - a hit pushes the player back 4;
+   - a hit pushes the player back 4 and leaves him guarding every
+     line until his next frame, the player's next strike included (VA
+     `0x27b7d`);
    - it moves the bar `weapon + 1` times, 2 steps each (1 for a lunge);
    - a covered strike under 35 clashes.
 4. **The opponent steps.** At x 60 or less he is driven off, and the
@@ -1511,7 +1546,9 @@ move) and `0x38a1a` to `0x38b99`.
   N stops sightings and E brings them back (byte VA `0x33ee8`, read at
   VA `0x23ef3`); R makes the player near invulnerable and F ends it
   (byte VA `0x33ee9`: the enemy never fires, VA `0x8ecd`; a hit is not
-  doubled and the crew loses no men in sword fights, VA `0x2747c`); a
+  doubled, so the player's own hits move the bar `w + 1` times, the
+  player's bar never drops (VA `0x27f9c`) and the crew loses no men in
+  sword fights, VA `0x2747c`); a
   right click on the cabin's map moves the ship there. Both bytes are 0
   in the program, so normal play has them off.
   - **In the engine:** `--debug` turns the mode on, with the same keys
@@ -1528,7 +1565,16 @@ move) and `0x38a1a` to `0x38b99`.
 - **Men:** the panels show the men only for kinds 0 and up (crew fights
   and duels; not the story's fight nor practice), as numbers. The original draws them
   as figures for 500, 50 and 1 men (VA `0x169b7`).
-- **Duels and practice** use the same rules but have no caller yet.
+- **Keys combine:** the engine adds the held keys together (down then
+  left lunges low), where the original keeps the last key's pad
+  position; the keypad's 5 is not mapped.
+- **Not reproduced:** the mouse input lasting only while a button is
+  held (the engine takes a click); the flags redrawn when a bar reaches
+  a multiple of 8 (result 4, VA `0x27f6e`, `0x16d94`); the other tick
+  table at VA `0x389ce` when the word at `0x4c0e6` is 1; a scripted
+  fight when `0x4c0e4` is set (VA `0x28274`, purpose not traced); an
+  instant win when `0x4c0e2` is set from the command line (VA
+  `0x274f5`).
 
 ### The opponent's choices (VA `0x280ef`, when a move ends)
 
@@ -1541,8 +1587,10 @@ move) and `0x38a1a` to `0x38b99`.
   - A step below 0x80 is a move.
   - 0x90 parries the player's current line.
   - 0x91 parries while stepping back.
-  - 0x92 slashes, and 0x93 lunges, in one of the two other lines at
-    random. The lines come from the table at VA `0x38d47`.
+  - 0x92 slashes, and any other step from 0x80 lunges, in the line
+    `line + 1 + rand(2)`, made 0 when it reaches 3 (VA `0x28457`): one
+    of the two others against lines 0 and 1, always line 0 against
+    line 2. The lines come from the table at VA `0x38d47`.
 - **New script:** when a script wraps around, a new one is picked at
   random:
   - at level 1, after more than 2 player hits;

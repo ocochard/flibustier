@@ -1029,6 +1029,26 @@ test_battles(void)
 	CHECK(s.fleet.gold == gold + bt->loot_gold &&
 	    bt->loot_gold % 10 == 0 && s.fleet.crew == 30);
 	CHECK(!s.sword.active && !bt->active);
+	/* A named captain fights under his name, (id & 7) / 3 levels
+	 * harder, or one with bit 0x80 (VA 0xf1df). */
+	battle_game(&s);
+	bt->outcome = BAT_BOARDING;
+	s.encounter.captain = 0;
+	sim_board(&s, 0);
+	{
+		int level;
+
+		CHECK(s.sword.title == 4 && s.sword.nation == s.encounter.nation);
+		battle_game(&s);
+		bt->outcome = BAT_BOARDING;
+		s.encounter.captain = 0x16;	/* id & 7 = 6: 2 levels */
+		sim_board(&s, 0);
+		level = s.player.difficulty + 2 -
+		    (s.player.ability == ABILITY_FENCING);
+		CHECK(s.sword.title == 0x16 && s.sword.nation == -1 &&
+		    s.sword.level == (level < 0 ? 0 : level > 4 ? 4 : level));
+		s.encounter.captain = 0;
+	}
 	/* Driven back: no prize, the losses stay. */
 	battle_game(&s);
 	bt->outcome = BAT_BOARDING;
@@ -1362,6 +1382,21 @@ test_sword(void)
 	for (i = 0; i < 12; i++)
 		sim_sword_tick(&s);
 	CHECK(sw->you.x == x + 28 && sw->input == SWM_BACK);
+	/* Close in, stepping back still works; only stepping in waits for
+	 * 10 apart (VA 0x27a2c). */
+	sword_game(&s, 5);
+	sim_sword_input(&s, SWM_BACK);
+	x = sw->you.x;
+	sim_sword_tick(&s);
+	CHECK(sw->you.x == x + 14);
+
+	/* A hit leaves the hitter guarding every line (VA 0x278dd): the
+	 * opponent's strike that tick is covered. */
+	sword_game(&s, 25);
+	sim_sword_input(&s, SWM_SLASH + 2);
+	for (i = 0, ev = 0; i < 4 && !(ev & SEV_HIT_FOE); i++)
+		ev = sim_sword_tick(&s);
+	CHECK((ev & SEV_HIT_FOE) && sw->you.guard == 7);
 
 	/* The hit that empties the opponent's bar fells him; he lies
 	 * after frame 8 and the player wins. */

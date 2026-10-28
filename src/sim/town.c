@@ -715,7 +715,7 @@ sim_duel_end(struct sim *s)
 
 	sw->active = 0;
 	if (disgraced)
-		s->reputation = -1;		/* VA 0x16384 */
+		s->reputation = -1;		/* VA 0x165fe */
 	return (disgraced);
 }
 
@@ -777,7 +777,7 @@ sim_assault_end(struct sim *s, int town)
 		s->fleet.crew -= sw->men_start - sw->you.men;
 		return (1);
 	}
-	/* Repelled: the men who fell (VA 0x16384). Defeated: prison (VA
+	/* Repelled: the men who fell (VA 0x1661d). Defeated: prison (VA
 	 * 0x16647). */
 	s->fleet.crew -= sw->men_start - sw->you.men;
 	if (s->fleet.crew < 1)

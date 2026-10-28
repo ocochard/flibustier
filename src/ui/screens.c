@@ -3640,9 +3640,10 @@ const struct screen screen_battle = {
 #define W_TITLE			74	/* Guard... Captain, First Mate */
 #define SW_Y			140	/* fighters' line on the screen */
 #define SW_FALL_DROP		24
-#define SW_PAD_X		283	/* the arrow pad on pic/shipdeck */
-#define SW_PAD_Y		291
-#define SW_PAD_CELL		24
+#define SW_MOUSE_LEFT		308	/* the pointer's half-planes (VA */
+#define SW_MOUSE_RIGHT		331	/* 0x27638): left of 308 attacks, */
+#define SW_MOUSE_UP		313	/* right of 331 steps back, above */
+#define SW_MOUSE_DOWN		334	/* 313 high, below 334 low */
 #define SW_YOU_FLAG_X		584
 #define SW_FOE_FLAG_X		10
 #define H_LEFT			1
@@ -3880,7 +3881,7 @@ sword_outcome_done(struct game *g)
 	if (g->sw_guard) {
 		g->sw_guard = 0;
 		/* Back to sea either way (VA 0x195f5); a loss or a retreat
-		 * is a disgrace (VA 0x16384). */
+		 * is a disgrace (VA 0x165b8). */
 		game_goto(g, sim_duel_end(&g->sim) ? &screen_disgrace :
 		    &screen_sail);
 		return;
@@ -3982,14 +3983,16 @@ sword_event(struct game *g, const struct ui_event *ev)
 				sim_sword_input(&g->sim, sword_code(g->sw_held));
 		} else if (ev->type == EV_KEYUP)
 			g->sw_held &= ~key_bit(ev->key);
-		else if (ev->type == EV_CLICK) {
-			cx = (ev->x - SW_PAD_X) / SW_PAD_CELL;
-			cy = (ev->y - SW_PAD_Y) / SW_PAD_CELL;
-			if (ev->x >= SW_PAD_X && ev->y >= SW_PAD_Y && cx < 3 &&
-			    cy < 3)
-				sim_sword_input(&g->sim, sword_code(
-				    (cx == 0 ? H_LEFT : cx == 2 ? H_RIGHT : 0) |
-				    (cy == 0 ? H_UP : cy == 2 ? H_DOWN : 0)));
+		else if (ev->type == EV_CLICK || ev->type == EV_RCLICK) {
+			/* Anywhere on the screen, by the pointer's side of
+			 * the pad's centre; the right button slashes (VA
+			 * 0x248dc). */
+			cx = ev->x <= SW_MOUSE_LEFT ? H_LEFT :
+			    ev->x >= SW_MOUSE_RIGHT ? H_RIGHT : 0;
+			cy = ev->y <= SW_MOUSE_UP ? H_UP :
+			    ev->y >= SW_MOUSE_DOWN ? H_DOWN : 0;
+			sim_sword_input(&g->sim, sword_code(cx | cy |
+			    (ev->type == EV_RCLICK ? H_SHIFT : 0)));
 		}
 		return;
 	default:
@@ -4084,12 +4087,20 @@ sword_draw(struct game *g)
 
 	switch (g->sw_stage) {
 	case 0:
-		/* On the picture, no box (VA 0xf10a): at (274, 306) up to
-		 * x 560, in palette entry 2. */
+		/* On the picture (VA 0xf10a; the original boxes it, VA
+		 * 0xf170): at (274, 306) up to x 560, in palette entry 2. */
 		if (g->bg.pixels != NULL)
 			memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
-		fill(text, sizeof(text), game_str(g, S_BOARDING),
-		    game_word(g, W_SAILING, SAILING_CAPTAIN), NULL);
+		/* "...you spot %s approaching": a named captain by his
+		 * name (VA 0xf130), else "the enemy captain". */
+		if (g->sim.encounter.captain != 0)
+			captain_name(g, g->sim.encounter.captain, label,
+			    sizeof(label));
+		else
+			snprintf(label, sizeof(label), "%s", game_word(g,
+			    W_SAILING, SAILING_CAPTAIN));
+		fill(text, sizeof(text), game_str(g, S_BOARDING), label,
+		    NULL);
 		draw(g, FONT_BODY, 274, 306, 286, text, 0);
 		continue_prompt(g);
 		return;
@@ -4130,7 +4141,7 @@ sword_draw(struct game *g)
 	 * nation (VA 0x16205). */
 	if (sw->nation == -2 && g->sim.villain_duel >= 0)
 		villain_name(g, g->sim.villain_duel, label, sizeof(label));
-	else if (sw->nation == -1 && sw->kind == SWORD_DUEL)
+	else if (sw->nation == -1)
 		captain_name(g, sw->title, label, sizeof(label));
 	else if (sw->kind == SWORD_CREW && sw->nation >= 0 && sw->nation != 5)
 		snprintf(label, sizeof(label), "%s %s",
@@ -4143,11 +4154,9 @@ sword_draw(struct game *g)
 	draw(g, FONT_BODY, 160 - w / 2, 336, 300, label, 0);
 	w = text_width(&g->font[FONT_BODY], g->sim.player.name);
 	draw(g, FONT_BODY, 480 - w / 2, 336, 300, g->sim.player.name, 0);
-	/* The crews are shown only for kinds 0 and up (VA 0x169b7): not
-	 * in the story's fight nor in practice. */
-	/* Crews are counted in crew fights only: a duel is one man each,
-	 * and the story's fight hides them. */
-	if (sw->kind == SWORD_CREW) {
+	/* The men are shown for kinds 0 and up, duels too (VA 0x16c5b):
+	 * not in the story's fight nor in practice. */
+	if (sw->kind >= 0) {
 		snprintf(text, sizeof(text), "%s%d",
 		    game_word(g, W_SAILING, SAILING_MEN), sw->foe.men);
 		draw(g, FONT_BODY, 100, 380, 140, text, 0);
@@ -6461,7 +6470,7 @@ const struct screen screen_arrive = {
 };
 
 /*
- * Disgrace (VA 0x16384): the captain's portrait in its frame, as for the
+ * Disgrace (VA 0x165b8): the captain's portrait in its frame, as for the
  * story (VA 0x159df), and CSTR 174 at (100, 350) up to x 560.
  */
 static void
