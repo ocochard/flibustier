@@ -1139,7 +1139,8 @@ fight computes its level the same way with fencing.
   Its type byte holds the class (`& 7`) and the hull damage it already
   has (`& 0xF8`).
 - **Player crew aboard:** `min(crew + 8 - 8 x ships, (class + 2) x 32)`.
-  The rest stays with the fleet.
+  The rest stays with the fleet. There is no floor: with no men, none
+  are aboard and none ashore.
 - **Player guns:** `min(guns, crew aboard / 4, (class + 2) x 4)`.
 - **Gunnery `g`:** `clamp(mood / 2 + 4, 0, 16)`, from the crew's mood
   (player block +0x18, VA `0x45faa`, see "The crew's mood"). Reloading

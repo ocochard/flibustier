@@ -196,8 +196,6 @@ flagship(struct sim *s)
 	bt->you.crew = f->crew + 8 - 8 * f->nships;
 	if (bt->you.crew > (cls + 2) * 32)
 		bt->you.crew = (cls + 2) * 32;
-	if (bt->you.crew < 1)
-		bt->you.crew = 1;
 	bt->crew_ashore = f->crew - bt->you.crew;
 	bt->you.guns = f->guns;
 	if (bt->you.guns > bt->you.crew / 4)

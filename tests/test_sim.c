@@ -1058,6 +1058,12 @@ test_battles(void)
 	CHECK(bt->you.crew == 40 && bt->you.guns == 10);
 	CHECK(bt->guns_ashore == 2 && bt->crew_ashore == 0);
 	CHECK(bt->foe.crew == 80 && bt->foe.guns == 8 && bt->foe.type == 4);
+	/* No men: none aboard and none ashore, never fewer (VA 0x9832). */
+	sea_game(&s, 300, 300, 0x00);
+	s.fleet.crew = 0;
+	sim_battle_start(&s);
+	CHECK(bt->you.crew == 0 && bt->crew_ashore == 0);
+	battle_game(&s);
 	CHECK(bt->you.turn_rate == 3 && bt->foe.turn_rate == 2);
 	gx = abs(bt->you.x - bt->foe.x) / 256;
 	gy = abs(bt->you.y - bt->foe.y) / 256;
