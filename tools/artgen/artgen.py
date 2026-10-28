@@ -1567,6 +1567,42 @@ def make_chain(args, spec, a, profile, seed, graph):
     return record
 
 
+def outline_workflow(photo, render, out_w, out_h, prefix, expand=-2):
+    """A redrawn frame cut to its render's own outline, grown by
+    "expand" pixels of the render (a third of the frame's; a body a
+    little in, past the redraw's backdrop at its edge, a head a little out over the
+    body it sits on, which is the same photograph) and softened: the figure keeps exactly the render's shape, so no head
+    from a reference, no lost leg and no shrunken figure come along, and
+    the redraw's background stays out."""
+    return {
+        "photo": {"class_type": "LoadImage", "inputs": {"image": photo}},
+        "render": {"class_type": "LoadImage", "inputs": {"image": render}},
+        "shape": {"class_type": "InvertMask", "inputs": {
+            "mask": ["render", 1]}},
+        "inner": {"class_type": "GrowMask", "inputs": {
+            "mask": ["shape", 0], "expand": expand,
+            "tapered_corners": True}},
+        "mimg": {"class_type": "MaskToImage", "inputs": {
+            "mask": ["inner", 0]}},
+        "mblur": {"class_type": "ImageBlur", "inputs": {
+            "image": ["mimg", 0], "blur_radius": 2, "sigma": 1.0}},
+        "msmall": {"class_type": "ImageScale", "inputs": {
+            "image": ["mblur", 0], "upscale_method": "bilinear",
+            "width": out_w, "height": out_h, "crop": "disabled"}},
+        "alpha": {"class_type": "ImageToMask", "inputs": {
+            "image": ["msmall", 0], "channel": "red"}},
+        "clear": {"class_type": "InvertMask", "inputs": {
+            "mask": ["alpha", 0]}},
+        "small": {"class_type": "ImageScale", "inputs": {
+            "image": ["photo", 0], "upscale_method": "lanczos",
+            "width": out_w, "height": out_h, "crop": "disabled"}},
+        "rgba": {"class_type": "JoinImageWithAlpha", "inputs": {
+            "image": ["small", 0], "alpha": ["clear", 0]}},
+        "save": {"class_type": "SaveImage", "inputs": {
+            "images": ["rgba", 0], "filename_prefix": prefix}},
+    }
+
+
 def silhouette_workflow(photo, render, out_w, out_h, prefix):
     """A redrawn frame cut to the figure: where the matte finds the man
     in the redraw, near its render's outline, so the redraw's background
@@ -1632,6 +1668,17 @@ def shrink_workflow(image, out_w, out_h, prefix):
 FENCER_DROP = 60
 FENCER_BANKS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 6, 6, 10, 6]
 FENCER_RENDER = (951, 609)	# a fight frame as rendered (3 x 317x203)
+# The surrender's frames (14.3 on) are 114 lines high, not 90.
+FENCER_TALL = (14, 3, 114)
+
+
+def fencer_size(m, f, k, render=False):
+    """A fight frame's size, in the pack's pixels or as rendered."""
+    tall = m == FENCER_TALL[0] and f >= FENCER_TALL[1]
+    if render:
+        return FENCER_RENDER[0], round(FENCER_RENDER[1] *
+                                       (FENCER_TALL[2] / 90 if tall else 1))
+    return round(141 * k), round((FENCER_TALL[2] if tall else 90) * k)
 
 
 def make_fencer(args, spec, a, profile, seed):
@@ -1641,7 +1688,6 @@ def make_fencer(args, spec, a, profile, seed):
     wounds as rendered, each group's frames in a grid atlas (a move a
     row) with its .sheet."""
     k = spec["pack"]["art_height"] / SCREEN_H
-    fw, fh = round(141 * k), round(90 * k)
     side = a["fencer"]["side"]
     host = args.render_host
     work = "flibustier-fencers/%s" % side
@@ -1679,38 +1725,41 @@ def make_fencer(args, spec, a, profile, seed):
     frames = [(m, f) for m in (moves or range(len(FENCER_BANKS)))
               for f in range(FENCER_BANKS[m])]
     record = {}
+    fc = a["fencer"]
     free(args.server)
     try:
-        for layer, (gid, gfile) in a["fencer"]["groups"].items():
-            redraw = layer in a["fencer"]["redraw"]
-            prompt = characters(a["fencer"]["redraw"].get(layer, ""), spec)
-            out = {}
-            if redraw:
-                # Every frame redrawn, then every one cut: the image model
-                # and the matte take turns, never both loaded.
-                for m, f in frames:
-                    src = os.path.join(local, layer, "%d.%d.png" % (m, f))
-                    ref = os.path.join(local, layer + "ref",
-                                       "%d.%d.png" % (m, f))
-                    rup = upload(args.server, ref if os.path.exists(ref)
-                                 else src, "flibustier-fencer-ref.png")
-                    png = render(args.server, ship_frame_workflow(
-                        spec, profile, seed, rup, prompt,
-                        a.get("denoise", 0.6), FENCER_RENDER[0],
-                        FENCER_RENDER[1], prefix, FENCER_RENDER))
-                    with open(os.path.join(local, "%s-photo-%d.%d.png" % (
-                            layer, m, f)), "wb") as fp:
-                        fp.write(png)
-                free(args.server)
+        # The redraws: each reference render (a fencer, the opponent with
+        # each of his heads) made a photograph, every frame; the image
+        # model and the matte take turns, never both loaded.
+        for ref, text in fc["redraw"].items():
+            prompt = characters(text, spec)
             for m, f in frames:
+                rw, rh = fencer_size(m, f, k, render=True)
+                rup = upload(args.server, os.path.join(
+                    local, ref, "%d.%d.png" % (m, f)),
+                    "flibustier-fencer-ref.png")
+                png = render(args.server, ship_frame_workflow(
+                    spec, profile, seed, rup, prompt,
+                    a.get("denoise", 0.6), rw, rh, prefix, (rw, rh)))
+                with open(os.path.join(local, "%s-photo-%d.%d.png" % (
+                        ref, m, f)), "wb") as fp:
+                    fp.write(png)
+        free(args.server)
+        for layer, (gid, gfile) in fc["groups"].items():
+            ref = fc["photo"].get(layer)
+            out = {}
+            for m, f in frames:
+                fw, fh = fencer_size(m, f, k)
                 src = os.path.join(local, layer, "%d.%d.png" % (m, f))
                 up = upload(args.server, src, "flibustier-fencer.png")
-                if redraw:
+                if ref:
+                    # Cut from its photograph to its own render's outline.
                     pup = upload(args.server, os.path.join(
-                        local, "%s-photo-%d.%d.png" % (layer, m, f)),
+                        local, "%s-photo-%d.%d.png" % (ref, m, f)),
                         "flibustier-photo.png")
-                    png = render(args.server, silhouette_workflow(
-                        pup, up, fw, fh, prefix + "-cut"))
+                    png = render(args.server, outline_workflow(
+                        pup, up, fw, fh, prefix + "-cut",
+                        -9 if layer == "body" else 3))
                 else:
                     png = render(args.server, shrink_workflow(
                         up, fw, fh, prefix + "-small"))
@@ -1721,12 +1770,17 @@ def make_fencer(args, spec, a, profile, seed):
                                      "flibustier-frame-%d-%d.png" % (m, f))
             # The atlas: move m on row m, frame f in column f.
             cols = max(FENCER_BANKS)
+            fw = fencer_size(0, 0, k)[0]
+            rows = [max(fencer_size(m, f, k)[1]
+                        for f in range(FENCER_BANKS[m]))
+                    for m in range(len(FENCER_BANKS))]
+            top = [sum(rows[:m]) for m in range(len(rows))]
             g = {"canvas": {"class_type": "EmptyImage", "inputs": {
-                "width": cols * fw, "height": len(FENCER_BANKS) * fh,
+                "width": cols * fw, "height": sum(rows),
                 "batch_size": 1, "color": 0}},
                 "clear": {"class_type": "SolidMask", "inputs": {
                     "value": 1.0, "width": cols * fw,
-                    "height": len(FENCER_BANKS) * fh}}}
+                    "height": sum(rows)}}}
             img, msk = ["canvas", 0], ["clear", 0]
             for n, ((m, f), image) in enumerate(sorted(out.items())):
                 g["f%d" % n] = {"class_type": "LoadImage", "inputs": {
@@ -1734,11 +1788,11 @@ def make_fencer(args, spec, a, profile, seed):
                 g["p%d" % n] = {"class_type": "ImageCompositeMasked",
                                 "inputs": {"destination": img,
                                            "source": ["f%d" % n, 0],
-                                           "x": f * fw, "y": m * fh,
+                                           "x": f * fw, "y": top[m],
                                            "resize_source": False}}
                 g["m%d" % n] = {"class_type": "MaskComposite", "inputs": {
                     "destination": msk, "source": ["f%d" % n, 1],
-                    "x": f * fw, "y": m * fh, "operation": "multiply"}}
+                    "x": f * fw, "y": top[m], "operation": "multiply"}}
                 img, msk = ["p%d" % n, 0], ["m%d" % n, 0]
             g["rgba"] = {"class_type": "JoinImageWithAlpha", "inputs": {
                 "image": img, "alpha": msk}}
@@ -1753,20 +1807,20 @@ def make_fencer(args, spec, a, profile, seed):
             for m in range(len(FENCER_BANKS)):
                 for f in range(FENCER_BANKS[m]):
                     lines.append("%d.%d = %d %d %d %d 0 %d" % (
-                        m, f, f * fw, m * fh, fw, fh,
-                        round(FENCER_DROP * k)))
+                        (m, f, f * fw, top[m]) + fencer_size(m, f, k) +
+                        (round(FENCER_DROP * k),)))
             with open(os.path.join(args.pack, gfile), "w") as fp:
                 fp.write("\n".join(lines) + "\n")
-            record[gid] = {"layer": layer, "redrawn": redraw,
-                           "prompt": " ".join(prompt.split()) or None}
+            record[gid] = {"layer": layer, "photo": ref}
             print("%s: %s done" % (a["id"], gid))
-            if redraw:
-                free(args.server)
     except RuntimeError as e:
         print("%s: %s" % (a["id"], e), file=sys.stderr)
         return None
-    shutil.rmtree(local)
-    return {"groups": record, "frame": [fw, fh],
+    # The renders and photographs stay (art/fencer-SIDE.frames, not
+    # part of the pack), to cut again without redrawing.
+    return {"groups": record, "frame": list(fencer_size(0, 0, k)),
+            "redraw": {r: " ".join(characters(t, spec).split())
+                       for r, t in fc["redraw"].items()},
             "render": list(FENCER_RENDER), "denoise": a.get("denoise", 0.6),
             "blend": "provenance/fencers/%s.blend" % side,
             "model_sha256": hashlib.sha256(open(script, "rb").read())
@@ -1839,15 +1893,22 @@ PORTRAIT_VIEWS = [(1, 1), (202, 1), (403, 1), (1, 202), (202, 202)]
 PORTRAIT_VIEW = 200
 
 
-def portrait_sheet_workflow(photo, mask, k, prefix):
-    """A ship portrait's 5 spyglass views from one photograph: the ship
-    rising and falling a little on the swell from view to view, each
+def portrait_sheet_workflow(sea, ship, mask, k, prefix):
+    """A ship portrait's 5 spyglass views: the same sea and sky in every
+    view, the glass held still, and the ship (cut out) riding the swell
+    on it, rising, falling and drifting a little from view to view; each
     seen through the round glass, on black."""
     side = round(PORTRAIT_VIEW * k)
     win = round(PORTRAIT_RENDER[0] * 0.9)
-    spare = PORTRAIT_RENDER[0] - win
+    # The ship placed `base` further on than her swing, so no offset is
+    # negative (the composite takes none), and the window with her.
+    base = 16
+    off = (PORTRAIT_RENDER[0] - win) // 2 + base
     g = {
-        "photo": {"class_type": "LoadImage", "inputs": {"image": photo}},
+        "sea": {"class_type": "LoadImage", "inputs": {"image": sea}},
+        "ship": {"class_type": "LoadImage", "inputs": {"image": ship}},
+        "solid": {"class_type": "InvertMask", "inputs": {
+            "mask": ["ship", 1]}},
         "glass": {"class_type": "LoadImage", "inputs": {"image": mask}},
         "gfit": {"class_type": "ImageScale", "inputs": {
             "image": ["glass", 0], "upscale_method": "bilinear",
@@ -1861,11 +1922,15 @@ def portrait_sheet_workflow(photo, mask, k, prefix):
     last = ["canvas", 0]
     for n, (vx, vy) in enumerate(PORTRAIT_VIEWS):
         t = 2 * math.pi * n / len(PORTRAIT_VIEWS)
-        cx = round(spare / 2 + spare * 0.25 * math.cos(t))
-        cy = round(spare / 2 + spare * 0.45 * math.sin(t))
+        dx = round(PORTRAIT_RENDER[0] * 0.012 * math.cos(t))
+        dy = round(PORTRAIT_RENDER[1] * 0.02 * math.sin(t))
+        g["on%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["sea", 0], "source": ["ship", 0],
+            "x": base + dx, "y": base + dy, "resize_source": False,
+            "mask": ["solid", 0]}}
         g["c%d" % n] = {"class_type": "ImageCrop", "inputs": {
-            "image": ["photo", 0], "width": win, "height": win, "x": cx,
-            "y": cy}}
+            "image": ["on%d" % n, 0], "width": win, "height": win,
+            "x": off, "y": off}}
         g["s%d" % n] = {"class_type": "ImageScale", "inputs": {
             "image": ["c%d" % n, 0], "upscale_method": "lanczos",
             "width": side, "height": side, "crop": "disabled"}}
@@ -1937,24 +2002,11 @@ def make_portrait(args, spec, a, profile, seed):
             f.write(cut)
         cup = upload(args.server, cpath, "flibustier-portrait-cut.png")
         sup = upload(args.server, spath, "flibustier-portrait-sea.png")
-        onsea = render(args.server, {
-            "sea": {"class_type": "LoadImage", "inputs": {"image": sup}},
-            "ship": {"class_type": "LoadImage", "inputs": {"image": cup}},
-            "solid": {"class_type": "InvertMask", "inputs": {
-                "mask": ["ship", 1]}},
-            "put": {"class_type": "ImageCompositeMasked", "inputs": {
-                "destination": ["sea", 0], "source": ["ship", 0], "x": 0,
-                "y": 0, "resize_source": False, "mask": ["solid", 0]}},
-            "save": {"class_type": "SaveImage", "inputs": {
-                "images": ["put", 0], "filename_prefix": prefix + "-on"}}})
-        with open(ppath, "wb") as f:
-            f.write(onsea)
-        pup = upload(args.server, ppath, "flibustier-portrait-photo.png")
         mask = upload(args.server, os.path.join(HERE, "layouts",
                                                 "spyglass.png"),
                       "flibustier-spyglass.png")
         sheet = render(args.server, portrait_sheet_workflow(
-            pup, mask, k, prefix + "-views"))
+            sup, cup, mask, k, prefix + "-views"))
     except RuntimeError as e:
         print("%s: %s" % (a["id"], e), file=sys.stderr)
         return None

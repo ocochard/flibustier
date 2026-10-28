@@ -34,6 +34,10 @@ import bpy
 from mathutils import Vector
 
 BANKS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 6, 6, 10, 6]
+# The fall's last frames (14.3 on), the arms raised in surrender, are
+# 141x114, 24 lines taller than the others (the game draws them 24
+# higher, so the feet stay where they were).
+TALL_MOVE, TALL_FROM, TALL = 14, 3, 114 / 90
 FRAME_M = 3.08		# the frame's width in metres (141 pixels)
 # Where each fencer stands in his frame, as in the game's: the player
 # right of the middle facing left, the opponent left of it facing right
@@ -389,9 +393,25 @@ def scene(fw, fh):
     # the frame's bottom, the fencer a little right of its middle.
     high = FRAME_M * fh / fw
     cob.location = (CAMERA_X[SIDE], -20, high / 2 - 0.04)
+    cob["fw"], cob["fh"] = fw, fh
     cob.rotation_euler = (math.pi / 2, 0, 0)
     bpy.context.collection.objects.link(cob)
     sc.camera = cob
+
+
+def frame_size(move, k):
+    """A frame taller for the surrender, the camera raised with it so the
+    ground stays at the frame's bottom."""
+    sc = bpy.context.scene
+    cob = sc.camera
+    fw, fh = cob["fw"], cob["fh"]
+    if move == TALL_MOVE and k >= TALL_FROM:
+        th = round(fh * TALL)
+    else:
+        th = fh
+    sc.render.resolution_y = th
+    high = FRAME_M * fh / fw
+    cob.location.z = high / 2 - 0.04 + FRAME_M * (th - fh) / fw / 2
 
 
 def show(objects, holdouts):
@@ -430,11 +450,11 @@ def main():
     body = f.layers["body"]
     heads = [ob for parts in f.layers["heads"].values() for ob in parts]
     passes = [("body", body, [])]
-    if f.layers["heads"]:
-        # The opponent's body with a head on, for the redraw to see a
-        # man (a body alone it gives a fencing mask); the body's own
-        # outline still cuts it.
-        passes.append(("bodyref", body + f.layers["heads"]["head1"], []))
+    # The opponent with each of his heads on, the picture redrawn: the
+    # body is cut from the first (a body alone the redraw gives a
+    # fencing mask), each head from its own, so head and body match.
+    for name, parts in f.layers["heads"].items():
+        passes.append(("bodyref" + name[4:], body + parts, []))
     for name, parts in f.layers["heads"].items():
         passes.append((name, parts, body))
     for name, parts in f.layers["weapon"].items():
@@ -446,6 +466,7 @@ def main():
     for move in moves:
         for k in range(BANKS[move]):
             f.pose(move_pose(move, k))
+            frame_size(move, k)
             for name, objects, holdouts in passes:
                 show(objects, holdouts)
                 d = os.path.join(args.out, name)

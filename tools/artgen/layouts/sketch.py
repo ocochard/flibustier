@@ -156,12 +156,12 @@ ALLEY = [
 # battlements; the fighters stand on the walkway, in front of its rail.
 FORT = [
     line((0, 120), (640, 120)),				# the sea's horizon
-    line((0, 140), (640, 140)),				# the battlements' top
-    rect(60, 120, 120, 140), rect(200, 120, 260, 140),	# merlons
-    rect(340, 120, 400, 140), rect(480, 120, 540, 140),
+    # One parapet: its merlons standing on its top, the rail before it.
+    rect(40, 150, 120, 175), rect(190, 150, 270, 175),	# merlons
+    rect(340, 150, 420, 175), rect(490, 150, 570, 175),
+    line((0, 175), (640, 175)),				# the parapet's top
     line((0, 214), (640, 214)),				# the walkway's rail
-    line((30, 214), (30, 60), (80, 60)),			# a gallows
-    line((560, 214), (600, 320)), line((580, 214), (620, 320)),	# a ladder
+    line((20, 214), (20, 110), (50, 110)),		# a gallows
     line((0, 320), (640, 320)),
 ]
 

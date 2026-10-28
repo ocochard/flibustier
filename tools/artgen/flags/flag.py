@@ -104,12 +104,18 @@ def wave(ob, width, phase):
     for v in me.vertices:
         x, z = v.co.x, v.co.z
         u = x / width
-        y = 0.22 * u * math.sin(2 * math.pi * (1.4 * u - phase)) + \
-            0.07 * u * math.sin(2 * math.pi * (3.0 * u + 0.7 * z - 2 * phase))
+        # Strong wind: deep folds running out to the fly, the cloth
+        # pinned at the staff (u 0) and freest at the fly.
+        a = u ** 0.8
+        y = 0.30 * a * math.sin(2 * math.pi * (1.3 * u - phase)) + \
+            0.10 * a * math.sin(2 * math.pi * (2.7 * u + 0.8 * z - 2 * phase))
         v.co.y = y * width
-        # The fly sags and flutters a little in height too.
-        v.co.z = z - 0.06 * width * u * u + \
-            0.02 * width * u * math.sin(2 * math.pi * (2 * u - phase))
+        # Folds pull the cloth in towards the staff, and its fly lifts
+        # and falls with them, so the outline moves too.
+        v.co.x = x - 0.10 * width * a * (1 + math.cos(2 * math.pi * (
+            1.3 * u - phase))) / 2
+        v.co.z = z - 0.05 * width * u * u + \
+            0.07 * width * a * math.sin(2 * math.pi * (1.1 * u - phase))
 
 
 def main():
@@ -139,10 +145,12 @@ def main():
     world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.8
     sc.world = world
     sun = bpy.data.lights.new("sun", "SUN")
-    sun.energy = 3.0
+    sun.energy = 3.5
     sob = bpy.data.objects.new("sun", sun)
-    sob.rotation_euler = (math.radians(40), math.radians(-30),
-                          math.radians(20))
+    # Low from the side, so each fold lights on one face and shades on
+    # the other.
+    sob.rotation_euler = (math.radians(70), math.radians(-55),
+                          math.radians(10))
     bpy.context.collection.objects.link(sob)
 
     width, height = 1.5, 1.0
