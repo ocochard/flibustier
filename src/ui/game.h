@@ -133,6 +133,7 @@ struct game {
 	int			 sw_wait;	/* game ticks to the next fight tick */
 	int			 intro_step;	/* 0 logo .. 4 title */
 	int			 intro_hold;	/* ticks shown at full brightness */
+	int			 intro_queued;	/* a key pressed during a fade */
 	int			 intro_next;	/* advance on the next enter */
 	struct sprite_bank	 intro_spr[2];
 	uint8_t			*intro_title;	/* title layer, w x h, 0 clear */
@@ -145,7 +146,7 @@ struct game {
 	int			 intro_pause;
 	struct image		 credits;	/* the credits' text picture */
 	int			 cred_block;	/* 0..5 */
-	int			 cred_ms;	/* time into the block */
+	int			 cred_ticks;	/* ticks into the block */
 	struct sprite_bank	 town_spr;	/* harbour and closed gate */
 	int			 town_spot;	/* building under the cursor, -1 */
 	int			 town_key;	/* keyboard selection, -1 */
