@@ -12,6 +12,9 @@
  * line per map row of two hex digits per cell, the tile it draws, then
  * one line per ship class of the speeds by heading to the wind (16
  * sectors).
+ *
+ * With --arrivals, the cells where a ship reaches a town instead, one
+ * "town x y" line each.
  */
 
 #include <stdio.h>
@@ -33,20 +36,22 @@ main(int argc, char **argv)
 	const struct exe_layout *layout;
 	const char *data = getenv("FLIBUSTIER_DATA");
 	char err[256];
-	int era = -1, x, y, i, j, t, c, u, pixels = 0;
+	int era = -1, x, y, i, j, t, c, u, pixels = 0, arrivals = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--data") == 0 && i + 1 < argc)
 			data = argv[++i];
 		else if (strcmp(argv[i], "--pixels") == 0)
 			pixels = 1;
+		else if (strcmp(argv[i], "--arrivals") == 0)
+			arrivals = 1;
 		else
 			for (j = 0; j < 6; j++)
 				if (atoi(argv[i]) == years[j])
 					era = j;
 	}
 	if (era < 0 || data == NULL) {
-		fprintf(stderr, "usage: flibustier-seamap [--data PATH] [--pixels] YEAR\n");
+		fprintf(stderr, "usage: flibustier-seamap [--data PATH] [--pixels | --arrivals] YEAR\n");
 		return (2);
 	}
 	if ((packs = packs_new()) == NULL ||
@@ -62,6 +67,14 @@ main(int argc, char **argv)
 		fprintf(stderr, "%s\n", layout == NULL ?
 		    "unknown PIRATESG.EXE build" : err);
 		return (1);
+	}
+	if (arrivals) {
+		for (i = 0; i < (int)w.narrival; i++)
+			printf("%d %d %d\n", w.arrival[i].town, w.arrival[i].x,
+			    w.arrival[i].y);
+		blob_free(&b);
+		packs_free(packs);
+		return (0);
 	}
 	if (pixels) {
 		for (t = 0; t < 256; t++) {

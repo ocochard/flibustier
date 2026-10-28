@@ -158,6 +158,15 @@ class Bot:
              str(era)], stdout=subprocess.PIPE, text=True,
             check=True).stdout.splitlines()
         self.H, self.W = len(self.grid), len(self.grid[0])
+        # the cells where a ship enters each town, its harbour's water not
+        # among them
+        self.arrivals = collections.defaultdict(list)
+        for line in subprocess.run(
+                [os.path.join(BUILD, "flibustier-seamap"), "--data", DATA,
+                 "--arrivals", str(era)], stdout=subprocess.PIPE, text=True,
+                check=True).stdout.splitlines():
+            t, x, y = map(int, line.split())
+            self.arrivals[t].append((x, y))
         self.components()
         if REEF_GUARD or WIND:
             self.load_pixels(era)
@@ -415,6 +424,8 @@ class Bot:
             r = self.sim("sail", turn=turn, ticks=4)
             # a wreck counts whatever the ship stands on afterwards: a lone
             # ship's loss puts the marooned player back on the shore
+            if r["stop"] == "town":
+                break	# in port, though on a shore arrival cell
             if r["stop"] == "land" or self.wrecked(r):
                 room = -1
             elif wrecks_only:
@@ -513,6 +524,12 @@ class Bot:
                         continue	# a shortcut that heads into the wind
                     j = k
             wx, wy = route[j]
+            if town is not None and self.arrivals[town] and \
+                    max(abs(cx - route[-1][0]), abs(cy - route[-1][1])) <= 1:
+                # by the harbour: the town is entered on its arrival
+                # cells only, shore ones too
+                wx, wy = min(self.arrivals[town],
+                             key=lambda a: max(abs(a[0] - cx), abs(a[1] - cy)))
             want = self.bearing(wx * 16 + 8 - x, wy * 16 + 8 - y)
             want = (want + 8) & 0xF0
             diff = ((want - f["heading"] + 128) & 0xFF) - 128
@@ -1225,7 +1242,11 @@ class Bot:
                 return self.assault(ti)
             self.visit(ti)
             return "visited"
-        res = self.go(t["sea_x"], t["sea_y"], town=ti)
+        # an arrival cell on the water, else the harbour beside them
+        sea = [a for a in self.arrivals[ti] if self.grid[a[1]][a[0]] in ".,"]
+        gx, gy = min(sea, key=lambda a: max(abs(a[0] - t["sea_x"]), abs(a[1] - t["sea_y"]))) \
+            if sea else (t["sea_x"], t["sea_y"])
+        res = self.go(gx, gy, town=ti)
         if res == "noroute":
             self.unreachable.add(ti)
         if res != "town":

@@ -39,6 +39,9 @@ Like a player, it sees the shallows (`flibustier-seamap --pixels` gives
 the exact tiles) and sails a few ticks ahead in the sim to steer clear of
 them; `BOT_REEF_GUARD=0` turns that off.
 
+It enters a town by sailing onto one of the town's arrival cells
+(`flibustier-seamap --arrivals` lists them), as the game requires.
+
 The bot is a mediocre captain: it runs onto reefs, takes some fights it
 should not, and its choices are not meant to be optimal. It is not part of
 `ctest`, since a career takes a few minutes.
