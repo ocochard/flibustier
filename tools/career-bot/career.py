@@ -391,36 +391,44 @@ class Bot:
                 return m
         return -1
 
-    def rollout(self, turn, before):
+    def rollout(self, turn, before, wrecks_only=False):
         """Sail REEF_HORIZON chunks of 4 ticks on one turn and report the
         least room from shallows met on the way (-1: ran onto it or land);
-        the game state is put back afterwards."""
+        with wrecks_only, -1 only when a reef takes a ship or the ship
+        runs aground, the shallows being crossed otherwise (a reef waits
+        100 passes between ships). The game state is put back afterwards."""
         least = 99
         for _ in range(REEF_HORIZON):
             r = self.sim("sail", turn=turn, ticks=4)
-            room = -1 if r["stop"] == "land" else self.room(r["x"], r["y"])
+            if wrecks_only:
+                room = -1 if r["stop"] == "land" or r["stop"] == "crew" and \
+                    self.sim.state()["crew_event"] == 6 else 0
+            else:
+                room = -1 if r["stop"] == "land" else self.room(r["x"], r["y"])
             least = min(least, room)
             if room < 0 or r["stop"] not in ("ticks", "town"):
                 break
         self.sim("load", state=before)
         return least
 
-    def guarded_sail(self, turn, ticks, f):
+    def guarded_sail(self, turn, ticks, f, margin=REEF_MARGIN):
         """One sail step that keeps clear of shallows: the turn the bot
         wants is run ahead (a rollout), and when it comes within
-        REEF_MARGIN pixels of shallows the other turns are too; the one
-        keeping the most room is sailed for one chunk. Returns the sail
+        "margin" pixels of shallows the other turns are too; the one
+        keeping the most room is sailed for one chunk. A margin of 0
+        (a narrow passage) refuses only the turns that wreck. Returns the sail
         reply, or None when the wanted turn is safe enough (the caller
         sails it as usual)."""
         before = self.sim.state()
-        want = self.rollout(turn, before)
-        if want >= REEF_MARGIN:
+        narrow = margin == 0
+        want = self.rollout(turn, before, narrow)
+        if want >= margin:
             return None
         best = (want, turn)
         for t in (0, -1, 1):
             if t == turn:
                 continue
-            room = self.rollout(t, before)
+            room = self.rollout(t, before, narrow)
             if room > best[0]:
                 best = (room, t)
         self.stats["reef_avoided"] += best[1] != turn
@@ -497,8 +505,15 @@ class Bot:
             r = None
             self.guard_mode = "outside"
             if REEF_GUARD and (cx, cy) in self.reef_zone:
-                r = self.guarded_sail(turn, ticks, f)
-                self.guard_mode = "steered" if r else "safe"
+                # where the route itself crosses shallows ahead (the only
+                # way in, as into Lake Maracaibo) no turn keeps the margin:
+                # then only running onto them is refused; a ship already on
+                # the shallows keeps the margin, to get off them
+                narrow = self.grid[cy][cx] != "," and any(
+                    self.grid[py][px] == "," and 0 < max(abs(px - cx), abs(py - cy)) <= 3
+                    for px, py in route[max(0, idx - 4):idx + 4])
+                r = self.guarded_sail(turn, ticks, f, 0 if narrow else REEF_MARGIN)
+                self.guard_mode = ("narrow_" if narrow else "") + ("steered" if r else "safe")
             if r is None:
                 r = self.sim("sail", turn=turn, ticks=ticks)
             f.update(x=r["x"], y=r["y"], heading=r["heading"])
