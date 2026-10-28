@@ -7872,7 +7872,8 @@ crew_event(struct game *g, const struct ui_event *ev)
 		return;
 	}
 	g->sim.crew_event = CREW_NONE;
-	game_goto(g, &screen_sail);
+	/* The last ship on a reef: marooned (VA 0x1f2a1). */
+	game_goto(g, g->sim.jail.fresh ? &screen_prison : &screen_sail);
 }
 
 static void

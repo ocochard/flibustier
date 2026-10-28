@@ -35,7 +35,6 @@
 #define FORT_LO		10	/* a fort battle ends beyond these */
 #define FORT_HI		430
 #define FORT_CLASS	8	/* the fort's class in the hit formula */
-#define FORT_TYPE	9	/* its type for labels ("Fort", CSTN 8.9) */
 #define CENTRE_X	40	/* a ship's centre from its position */
 #define CENTRE_Y	30
 #define FORT_BOX	32	/* its box, not quartered (VA 0xe3f0) */
@@ -399,12 +398,33 @@ move_ship(const struct sim *s, struct battle_ship *b, int half)
 	b->y -= dy;
 }
 
-/* Flight time to the other ship: d / 2 ticks, d at least 16. */
+/*
+ * A side's corner from its centre: a ship's centre is 40, 30 from its
+ * corner, the fort's 16, 16 (VA 0xe3f0).  The original aims (VA 0x87bf)
+ * and times its shots (VA 0x9f9e) corner to corner, but fires from the
+ * centre (VA 0x835a, 0x8fee): ships alike aim true, while the fort's
+ * shots land 24, 14 short of the player's centre.
+ */
+static int
+corner_x(const struct sim_battle *bt, const struct battle_ship *b, int x)
+{
+	return (px(x) - (bt->fort && b == &bt->foe ? FORT_BOX / 2 : CENTRE_X));
+}
+
+static int
+corner_y(const struct sim_battle *bt, const struct battle_ship *b, int y)
+{
+	return (px(y) - (bt->fort && b == &bt->foe ? FORT_BOX / 2 : CENTRE_Y));
+}
+
+/* Flight time to the other side: d / 2 ticks, d at least 16. */
 static int
 flight_ticks(const struct sim_battle *bt)
 {
-	int dx = abs(px(bt->you.x) - px(bt->foe.x));
-	int dy = abs(px(bt->you.y) - px(bt->foe.y));
+	int dx = abs(corner_x(bt, &bt->you, bt->you.x) -
+	    corner_x(bt, &bt->foe, bt->foe.x));
+	int dy = abs(corner_y(bt, &bt->you, bt->you.y) -
+	    corner_y(bt, &bt->foe, bt->foe.y));
 	int d = (dx > dy ? dx : dy) + (dx > dy ? dy : dx) / 4;
 
 	return ((d < 16 ? 16 : d) / 2);
@@ -578,11 +598,12 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 			ev |= BEV_RELOADED;
 	}
 
-	/* Bearing from the enemy to where the player will be next tick. */
-	lx = px(y->x + sim_sine_mul(s->world, y->heading, y->speed) * 4) -
-	    px(e->x);
-	ly = px(y->y - sim_sine_mul(s->world, y->heading + 0x40, y->speed) *
-	    4) - px(e->y);
+	/* Bearing from the enemy to where the player will be next tick,
+	 * corner to corner. */
+	lx = corner_x(bt, y, y->x + sim_sine_mul(s->world, y->heading,
+	    y->speed) * 4) - corner_x(bt, e, e->x);
+	ly = corner_y(bt, y, y->y - sim_sine_mul(s->world, y->heading + 0x40,
+	    y->speed) * 4) - corner_y(bt, e, e->y);
 	bearing = sim_bearing(lx, ly);
 
 	if (fire_now && y->reload == 0 && y->guns > 0 && y->shot.ticks == 0) {

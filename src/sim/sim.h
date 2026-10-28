@@ -407,9 +407,11 @@ struct sim_land {
 	struct land_unit u[LAND_UNITS];
 };
 
+#define FORT_TYPE	9	/* a fort as an encounter ("Fort", CSTN 8.9) */
+
 struct sim_encounter {
 	int		stage;		/* enum encounter_stage */
-	int		type;		/* 0 pinnace .. 8 fast galleon */
+	int		type;		/* 0 pinnace .. 8 fast galleon, FORT_TYPE */
 	int		nation;		/* 0..3, or NATION_PIRATE */
 	int		crew;
 	int		guns;

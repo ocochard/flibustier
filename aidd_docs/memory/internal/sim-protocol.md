@@ -25,8 +25,9 @@ with a message. Numbers are integers only.
 | `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land`, `town`, `encounter` or `crew`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
-| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold`; after a capture `loot_gold` (already aboard), `loot` (food, goods, sugar, cannon: take with `merchant` `loot`), `volunteers` (`crew` `volunteers` with `accept`); after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
-| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
+| `flagship` | `ship` (fleet index): with several ships, the one to command, before the battle's first tick; it swaps places with ship 0 | `battle` |
+| `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `aboard` after a fort battle's landing (the men left with the fleet: `assault` `start` `aboard`), `fleet_ships`, `crew`, `gold`; after a capture `loot_gold` (already aboard), `loot` (food, goods, sugar, cannon: take with `merchant` `loot`), `volunteers` (`crew` `volunteers` with `accept`); after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
+| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), `fort` (after `attack`, from the sea at a town with forts: the fort battle, fought with `battle`), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
@@ -103,7 +104,9 @@ with a message. Numbers are integers only.
   "wright_gold": -1, "wright_cannon": 0, "merchant_gold": -1,
   "reputation": 0, "tavern_spots": 1023, "recruits": 0,
   "acres": 0, "fortune": 0, "rank": [0, 0, 0, 0, 0],
-  "ship_classes": [{"guns": 8, "hull": 2, "speed": 0}],
+  "ship_classes": [{"guns": 8, "hull": 2, "speed": 0,
+                    "sectors": [0, 0, 0, 0, 0, 0, 0, 0,
+                                0, 0, 0, 0, 0, 0, 0, 0]}],
   "market": {"open": 0, "stock": [0, 0, 0], "price": [0, 0, 0],
              "gold_at_open": 0},
   "relations": [[0,-1,0,0], [-1,0,0,-1], [0,0,0,0], [0,-1,0,0]],
@@ -140,6 +143,10 @@ with a message. Numbers are integers only.
     `outcome` is set: `boarding`, `escaped`, `sunset`, `surrender`,
     `player_sunk`, `enemy_sunk`, `beached` (the player ran onto
     land) or `landed` (by the fort, in a fort battle).
+  - A fort battle (`town` `fort`) is a battle with `fort` 1. Only
+    `landed` goes on: `finish` leaves the garrison its rules give (see
+    "The fort battle" in game-rules), then `assault` follows with
+    `aboard` from the reply.
   - `events` bits: 1 the player fired, 2 the enemy fired, 4 the player
     hit, 8 the enemy hit, 16 the player's guns reloaded, 32 the
     player's sails changed, 64 the wind changed, 128 the player's ship
@@ -175,6 +182,10 @@ with a message. Numbers are integers only.
     none) and `effect` (the digitised effect replacing it, -1 none)
     (version 32);
     `deserted` the men lost at the last roll call.
+- `ship_classes` is read-only, for bots: each class's battle `guns` and
+  `hull`, and its sailing speed per wind sector in `sectors` (sector
+  `((heading + 8 - wind) >> 4) & 15`, 0 running before the wind), with
+  their sum in `speed`.
 - `rng` holds the generator's two 64-bit words. Loading a state
   restores it, so a game continues exactly as it would have.
 - Nations are indexed 0 Spain, 1 England, 2 France, 3 Holland.

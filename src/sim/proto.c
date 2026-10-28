@@ -496,7 +496,8 @@ encounter_from_json(struct sim_encounter *e, const struct json *j)
 	e->town = (int)json_get_int(j, "town", -1);
 	e->named = json_get_int(j, "named", 0) != 0;
 	e->captain = (int)(json_get_int(j, "captain", 0) & 0xFFFF);
-	return (e->type < 0 || e->type > 8 || e->nation < 0 ||
+	/* A fort battle leaves the fort as the encounter. */
+	return (e->type < 0 || e->type > FORT_TYPE || e->nation < 0 ||
 	    e->nation > NATION_PIRATE ? -1 : 0);
 }
 
@@ -693,7 +694,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	}
 	jb_raw(b, "]");
 	/* What each class is worth: guns and hull by the battle rules, speed
-	 * as the sum of its sailing speeds over the 16 wind sectors. */
+	 * as the sum of its sailing speeds over the 16 wind sectors, and
+	 * those speeds. */
 	jb_raw(b, ",\"ship_classes\":[");
 	for (i = 0; i < SHIP_CLASSES; i++) {
 		int k, sum = 0;
@@ -707,7 +709,13 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 		jb_int(b, i + 2);
 		jb_raw(b, ",\"speed\":");
 		jb_int(b, sum);
-		jb_raw(b, "}");
+		/* Each sector's speed: sector ((heading + 8 - wind) >> 4)
+		 * & 15, 0 running before the wind. */
+		for (k = 0; k < WIND_SECTORS; k++) {
+			jb_raw(b, k == 0 ? ",\"sectors\":[" : ",");
+			jb_int(b, s->world != NULL ? s->world->speed[i][k] : 0);
+		}
+		jb_raw(b, "]}");
 	}
 	jb_raw(b, "]");
 	for (i = 0; i < SIM_VILLAINS; i++) {
@@ -1742,10 +1750,32 @@ cmd_battle(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/* With several ships, the one to command (VA 0xf246), before the
+ * battle's first tick: it swaps into the flagship's place. */
+static void
+cmd_flagship(struct session *ss, const struct json *cmd, struct jbuf *out)
+{
+	int64_t ship = json_get_int(cmd, "ship", -1);
+
+	if (!ss->sim.battle.active || ss->sim.battle.tick != 0) {
+		reply_error(out, "flagship needs a battle not yet begun");
+		return;
+	}
+	if (ship < 0 || ship >= ss->sim.fleet.nships) {
+		reply_error(out, "flagship needs \"ship\", a fleet index");
+		return;
+	}
+	sim_battle_command(&ss->sim, (int)ship);
+	jb_raw(out, "{\"ok\":true,\"battle\":");
+	battle_json(&ss->sim.battle, out);
+	jb_raw(out, "}");
+}
+
 static void
 cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	enum battle_outcome o;
+	int aboard = ss->sim.battle.crew_ashore;
 
 	if (!ss->sim.battle.active || ss->sim.battle.outcome == BAT_NONE) {
 		reply_error(out, "no finished battle");
@@ -1757,8 +1787,16 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 		return;
 	}
 	o = sim_battle_finish(&ss->sim, json_get_int(cmd, "keep", 0) != 0);
+	/* Landed by the fort: the garrison left to face the assault (VA
+	 * 0x18c2c); the men who stayed with the fleet do not fight. */
+	if (o == BAT_LANDED && ss->sim.battle.fort)
+		sim_fort_battle_garrison(&ss->sim, ss->sim.encounter.town);
 	jb_raw(out, "{\"ok\":true,\"outcome\":");
 	jb_str(out, outcome_names[o]);
+	if (o == BAT_LANDED && ss->sim.battle.fort) {
+		jb_raw(out, ",\"aboard\":");
+		jb_int(out, aboard);
+	}
 	jb_raw(out, ",\"fleet_ships\":");
 	jb_int(out, ss->sim.fleet.nships);
 	jb_raw(out, ",\"crew\":");
@@ -1848,6 +1886,16 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 			return;
 		}
 		sim_attack_begin(s, s->fleet.leaving);
+	} else if (action != NULL && strcmp(action, "fort") == 0) {
+		/* From the sea, a town's forts fight the fleet first. */
+		if (s->fleet.leaving < 0 || s->player_town >= 0 ||
+		    s->fleet.ashore || s->battle.active ||
+		    s->towns[s->fleet.leaving].forts == 0) {
+			reply_error(out, "fort needs a town with forts reached "
+			    "by sea, and no battle");
+			return;
+		}
+		sim_fort_battle_start(s, s->fleet.leaving);
 	} else if (action != NULL && strcmp(action, "leave") == 0) {
 		if (s->player_town < 0) {
 			reply_error(out, "not in a town");
@@ -1856,7 +1904,7 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 		sim_leave_town(s);
 	} else {
 		reply_error(out, "town needs \"action\": enter, sail_in, sneak, "
-		    "guard, duel_end, attack or leave");
+		    "guard, duel_end, attack, fort or leave");
 		return;
 	}
 	jb_raw(out, "{\"ok\":true,\"player_town\":");
@@ -2782,6 +2830,8 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		cmd_encounter(ss, cmd, out);
 	else if (strcmp(name, "battle") == 0)
 		cmd_battle(ss, cmd, out);
+	else if (strcmp(name, "flagship") == 0)
+		cmd_flagship(ss, cmd, out);
 	else if (strcmp(name, "finish") == 0)
 		cmd_finish(ss, cmd, out);
 	else if (strcmp(name, "town") == 0)
