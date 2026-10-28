@@ -11,11 +11,13 @@
 
 #include "data/exe.h"
 #include "data/pack.h"
+#include "towns.h"
 
 #define WORLD_CELLS_W	640
 #define WORLD_CELLS_H	480
 #define WORLD_TILE	16
 #define TREASURE_SPOTS	256	/* where treasure is buried */
+#define WORLD_ARRIVALS	(TOWN_MAX * TOWN_ARRIVALS)
 #define WORLD_PX_W	(WORLD_CELLS_W * WORLD_TILE)
 #define WORLD_PX_H	(WORLD_CELLS_H * WORLD_TILE)
 #define SHIP_CLASSES	8
@@ -111,6 +113,12 @@ struct world {
 			    BATTLE_SCREEN];
 	uint8_t		land_ground[256];
 	int16_t		treasure[TREASURE_SPOTS][2];	/* x, y cells */
+	/* The cells where the era's towns are reached, and the town's
+	 * index (struct town, arrival). */
+	struct {
+		int16_t	x, y, town;
+	}		arrival[WORLD_ARRIVALS];
+	size_t		narrival;
 	uint8_t		coast[256];	/* per map tile (VA 0x33b18) */
 	uint8_t		sine[128];
 	int8_t		speed[SHIP_CLASSES][WIND_SECTORS];
@@ -161,5 +169,8 @@ int	world_load(struct world *w, struct packs *packs,
 
 /* Terrain class of the world pixel (x, y); land outside the world. */
 int	world_terrain(const struct world *w, int x, int y);
+
+/* The town reached on map cell (x, y), or -1. */
+int	world_arrival(const struct world *w, int x, int y);
 
 #endif

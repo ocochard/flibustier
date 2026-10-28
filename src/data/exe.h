@@ -59,6 +59,8 @@ struct exe_layout {
 	uint32_t	 shot_frame_va;		/* 16 x u16: its spread frame */
 	uint32_t	 bow_mark_va;		/* 16 x (i16 x, i16 y): the bow
 						 * cross around the ship */
+	uint32_t	 arrival_va[EXE_ERAS];	/* {i16 x, y, town} cells, x -1
+						 * ends; 0: none */
 };
 
 /* Returns the layout of a known build, or NULL. */

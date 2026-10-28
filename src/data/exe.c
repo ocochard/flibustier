@@ -19,7 +19,9 @@
  * 0x1361c copies, which starts with the speed table.  The battle loop
  * (VA 0x7db8) uses the hit box tables, and draws its shots' arc from
  * the height and frame tables (VA 0x8405); its bow cross (VA 0xf903)
- * sits on a circle of offsets.
+ * sits on a circle of offsets.  The era loader also copies the era's
+ * arrival cells, which the sailing loop looks the ship's cell up in
+ * (VA 0x29dd9).
  */
 static const struct exe_layout layouts[] = {
 	{
@@ -56,6 +58,7 @@ static const struct exe_layout layouts[] = {
 		0x32544,
 		0x32564,
 		0x40fbc,
+		{ 0x3e830, 0x3ed70, 0x3f2da, 0x3f922, 0x40030, 0x4075c },
 	},
 };
 

@@ -17,6 +17,7 @@
 
 #include "assets/pic.h"
 #include "assets/towns.h"
+#include "assets/world.h"
 #include "data/pack.h"
 #include "sim/hof.h"
 #include "sim/json.h"
@@ -73,6 +74,48 @@ play_raw(const char *saves, const char *lang, const char *script)
 		failures++;
 	}
 	return (&g);
+}
+
+/* The town the career left from: the nearest, just out of it. */
+static struct sim_town *
+home_port(struct game *g)
+{
+	int dist;
+
+	return (&g->sim.towns[sim_nearest_town(&g->sim, &dist)]);
+}
+
+/*
+ * Put the fleet on a water cell where town "t" is reached (its arrival
+ * cells): the next step sails in.  Its harbour mouth is not one.
+ */
+static void
+into_town(struct game *g, const struct sim_town *t)
+{
+	const struct world *w = g->sim.world;
+	int town = (int)(t - g->sim.towns), x, y, r, best = -1;
+	size_t i;
+
+	/* The water pixel nearest a cell's centre, so a step any way stays
+	 * on the cell. */
+	for (i = 0; w != NULL && i < w->narrival; i++) {
+		if (w->arrival[i].town != town)
+			continue;
+		for (y = 0; y < 16; y++)
+			for (x = 0; x < 16; x++) {
+				r = abs(x - 8) > abs(y - 8) ? abs(x - 8) :
+				    abs(y - 8);
+				if ((best < 0 || r < best) && world_terrain(w,
+				    w->arrival[i].x * 16 + x,
+				    w->arrival[i].y * 16 + y) != TERRAIN_LAND) {
+					best = r;
+					g->sim.fleet.x = w->arrival[i].x * 16 + x;
+					g->sim.fleet.y = w->arrival[i].y * 16 + y;
+				}
+			}
+	}
+	g->sim.fleet.leaving = -1;
+	CHECK(best >= 0);
 }
 
 /*
@@ -959,10 +1002,8 @@ test_town(void)
 		return;
 	CHECK(g->screen == &screen_sail);
 	g->sim.encounters = 0;
-	t = &g->sim.towns[g->sim.fleet.leaving];
-	g->sim.fleet.x = t->sea_x * 16 + 8;	/* at its harbour mouth */
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;	/* the home port counts again */
+	t = home_port(g);
+	into_town(g, t);
 	CHECK(game_script(g, "wait:40") == 0);
 	/* The arrival menu; sailing into the home port. */
 	CHECK(g->screen == &screen_arrive && g->sim.player_town == -1);
@@ -1010,11 +1051,9 @@ test_shipwright(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	t = &g->sim.towns[g->sim.fleet.leaving];
+	t = home_port(g);
 	CHECK(t->nation != NATION_SPAIN);
-	g->sim.fleet.x = t->sea_x * 16 + 8;
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	into_town(g, t);
 	g->sim.fleet.nships = 2;
 	g->sim.fleet.ships[1] = 4;
 	g->sim.fleet.damage[1] = 0;
@@ -1065,10 +1104,8 @@ test_merchant(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	t = &g->sim.towns[g->sim.fleet.leaving];
-	g->sim.fleet.x = t->sea_x * 16 + 8;
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	t = home_port(g);
+	into_town(g, t);
 	CHECK(game_script(g, "wait:40 enter wait:40 click:400,320 wait:40") == 0);
 	CHECK(g->screen == &screen_merchant && g->shop_stage == 0);
 	CHECK(g->sim.market.open && g->shop_spr[0].count == 93);
@@ -1129,10 +1166,8 @@ test_tavern(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	t = &g->sim.towns[g->sim.fleet.leaving];
-	g->sim.fleet.x = t->sea_x * 16 + 8;
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	t = home_port(g);
+	into_town(g, t);
 	CHECK(game_script(g, "wait:40 enter wait:40 click:250,350 wait:40") == 0);
 	CHECK(g->screen == &screen_tavern && g->tavern_spr.count == 3);
 	CHECK(g->sim.recruits > 0);
@@ -1220,10 +1255,8 @@ test_governor(void)
 	 * scenario's): back to 0 for the Letter of Marque. */
 	CHECK(g->sim.standing[NATION_ENGLAND] == 2);
 	g->sim.standing[NATION_ENGLAND] = 0;
-	t = &g->sim.towns[g->sim.fleet.leaving];
-	g->sim.fleet.x = t->sea_x * 16 + 8;
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	t = home_port(g);
+	into_town(g, t);
 	CHECK(game_script(g, "wait:40 enter wait:40 click:580,220 wait:40") == 0);
 	CHECK(g->screen == &screen_governor && g->gov_stage == 0);
 	CHECK(g->sim.visit_flags & VISIT_GOVERNOR);
@@ -1401,12 +1434,13 @@ test_land_battle(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	town = g->sim.fleet.leaving;
+	town = (int)(home_port(g) - g->sim.towns);
 	t = &g->sim.towns[town];
 	t->soldiers = 20;
 	t->forts = 2;
 	g->sim.fleet.crew = 120;
 	g->sim.fleet.ashore = 1;
+	g->sim.fleet.leaving = town;	/* the town arrived at */
 	g->arrive_stage = 0;
 	game_goto(g, &screen_arrive);
 	CHECK(game_script(g, "wait:40 down enter wait:40") == 0 &&
@@ -1753,16 +1787,14 @@ test_assault(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	town = g->sim.fleet.leaving;
+	town = (int)(home_port(g) - g->sim.towns);
 	t = &g->sim.towns[town];
 	t->forts = 0;
 	t->gold = 200;
 	t->citizens = 1;
 	g->sim.fleet.crew = 100;
 	g->sim.heat = 0;
-	g->sim.fleet.x = t->sea_x * 16 + 8;
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	into_town(g, t);
 	/* The treasure fleet is in port: 10 more men guard the town, and
 	 * the sack takes the fleet. */
 	g->sim.fleet_town = town;
@@ -1799,9 +1831,7 @@ test_assault(void)
 	 * the assault, the garrison set from the battle. */
 	t->forts = 2;
 	t->soldiers = 9;
-	g->sim.fleet.x = t->sea_x * 16 + 8;
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	into_town(g, t);
 	CHECK(game_script(g, "wait:40 down enter wait:40") == 0 &&
 	    g->screen == &screen_battle && g->sim.battle.fort);
 	g->sim.battle.foe.crew = 31;
@@ -1937,11 +1967,9 @@ test_arrival(void)
 	if (g == NULL)
 		return;
 	g->sim.encounters = 0;
-	t = &g->sim.towns[g->sim.fleet.leaving];
+	t = home_port(g);
 	for (i = 0; i < 20 && (!fired || !caught); i++) {
-		g->sim.fleet.x = t->sea_x * 16 + 8;
-		g->sim.fleet.y = t->sea_y * 16 + 8;
-		g->sim.fleet.leaving = -1;
+		into_town(g, t);
 		g->sim.player_town = -1;
 		t->forts = 2;
 		t->standing = (uint16_t)(int16_t)-20;
@@ -2298,9 +2326,7 @@ test_town_assets(void)
 	CHECK(packs_add_dir(own, dir) == 0);
 	g->packs = own;
 	g->sim.encounters = 0;
-	g->sim.fleet.x = t->sea_x * 16 + 8;	/* at its harbour mouth */
-	g->sim.fleet.y = t->sea_y * 16 + 8;
-	g->sim.fleet.leaving = -1;
+	into_town(g, t);
 	CHECK(game_script(g, "wait:40 enter wait:40 click:250,350 wait:40") ==
 	    0);
 	CHECK(g->screen == &screen_tavern && g->sim.player_town == (int)i);

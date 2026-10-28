@@ -17,6 +17,7 @@
 #define TOWN_MAX	48	/* records per era block, used or not */
 #define TOWN_FIELDS	32
 #define CONVOY_STOPS	15	/* a convoy's route */
+#define TOWN_ARRIVALS	16	/* arrival cells per town */
 
 enum nation {
 	NATION_SPAIN,
@@ -59,6 +60,11 @@ struct town {
 	/* f29, f30: the town's dot on the Map of the Caribbean
 	 * (pic/citymap). */
 	int		 citymap_x, citymap_y;
+	/* The map cells where a ship or a party reaches the town (the
+	 * era's arrival list, VA 0x4ca58); without one, the town's cell
+	 * and the eight around it. */
+	int		 arrival[TOWN_ARRIVALS][2];
+	size_t		 narrival;
 	uint16_t	 raw[TOWN_FIELDS];	/* original data only */
 };
 
@@ -104,10 +110,11 @@ int	towns_for_era(struct packs *packs, const struct exe_layout *layout,
  *	    "garrison": 0, "governor": 3, "family": 0, "barmaid": 0,
  *	    "land": [x, y], "fort": [x, y], "ship": [x, y, heading],
  *	    "party": [x, y], "sea": [x, y, heading],
- *	    "citymap": [x, y] }, ... ] }
+ *	    "citymap": [x, y], "arrival": [[x, y], ...] }, ... ] }
  *
- * Every member is required; numbers are 0..65535, nations "spain",
- * "england", "france" or "holland".  towns_encode() writes that form.
+ * Every member is required but "arrival" (1 to TOWN_ARRIVALS map
+ * cells); numbers are 0..65535, nations "spain", "england", "france" or
+ * "holland".  towns_encode() writes that form.
  */
 int	towns_decode(const uint8_t *data, size_t len, int era,
 	    struct era_towns *out, char *err, size_t errlen);

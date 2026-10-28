@@ -308,6 +308,24 @@ find_town(const struct era_towns *era, const char *name)
 	return (NULL);
 }
 
+/* A town's arrival cells: a few, close to it, never its harbour mouth
+ * (where a fleet leaving it is put). */
+static void
+arrival_cells(const struct town *t)
+{
+	size_t k;
+	int dx, dy;
+
+	CHECK(t->narrival >= 2);
+	for (k = 0; k < t->narrival; k++) {
+		dx = abs(t->arrival[k][0] - t->x);
+		dy = abs(t->arrival[k][1] - t->y);
+		CHECK(dx <= 3 && dy <= 3);
+		CHECK(t->sea_x == 0 || t->arrival[k][0] != t->sea_x ||
+		    t->arrival[k][1] != t->sea_y);
+	}
+}
+
 static void
 test_towns(struct packs *packs)
 {
@@ -342,6 +360,7 @@ test_towns(struct packs *packs)
 			per[era.towns[i].nation]++;
 			CHECK(era.towns[i].x < 640 && era.towns[i].y < 480);
 			CHECK(era.towns[i].wealth <= 255);
+			arrival_cells(&era.towns[i]);
 		}
 		CHECK(memcmp(per, nations[e], sizeof(per)) == 0);
 	}

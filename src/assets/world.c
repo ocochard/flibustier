@@ -378,6 +378,38 @@ load_places(struct world *w, struct packs *packs, char *err, size_t errlen)
 	return (0);
 }
 
+/* The arrival cells of the era's towns, from wherever the towns come. */
+static int
+load_arrival(struct world *w, struct packs *packs,
+    const struct exe_layout *layout, const uint8_t *exe, size_t len,
+    int era, char *err, size_t errlen)
+{
+	struct era_towns *towns;
+	const struct town *t;
+	size_t i, k;
+
+	if ((towns = malloc(sizeof(*towns))) == NULL) {
+		snprintf(err, errlen, "out of memory");
+		return (-1);
+	}
+	if (towns_for_era(packs, layout, exe, len, era, towns, err,
+	    errlen) != 0) {
+		free(towns);
+		return (-1);
+	}
+	for (i = 0; i < towns->count; i++) {
+		t = &towns->towns[i];
+		for (k = 0; k < t->narrival; k++) {
+			w->arrival[w->narrival].x = (int16_t)t->arrival[k][0];
+			w->arrival[w->narrival].y = (int16_t)t->arrival[k][1];
+			w->arrival[w->narrival].town = (int16_t)i;
+			w->narrival++;
+		}
+	}
+	free(towns);
+	return (0);
+}
+
 int
 world_load(struct world *w, struct packs *packs,
     const struct exe_layout *layout, const uint8_t *exe, size_t len,
@@ -464,8 +496,22 @@ world_load(struct world *w, struct packs *packs,
 	    layout->bow_mark_va, w->bow_mark, 16 * 2) != 0 ||
 	    sword_load(layout, exe, len, &w->sword) != 0)
 		goto bad;
+	if (load_arrival(w, packs, layout, exe, len, era, err, errlen) != 0)
+		return (-1);
 	return (load_places(w, packs, err, errlen));
 bad:
 	snprintf(err, errlen, "tables missing from the executable");
+	return (-1);
+}
+
+/* The first listed cell matching wins, as in the game (VA 0x29dd9). */
+int
+world_arrival(const struct world *w, int x, int y)
+{
+	size_t i;
+
+	for (i = 0; i < w->narrival; i++)
+		if (w->arrival[i].x == x && w->arrival[i].y == y)
+			return (w->arrival[i].town);
 	return (-1);
 }

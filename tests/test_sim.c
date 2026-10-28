@@ -627,6 +627,26 @@ world_cb(void *arg, int era, struct world *w)
 }
 
 /* A game on the synthetic world, fleet at cell (cx, cy) heading "h". */
+/* The test world's arrival cells: each town's and the eight around. */
+static void
+test_arrivals(struct world *w, const struct sim *s)
+{
+	size_t i;
+	int dx, dy;
+
+	w->narrival = 0;
+	for (i = 0; i < s->ntowns; i++)
+		for (dy = -1; dy <= 1; dy++)
+			for (dx = -1; dx <= 1; dx++) {
+				w->arrival[w->narrival].x =
+				    (int16_t)(s->towns[i].x + dx);
+				w->arrival[w->narrival].y =
+				    (int16_t)(s->towns[i].y + dy);
+				w->arrival[w->narrival].town = (int16_t)i;
+				w->narrival++;
+			}
+}
+
 static void
 sea_game(struct sim *s, int cx, int cy, int heading)
 {
@@ -638,6 +658,7 @@ sea_game(struct sim *s, int cx, int cy, int heading)
 	sim_new_game(s, &era, &scn, 21);
 	s->day_of_year = s->month = 0;	/* mechanics from New Year */
 	s->world = &test_world;
+	test_arrivals(&test_world, s);
 	s->fleet.x = cx * WORLD_TILE + 8;
 	s->fleet.y = cy * WORLD_TILE + 8;
 	s->fleet.heading = (uint8_t)heading;
@@ -794,8 +815,10 @@ test_encounters(void)
 	CHECK(hostile > 0);	/* pirates are among the records */
 
 	/* Near a town (2 cells from Beta), a first check adds 6 to the
-	 * counter: (r & 7) + 1 < 2, 1 in 8.  Lingering shuts sightings off. */
+	 * counter: (r & 7) + 1 < 2, 1 in 8.  Lingering shuts sightings off.
+	 * Beta's arrival cells are left out: the ship lingers, not arrives. */
 	sea_game(&s, 120, 112, 0x00);
+	test_world.narrival = 0;
 	s.encounters = 1;
 	for (i = 0; i < 400; i++) {
 		s.encounter.stage = ENC_NONE;
@@ -2585,12 +2608,14 @@ test_landing(void)
 		s.fleet.land_y = sy - 16;
 		s.towns[1].x = (uint16_t)(sx / 16);
 		s.towns[1].y = (uint16_t)(sy / 16 - 3);	/* 2 from the landing */
+		test_arrivals(&test_world, &s);
 		s.fleet.leaving = 1;
 		sim_go_ashore(&s);
 		CHECK(s.fleet.leaving == -1);
 		CHECK(sim_march(&s, 0, -1, 200, &town) == SAIL_TOWN &&
 		    town == 1);
 		s.towns[1] = keep;
+		test_arrivals(&test_world, &s);
 	}
 }
 

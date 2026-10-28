@@ -720,7 +720,7 @@ test_sha256(void)
 static void
 test_towns(void)
 {
-	static uint8_t exe[16 + 0xF24];
+	static uint8_t exe[16 + 0xF24 + 0x780];
 	struct exe_layout layout;
 	struct era_towns era;
 	uint8_t *r;
@@ -742,7 +742,18 @@ test_towns(void)
 	memcpy(r + 64, "Havana", 6);
 	memcpy(r + 80 + 64, "Channel A", 9);
 	memcpy(r + 160 + 64, "Channel B", 9);
+	/* 1660's arrival list, after the block: two cells, then the end. */
+	layout.arrival_va[4] = 0xF24;
+	r = exe + 16 + 0xF24;
+	put16(r, 245);
+	put16(r + 2, 180);
+	put16(r + 6, 246);
+	put16(r + 8, 179);
+	put16(r + 12, 0xFFFF);
+	r = exe + 16 + 36;
 	CHECK(towns_load(&layout, exe, sizeof(exe), 4, &era) == 0);
+	CHECK(era.towns[0].narrival == 2 && era.towns[0].arrival[0][1] == 180 &&
+	    era.towns[0].arrival[1][0] == 246);
 	CHECK(era.year == 1660 && era.count == 1);
 	CHECK(strcmp(era.towns[0].name, "Havana") == 0);
 	CHECK(era.towns[0].x == 245 && era.towns[0].y == 179 &&
@@ -754,8 +765,16 @@ test_towns(void)
 	memcpy(r + 64, "ABCDEFGHIJKLMNOP", 16);
 	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == 0);
 	CHECK(strlen(era.towns[0].name) == 16);
+	/* No list for 1560: the town's cell and the eight around. */
+	CHECK(era.towns[0].narrival == 9 && era.towns[0].arrival[4][0] == 245 &&
+	    era.towns[0].arrival[4][1] == 179);
+	/* A cell for a town past the count, or no end, is refused. */
+	put16(exe + 16 + 0xF24 + 4, 1);
+	CHECK(towns_load(&layout, exe, sizeof(exe), 4, &era) == -1);
+	put16(exe + 16 + 0xF24 + 4, 0);
+	CHECK(towns_load(&layout, exe, sizeof(exe) - 1, 4, &era) == -1);
 
-	CHECK(towns_load(&layout, exe, sizeof(exe) - 1, 0, &era) == -1);
+	CHECK(towns_load(&layout, exe, 16 + 0xF24 - 1, 0, &era) == -1);
 	CHECK(towns_load(&layout, exe, sizeof(exe), 6, &era) == -1);
 	put16(r + 6, 7);		/* no such nation */
 	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == -1);
@@ -1493,12 +1512,28 @@ test_town_files(void)
 	    t->land_y == 2 && t->ship_heading == 7 && t->sea_x == 10 &&
 	    t->sea_heading == 12);
 
+	/* No arrival cells given: its cell and the eight around. */
+	CHECK(t->narrival == 9 && t->arrival[0][0] == 244 &&
+	    t->arrival[8][1] == 180);
+
 	/* What the engine writes, it reads. */
 	towns_encode(&era, &b);
 	CHECK(b.s != NULL && towns_decode((const uint8_t *)b.s, b.len, 4,
 	    &back, err, sizeof(err)) == 0 && back.count == 1 &&
-	    back.towns[0].party_x == 8 && back.towns[0].governor == 3);
+	    back.towns[0].party_x == 8 && back.towns[0].governor == 3 &&
+	    back.towns[0].narrival == 9);
 	jb_free(&b);
+
+	/* Arrival cells given; an empty list is refused. */
+	snprintf(text, sizeof(text), "%.*s, \"arrival\": [[245, 180], "
+	    "[246, 179]]}]}", (int)(strlen(one) - 3), one);
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == 0 && t->narrival == 2 &&
+	    t->arrival[1][0] == 246 && t->arrival[1][1] == 179);
+	snprintf(text, sizeof(text), "%.*s, \"arrival\": []}]}",
+	    (int)(strlen(one) - 3), one);
+	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
+	    sizeof(err)) == -1);
 
 	/* A missing member, a bad nation, a number out of range, a short
 	 * point, a name too long, no towns. */

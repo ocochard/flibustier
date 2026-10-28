@@ -29,7 +29,7 @@
 #define EDGE_MIN		0x41	/* playable world, in pixels */
 #define EDGE_MAX_X		0x27bf
 #define EDGE_MAX_Y		0x1dbf
-#define ARRIVAL_CELLS		1	/* a town counts as reached within */
+#define START_CELLS		4	/* the start town is within */
 #define SIGHTING_TICKS		32	/* how often a sail may appear */
 #define HEAT_IGNORED		16	/* added when an encounter is left */
 #define FAR_FROM_TOWNS		12	/* cells: ships from any nation */
@@ -267,7 +267,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	sim_restore_towns(s, era);
 	/* The start position is in a town; the voyage starts on the water
 	 * outside its harbour. */
-	s->fleet.leaving = town_near(s, ARRIVAL_CELLS + 3);
+	s->fleet.leaving = town_near(s, START_CELLS);
 	if (s->fleet.leaving >= 0)
 		sim_harbour_mouth(s, s->fleet.leaving);
 	start_log(s);
@@ -745,45 +745,42 @@ shift_wind(struct sim *s)
 	    (r - w + 10) / 2 : -((-(r - w + 10) + 1) / 2)));
 }
 
-/* Cell distance (the larger axis) from the fleet to a town: to the town
- * itself or to the water outside its harbour, whichever is nearer. */
-static int
-town_distance(const struct sim *s, const struct sim_town *t)
-{
-	int cx = s->fleet.x / WORLD_TILE, cy = s->fleet.y / WORLD_TILE;
-	int d, dx, dy;
+static int	shore_ahead(const struct sim *s);
+static void	clear_heading(struct sim *s, int x, int y);
 
-	dx = abs(t->x - cx);
-	dy = abs(t->y - cy);
-	d = dx > dy ? dx : dy;
-	if (t->sea_x != 0) {
-		dx = abs(t->sea_x - cx);
-		dy = abs(t->sea_y - cy);
-		if ((dx > dy ? dx : dy) < d)
-			d = dx > dy ? dx : dy;
+/*
+ * Town whose arrival cell holds world pixel (x, y) (VA 0x29dd9), or -1.
+ * The town just left (or any, as the game ignores them all then) counts
+ * once the fleet stands on no arrival cell.
+ */
+static int
+town_at(struct sim *s, int x, int y)
+{
+	int t;
+
+	t = world_arrival(s->world, x / WORLD_TILE, y / WORLD_TILE);
+	if (t < 0 || (size_t)t >= s->ntowns) {
+		s->fleet.leaving = -1;
+		return (-1);
 	}
-	return (d);
+	return (s->fleet.leaving >= 0 ? -1 : t);
 }
 
-/* Town the fleet has reached, other than the one it is leaving; -1 if
- * none.  The departure town counts again once the fleet is clear. */
-static int
-town_at(struct sim *s)
+/*
+ * In port by sea.  The ship waits on the water; facing the shore, it
+ * turns away from the town to open water, so sailing on from the
+ * arrival does not run it aground at once (an engine choice).
+ */
+static enum sail_stop
+arrive(struct sim *s, int t, int *town)
 {
-	size_t i;
-	int near = -1, d;
-
-	for (i = 0; i < s->ntowns; i++) {
-		d = town_distance(s, &s->towns[i]);
-		if ((int)i == s->fleet.leaving) {
-			if (d > ARRIVAL_CELLS + 1)
-				s->fleet.leaving = -1;	/* clear of it */
-			continue;
-		}
-		if (d <= ARRIVAL_CELLS && near < 0)
-			near = (int)i;
-	}
-	return (near);
+	s->fleet.speed = 0;
+	if (shore_ahead(s))
+		clear_heading(s, s->towns[t].x * WORLD_TILE + 8,
+		    s->towns[t].y * WORLD_TILE + 8);
+	s->fleet.leaving = t;
+	*town = t;
+	return (SAIL_TOWN);
 }
 
 /*
@@ -1062,9 +1059,14 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 			if (s->crew_event != CREW_NONE)
 				return (SAIL_CREW);
 		}
-		/* Ships never sail onto land; the player may go ashore. */
+		/* A town's arrival cell is looked up before the shore (VA
+		 * 0x231b8): its land takes the ship into port.  Ships never
+		 * sail onto other land; the player may go ashore. */
+		t = town_at(s, nx, ny);
 		if (world_terrain(s->world, nx, ny) == TERRAIN_LAND) {
 			f->speed = 0;
+			if (t >= 0)
+				return (arrive(s, t, town));
 			f->land_x = nx;
 			f->land_y = ny;
 			return (SAIL_LAND);
@@ -1077,12 +1079,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 		clouds_move(s);
 		if (reef(s, world_terrain(s->world, nx, ny)))
 			return (SAIL_CREW);
-		if ((t = town_at(s)) >= 0) {
-			*town = t;
-			f->speed = 0;
-			f->leaving = t;
-			return (SAIL_TOWN);
-		}
+		if (t >= 0)
+			return (arrive(s, t, town));
 		if (s->encounters && (f->ticks + 4) % SIGHTING_TICKS == 0 &&
 		    sighting(s)) {
 			f->speed = 0;
@@ -1135,14 +1133,13 @@ shore_ahead(const struct sim *s)
 	return (0);
 }
 
-/* The heading nearest "away from the landing point" with open water
- * ahead, turning 16 at a time either side. */
+/* The heading nearest "away from pixel (x, y)" with open water ahead,
+ * turning 16 at a time either side. */
 static void
-clear_heading(struct sim *s)
+clear_heading(struct sim *s, int x, int y)
 {
 	struct sim_fleet *f = &s->fleet;
-	int away = (sim_bearing(f->x - f->land_x, f->y - f->land_y) + 8) &
-	    0xF0, k;
+	int away = (sim_bearing(f->x - x, f->y - y) + 8) & 0xF0, k;
 
 	for (k = 0; k <= 128; k += 16) {
 		f->heading = (uint8_t)(away + k);
@@ -1198,6 +1195,18 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 		if (nx > EDGE_MAX_X || nx < EDGE_MIN || ny > EDGE_MAX_Y ||
 		    ny < EDGE_MIN)
 			continue;
+		/* The town first, as at sea (its cells may be water). */
+		if ((t = town_at(s, nx, ny)) >= 0) {
+			if (world_terrain(s->world, nx, ny) == TERRAIN_LAND) {
+				f->x = nx;
+				f->y = ny;
+				f->fx = (uint8_t)(x8 & 7);
+				f->fy = (uint8_t)(y8 & 7);
+			}
+			*town = t;
+			f->leaving = t;
+			return (SAIL_TOWN);
+		}
 		if (world_terrain(s->world, nx, ny) != TERRAIN_LAND) {
 			/* Water: aboard again near the landing point. */
 			if (abs(nx - f->land_x) < BOARD_REACH &&
@@ -1213,7 +1222,8 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 				 * whether to disembark: the engine then
 				 * heads away from where the party landed. */
 				if (shore_ahead(s))
-					clear_heading(s);
+					clear_heading(s, f->land_x,
+					    f->land_y);
 				return (SAIL_BOARDED);
 			}
 			continue;
@@ -1222,11 +1232,6 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 		f->y = ny;
 		f->fx = (uint8_t)(x8 & 7);
 		f->fy = (uint8_t)(y8 & 7);
-		if ((t = town_at(s)) >= 0) {
-			*town = t;
-			f->leaving = t;
-			return (SAIL_TOWN);
-		}
 	}
 	return (SAIL_TICKS);
 }

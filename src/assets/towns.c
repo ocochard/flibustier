@@ -17,6 +17,8 @@
 #define NAME_OFF	64
 #define NAME_LEN	16
 #define LAST_INDEX_OFF	0x20
+#define ARRIVAL_LEN	0x780	/* the era's arrival list, at most */
+#define ARRIVAL_REC	6
 
 const int town_era_years[EXE_ERAS] = { 1560, 1600, 1620, 1640, 1660, 1680 };
 
@@ -66,6 +68,55 @@ parse_town(const uint8_t *r, struct town *t)
 	t->citymap_y = t->raw[30];
 }
 
+/* A town without arrival cells: its own and the eight around it. */
+static void
+default_arrival(struct town *t)
+{
+	int dx, dy;
+
+	if (t->narrival > 0)
+		return;
+	for (dy = -1; dy <= 1; dy++)
+		for (dx = -1; dx <= 1; dx++) {
+			t->arrival[t->narrival][0] = t->x + dx;
+			t->arrival[t->narrival][1] = t->y + dy;
+			t->narrival++;
+		}
+}
+
+/*
+ * The era's arrival list (VA 0x13555 copies it to VA 0x4ca58): records
+ * of i16 x, y (a map cell) and the town reached there, ended by x -1.
+ */
+static int
+load_arrival(const struct exe_layout *layout, const uint8_t *exe, size_t len,
+    int era, struct era_towns *out)
+{
+	const uint8_t *b;
+	struct town *t;
+	size_t i;
+	unsigned town;
+
+	if (layout->arrival_va[era] == 0)
+		return (0);
+	if ((b = exe_at(layout, exe, len, layout->arrival_va[era],
+	    ARRIVAL_LEN)) == NULL)
+		return (-1);
+	for (i = 0; i + ARRIVAL_REC <= ARRIVAL_LEN; i += ARRIVAL_REC) {
+		if (le16(b + i) == 0xFFFF)
+			return (0);
+		town = le16(b + i + 4);
+		if (town >= out->count ||
+		    out->towns[town].narrival == TOWN_ARRIVALS)
+			return (-1);
+		t = &out->towns[town];
+		t->arrival[t->narrival][0] = (int)le16(b + i);
+		t->arrival[t->narrival][1] = (int)le16(b + i + 2);
+		t->narrival++;
+	}
+	return (-1);
+}
+
 int
 towns_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
     int era, struct era_towns *out)
@@ -101,6 +152,10 @@ towns_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 		    out->towns[i].nation > NATION_HOLLAND))
 			return (-1);
 	}
+	if (load_arrival(layout, exe, len, era, out) != 0)
+		return (-1);
+	for (i = 0; i < out->count; i++)
+		default_arrival(&out->towns[i]);
 	return (0);
 }
 
@@ -201,6 +256,21 @@ decode_town(const struct json *o, struct town *t, char *why, size_t len)
 			    0)
 				goto bad;
 	}
+	if ((p = json_get(o, "arrival")) != NULL) {
+		if (p->type != JSON_ARRAY || p->count == 0 ||
+		    p->count > TOWN_ARRIVALS)
+			goto bad;
+		for (i = 0; i < p->count; i++) {
+			if (p->items[i]->type != JSON_ARRAY ||
+			    p->items[i]->count != 2 ||
+			    number(p->items[i]->items[0], &t->arrival[i][0]) !=
+			    0 || number(p->items[i]->items[1],
+			    &t->arrival[i][1]) != 0)
+				goto bad;
+		}
+		t->narrival = p->count;
+	}
+	default_arrival(t);
 	return (0);
 bad:
 	snprintf(why, len, "%s: a member is missing or out of range",
@@ -325,6 +395,15 @@ towns_encode(const struct era_towns *era, struct jbuf *b)
 			}
 			jb_raw(b, "]");
 		}
+		for (n = 0; n < t->narrival; n++) {
+			jb_raw(b, n == 0 ? ",\n   \"arrival\": [[" : ", [");
+			jb_int(b, t->arrival[n][0]);
+			jb_raw(b, ", ");
+			jb_int(b, t->arrival[n][1]);
+			jb_raw(b, "]");
+		}
+		if (t->narrival > 0)
+			jb_raw(b, "]");
 		jb_raw(b, "}");
 	}
 	jb_raw(b, "\n],\n\"treasure_fleet\": ");

@@ -245,7 +245,15 @@ The first 512 bytes of the matching PCX, presumably a backup for the
     1560-1680; 0 also maps to 1560). It copies a 0xF24-byte block from
     VA `0x38d58`, `0x39c7c`, `0x3aba0`, `0x3bac4`, `0x3c9e8` or `0x3d90c`
     into the live table at VA `0x4605e`. It also copies 0x780 bytes of a
-    second per-era table (the coordinate lists below) to VA `0x4ca58`.
+    second per-era table, the arrival cells, to VA `0x4ca58`.
+  - **Arrival cells.** Per era at VA `0x3e830`, `0x3ed70`, `0x3f2da`,
+    `0x3f922`, `0x40030`, `0x4075c` (1560 to 1680; era codes 0 and 1
+    share the first): records of three i16, a map cell's x and y and the
+    index of the town reached there, ended by x = -1, within 0x780
+    bytes (1344 to 1890 used). Every town has 2 to 13; the two Florida
+    Channel records have none. Read by the sailing loop (VA `0x29dd9`,
+    exact match) and the nearest-town search (VA `0x1adfc`); see
+    "Arriving" in game-rules.md.
   - **Block layout.** A 36-byte header, then 48 records of 80 bytes:
     `u16 f[32]` followed by `char name[16]` (ASCII).
     - Header offset `0x20`: index of the last record in use.
@@ -498,7 +506,7 @@ The first 512 bytes of the matching PCX, presumably a backup for the
 | 0xF24 | `0x4605e` | live town table, in the era block format |
 | 0xA0 | `0x4d280` | |
 | 0x54 | `0x47a76` | |
-| 0x780 | `0x4ca58` | per-era coordinate lists (copied at era load) |
+| 0x780 | `0x4ca58` | the era's arrival cells (copied at era load) |
 | 2 | `0x46058` | current town index |
 | 2 | (current town) | the first field of the current town record |
 | 1 | `0x47aca` | |

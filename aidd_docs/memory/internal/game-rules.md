@@ -274,7 +274,8 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 
 ### Landing parties (VA `0x231b8`, `0x315d`, `0x24808`)
 
-- **Going ashore:** when the ship's next step is on land, the player is
+- **Going ashore:** when the ship's next step is on land outside any
+  town's arrival cells (see "Arriving"), the player is
   asked with the language's "Disembark (y/n)" plaque, `misc.crs` frame 8
   at (268, 218) (VA `0x315d`; frame 4 is "Quit (Y/N)", 5 "Game
   Paused"), answered with the keys at VA `0x31610` ("YN"). No puts the
@@ -296,11 +297,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   disembark again; the engine then turns the ship (an engine choice):
   away from the landing point, else 16 at a time either side, to the
   first heading with no land within 16 pixels ahead.
-- **Towns on foot:** reached as by sea, including inland towns. A town
-  the ship has just left (after a failed attack, or leaving port) is
-  ignored until the fleet is more than 2 cells from it; going ashore
-  clears that, so a party landing beside it can walk in (an engine
-  choice; leaving a town on foot keeps it). The
+- **Towns on foot:** reached as by sea, on the same arrival cells,
+  including inland towns. Going ashore lets a party walk into the town
+  the ship just left (after a failed attack, say; an engine choice). The
   arrival offers "March into town" (CSTN 29.5) on `arr_land.pcx`; the
   fort may fire but sinks no ship. In town the ship is not in port: no
   harbour picture, no shipwright. Leaving puts the party on the town's
@@ -794,6 +793,35 @@ Run at each start of sailing (VA `0x28789`), after leaving a town (VA
   hold! You must throw some overboard!" (CSTR 113): goods sold for
   nothing, nothing to take, no leaving until it fits.
 
+### Arriving (VA `0x231b8`, `0x29dd9`)
+
+- **Arrival cells:** each era has a list of map cells, each naming the
+  town reached there (VA `0x13555` copies it to VA `0x4ca58`; layout in
+  asset-formats.md). A town has 2 to 13 cells, mostly its own and some
+  next to it, at most 3 cells away; the harbour mouth (fields 26, 27) is never
+  one, so a fleet leaving a town does not re-enter it.
+- **Test:** every pass, after the move and before the terrain test, the
+  cell under the ship or the party (`x >> 4`, `y >> 4`) is looked up;
+  the first matching entry wins (VA `0x29dd9`). A match stops the
+  voyage with code 4, the arrival (VA `0x24510`), even when the step is
+  onto land: the town's shore takes the ship into port instead of
+  asking to disembark.
+- **On foot after leaving a town:** when the loop starts with the party
+  ashore (VA `0x3684e`), no town counts until the party stands on no
+  arrival cell; leaving a town on foot puts it on the town's own cell.
+- **At sea, no such wait:** the loop also keeps the start position (VA
+  `0x367fc`, `0x367fe`) to skip an arrival on that cell, but stores it
+  in pixels (`x 16`, VA `0x2329d`) and compares it with a cell, so it
+  never matches.
+- **Engine:** the ship stays on the water when the step was onto the
+  town's land, and, with land within a ship's length ahead, turns away
+  from the town to the first heading with open water ahead, so sailing
+  on from the arrival menu, a failed attack or a sack does not run it
+  aground at once. The town just visited counts again once the fleet
+  stands on none of the arrival cells, at sea as on foot. Without
+  arrival cells (a town pack lacking them), a town is reached on its
+  own cell and the eight around it. These are engine choices.
+
 ### Leaving a town (VA `0x19b9e`)
 
 The fleet is put on the water outside the town, at town fields 26 and
@@ -830,10 +858,8 @@ inside the town, on land.
 ### Engine choices (not traced)
 
 Where the original's behaviour is not traced yet, the engine does this:
-- **Arriving:** the fleet reaches a town within 1 cell, of the town or of
-  that outer approach point. The town it is leaving only counts again
-  once the fleet is more than 2 cells away.
-- **Land:** land always stops the ship. Landing parties come later.
+- **Land:** land always stops the ship, but on a town's arrival cell
+  (see "Arriving").
 - **Time:** days pass steadily, one every 64 ticks, rather than as
   `ticks / 64 + 1` at the end of a voyage, so stepping a voyage in small
   pieces gives the same calendar.
