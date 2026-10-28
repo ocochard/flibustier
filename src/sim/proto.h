@@ -30,6 +30,7 @@ struct session {
 	void		*load_arg;
 	struct world	*world;		/* owned; the era of sim.world */
 	struct daughter	 daughter;	/* the governor's, met */
+	int		 conquest;	/* town + 1 whose sack allows a governor */
 };
 
 /* Release what the session allocated. */

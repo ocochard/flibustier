@@ -1597,6 +1597,7 @@ cmd_new_game(struct session *ss, const struct json *cmd, struct jbuf *out)
 	sim_new_game(&ss->sim, &towns, &scn, (uint64_t)seed);
 	ss->sim.player.nation = nat;
 	ss->started = 1;
+	ss->conquest = 0;
 	if (attach_world(ss) != 0) {
 		reply_error(out, "cannot load the era's world");
 		return;
@@ -2707,6 +2708,8 @@ cmd_assault(struct session *ss, const struct json *cmd, struct jbuf *out)
 	}
 	memset(&k, 0, sizeof(k));
 	k.hidden = -1;
+	if (strcmp(action, "governor") != 0)
+		ss->conquest = 0;	/* only the sack just made allows one */
 	if (strcmp(action, "start") == 0)
 		sim_assault_start(s, town, (int)json_get_int(cmd, "aboard", 0),
 		    (int)json_get_int(cmd, "weapon", 2) % SWORD_WEAPONS);
@@ -2716,16 +2719,23 @@ cmd_assault(struct session *ss, const struct json *cmd, struct jbuf *out)
 			return;
 		}
 		r = sim_assault_end(s, town);
-	} else if (strcmp(action, "sack") == 0)
+	} else if (strcmp(action, "sack") == 0) {
 		sim_sack(s, town, &k);
-	else if (strcmp(action, "governor") == 0) {
+		if (k.conquest)
+			ss->conquest = town + 1;
+	} else if (strcmp(action, "governor") == 0) {
 		int64_t n = json_get_int(cmd, "nation", -1);
 
+		if (ss->conquest != town + 1) {
+			reply_error(out, "no sack here allows a governor");
+			return;
+		}
 		if (n < 0 || n > 3) {
 			reply_error(out, "governor needs \"nation\" 0..3");
 			return;
 		}
 		sim_install_governor(s, town, (int)n);
+		ss->conquest = 0;
 	} else {
 		reply_error(out, "assault needs \"action\": start, end, sack "
 		    "or governor");
@@ -2897,6 +2907,7 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 			reply_error(out, "cannot load the era's world");
 		else {
 			ss->started = 1;
+			ss->conquest = 0;
 			jb_raw(out, "{\"ok\":true}");
 		}
 	} else if (!ss->started)

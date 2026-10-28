@@ -1826,6 +1826,24 @@ test_towns(void)
 	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"enter\"}", &out);
 	CHECK(out.s != NULL && strstr(out.s, "\"player_town\":2") != NULL);
 	jb_free(&out);
+	/* A governor only after a sack that allows a conquest. */
+	proto_handle(&ss, "{\"cmd\":\"assault\",\"action\":\"governor\","
+	    "\"nation\":0}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "no sack here") != NULL);
+	jb_free(&out);
+	ss.sim.fleet.crew = 30000;
+	proto_handle(&ss, "{\"cmd\":\"assault\",\"action\":\"sack\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"conquest\":1") != NULL);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"assault\",\"action\":\"governor\","
+	    "\"nation\":0}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":true") != NULL &&
+	    ss.sim.towns[2].nation == 0);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"assault\",\"action\":\"governor\","
+	    "\"nation\":1}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "no sack here") != NULL);
+	jb_free(&out);
 	/* The reckoning: a fresh captain, 25, of no rank. */
 	proto_handle(&ss, "{\"cmd\":\"career_end\"}", &out);
 	CHECK(out.s != NULL && strstr(out.s, "\"ok\":true") != NULL &&
