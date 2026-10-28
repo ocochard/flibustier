@@ -40,6 +40,8 @@ RANK_NATIONS = [int(c) for c in os.environ.get("BOT_RANKS", "")]	# nations to wi
 HOME_MONTHS = int(os.environ.get("BOT_HOME_MONTHS", 8))	# months without a division before heading for a bank
 HOME_ANY = int(os.environ.get("BOT_HOME_ANY", 0))	# any friendly town will do, not only the bot's own nation's
 MAX_SHIPS = int(os.environ.get("BOT_MAXSHIPS", 3))
+GUNNERY = int(os.environ.get("BOT_GUNNERY", 2))	# 0 ram only, 1 aimed fire, wind and lead, 2 also turn to fire on a fleeing enemy, 3 also spare a prize the sinking shot
+FLEE_DAMAGE = int(os.environ.get("BOT_FLEE_DAMAGE", 32))	# hull damage that sends the bot running from a losing fight
 SHIPS = os.environ.get("BOT_SHIPS", "rating")	# rating, big, small or proof
 FOOD_DIV = int(os.environ.get("BOT_FOOD_DIV", 4))
 CONQUER = int(os.environ.get("BOT_CONQUER", 1))
@@ -668,6 +670,63 @@ class Bot:
         best = max(range(0, 256, 8), key=way)
         return you["heading"] if way(you["heading"]) >= 0.8 * way(best) > 0 else best
 
+    @staticmethod
+    def turn_to(you, want):
+        diff = ((want - you["heading"] + 128) & 0xFF) - 128
+        return 0 if abs(diff) < 6 else (1 if diff > 0 else -1)
+
+    def shot_lands(self, b, turn, sails):
+        """Would a broadside fired now hit? Run it ahead in the sim (fire,
+        then the shot's flight of d / 2 ticks) and put the battle back."""
+        you, foe = b["you"], b["foe"]
+        dx, dy = abs(foe["x"] - you["x"]) // 256, abs(foe["y"] - you["y"]) // 256
+        flight = max(16, max(dx, dy) + min(dx, dy) // 4) // 2
+        before = self.sim.state()
+        r = self.sim("battle", ticks=flight + 2, turn=turn, fire=1, sails=sails)
+        self.sim("load", state=before)
+        return r["events"] & 4 != 0
+
+    def tactics(self, b, fleeing, sails):
+        """One step of a sea battle: the turn and whether to fire.
+        - Closing: lead the enemy (aim where she will be when the bot
+          gets there) and beat to windward when she lies upwind.
+        - Fleeing: the best way off, away from her.
+        - Guns: fire whenever a look-ahead says the shot hits; a hit cuts
+          her crew and guns, slows her and turns her into the wind.
+        - With GUNNERY 2, a fleeing enemy (her decision 2) is brought
+          abeam when the guns are loaded, to stop her with a hit; with 3,
+          also no shot that would sink her."""
+        you, foe = b["you"], b["foe"]
+        fx, fy = foe["x"] / 256, foe["y"] / 256
+        yx, yy = you["x"] / 256, you["y"] / 256
+        dist = math.hypot(fx - yx, fy - yy)
+        bearing = self.bearing(fx - yx, fy - yy)
+        if fleeing:
+            want = self.beat(you, (bearing + 128) & 0xFF, b["wind"])
+            return self.turn_to(you, want), 0
+        # lead: her velocity in pixels a tick, over the time to reach her
+        a = foe["heading"] * math.pi / 128
+        vx, vy = math.sin(a) * foe["speed"] * 4 / 256, -math.cos(a) * foe["speed"] * 4 / 256
+        mine = max(0.05, you["speed"] * 4 / 256)
+        t = min(dist / mine, 400)
+        want = self.beat(you, self.bearing(fx + vx * t - yx, fy + vy * t - yy), b["wind"])
+        ready = you["reload"] == 0 and you["guns"] > 0 and you["shot"][0] == 0 and you["sail_timer"] == 0
+        if ready and GUNNERY >= 2 and b["decision"] == 2 and 40 < dist < 220:
+            # bring her abeam, on the side nearer the present heading
+            sides = [(bearing + 64) & 0xFF, (bearing - 64) & 0xFF]
+            want = min(sides, key=lambda h: abs(((h - you["heading"] + 128) & 0xFF) - 128))
+        turn = self.turn_to(you, want)
+        off = abs(abs(((bearing - you["heading"] + 128) & 0xFF) - 128) - 64)
+        fire = 0
+        # a prize is worth more than a wreck: spare her the hit that would
+        # sink her (hull damage of a hit, halved under battle sails)
+        hit = max(1, you["guns"] * 4 // ((foe["type"] & 7) + 2) // (1 if foe["full_sails"] else 2))
+        spare = GUNNERY >= 3 and foe["damage"] + hit >= 64
+        if ready and not spare and off < 24 and dist < 320 and self.shot_lands(b, turn, sails):
+            fire = 1
+            self.stats["broadsides"] += 1
+        return turn, fire
+
     def battle(self):
         """Steer at the foe and board her (or land by the fort); returns
         the finish reply."""
@@ -678,23 +737,27 @@ class Bot:
         fleeing = False
         while b["outcome"] == "none" and n < 20000:
             you, foe = b["you"], b["foe"]
-            # run from a fight being lost (escape: over 240 pixels apart)
+            # run from a fight being lost (escape: over 240 pixels apart);
+            # damage counts to 64 (16 a level, level 4 sinks her)
             if not b.get("fort") and (foe["guns"] >= 2 * you["guns"] or
-                                      (you["damage"] >= 2 and foe["damage"] < you["damage"])):
+                                      (you["damage"] >= FLEE_DAMAGE and foe["damage"] < you["damage"])):
                 fleeing = True
-            want = self.bearing(foe["x"] - you["x"], foe["y"] - you["y"])
-            if fleeing:
-                want = (want + 128) & 0xFF
-            if b.get("fort"):
-                want = self.beat(you, want, b["wind"])
-            diff = ((want - you["heading"] + 128) & 0xFF) - 128
-            turn = 0 if abs(diff) < 6 else (1 if diff > 0 else -1)
-            dist = math.hypot(foe["x"] - you["x"], foe["y"] - you["y"]) / 256
-            fire = 1 if not fleeing and (b.get("fort") or dist > 60) and you["reload"] == 0 and abs(diff) > 40 else 0
+            sails = -1 if b.get("fort") else 1
+            if GUNNERY and not b.get("fort"):
+                turn, fire = self.tactics(b, fleeing, sails)
+            else:
+                want = self.bearing(foe["x"] - you["x"], foe["y"] - you["y"])
+                if fleeing:
+                    want = (want + 128) & 0xFF
+                if b.get("fort"):
+                    want = self.beat(you, want, b["wind"])
+                diff = ((want - you["heading"] + 128) & 0xFF) - 128
+                turn = 0 if abs(diff) < 6 else (1 if diff > 0 else -1)
+                dist = math.hypot(foe["x"] - you["x"], foe["y"] - you["y"]) / 256
+                fire = 1 if not fleeing and (b.get("fort") or dist > 60) and you["reload"] == 0 and abs(diff) > 40 else 0
             # before a fort, battle sails halve its hits for a third
             # less speed: less damage on the way in
-            b = self.sim("battle", ticks=4, turn=turn, fire=fire,
-                         sails=-1 if b.get("fort") else 1)["battle"]
+            b = self.sim("battle", ticks=4, turn=turn, fire=fire, sails=sails)["battle"]
             n += 1
         out = b["outcome"]
         self.stats["battle_" + out] += 1
