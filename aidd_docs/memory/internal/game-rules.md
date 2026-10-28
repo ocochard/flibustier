@@ -1096,8 +1096,16 @@ fight computes its level the same way with fencing.
 
 ### Each tick
 
-- **Steering:** the player's heading changes by 16 x turn input every
-  8 ticks.
+- **Steering:** the player's heading changes by 16 x turn input on
+  ticks that are multiples of 8 (VA `0x7e97`). The keys are read every
+  tick and the turn request cleared each time (VA `0x1b58a`; Left and
+  Right set it to -16 or +16 for that tick only, VA `0x1b6b3`,
+  `0x1b6ca`), so a single press turns only when it falls on such a
+  tick; holding the key (the keyboard's repeat) turns 16 every 8 ticks.
+  - **In the engine:** a press turns at once, then every 8 ticks while
+    held; a press during those 8 ticks is kept and turns when they end.
+    The ship turns no faster than in the original, and no press is
+    lost (an engine choice).
 - **Sails:** either sail key, Up or Down, starts a change that flips
   them (VA `0x7f1d`, `0x7eff`). Changing sails takes 160 ticks, while
   the panel says "Raising sail" or "Lowering sail" (CSTN 30.4, 30.5, VA
