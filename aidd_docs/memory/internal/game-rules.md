@@ -282,7 +282,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   where it stood and puts the party on that land.
 - **On foot:** the party walks with the input, eight directions (bits 1
   west, 2 east, 4 north, 8 south), half a pixel a pass on each axis
-  moved. Time and the wind go on; there are no encounters.
+  moved. Time and the wind go on; there are no encounters. In the
+  engine a tap released between two passes still walks on the next (an
+  engine choice).
 - **Sprite:** `sailmisc.spr`, four frames a direction from the table at
   VA `0x36850` (north and standing 0, north-east 4, east 8, south-east
   12, south 16, south-west 20, west 24, north-west 28), stepping every

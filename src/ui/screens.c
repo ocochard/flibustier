@@ -2579,7 +2579,7 @@ clouds_start(struct game *g)
 {
 	load_bank(g, "cur/cloud", 1, &g->cloud_spr);
 	load_bank(g, "spr/sailmisc", 0, &g->party_spr);
-	g->march_held = 0;
+	g->march_held = g->march_tap = 0;
 	sim_voyage_start(&g->sim);
 }
 
@@ -2712,9 +2712,10 @@ sail_event(struct game *g, const struct ui_event *ev)
 	    ev->type == EV_KEYUP)) {
 		for (i = 0; i < sizeof(walk) / sizeof(walk[0]); i++)
 			if (walk[i].key == ev->key) {
-				if (ev->type == EV_KEY)
+				if (ev->type == EV_KEY) {
 					g->march_held |= walk[i].bits;
-				else
+					g->march_tap |= walk[i].bits;
+				} else
 					g->march_held &= ~walk[i].bits;
 				return;
 			}
@@ -2767,7 +2768,7 @@ sail_event(struct game *g, const struct ui_event *ev)
 static void
 sail_tick(struct game *g)
 {
-	int town, turn;
+	int town, turn, walk;
 
 	if (g->fading != 0)
 		return;		/* the ship waits for the screen */
@@ -2777,12 +2778,14 @@ sail_tick(struct game *g)
 	if (g->ashore_prompt)
 		return;
 	g->sail_passes++;
-	/* A tap released between two passes still steers on the next. */
+	/* A tap released between two passes still steers or walks on the
+	 * next. */
 	turn = g->turn != 0 ? g->turn : g->turn_tap;
 	g->turn_tap = 0;
-	switch (g->sim.fleet.ashore ? sim_march(&g->sim, g->march_held & 1 ?
-	    -1 : g->march_held & 2 ? 1 : 0, g->march_held & 4 ? -1 :
-	    g->march_held & 8 ? 1 : 0, 1, &town) :
+	walk = g->march_held | g->march_tap;
+	g->march_tap = 0;
+	switch (g->sim.fleet.ashore ? sim_march(&g->sim, walk & 1 ? -1 :
+	    walk & 2 ? 1 : 0, walk & 4 ? -1 : walk & 8 ? 1 : 0, 1, &town) :
 	    sim_sail(&g->sim, turn, 1, &town)) {
 	case SAIL_TOWN:
 		g->sail_fast = 0;		/* VA 0x284b6 */
@@ -2798,7 +2801,7 @@ sail_tick(struct game *g)
 		g->turn = 0;
 		break;
 	case SAIL_BOARDED:
-		g->march_held = 0;
+		g->march_held = g->march_tap = 0;
 		break;
 	case SAIL_CREW:
 		g->turn = 0;
