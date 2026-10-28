@@ -1446,7 +1446,7 @@ sim_leave_town(struct sim *s)
 	}
 	if (s->player_town >= 0 && (size_t)s->player_town < s->ntowns) {
 		if (s->fleet.ashore) {
-			/* On foot: out on the town's own cell (VA 0x19bd0). */
+			/* On foot: out on the town's own cell (VA 0x19c11). */
 			s->fleet.x = s->towns[s->player_town].x * WORLD_TILE + 8;
 			s->fleet.y = s->towns[s->player_town].y * WORLD_TILE + 8;
 		} else

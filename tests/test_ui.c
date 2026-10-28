@@ -609,8 +609,11 @@ test_battle_screen(void)
 		CHECK(game_script(g, "enter wait:40") == 0);
 		after_capture(g);
 	}
-	CHECK(g->screen == &screen_sail && !g->sim.battle.active);
-	CHECK(g->sim.fleet.nships >= 1);
+	if (g->screen == &screen_prison)	/* sunk, the last ship */
+		CHECK(g->sim.jail.cause == JAIL_MAROONED);
+	else
+		CHECK(g->screen == &screen_sail);
+	CHECK(!g->sim.battle.active && g->sim.fleet.nships >= 1);
 	game_free(g);
 }
 
@@ -991,8 +994,8 @@ test_tavern(void)
 	    g->screen == &screen_rumours);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_tavern);
-	/* A villain passed through: the bartender tells where he went,
-	 * asks again; "No one?" ends it. */
+	/* A villain passed through: the bartender tells where he went;
+	 * the only one, he is not asked about again. */
 	g->sim.villains[2].active = 1;
 	g->sim.villains[2].town = 3;
 	g->sim.villains[2].trail[0] = g->sim.player_town;
@@ -1002,9 +1005,19 @@ test_tavern(void)
 	    g->screen == &screen_vnews && g->vnews_n == 1);
 	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 107 &&
 	    g->vnews_where == 3);
-	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 0);
-	CHECK(game_script(g, "down enter wait:40") == 0 &&
+	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_tavern);
+	/* Two villains: the question again after each, "No one?" ends
+	 * it. */
+	g->sim.villains[1] = g->sim.villains[2];
+	CHECK(game_script(g, "click:110,250 wait:40 enter wait:40") == 0 &&
+	    g->screen == &screen_vnews && g->vnews_n == 2);
+	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 107);
+	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 0 &&
+	    g->screen == &screen_vnews);
+	CHECK(game_script(g, "down down enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	g->sim.villains[1].active = 0;
 	/* A crew captured near the town tells the same, on crew.pcx,
 	 * then the steps after the battle go on to the sea. */
 	g->btl_news = g->sim.player_town;
@@ -1248,6 +1261,16 @@ test_land_battle(void)
 	CHECK(game_script(g, "wait:40") == 0 && g->land_stage == 1);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_sail);
+	/* Lost with no one left: prison at once, without the failure. */
+	g->sim.fleet.crew = 120;
+	sim_land_start(&g->sim, town);
+	game_goto(g, &screen_land);
+	CHECK(game_script(g, "wait:40") == 0);
+	g->sim.land.u[1].men = g->sim.land.u[2].men = 0;
+	g->sim.land.u[3].men = 0;
+	g->sim.land.result = 3;
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_prison && g->land_stage == 0);
 	game_free(g);
 }
 
@@ -1293,8 +1316,16 @@ test_landing(void)
 	    g->sim.fleet.ashore);
 	y = g->sim.fleet.y;
 	CHECK(game_script(g, "hold:up:20") == 0 && g->sim.fleet.y < y);
-	/* The cabin: no saving outside a town; search on foot. */
-	CHECK(game_script(g, "esc wait:40") == 0 && g->screen == &screen_cabin);
+	/* The cabin, from Space as in the original: no saving outside a
+	 * town; search on foot. */
+	{
+		struct ui_event ev = { 0 };
+
+		ev.type = EV_CHAR;
+		ev.ch = ' ';
+		game_event(g, &ev);
+	}
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_cabin);
 	CHECK(game_script(g, "click:560,170") == 0 &&
 	    g->screen == &screen_cabin);
 	/* A whole map whose spot is right here: the maps' spot shows it,

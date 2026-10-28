@@ -893,8 +893,9 @@ test_battles(void)
 	gy = abs(bt->you.y - bt->foe.y) / 256;
 	CHECK(gx >= 64 && gx <= 94 && gy >= 64 && gy <= 94);
 	CHECK(!bt->you.full_sails && !bt->foe.full_sails);
-	CHECK(abs((signed char)(uint8_t)(bt->foe.heading - bt->you.heading))
-	    <= 40);
+	/* The enemy 0x60 to the player's left, give or take 16. */
+	CHECK(abs((signed char)(uint8_t)(bt->foe.heading - bt->you.heading +
+	    0x60)) <= 16);
 
 	/* Firing: one shot, then a reload of |144 - 8 x (mood / 2 + 4)|
 	 * ticks: 112 with a neutral crew. */
@@ -918,6 +919,11 @@ test_battles(void)
 	for (i = 0, ev = 0; i < 160 && bt->outcome == BAT_NONE; i++)
 		ev |= sim_battle_tick(&s, 0, 0, 0);
 	CHECK((ev & BEV_SAILS) && bt->you.full_sails);
+	/* Either key changes them: "full" again lowers them. */
+	CHECK(sim_battle_tick(&s, 0, 0, 1) == 0 && bt->you.sail_timer == 160);
+	for (i = 0, ev = 0; i < 160 && bt->outcome == BAT_NONE; i++)
+		ev |= sim_battle_tick(&s, 0, 0, 0);
+	CHECK((ev & BEV_SAILS) && !bt->you.full_sails);
 
 	/* Steering: 16 per 8 ticks. */
 	battle_game(&s);
@@ -978,7 +984,17 @@ test_battles(void)
 		sim_battle_tick(&s, 0, 1, 0);
 	CHECK(bt->outcome == BAT_ENEMY_SUNK);
 	gold = s.fleet.gold;
-	CHECK(sim_battle_finish(&s, 1) == BAT_ENEMY_SUNK);
+	{
+		int d, near = sim_nearest_town(&s, &d), w;
+
+		CHECK(near >= 0);
+		s.towns[near].wealth = 50;
+		CHECK(sim_battle_finish(&s, 1) == BAT_ENEMY_SUNK);
+		/* A ship sunk costs the nearest town 10 wealth, however
+		 * far. */
+		w = s.towns[near].wealth;
+		CHECK(w == 40);
+	}
 	CHECK(!bt->active && s.fleet.nships == 1 && s.fleet.gold == gold);
 	CHECK(s.fleet.guns == bt->you.guns + 2);
 
@@ -1075,10 +1091,22 @@ test_battles(void)
 		CHECK(bt->outcome == want[i]);
 	}
 
-	/* Sunset after 4500 ticks. */
+	/* Sunset after 4500 ticks without a hit; a hit starts them
+	 * again and turns the enemy to the wind. */
 	battle_game(&s);
-	bt->tick = 4499;
+	bt->quiet = 4499;
 	bt->foe.x = bt->you.x + 100 * 256;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->outcome == BAT_NONE && bt->quiet == 4500);
+	bt->foe.full_sails = 1;
+	bt->you.shot.ticks = 1;
+	bt->you.shot.x = bt->foe.x;
+	bt->you.shot.y = bt->foe.y;
+	bt->foe.target = (uint8_t)(bt->wind + 0x40);
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->outcome == BAT_NONE && bt->quiet == 0 &&
+	    bt->foe.damage > 0 && bt->foe.target == bt->wind);
+	bt->quiet = 4500;
 	sim_battle_tick(&s, 0, 0, 0);
 	CHECK(bt->outcome == BAT_SUNSET);
 
@@ -2030,6 +2058,11 @@ test_fort_battle(void)
 	s.battle.you.shot.y = fy;
 	sim_battle_tick(&s, 0, 0, 0);
 	CHECK(s.battle.fort_damage > 0 && s.battle.foe.damage == 0);
+	/* Past 400, still in reach: a fort's field does not scroll (its
+	 * bounds, 5..470, lie beyond the battle's end, VA 0x9a14). */
+	s.battle.you.x = (410 + 40) * 256;
+	CHECK(!(sim_battle_tick(&s, 0, 0, 0) & BEV_SCROLLED) &&
+	    s.battle.scroll_x == 0 && s.battle.outcome == BAT_NONE);
 	/* Past 430 on an axis: out of the fort's reach. */
 	s.battle.you.x = (440 + 40) * 256;
 	sim_battle_tick(&s, 0, 0, 0);

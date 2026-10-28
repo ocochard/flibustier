@@ -89,11 +89,11 @@ FLIBUSTIER_DATA=~/games/pirates_gold ctest --test-dir build
 
 The mouse works everywhere; the keys are the original's:
 
-- Sailing: Left/Right steer, T toggles the faster pace, Escape opens
-  the captain's cabin (log book, map, save, search, exit). On foot the
-  arrows walk.
-- Sea battles: Left/Right steer, Enter fires, Up/Down set full or
-  battle sails; sailing into the enemy boards her.
+- Sailing: Left/Right steer, T toggles the faster pace, Space (or
+  Escape) opens the captain's cabin (log book, map, save, search,
+  exit). On foot the arrows walk.
+- Sea battles: Left/Right steer, Enter fires, Up or Down switches
+  between full and battle sails; sailing into the enemy boards her.
 - Sword fights: Left attacks with a lunge, Shift+Left with a slash,
   Up/Down pick the line, Right steps back; the numeric keypad works too,
   its corners as diagonals.

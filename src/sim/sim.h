@@ -343,6 +343,7 @@ struct battle_ship {
 struct sim_battle {
 	int		active;
 	uint32_t	tick;
+	uint32_t	quiet;		/* ticks since the last hit */
 	uint8_t		wind;		/* direction it blows toward */
 	int		wind_strength;	/* 0..2 */
 	int		decision;	/* the enemy's: 0 close, 1 broadside,
@@ -965,8 +966,9 @@ void	sim_fort_battle_start(struct sim *s, int town);
 void	sim_battle_command(struct sim *s, int ship);
 
 /*
- * One battle tick: turn -1, 0 or +1; fire when nonzero; sails -1 for
- * battle sails, +1 for full sails, 0 to keep them.  Returns BEV_* bits;
+ * One battle tick: turn -1, 0 or +1; fire when nonzero; sails nonzero
+ * when a sail key is pressed, which starts changing them either way.
+ * Returns BEV_* bits;
  * sim.battle.outcome tells when it is over.
  */
 int	sim_battle_tick(struct sim *s, int turn, int fire, int sails);
@@ -996,7 +998,7 @@ void	sim_practice_end(struct sim *s);
  * fort battle, the garrison was first set from it.
  */
 void	sim_assault_start(struct sim *s, int town, int aboard, int weapon);
-/* The garrison after the fort battle (VA 0x18c2c). */
+/* The garrison after the fort battle (VA 0x18e3d). */
 void	sim_fort_battle_garrison(struct sim *s, int town);
 /* After the assault: 1 won (the sack follows), 0 repelled, -1 defeated
  * (prison).  A failure costs reputation and standing. */

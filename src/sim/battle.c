@@ -258,16 +258,16 @@ sim_battle_start(struct sim *s)
 	bt->you.y = (FIELD_CENTRE + off + CENTRE_Y) * FP;
 	bt->foe.y = (FIELD_CENTRE - off + CENTRE_Y) * FP;
 
-	/* The player faces the enemy's side; the enemy heads within 56
-	 * degrees (40 / 256 turn) of the player's heading. */
+	/* The player faces the enemy's side; the enemy heads 0x60 to his
+	 * left, give or take 16 (VA 0x9bbd). */
 	if (bt->foe.x < bt->you.x)
 		bt->you.heading = bt->you.y == bt->foe.y ? 0xC0 :
 		    bt->foe.y < bt->you.y ? 0xE0 : 0xA0;
 	else
 		bt->you.heading = bt->you.y == bt->foe.y ? 0x40 :
 		    bt->foe.y < bt->you.y ? 0x20 : 0x60;
-	bt->foe.heading = (uint8_t)(rng_below(&s->rng, 81) +
-	    bt->you.heading - 40);
+	bt->foe.heading = (uint8_t)(rng_below(&s->rng, 32) - 16 +
+	    bt->you.heading - 0x60);
 	bt->foe.target = bt->foe.heading;
 	bt->decision = 1;
 }
@@ -282,7 +282,7 @@ sim_fort_battle_start(struct sim *s, int town)
 	if (town < 0 || (size_t)town >= s->ntowns)
 		return;
 	t = &s->towns[town];
-	/* The fort as an encounter (VA 0x18b9c): half the garrison, 12
+	/* The fort as an encounter (VA 0x18d67): half the garrison, 12
 	 * guns a fort. */
 	memset(e, 0, sizeof(*e));
 	e->type = FORT_TYPE;
@@ -330,7 +330,7 @@ field_terrain(const struct sim *s, int x, int y)
 }
 
 /*
- * The shallows (VA 0x81fb, 0x8732): once a ship's cooldown has run out,
+ * The shallows (VA 0x81ef, 0x8cd6): once a ship's cooldown has run out,
  * a roll of rand(16) at or above its class (the table at VA 0x327ce
  * holds 0..7) costs 16 damage and starts 20 ticks of cooldown.  Returns
  * 1 when it hurt.
@@ -391,7 +391,7 @@ move_ship(const struct sim *s, struct battle_ship *b, int half)
 	int dx = sim_sine_mul(s->world, b->heading, b->speed) * 4;
 	int dy = sim_sine_mul(s->world, b->heading + 0x40, b->speed) * 4;
 
-	if (half) {		/* the player before a fort (VA 0x7f6c) */
+	if (half) {		/* the player before a fort (VA 0x808f) */
 		dx >>= 1;
 		dy >>= 1;
 	}
@@ -444,6 +444,12 @@ hit(struct sim *s, struct battle_ship *t, int g, int bonus)
 {
 	int fort = s->battle.fort && t == &s->battle.foe;
 	int c = fort ? FORT_CLASS : t->type & 7, dmg;
+
+	/* Any hit puts sunset off; a hit enemy heads for the wind until
+	 * its next decision (VA 0x8641, 0x9294). */
+	s->battle.quiet = 0;
+	if (t == &s->battle.foe)
+		t->target = s->battle.wind;
 
 	dmg = sim_div16(g * 4, c + 2);
 	if (!t->full_sails)
@@ -561,6 +567,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	if (!bt->active || bt->outcome != BAT_NONE || s->world == NULL)
 		return (0);
 	bt->tick++;
+	bt->quiet++;
 	bt->sound = bt->sound_rank = 0;
 
 	/* Steering, sails and reloading. */
@@ -572,7 +579,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 			ev |= BEV_SAILS;
 		}
 	} else {
-		if (sails != 0 && (sails > 0) != y->full_sails)
+		if (sails != 0)		/* either key (VA 0x7f1d) */
 			y->sail_timer = SAIL_TICKS;
 		else if (y->reload > 0 && --y->reload == 0)
 			ev |= BEV_RELOADED;
@@ -602,7 +609,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 
 	y->speed = ship_speed(s, y, 0);
 	move_ship(s, y, bt->fort);
-	/* The player's ship on the shallows or on land (VA 0x81f0): land
+	/* The player's ship on the shallows or on land (VA 0x8185): land
 	 * beaches it, unless the enemy is alongside. */
 	switch (field_terrain(s, px(y->x), px(y->y))) {
 	case TERRAIN_SHALLOWS:
@@ -686,12 +693,15 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	/* The wind may shift. */
 wind:
 	if (bt->tick % WIND_TICKS == 0) {
-		int w = (uint8_t)((rng_below(&s->rng, 3) - 1) * 16 + bt->wind);
+		/* -1, 0, +1 or +2 sixteenths; when it moved, the strength
+		 * -1, 0, 0 or +1 (VA 0x8806). */
+		static const int gust[4] = { -1, 0, 0, 1 };
+		int w = (uint8_t)((rng_below(&s->rng, 4) - 1) * 16 + bt->wind);
 
 		if (w != bt->wind) {
 			bt->wind = (uint8_t)w;
 			bt->wind_strength = clampi(bt->wind_strength +
-			    rng_below(&s->rng, 3) - 1, 0, 2);
+			    gust[rng_below(&s->rng, 4)], 0, 2);
 			ev |= BEV_WIND;
 		}
 	}
@@ -717,7 +727,7 @@ wind:
 		    abs(px(e->y) - px(y->y)) > ESCAPE_RANGE)
 			bt->outcome = BAT_ESCAPED;
 	}
-	if (bt->outcome == BAT_NONE && bt->tick >= SUNSET_TICKS)
+	if (bt->outcome == BAT_NONE && bt->quiet > SUNSET_TICKS)
 		bt->outcome = BAT_SUNSET;
 	return (ev);
 }
@@ -859,7 +869,8 @@ sim_prize_place(struct sim *s, int slot, int type, int damage)
 /*
  * The nearest town feels a sea battle (VA 0x4c0a0, the distance in
  * cells): within 12, the heat rises by 24 - 2 x the distance (VA
- * 0xe245); a capture within class + 5 cells takes 10 from its wealth
+ * 0xe245); a ship sunk, or captured within class + 5 cells, takes 10
+ * from its wealth
  * and its crew may tell of the villains there (VA 0xdb7b).
  */
 static void
@@ -873,6 +884,8 @@ near_town(struct sim *s, enum battle_outcome o)
 	t = &s->towns[town];
 	if (dist < 12)
 		s->heat += 24 - 2 * dist;
+	if (o == BAT_ENEMY_SUNK)	/* at any distance (VA 0xe706) */
+		t->wealth = t->wealth < 11 ? 0 : t->wealth - 10;
 	if (o != BAT_SURRENDER || dist >= (s->battle.foe.type & 0xF) + 5)
 		return;
 	t->wealth = t->wealth < 11 ? 0 : t->wealth - 10;

@@ -142,7 +142,7 @@ distance(const struct land_unit *a, const struct land_unit *b)
 	return (dx < dy ? dx / 2 + dy : dy / 2 + dx);
 }
 
-/* Every 16 passes, staggered, a unit fights its nearest foe (VA 0x6295)
+/* Every 16 passes, staggered, a unit fights its nearest foe (VA 0x664c)
  * and, for the town, chooses where to go. */
 static int
 fight(struct sim *s, int i, int engaged)
@@ -378,7 +378,7 @@ sim_land_end(struct sim *s)
 	s->fleet.crew = mine < 1 ? 1 : mine;
 	s->towns[l->town].soldiers = (uint16_t)(theirs / 10);
 	s->heat += (int)(l->pass / 99);
-	/* Beaten with no one left: prison (VA 0x18cd0). */
+	/* Beaten with no one left: prison (VA 0x18d35). */
 	if (l->result != 2 && s->fleet.crew < 2)
 		sim_imprison(s, JAIL_TOWN, l->town);
 	return (l->result == 2);

@@ -213,6 +213,19 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   `0x284b6`) turns it off. The engine does so on reaching a town.
 - **Ticks:** a tick counter; 64 ticks make a day. When a voyage ends,
   the game adds `ticks / 64 + 1` days (VA `0x28789`).
+- **The cabin:** Space opens it (key table VA `0x33d90`, Space handler
+  VA `0x1b62d`; on foot the table at VA `0x33c74`, handler VA
+  `0x1b2e6`). Setting sail sets the input mode `0x4c856` to 3 (VA
+  `0x2890b`), so Space sets the flag `0x49b3c` and the loop leaves with
+  exit code 0 when word `0x44b26` is 0 (VA `0x24460`), which silences
+  the music and opens the cabin (VA `0x28760`). With the mode at 0,
+  Space acts as Enter (flag `0x49b3e`). On foot the same exit applies
+  (the pass's exit code is 0 unless the walk sets 7, VA `0x235aa`).
+  Escape is in neither table: the keyboard reader (VA `0x26844`, BIOS
+  keys) passes ASCII through, 0x1b included, and maps the extended keys
+  (table VA `0x386dc`, among them arrows to 1-4, Home/PgUp/End/PgDn to
+  0x10-0x13), so the original ignores Escape here; the engine accepts it
+  as well.
 
 ### Each tick
 
@@ -282,7 +295,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   arrival offers "March into town" (CSTN 29.5) on `arr_land.pcx`; the
   fort may fire but sinks no ship. In town the ship is not in port: no
   harbour picture, no shipwright. Leaving puts the party on the town's
-  own cell (VA `0x19bd0`).
+  own cell (VA `0x19b9e`, branch at `0x19c11`).
 - **Attacking on foot:** a land battle first (see below) when the crew
   is at most `soldiers x 15`, the town has forts and more than 9
   soldiers; otherwise straight to the assault. No fort battle on foot.
@@ -329,7 +342,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 
 - **Ways in:**
   - Beaten storming a town (the assault's sword fight, or a land battle
-    that leaves fewer than 2 men, VA `0x18cd0`): prison in the town.
+    that leaves fewer than 2 men, VA `0x18d35`): prison in the town.
   - A boarding party beaten (VA `0x16647` from the sword fight): prison
     "in the ship" (CSTN 77.4), after the flagship is lost.
   - The last ship sunk in a sea battle (VA `0x1f2a1`, `from_fort` 0):
@@ -337,8 +350,10 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   - The last ship sunk by a fort's salvo on arrival (`from_fort` 1):
     prison in the town.
 - **Pages:** on `prison.pcx` (picture 10) at (300, 150) up to x 560,
-  "You are imprisoned in %s" (CSTR 175, the town or "the ship");
-  marooned, on `maroon.pcx` (picture 11) at (100, 320) up to x 620,
+  "You are imprisoned in %s" (CSTR 175, the town or "the ship"); after
+  a fort's salvo (VA `0x1f2a1`) that page and the next ones at (320,
+  150) up to x 620 (VA `0x1f320`, `0x1f33c`); marooned, on
+  `maroon.pcx` (picture 11) at (100, 320) up to x 620,
   "With your last ship gone, you are washed ashore..." (CSTR 161).
 - **Injury:** a defeat (not the ship losses) adds 1 to VA `0x45e88`.
 - **The career may end (VA `0x1f1d7`):** a famous expedition (CSTR 159,
@@ -410,7 +425,7 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 ### The governor's daughter (VA `0x128c1`)
 
 - **Town field 11** (the governor): bit 0 a niece rather than a
-  daughter (`niece.pcx`, picture 0x2c, text at (10, 150) up to x 310;
+  daughter (`niece.pcx`, picture 0x2c, text at (10, 150) up to x 300;
   else `daughter.pcx`, 0x2b, at (350, 100) up to x 620); 0x80 the
   player's informant, 0x40 his wife (0x20 is read with them, not
   identified).
@@ -494,7 +509,11 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   CSTN 16 citizens, bartender, traveller, crewmen; the villains one a
   line, joined by "\r~"; "No one?"), then "%s is now in %s." (108) or
   "%s left for %s a few months ago." (107, the next town of his trail),
-  logged (code 9), and the question again. Told by the citizens after a
+  logged (code 9), and the question again, unless only one villain was
+  listed (VA `0x1ef56`). The entry that matched (his town or a trail
+  step) is rewritten as the town plus 0x80 (VA `0x1ee67`); the matching
+  reads the town through `& 0x3f`, so he stays listed, and no reader of
+  the mark was traced. Told by the citizens after a
   sack (`town.pcx`, (20, 50) up to x 250), the bartender after his
   rumours (`bartenda.pcx`, (320, 150) up to 560), the traveller after
   his town's information (`infoman.pcx`, (20, 150) up to 280), and a
@@ -677,31 +696,35 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   - Every 16 passes, staggered, each unit faces the nearest foe it can
     see (a foe in cover only within 31 pixels; distance: the longer
     side plus half the shorter). Within 32 pixels they fight (VA
-    `0x6295`): `men x morale / 80` (x 4 for horsemen) x 32, halved for
+    `0x664c`): `men x morale / 80` (x 4 for horsemen) x 32, halved for
     a target in cover, doubled in water, quartered against the fort
-    (which ends the battle, won). The target loses `rand((v + 16) / 31)
-    / 2 + 1` men and `kills x 128 / men` morale; at 0 morale an eighth
-    of its men flee.
-  - The town's units then choose: the fort rallies the others; any
-    other advances on the foe, holds, or falls back to the fort (and
-    joins it) by comparing strengths (VA `0x5d40`, `0x66f0`): it wants
-    to close in when the foe has fewer than half its men (horsemen
-    count double), and falls back when its firepower, `(men x muskets
-    / 16) x morale / 65`, halved when the foe stands in cover, is below
-    the foe's `men x muskets / 16`. This is the only use of the
-    muskets besides the panel (VA `0x6c9a`): nobody fires from afar,
-    and moving or standing still does not change a fight (the 1987
+    (which ends the battle, won). With `r = rand((v + 16) / 31)`, the
+    target loses `r / 2 + 1` men, then `r x 128 / men left` morale
+    (none left: 0), clamped to 0..255; at 0 morale an eighth of its men
+    flee.
+  - The town's units then choose: the fort rallies the others; any other
+    advances on the foe, holds, or falls back to the fort (and joins it)
+    by comparing strengths (VA `0x5d40`, `0x6931`). A threshold `d`
+    starts at 1, 2 for horsemen; it is -1 when the foe has fewer than
+    half its men (horsemen count their men double); then, except for
+    horsemen, 2 when its firepower, `(men x muskets / 16) x morale /
+    65`, halved when the foe stands in cover, is below the foe's `men x
+    muskets / 16`; and 99 when the town is not "ahead". With the foe
+    `distance / 16` cells away: farther than `d`, it advances on him;
+    exactly `d`, it holds; nearer, it falls back. This is the only use
+    of the muskets besides the panel (VA `0x6c9a`): nobody fires from
+    afar, and moving or standing still does not change a fight (the 1987
     game's rule that muskets fire only when standing still is not in
-    Pirates! Gold). A unit below 16
-    morale near a foe backs away.
+    Pirates! Gold). A unit below 16 morale near a foe backs away.
 - **Afterwards:** the crew is the party's men (at least 1), the town's
   soldiers a tenth of its men; heat rises by `passes / 99`. Won: the
   assault follows. Lost: "Your men are scattered and exhausted. The
-  attack on %s has failed." (CSTR 191, log 23), then prison for a lone
-  captain.
+  attack on %s has failed." (CSTR 191 at (100, 200) up to x 620, log
+  23); a lone captain (crew 1) goes to prison without it (VA `0x5b61`,
+  `0x18d35`).
 - **Then** the crew check (see "Manning the fleet").
 - **The cabin:** Save game only in town, Search only on foot outside a
-  town (the spots' flags are set from the arrival mode, VA `0xa060`).
+  town (the spots' flags are set from the arrival mode, VA `0xa11c`).
   Dividing and joining parties are unreachable in the original.
 
 ### Food (VA `0x231b8`, `0x2849c`)
@@ -804,7 +827,7 @@ Where the original's behaviour is not traced yet, the engine does this:
   table: 8 ship classes, each with 16 headings relative to the wind.
 - **Rows by class:** row 0 reads 4, 5, 6, 7, 7, 6, 4, 3, 3, 3, 4, 6, 7,
   7, 6, 5. Running before the wind gives 4, a beam reach 7, and into
-  the wind 3. Rows 4-7 have -1 into the wind.
+  the wind 3. Rows 3-7 have -1 into the wind.
 - **Scale:** with the x3 multiplier and the 4..12 clamp, most entries
   give full speed. The table matters mostly near the wind.
 - **The whole block (copied to VA `0x46f86`), by what reads it:**
@@ -985,11 +1008,16 @@ fight computes its level the same way with fencing.
   centres 40 right and 30 down): each axis
   offset by `rand(16) + 32` pixels, sign random.
 - **Headings:** the player faces the enemy's side (east or west, 45°
-  toward it when not level); the enemy heading is random within ±56° of
-  the player's.
+  toward it when not level); the enemy heads `0x60` to the left of the
+  player's heading, give or take 16: `heading - 0x60 + (rand & 31) -
+  16` (VA `0x9bbd`).
 - **Battle state:** the wind keeps its direction from sailing, with
   strength `w = rand(3)` rolled during the encounter (VA `0xd1fc`).
   Both ships start with battle sails.
+- **Enemy reload:** `|144 - 8 x role|` ticks (VA `0x9046`).
+- **Class 5 shown as 8:** when the byte at VA `0x45e8c` is below 4, a
+  class 5 enemy takes the class 8 pictures, box and panel type (VA
+  `0xd1db`, `0xe43f`, `0x1058a`); that byte is not identified.
 - **Which ship (VA `0xf246`):** with more than one ship, the player
   picks the ship to command on the fleet panel, under "Which ship will
   you command?" (CSTR 286). The code fills CSTR 123 ("We have %s men
@@ -1008,20 +1036,20 @@ fight computes its level the same way with fencing.
   (437, 429)-(639, 479), labelled from CSTN 87 (SELECT, REPAIR, SELL,
   BUY) centred at (510, 436), ends the choice once enough are marked.
   Two keys step through the ships and the button; Enter acts.
-- The prompt is centred across x 5..420 at y 400 (x 320..420 with
-  prices). The shipwright's modes also show each ship's price and the
-  total (not used by the engine's shipwright yet).
-- **Enemy reload:** `|144 - 8 x role|` ticks.
+- The prompt is centred across x 5..420 at y 400; with prices, across
+  x 5..320 at y 420 (VA `0x103f0`). The shipwright's modes also show
+  each ship's price and the total (not used by the engine's shipwright
+  yet).
 
 ### Each tick
 
 - **Steering:** the player's heading changes by 16 x turn input every
   8 ticks.
-- **Sails:** Up raises and Down lowers them. Changing sails takes 160
-  ticks, while the panel says "Raising sail" or "Lowering sail" (CSTN
-  30.4, 30.5, VA `0xef06` event 10) and reloading waits. Then it shows
-  "Full sails" or "Battle sails" (30.3, 30.2), and full sails multiply
-  the speed by 1.5.
+- **Sails:** either sail key, Up or Down, starts a change that flips
+  them (VA `0x7f1d`, `0x7eff`). Changing sails takes 160 ticks, while
+  the panel says "Raising sail" or "Lowering sail" (CSTN 30.4, 30.5, VA
+  `0xef06` event 10) and reloading waits. Then it shows "Full sails" or
+  "Battle sails" (30.3, 30.2), and full sails multiply the speed by 1.5.
 - **Speed:**
   - Start from `(speed_table[class][sector] x 4 - damage / 4)`, with
     `sector = ((heading + 8 - wind) >> 4) & 15`.
@@ -1046,17 +1074,21 @@ fight computes its level the same way with fencing.
   - The player's shots see the enemy's box widened by 3, 2, 1, 1 or 1
     quarter sizes for difficulty 0 to 4.
 - **Damage of a hit by guns `G` on class `c`:**
-  - **Hull:** `max(1, div16(G x 4, c + 2))`. It is halved when the
-    target has battle sails. Shots from the player gain half again at
-    difficulty 0.
+  - **Hull:** `div16(G x 4, c + 2)`, halved when the target has
+    battle sails, then at least 1 (VA `0x85d9`-`0x85f8`). Shots from the
+    player gain half again at difficulty 0.
+  - **Any hit** starts the sunset count again (VA `0x8641`, `0x9294`);
+    a hit on the enemy sets its target heading to the wind until its
+    next decision (VA `0x864a`).
   - **Crew lost:** `((rand & 63) + 4 x div16(crew x G, c + 3)) >> 6`. The
     player keeps at least 1 and at most 999.
   - **Guns lost:** `((rand & 63) + div16(guns x 4 x G, c + 3)) >> 6`.
 - **Damage levels:** `damage / 16` (0-4), shown with CSTN group 14.
   Level 4 sinks the ship: the player's (CSTR 167) or the enemy's
   (CSTR 168, she blows up).
-- **Wind:** every 512 ticks it may shift by one sixteenth either way,
-  and its strength by one step.
+- **Wind (VA `0x8806`):** every 512 ticks it moves by -1, 0, +1 or +2
+  sixteenths, one chance in four each; only when it moved does the
+  strength change, by -1, 0, 0 or +1, kept within 0..2 (event 4).
 
 ### Enemy decisions (every 64 ticks)
 
@@ -1076,8 +1108,9 @@ fight computes its level the same way with fencing.
    - 1: take a broadside position, battle sails;
    - 2: flee, full sails.
 
-   A total of 0 (hopeless) with the ships alongside: the enemy strikes
-   its colours (CSTR 170).
+   A total of 0 (hopeless) with the ships near, their boxes at twice
+   their half sizes touching (VA `0x9d53`, not the boarding test): the
+   enemy strikes its colours (outcome 9, CSTR 170).
 3. Target heading:
    - for 0 and 2, the bearing to the player plus `decision x 0x40`,
      clamped to within 0x50 of downwind;
@@ -1111,7 +1144,8 @@ fight computes its level the same way with fencing.
   coast's axis, open sea. Set 4 stays open sea.
 - **Terrain:** the class of the battle tile's colour under a ship's
   centre (table at VA `0x4113c`, the one sailing uses).
-- **The player's ship (VA `0x81f0`), after it moves:**
+- **The player's ship (VA `0x8185`; the shallows roll at `0x81ef`),
+  after it moves:**
   - Shallows: once a cooldown has run out, a roll `rand(16) >= class`
     (table at VA `0x327ce`, 0..7) costs 16 damage and starts a 20-tick
     cooldown. The cooldown only counts down on the shallows. A pinnace
@@ -1119,7 +1153,7 @@ fight computes its level the same way with fencing.
   - Land: the ship is beached (outcome 13). If the enemy is alongside
     (the boarding test, VA `0x9c84`), it is a boarding instead (outcome
     5).
-- **The enemy (VA `0x8732`):** the same shallows rule, with its own
+- **The enemy (VA `0x8cd6`):** the same shallows rule, with its own
   cooldown. Land does not stop it.
 - **Beached:** the enemy's portrait (VA `0xe9e6`) and CSTR 173 at (100,
   300) up to x 560. Nothing is lost.
@@ -1128,17 +1162,21 @@ fight computes its level the same way with fencing.
 
 Attacking a town with forts from the sea starts with a battle against
 the fort.
-- **The fort as an encounter (VA `0x18b9c`):** type 8, the town's
-  nation, crew byte `(soldiers + 1) / 2`, guns `forts x 12`, role 0
-  (reload 144 ticks). When any attack on a town begins (VA `0x18b3f`,
-  by sea or on foot) the treasure fleet and the silver train each add
+- **The fort as an encounter (VA `0x18d67`):** type 8, the town's
+  nation, crew byte `(soldiers + 1) / 2` (so its crew is 4 times that,
+  VA `0x999b`), guns `(forts & 7) x 12`, role 0 (reload 144 ticks).
+  When any attack on a town begins (VA `0x18b3f`, `0x18b9c`, by sea or
+  on foot) the treasure fleet and the silver train each add
   10 soldiers to its garrison, at most 255, for good.
 - **The field:** the town's own screen (town field 14). The fort's
-  sprite corner is at `field 17, 18 x 32` (a 32 x 32 box, centre +16);
+  sprite corner is at `field 17, 18 x 32` (centre +16; its box reaches
+  32 either way, not quartered as a ship's is);
   the player's at `field 19, 20 x 32 + 16`, heading field 21 (VA
   `0xd16c`). With several ships, the player picks one first.
 - **Differences from a ship battle:**
-  - The player's ship moves at half speed (VA `0x7f6c`).
+  - The player's ship moves at half speed (VA `0x808f`, `0x80cb`).
+  - The field scrolls only beyond 5..470 (VA `0x9a14`), outside the
+    10..430 that ends the battle: it never scrolls.
   - The fort neither decides nor moves (VA `0x8914`). Before each
     shot it turns to `bearing + 0x3C + rand(8)`, so it fires whenever
     reloaded.
@@ -1151,7 +1189,7 @@ the fort.
     accurate salvo… drives you back" (CSTR 196). Sunset says CSTR 317.
   - Running onto land with the boxes touching (the fort's box not
     quartered) is the landing: the assault follows (outcome 5).
-- **Afterwards (VA `0x18c2c`):** only the landing goes on. The
+- **Afterwards (VA `0x18e3d`, `0x18e46`):** only the landing goes on. The
   garrison becomes `(soldiers + 1) / 2 + fort crew / 10`, and the men
   who stayed with the fleet do not fight.
 
@@ -1203,10 +1241,13 @@ Back to sea afterwards.
 
 ### End of battle
 
-Each ending has its own picture (VA `0xe67b`-`0xe918`), with the text in
+Each ending has its own picture (VA `0xe67b`-`0xe985`), with the text in
 palette entry 2 and no box:
 - **Either ship sunk:** `sinking.pcx`, text at (100, 300) up to x 560.
-- **Escape:** `outrun.pcx`, the same place.
+  An enemy sunk costs the current town (VA `0x46f82`; at sea the
+  nearest) 10 wealth, to 0 at 10 or less, at any distance (VA `0xe706`).
+- **Escape:** `outrun.pcx`, the same place; the slow ship's loss (CSTR
+  172) is boxed, at (100, 300) up to x 620 (VA `0xe7e6`).
 - **Sunset:** `night.pcx`, text at (40, 150) up to x 280 (CSTR 317
   against a fort).
 - **Colours struck, beached (CSTR 173):** written over the battle at
@@ -1216,7 +1257,7 @@ palette entry 2 and no box:
 |---|---|---|
 | boarding | quarter-size boxes touch | CSTR 171, then a sword fight |
 | escape | the ships are more than 240 pixels apart on either axis | CSTR 198 when the enemy was fleeing (decision 2, VA `0x44a20`), otherwise CSTR 197; CSTR 196 against a fort (VA `0xe82a`). The encounter ends (see "The slow ship") |
-| sunset | 4500 ticks | CSTR 169 |
+| sunset | more than 4500 ticks without a hit (VA `0x7e38`) | CSTR 169 |
 | surrender | as above | CSTR 170, then capture (CSTR 164: keep her or plunder and sink her) |
 | player sunk | damage level 4 | CSTR 167; the fleet loses the ship and its cargo share (see losing a ship); with no ship left, marooned (CSTR 161) |
 | enemy sunk | damage level 4 | CSTR 168 |
@@ -1227,14 +1268,18 @@ byte), return to the fleet.
 ### Engine choices until more is traced
 
 - **Boarding:** the sword fight decides it (see below). A win counts as
-  a surrender.
+  a surrender: the same capture (VA `0xdb7b`) and log code 4 as colours
+  struck (VA `0xe74d`, `0xe95a`).
 - **Lost boarding:** the enemy takes the flagship, as if it sank; then
-  prison (see "Prison").
-- **The prize's picture:** `plunder.pcx`, the question at (40, 50) up to
-  x 620 in ink entry 0.
+  prison (see "Prison"). The original probably differs: `0xe245` changes
+  no ship when the fight is lost (VA `0xe775`: heat +16, reputation -2);
+  whether prison (VA `0x1f803`) removes one is not traced.
+- **The prize's picture (VA `0xdc12`, `0xdcc2`):** `plunder.pcx`, the
+  question at (40, 50) up to x 620 in ink entry 0.
 - **Near a town (VA `0x4c0a0`):** the distance `|dx| + |dy|` in cells
-  to the nearest town, at least 1, measured every 32 ticks at sea (VA
-  `0x28789`). A fight starting within 7 cells lowers that town's field 9
+  to the nearest town, at least 1, measured when `(ticks + 4) & 31` is
+  0 at sea (VA `0x23e0e`) and copied there at the voyage's end (VA
+  `0x2896d`). A fight starting within 7 cells lowers that town's field 9
   by 1 (VA `0xd1fc`); after any sea battle within 12 cells the heat
   rises by `24 - 2 x distance` (VA `0xe245`); a capture within `class +
   5` cells takes 10 from its wealth (to 0 below 11) and its crew tells
@@ -1265,7 +1310,8 @@ byte), return to the fleet.
   - A kept prize brings no guns by herself: they are on the board.
 - **The board's rows (VA `0x20229`):** the town merchant shows food,
   goods and sugar (layout records 0-22); the loot board (VA `0x2264f`:
-  overboard, capture, sack) adds cannon (records 23-28), which weigh
+  mode 1 overboard, 2 capture, 3 sack, 4 dividing or joining the
+  squadron) adds cannon (records 23-28), which weigh
   half a ton each.
 - **Marooned:** with no ship left, the game shows CSTR 161 and 162
   (VA `0x1f2a1`). The player then continues with a pinnace and at least
@@ -1448,8 +1494,9 @@ move) and `0x38a1a` to `0x38b99`.
   (60.9 Hz, see the game clock) by `level & 3` (VA `0x389c4`).
 - **Debug mode:** the command-line argument `RDM` (compared exactly
   with the string at VA `0x31fe8`, VA `0x3bd`) sets the debug flag (VA
-  `0x45e6c`). Then, while sailing (key table VA `0x33c74`, handlers from
-  VA `0x1b2e6`; a second table at VA `0x33df0` does the same on foot):
+  `0x45e6c`). Then, while sailing (key table VA `0x33d90`, read by VA
+  `0x1b58a`, handlers VA `0x1b700`-`0x1b74e`; on foot the table at VA
+  `0x33c74`, read by VA `0x1b210`, handlers VA `0x1b3ed`-`0x1b43b`):
   N stops sightings and E brings them back (byte VA `0x33ee8`, read at
   VA `0x23ef3`); R makes the player near invulnerable and F ends it
   (byte VA `0x33ee9`: the enemy never fires, VA `0x8ecd`; a hit is not

@@ -370,6 +370,8 @@ battle_json(const struct sim_battle *bt, struct jbuf *out)
 	jb_int(out, bt->active);
 	jb_raw(out, ",\"tick\":");
 	jb_int(out, bt->tick);
+	jb_raw(out, ",\"quiet\":");
+	jb_int(out, bt->quiet);
 	jb_raw(out, ",\"wind\":");
 	jb_int(out, bt->wind);
 	jb_raw(out, ",\"wind_strength\":");
@@ -418,6 +420,7 @@ battle_from_json(struct sim_battle *bt, const struct json *j)
 		return (-1);
 	bt->active = json_get_int(j, "active", 0) != 0;
 	bt->tick = (uint32_t)json_get_int(j, "tick", 0);
+	bt->quiet = (uint32_t)json_get_int(j, "quiet", bt->tick);
 	bt->wind = (uint8_t)json_get_int(j, "wind", 0);
 	bt->wind_strength = (int)json_get_int(j, "wind_strength", 0);
 	bt->decision = (int)json_get_int(j, "decision", 0);
@@ -1732,9 +1735,11 @@ cmd_battle(struct session *ss, const struct json *cmd, struct jbuf *out)
 		    "\"turn\" and \"sails\" (-1, 0, 1), \"fire\" (0, 1)");
 		return;
 	}
+	/* "sails" asks for full or battle sails: a key press when they
+	 * differ, as the keys only toggle them. */
 	for (i = 0; i < ticks && ss->sim.battle.outcome == BAT_NONE; i++)
 		ev |= sim_battle_tick(&ss->sim, (int)turn, i == 0 && fire != 0,
-		    (int)sails);
+		    sails != 0 && (sails > 0) != ss->sim.battle.you.full_sails);
 	jb_raw(out, "{\"ok\":true,\"events\":");
 	jb_int(out, ev);
 	jb_raw(out, ",\"battle\":");

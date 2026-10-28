@@ -2126,7 +2126,7 @@ cabin_open(const struct game *g, int i)
 
 	if (cabin_rect(g, i, r) != 0)
 		return (0);
-	/* Saving only in town, searching only ashore (VA 0xa060: the
+	/* Saving only in town, searching only ashore (VA 0xa11c: the
 	 * table's flags are set from the arrival mode). */
 	if (i == CABIN_SAVE)
 		return (g->sim.player_town >= 0 && g->save_dir[0] != '\0');
@@ -2269,7 +2269,7 @@ cabin_draw(struct game *g)
 	int w;
 
 	/* The chart on the table covers the maps' spot while there are
-	 * none (VA 0xa060). */
+	 * none (VA 0xa0d3). */
 	if (g->cabin_spr.count > 0 && !any_map(g))
 		fb_frame(&g->fb, &g->cabin_spr.frames[0], 325, 229);
 	/* The prompt over the chart, which it overlaps. */
@@ -2645,14 +2645,18 @@ sail_event(struct game *g, const struct ui_event *ev)
 	else if (ev->type == EV_KEYUP &&
 	    (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT))
 		g->turn = 0;
-	else if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE) {
+	else if ((ev->type == EV_CHAR && ev->ch == ' ') ||
+	    (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE)) {
+		/* Space opens the cabin (key tables VA 0x33d90, 0x33c74);
+		 * Escape too, an engine addition. */
 		if (!g->sim.fleet.ashore)
 			game_music(g, MUS_SILENCE);	/* VA 0x28789 */
 		game_goto(g, &screen_cabin);
 	} else if (ev->type == EV_CHAR && g->debug &&
 	    strchr("NnEeRrFf", ev->ch) != NULL && ev->ch != 0) {
-		/* The debug mode's keys (VA 0x1b3ed-0x1b43b): N no sails
-		 * sighted, E sightings again, R invulnerable, F not. */
+		/* The debug mode's keys (VA 0x1b700-0x1b74e at sea,
+		 * 0x1b3ed-0x1b43b on foot): N no sails sighted, E sightings
+		 * again, R invulnerable, F not. */
 		switch (ev->ch | 0x20) {
 		case 'n':
 			g->sim.encounters = 0;
@@ -3111,7 +3115,7 @@ const struct screen screen_encounter = {
  * Sea battle (pic/sbat): a 480x480 battle area, the encounter's corner of
  * the map drawn with the 32x32 battle tiles, and a panel on the right
  * with each side's men, guns and damage picture, and the wind.  Left and
- * Right steer, Enter or Space fires, Up and Down set the sails.
+ * Right steer, Enter or Space fires, Up or Down switches the sails.
  */
 #define AREA		480
 #define AREA_CELLS	(AREA / 32)
@@ -3275,7 +3279,7 @@ after_battle_enter(struct game *g)
 		return;
 	}
 	if (landed) {
-		/* The assault follows (VA 0x18c2c). */
+		/* The assault follows (VA 0x18e3d). */
 		g->assault_town = g->sim.encounter.town;
 		g->assault_aboard = g->btl_aboard;
 		sim_fort_battle_garrison(&g->sim, g->assault_town);
@@ -5764,7 +5768,7 @@ governor_greeting(struct game *g, char *out, size_t len)
 }
 
 /* Her pages: daughter.pcx at (350, 100) up to x 620, niece.pcx at (10,
- * 150) up to x 310 (VA 0x128c1). */
+ * 150) up to x 300 (VA 0x128c1). */
 static void
 daughter_draw(struct game *g)
 {
@@ -5772,7 +5776,7 @@ daughter_draw(struct game *g)
 	const char *arg[2];
 	char text[700], name[80];
 	int x = d->niece ? 10 : 350, y = d->niece ? 150 : 100;
-	int w = d->niece ? 300 : 270, menu = 0, at;
+	int w = d->niece ? 290 : 270, menu = 0, at;
 
 	switch (g->gov_stage) {
 	case GOV_DAUGHTER:
@@ -6686,8 +6690,9 @@ const struct screen screen_sack = {
 
 /*
  * Prison (VA 0x16647, 0x1f803), told from the sim's last imprisonment:
- * on prison.pcx at (300, 150) up to x 560, "...You are imprisoned in
- * %s" (CSTR 175, the town or "the ship"); marooned, on maroon.pcx at
+ * on prison.pcx at (300, 150) up to x 560 (after a fort's salvo, VA
+ * 0x1f2a1, at (320, 150) up to x 620), "...You are imprisoned in %s"
+ * (CSTR 175, the town or "the ship"); marooned, on maroon.pcx at
  * (100, 320) up to x 620, "With your last ship gone, you are washed
  * ashore..." (CSTR 161).  Then the months (CSTR 176-179 by health; at
  * (40, 320) when marooned) and "...take you back as %s captain" (CSTR
@@ -6770,6 +6775,8 @@ prison_draw(struct game *g)
 		    (size_t)g->sim.player.difficulty), NULL);
 	if (maroon)
 		draw(g, FONT_BODY, 40, 320, 580, text, 0);
+	else if (j->cause == JAIL_FORT)
+		draw(g, FONT_BODY, 320, 150, 300, text, 0);	/* VA 0x1f320 */
 	else
 		draw(g, FONT_BODY, 300, 150, 260, text, 0);
 	continue_prompt(g);
@@ -7271,9 +7278,13 @@ land_over(struct game *g)
 		game_goto(g, &screen_assault);
 		return;
 	}
-	/* "Your men are scattered and exhausted..." (CSTR 191), then
-	 * prison for a lone captain (VA 0x18cd0). */
+	/* "Your men are scattered and exhausted..." (CSTR 191), but a
+	 * lone captain goes to prison without it (VA 0x5b61, 0x18d35). */
 	sim_log_failure(&g->sim, g->assault_town);
+	if (g->sim.jail.fresh) {
+		game_goto(g, &screen_prison);
+		return;
+	}
 	g->land_stage = 1;
 }
 
@@ -8330,7 +8341,8 @@ const struct screen screen_merdaugh = {
  * about... ~%s?~No one?" (CSTR 154: CSTN 16 citizens, bartender,
  * traveller or crewmen; the town; the villains whose town or trail it
  * is, one a line), then "%s is now in %s." (108) or "%s left for %s a
- * few months ago." (107), and the question again.  Pictures and boxes:
+ * few months ago." (107), and the question again with two or more.
+ * Pictures and boxes:
  * citizens town.pcx (20, 50) up to x 250, bartender bartenda.pcx (320,
  * 150) up to 560, traveller infoman.pcx (20, 150) up to 280.
  */
@@ -8389,7 +8401,13 @@ vnews_event(struct game *g, const struct ui_event *ev)
 	}
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
-		g->vnews_said = 0;		/* the question again */
+		/* The question again, unless he was the only one (VA
+		 * 0x1ef56). */
+		if (g->vnews_n == 1) {
+			game_goto(g, g->vnews_back);
+			return;
+		}
+		g->vnews_said = 0;
 		g->selected = 0;
 	}
 }

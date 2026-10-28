@@ -24,7 +24,7 @@ with a message. Numbers are integers only.
 | `load` | `state`: an object as returned by `state` | none |
 | `sail` | `turn` (-1, 0, +1; default 0), `ticks` (1..23360; default 64) | `stop` (`ticks`, `land`, `town`, `encounter` or `crew`), `town` when it is `town`, `x`, `y`, `heading`, `speed`, `wind`, `day` |
 | `encounter` | `action`: `investigate`, `ignore`, `battle` or `hail` | `result` (`continue`, `escaped`, `news`, `battle`, `overtaken`, `unanswered`), `encounter` |
-| `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full) | `events` (bits, below), `battle` |
+| `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full: a sail key pressed when they differ, as either key only flips them) | `events` (bits, below), `battle` (with `quiet`, the ticks since the last hit, which sunset counts) |
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `fleet_ships`, `crew`, `gold`; after a capture `loot_gold` (already aboard), `loot` (food, goods, sugar, cannon: take with `merchant` `loot`), `volunteers` (`crew` `volunteers` with `accept`); after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
 | `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
@@ -77,7 +77,7 @@ with a message. Numbers are integers only.
   "encounter": {"stage": "none", "type": 4, "nation": 1, "crew": 8,
                 "guns": 8, "role": 5, "cargo": 60, "gold": 25,
                 "hostile": 0, "town": 20},
-  "battle": {"active": 0, "tick": 0, "wind": 192, "wind_strength": 1,
+  "battle": {"active": 0, "tick": 0, "quiet": 0, "wind": 192, "wind_strength": 1,
              "decision": 1, "outcome": "none", "crew_ashore": 0,
              "guns_ashore": 0, "fort": 0, "fort_damage": 0, "set": 4,
              "piece": 2, "scroll_x": 0, "scroll_y": 0, "screen": 106,
