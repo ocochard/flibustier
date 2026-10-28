@@ -389,6 +389,12 @@ if __name__ == "__main__":
     draw("boarding.png", BOARDING)
     bevel("sbat-panel", SBAT_BOXES, [])
     bevel("lbat-panel", LBAT_BOXES, [])
+    # A spyglass's round view, for the ship portraits: white inside,
+    # fading to black at its rim.
+    subprocess.run(["magick", "-size", "600x600", "xc:black", "-fill",
+                    "white", "-draw", "circle 300,300 300,22", "-blur",
+                    "0x14"] + SAME + [os.path.join(HERE, "spyglass.png")],
+                   check=True)
     f, i = BOARDING_FRAME, BOARDING_FIELD
     # The frame raised; its inner rim, two pixels in from the velvet.
     bevel("boarding-panel", [f, (i[0] - 2, i[1] - 2, i[2] + 2, i[3] + 2)],

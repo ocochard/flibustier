@@ -214,8 +214,9 @@ void
 fb_image_part(struct fb *fb, const struct image *img, int sx, int sy, int w,
     int h, int dx, int dy, int key)
 {
-	int x, y, px, py;
-	uint8_t c;
+	int x, y, px, py, ox, oy, ox0, ox1, oy0, oy1, lx, ly, ax, ay;
+	const uint8_t *a;
+	uint8_t c, *d;
 
 	for (y = 0; y < h; y++) {
 		py = dy + y;
@@ -228,6 +229,45 @@ fb_image_part(struct fb *fb, const struct image *img, int sx, int sy, int w,
 			c = img->pixels[(size_t)(sy + y) * img->w + sx + x];
 			if (key < 0 || c != key)
 				fb_put(fb, (size_t)py * FB_W + px, c);
+		}
+	}
+	if (img->rgba == NULL)
+		return;
+	/* The true colours of the same part, where the key lets it through,
+	 * at the canvas's resolution. */
+	ox0 = canvas_at(dx, fb->out_w, FB_W);
+	ox1 = canvas_at(dx + w, fb->out_w, FB_W);
+	oy0 = canvas_at(dy, fb->out_h, FB_H);
+	oy1 = canvas_at(dy + h, fb->out_h, FB_H);
+	for (oy = oy0 < 0 ? 0 : oy0; oy < oy1 && oy < fb->out_h; oy++) {
+		ly = sy + (int)((long)(oy - oy0) * h / (oy1 - oy0));
+		if (ly < 0 || ly >= img->h || dy + ly - sy < 0 ||
+		    dy + ly - sy >= FB_H)
+			continue;
+		for (ox = ox0 < 0 ? 0 : ox0; ox < ox1 && ox < fb->out_w; ox++) {
+			lx = sx + (int)((long)(ox - ox0) * w / (ox1 - ox0));
+			if (lx < 0 || lx >= img->w || dx + lx - sx < 0 ||
+			    dx + lx - sx >= FB_W)
+				continue;
+			if (key >= 0 &&
+			    img->pixels[(size_t)ly * img->w + lx] == key)
+				continue;
+			/* The art pixel under this canvas pixel: its place in
+			 * the part, in the picture's pixels, times the art's
+			 * scale. */
+			ay = (int)(((long)sy * (oy1 - oy0) + (long)(oy - oy0) *
+			    h) * img->rgba_h / ((long)(oy1 - oy0) * img->h));
+			ax = (int)(((long)sx * (ox1 - ox0) + (long)(ox - ox0) *
+			    w) * img->rgba_w / ((long)(ox1 - ox0) * img->w));
+			if (ax >= img->rgba_w || ay >= img->rgba_h)
+				continue;
+			a = img->rgba + ((size_t)ay * (img->rgba_stride > 0 ?
+			    img->rgba_stride : img->rgba_w) + (size_t)ax) * 4;
+			d = fb->rgb + ((size_t)oy * fb->out_w + ox) * 3;
+			d[0] = a[0];
+			d[1] = a[1];
+			d[2] = a[2];
+			fb->tc[(size_t)oy * fb->out_w + ox] = 1;
 		}
 	}
 }

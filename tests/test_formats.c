@@ -1528,6 +1528,57 @@ test_town_files(void)
 	    sizeof(err)) == -1 && strstr(err, "name") != NULL);
 }
 
+/*
+ * A part of a picture with true colours, drawn at twice the screen's
+ * size: its art comes along, through the key.
+ */
+static void
+test_image_part(void)
+{
+	static struct fb fb;
+	static uint8_t px[4 * 2] = { 1, 2, 3, 4, 5, 6, 7, 0 };
+	static uint8_t art[8 * 4 * 4];
+	struct image img;
+	uint8_t *rgb;
+	int x, y;
+
+	/* Art pixel (x, y) is (10 x, 10 y, 7). */
+	for (y = 0; y < 4; y++)
+		for (x = 0; x < 8; x++) {
+			art[(y * 8 + x) * 4] = (uint8_t)(10 * x);
+			art[(y * 8 + x) * 4 + 1] = (uint8_t)(10 * y);
+			art[(y * 8 + x) * 4 + 2] = 7;
+			art[(y * 8 + x) * 4 + 3] = 255;
+		}
+	memset(&img, 0, sizeof(img));
+	img.w = 4;
+	img.h = 2;
+	img.pixels = px;
+	img.rgba = art;
+	img.rgba_w = 8;
+	img.rgba_h = 4;
+	if (fb_init(&fb, 960) != 0 ||
+	    (rgb = malloc((size_t)1280 * 960 * 3)) == NULL) {
+		CHECK(!"fb_init");
+		return;
+	}
+	palette_fixed(fb.pal);
+	fb_clear(&fb, 9);
+	/* Picture pixels (2, 0)-(3, 1) at (5, 5); key 0, at (3, 1). */
+	fb_image_part(&fb, &img, 2, 0, 2, 2, 5, 5, 0);
+	CHECK(fb.px[5 * FB_W + 5] == 3 && fb.px[6 * FB_W + 6] == 9);
+	fb_to_rgb(&fb, 256, rgb);
+	/* Canvas (10, 10) shows art (4, 0); (13, 11), art (7, 1). */
+	CHECK(at(rgb, 1280, 10, 10)[0] == 40 && at(rgb, 1280, 10, 10)[1] == 0 &&
+	    at(rgb, 1280, 10, 10)[2] == 7);
+	CHECK(at(rgb, 1280, 11, 11)[0] == 50 && at(rgb, 1280, 11, 11)[1] == 10);
+	CHECK(at(rgb, 1280, 12, 10)[0] == 60);
+	/* The keyed pixel keeps what was there, not art (6..7, 2..3). */
+	CHECK(at(rgb, 1280, 12, 12)[2] != 7);
+	free(rgb);
+	fb_free(&fb);
+}
+
 int
 main(void)
 {
@@ -1545,6 +1596,7 @@ main(void)
 	test_pic();
 	test_fb();
 	test_sheets();
+	test_image_part();
 	test_fonts();
 	test_tiles();
 	test_tile_terrain();

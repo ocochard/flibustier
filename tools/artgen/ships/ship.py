@@ -145,8 +145,10 @@ def sheer_at(t, s):
     top = s["sheer"]
     aft = -1 + 2 * s["stern_len"]		# where the sterncastle begins
     fore = 1 - 2 * s["bow_len"]
+    # The castles rise in a slope over most of their length, not as a
+    # box (which, seen from ahead, an image model takes for a tower).
     if t < aft:
-        top += s["stern"] * min(1.0, (aft - t) / 0.08)
+        top += s["stern"] * min(1.0, (aft - t) / (0.7 * (aft + 1)))
     if s["bow_len"] and t > fore:
         top += s["bow"] * min(1.0, (t - fore) / 0.08)
     return top
@@ -571,6 +573,9 @@ def main():
                     help="render the side view from whole to sinking in "
                     "that many steps (DIR/d0.png...), not the headings")
     ap.add_argument("--blend", help="also save the built model there")
+    ap.add_argument("--portrait", action="store_true",
+                    help="render the encounter's portrait, DIR/portrait.png:"
+                    " the ship filling the view, low over the water")
     args = ap.parse_args(argv)
     fw, fh = (int(v) for v in args.frame.split("x"))
     s = CLASSES[args.cls] if args.cls else SIZES[args.size]
@@ -609,6 +614,21 @@ def main():
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.blend),
                                     compress=True)
     os.makedirs(args.out, exist_ok=True)
+    if args.portrait:
+        # As a lookout sees her through his glass: nearly level, her bow
+        # to the left and a little towards him, filling the view.
+        tall = max(h for _, h, _ in s["masts"]) + s["sheer"]
+        side_camera(fw, fh, max(s["length"] * 1.6, tall * 1.5))
+        cam = bpy.context.scene.camera
+        cam.location = (-200 * math.cos(math.radians(4)), 0,
+                        200 * math.sin(math.radians(4)) + tall * 0.55)
+        cam.rotation_euler = (math.radians(86), 0, -math.pi / 2)
+        water()
+        pivot.rotation_euler = (0, 0, math.radians(48))
+        bpy.context.scene.render.filepath = os.path.join(args.out,
+                                                         "portrait.png")
+        bpy.ops.render.render(write_still=True)
+        return
     if args.damage:
         # Each class wider with the square root of its length, against
         # the largest (true scale would make a sloop a speck).

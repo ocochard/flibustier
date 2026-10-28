@@ -1827,6 +1827,141 @@ def frame_fit_workflow(image, bounds, asset, height, out_w, out_h, prefix):
     }
 
 
+PORTRAIT_RENDER = (768, 768)		# a ship's portrait as rendered
+# The encounter's spyglass views: 5 of 200x200 on black, at these
+# places of the picture, shown in turn (screens.c, encounter_picture).
+PORTRAIT_VIEWS = [(1, 1), (202, 1), (403, 1), (1, 202), (202, 202)]
+PORTRAIT_VIEW = 200
+
+
+def portrait_sheet_workflow(photo, mask, k, prefix):
+    """A ship portrait's 5 spyglass views from one photograph: the ship
+    rising and falling a little on the swell from view to view, each
+    seen through the round glass, on black."""
+    side = round(PORTRAIT_VIEW * k)
+    win = round(PORTRAIT_RENDER[0] * 0.9)
+    spare = PORTRAIT_RENDER[0] - win
+    g = {
+        "photo": {"class_type": "LoadImage", "inputs": {"image": photo}},
+        "glass": {"class_type": "LoadImage", "inputs": {"image": mask}},
+        "gfit": {"class_type": "ImageScale", "inputs": {
+            "image": ["glass", 0], "upscale_method": "bilinear",
+            "width": side, "height": side, "crop": "disabled"}},
+        "gmask": {"class_type": "ImageToMask", "inputs": {
+            "image": ["gfit", 0], "channel": "red"}},
+        "canvas": {"class_type": "EmptyImage", "inputs": {
+            "width": round(SCREEN_W * k), "height": round(SCREEN_H * k),
+            "batch_size": 1, "color": 0}},
+    }
+    last = ["canvas", 0]
+    for n, (vx, vy) in enumerate(PORTRAIT_VIEWS):
+        t = 2 * math.pi * n / len(PORTRAIT_VIEWS)
+        cx = round(spare / 2 + spare * 0.25 * math.cos(t))
+        cy = round(spare / 2 + spare * 0.45 * math.sin(t))
+        g["c%d" % n] = {"class_type": "ImageCrop", "inputs": {
+            "image": ["photo", 0], "width": win, "height": win, "x": cx,
+            "y": cy}}
+        g["s%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["c%d" % n, 0], "upscale_method": "lanczos",
+            "width": side, "height": side, "crop": "disabled"}}
+        g["p%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": last, "source": ["s%d" % n, 0],
+            "x": round(vx * k), "y": round(vy * k), "resize_source": False,
+            "mask": ["gmask", 0]}}
+        last = ["p%d" % n, 0]
+    g["save"] = {"class_type": "SaveImage", "inputs": {
+        "images": last, "filename_prefix": prefix}}
+    return g
+
+
+def make_portrait(args, spec, a, profile, seed):
+    """A ship's encounter portrait: its class's model rendered on the
+    render host as a lookout sees it, redrawn as a photograph at sea
+    with its sky, then laid out as the 5 spyglass views."""
+    k = spec["pack"]["art_height"] / SCREEN_H
+    cls = a["portrait"]["class"]
+    host = args.render_host
+    work = "flibustier-ships/%s" % a["id"].replace("/", "-")
+    local = os.path.join(args.pack, a["file"] + ".work")
+    script = os.path.join(HERE, "ships", "ship.py")
+    try:
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "mkdir -p %s" % work], check=True,
+                       stdin=subprocess.DEVNULL)
+        subprocess.run(["scp", "-q", script, "%s:%s/" % (host, work)],
+                       check=True)
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "cd %s && rm -rf out && blender -b -P ship.py -- "
+                        "--class '%s' --portrait --out out --frame %dx%d "
+                        "> blender.log 2>&1" % (work, cls,
+                                                 *PORTRAIT_RENDER)],
+                       check=True, stdin=subprocess.DEVNULL)
+        os.makedirs(local, exist_ok=True)
+        subprocess.run(["scp", "-q", "%s:%s/out/portrait.png" % (host, work),
+                        local + "/"], check=True)
+    except subprocess.CalledProcessError as e:
+        print("%s: blender on %s failed: %s" % (a["id"], host, e),
+              file=sys.stderr)
+        return None
+    free(args.server)
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    try:
+        up = upload(args.server, os.path.join(local, "portrait.png"),
+                    "flibustier-portrait-render.png")
+        photo = render(args.server, ship_frame_workflow(
+            spec, profile, seed, up, a["prompt"], a.get("denoise", 0.75),
+            *PORTRAIT_RENDER, prefix, PORTRAIT_RENDER))
+        ppath = os.path.join(local, "photo.png")
+        with open(ppath, "wb") as f:
+            f.write(photo)
+        # The sea and sky behind every portrait: one photograph, the same
+        # seed for all, the ship cut out of her redraw and set on it.
+        sea = render(args.server, texture_workflow(
+            spec, profile, spec["portraits"]["seed"],
+            spec["portraits"]["background"], PORTRAIT_RENDER[0],
+            prefix + "-sea"))
+        spath = os.path.join(local, "sea.png")
+        with open(spath, "wb") as f:
+            f.write(sea)
+        free(args.server)
+        pup = upload(args.server, ppath, "flibustier-portrait-photo.png")
+        cut = render(args.server, cutout_workflow(
+            pup, PORTRAIT_RENDER[0], PORTRAIT_RENDER[1], prefix + "-cut"))
+        cpath = os.path.join(local, "cut.png")
+        with open(cpath, "wb") as f:
+            f.write(cut)
+        cup = upload(args.server, cpath, "flibustier-portrait-cut.png")
+        sup = upload(args.server, spath, "flibustier-portrait-sea.png")
+        onsea = render(args.server, {
+            "sea": {"class_type": "LoadImage", "inputs": {"image": sup}},
+            "ship": {"class_type": "LoadImage", "inputs": {"image": cup}},
+            "solid": {"class_type": "InvertMask", "inputs": {
+                "mask": ["ship", 1]}},
+            "put": {"class_type": "ImageCompositeMasked", "inputs": {
+                "destination": ["sea", 0], "source": ["ship", 0], "x": 0,
+                "y": 0, "resize_source": False, "mask": ["solid", 0]}},
+            "save": {"class_type": "SaveImage", "inputs": {
+                "images": ["put", 0], "filename_prefix": prefix + "-on"}}})
+        with open(ppath, "wb") as f:
+            f.write(onsea)
+        pup = upload(args.server, ppath, "flibustier-portrait-photo.png")
+        mask = upload(args.server, os.path.join(HERE, "layouts",
+                                                "spyglass.png"),
+                      "flibustier-spyglass.png")
+        sheet = render(args.server, portrait_sheet_workflow(
+            pup, mask, k, prefix + "-views"))
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    with open(os.path.join(args.pack, a["file"]), "wb") as f:
+        f.write(sheet)
+    shutil.rmtree(local)
+    return {"class": cls, "denoise": a.get("denoise", 0.75),
+            "prompt": a["prompt"].strip(),
+            "model_sha256": hashlib.sha256(open(script, "rb").read())
+            .hexdigest()}
+
+
 def write_manifest(pack, spec):
     """pack.ini: every asset that has art in the pack."""
     lines = ["# Generated by tools/artgen/artgen.py; see provenance/.",
@@ -1966,6 +2101,28 @@ def main():
                 f.write("\n")
             print("%s: %s tiles, %.0f s" % (a["id"], profile,
                                             time.time() - t0))
+            continue
+        if a.get("portrait"):
+            t0 = time.time()
+            record = make_portrait(args, spec, a, profile, seed)
+            if record is None:
+                failed.append(a["id"])
+                continue
+            pdir = os.path.join(args.pack, "provenance")
+            os.makedirs(pdir, exist_ok=True)
+            with open(os.path.join(pdir, a["id"].replace("/", "-") +
+                                   ".json"), "w") as f:
+                json.dump(dict(record, id=a["id"], file=a["file"],
+                               profile=profile, seed=seed,
+                               model="ships/ship.py",
+                               comfyui=system.get("comfyui_version"),
+                               generator=git_rev(),
+                               date=datetime.datetime.now(
+                                   datetime.timezone.utc)
+                               .isoformat(timespec="seconds")), f, indent=2)
+                f.write("\n")
+            print("%s: %s portrait, %.0f s" % (a["id"], profile,
+                                              time.time() - t0))
             continue
         if a.get("fencer"):
             t0 = time.time()
