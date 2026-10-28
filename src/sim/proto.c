@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	32
+#define STATE_VERSION	33
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -609,6 +609,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.food);
 	jb_raw(b, ",\"food_frac\":");
 	jb_int(b, s->fleet.food_frac);
+	jb_raw(b, ",\"reef_wait\":");
+	jb_int(b, s->fleet.reef_wait);
 	jb_raw(b, ",\"goods\":");
 	jb_int(b, s->fleet.goods);
 	jb_raw(b, ",\"sugar\":");
@@ -1031,6 +1033,9 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	    0));
 	f->food = (int)json_get_int(j, "food", 0);
 	f->food_frac = (int)(json_get_int(j, "food_frac", 0) & 0xFF);
+	f->reef_wait = (int)json_get_int(j, "reef_wait", 0);
+	if (f->reef_wait < 0 || f->reef_wait > 100)
+		f->reef_wait = 0;
 	f->goods = (int)json_get_int(j, "goods", 0);
 	f->sugar = (int)json_get_int(j, "sugar", 0);
 	f->capacity = (int)json_get_int(j, "capacity", 0);

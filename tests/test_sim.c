@@ -3825,6 +3825,20 @@ test_reef(void)
 	CHECK(stop == SAIL_CREW && s.crew_event == CREW_WRECKED &&
 	    s.fleet.nships == 2 && s.fleet.ships[1] == 1 &&
 	    s.fleet.crew == 2 * 3 * 32 && s.fleet.reef_wait == 100);
+	/* The wait survives a save and a load. */
+	{
+		struct sim t;
+		struct jbuf st = { 0 };
+		struct json *j;
+		char err[128];
+
+		sim_to_json(&s, &st);
+		j = json_parse(st.s, err, sizeof(err));
+		CHECK(j != NULL && sim_from_json(&t, j, err, sizeof(err)) == 0 &&
+		    t.fleet.reef_wait == 100);
+		json_free(j);
+		jb_free(&st);
+	}
 	/* Only sloops left: safe. */
 	s.crew_event = CREW_NONE;
 	s.fleet.reef_wait = 0;

@@ -64,7 +64,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 32,
+  "version": 33,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -188,6 +188,8 @@ with a message. Numbers are integers only.
   - the sword fight's `sound` (the tick's FM effect, a driver command, 0
     none) and `effect` (the digitised effect replacing it, -1 none)
     (version 32);
+  - the fleet's `reef_wait`, passes before a reef can strike again
+    (version 33; older states load it as 0);
     `deserted` the men lost at the last roll call.
 - `ship_classes` is read-only, for bots: each class's battle `guns` and
   `hull`, and its sailing speed per wind sector in `sectors` (sector
