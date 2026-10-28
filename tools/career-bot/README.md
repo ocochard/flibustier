@@ -13,7 +13,8 @@ What it does, roughly in this order of priority:
   men its gold keeps content, and divides the plunder before the crew turns
   mutinous;
 - hunts the villains named after each promotion, which gives the next
-  relative's map;
+  relative's map, sneaking into towns at war with it (`BOT_HUNT_WAR=0`
+  skips those: on 500 careers it scored 0.7 less);
 - attacks the town holding the silver train once strong enough;
 - otherwise cruises off Spanish towns (or, at peace with Spain, off its
   enemies' towns, as when playing Spain), boarding the ships it can beat,
