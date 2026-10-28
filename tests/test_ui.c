@@ -22,6 +22,7 @@
 #include "sim/json.h"
 #include "sim/proto.h"
 #include "sim/save.h"
+#include "sim/internal.h"
 #include "ui/game.h"
 #include "ui/screen.h"
 #include "ui/script.h"
@@ -997,26 +998,34 @@ test_tavern(void)
 	CHECK(g->screen == &screen_tavern && g->sim.fleet.crew == crew + men);
 	CHECK(game_script(g, "click:280,400 wait:5") == 0 &&
 	    g->screen == &screen_tavern);	/* nobody there now */
-	/* The bartender's rumours, then back. */
+	/* The bartender's rumours, then back: with news, he stays. */
+	sim_log_news(&g->sim, NEWS_WAR, NATION_SPAIN, NATION_FRANCE);
 	CHECK(game_script(g, "click:110,250 wait:40") == 0 &&
 	    g->screen == &screen_rumours);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
-	    g->screen == &screen_tavern);
-	/* A villain passed through: the bartender tells where he went;
-	 * the only one, he is not asked about again. */
+	    g->screen == &screen_tavern &&
+	    (g->sim.tavern_spots & TAVERN_BAR));
+	/* A villain passed through: with news, not a word of him. */
 	g->sim.villains[2].active = 1;
 	g->sim.villains[2].town = 3;
 	g->sim.villains[2].trail[0] = g->sim.player_town;
 	g->sim.villains[2].trail[1] = g->sim.villains[2].trail[2] =
 	    g->sim.villains[2].trail[3] = -1;
 	CHECK(game_script(g, "click:110,250 wait:40 enter wait:40") == 0 &&
+	    g->screen == &screen_tavern);
+	/* Without news, the gossip, then where the villain went; the only
+	 * one, he is not asked about again; the bartender then leaves. */
+	g->sim.nnews = 0;
+	CHECK(game_script(g, "click:110,250 wait:40 enter wait:40") == 0 &&
 	    g->screen == &screen_vnews && g->vnews_n == 1);
 	CHECK(game_script(g, "enter") == 0 && g->vnews_said == 107 &&
 	    g->vnews_where == 3);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
-	    g->screen == &screen_tavern);
+	    g->screen == &screen_tavern &&
+	    !(g->sim.tavern_spots & TAVERN_BAR));
 	/* Two villains: the question again after each, "No one?" ends
 	 * it. */
+	g->sim.tavern_spots |= TAVERN_BAR;
 	g->sim.villains[1] = g->sim.villains[2];
 	CHECK(game_script(g, "click:110,250 wait:40 enter wait:40") == 0 &&
 	    g->screen == &screen_vnews && g->vnews_n == 2);
@@ -1039,6 +1048,7 @@ test_tavern(void)
 	game_goto(g, &screen_tavern);
 	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_tavern);
 	/* The keyboard skips the seamen now; the door leads out. */
+	g->sim.tavern_spots |= TAVERN_BAR;
 	g->tavern_key = 1;
 	CHECK(game_script(g, "right") == 0 && g->tavern_key == 3);
 	CHECK(game_script(g, "click:610,300 wait:40") == 0 &&
@@ -1425,9 +1435,10 @@ test_tavern_people(void)
 	g->sim.villains[1].active = 1;
 	g->sim.villains[1].town = g->sim.player_town;
 	g->sim.tavern_spots |= TAVERN_MYSTERY;
+	/* He stays while the villain is still here (VA 0x119de). */
 	CHECK(game_script(g, "click:380,260 wait:40") == 0 &&
 	    g->screen == &screen_villain && g->villain == 1 &&
-	    !(g->sim.tavern_spots & TAVERN_MYSTERY));
+	    (g->sim.tavern_spots & TAVERN_MYSTERY));
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_sword && g->sw_stage == 1);
 	CHECK(game_script(g, "enter") == 0 && g->sw_stage == 2 &&
@@ -1440,7 +1451,8 @@ test_tavern_people(void)
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_tmap);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
-	    g->screen == &screen_tavern);
+	    g->screen == &screen_tavern &&
+	    !(g->sim.tavern_spots & TAVERN_MYSTERY));	/* nobody left */
 	/* The contact for a letter: delivered. */
 	g->sim.mission.type = MISSION_LETTER;
 	g->sim.mission.giver = 2;
@@ -1450,7 +1462,132 @@ test_tavern_people(void)
 	    g->screen == &screen_contact &&
 	    g->sim.mission.type == -MISSION_LETTER);
 	CHECK(game_script(g, "enter wait:40") == 0 &&
-	    g->screen == &screen_tavern);
+	    g->screen == &screen_tavern &&
+	    !(g->sim.tavern_spots & TAVERN_MYSTERY));
+	/* The map seller and the traveller leave for the stay, turned
+	 * down too (VA 0x1191b, 0x11935). */
+	g->sim.tavern_spots |= TAVERN_NEWS | TAVERN_MAPS;
+	CHECK(game_script(g, "click:40,350 wait:40") == 0 &&
+	    g->screen == &screen_mapman);
+	CHECK(game_script(g, "down enter wait:40") == 0 &&
+	    g->screen == &screen_tavern &&
+	    !(g->sim.tavern_spots & TAVERN_MAPS));
+	CHECK(game_script(g, "click:180,290 wait:40") == 0 &&
+	    g->screen == &screen_traveller);
+	CHECK(game_script(g, "down enter wait:40") == 0 &&
+	    g->screen == &screen_tavern &&
+	    !(g->sim.tavern_spots & TAVERN_NEWS));
+	game_free(g);
+}
+
+/* The pixels of the screen's ink in a box, less those of the picture. */
+static int
+inked(struct game *g, int x0, int y0, int x1, int y1)
+{
+	uint8_t ink = fb_nearest(&g->fb, g->ink[0], g->ink[1], g->ink[2]);
+	int x, y, n = 0;
+
+	for (y = y0; y < y1; y++)
+		for (x = x0; x < x1; x++)
+			n += (g->fb.px[y * FB_W + x] == ink) -
+			    (g->bg.pixels[y * g->bg.w + x] == ink);
+	return (n);
+}
+
+/*
+ * Time in town: three days a pass through the menu, none back from the
+ * city information or the cabin (VA 0x18771).  And the town's pages
+ * checked against the original on the way.
+ */
+static void
+test_town_time(void)
+{
+	struct game *g;
+	struct image want;
+	struct ui_event space = { 0 };
+	struct sim_town *t;
+	int32_t day;
+	int a, b, k;
+
+	space.type = EV_CHAR;
+	space.ch = ' ';
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_town);
+	t = &g->sim.towns[g->sim.player_town];
+	day = g->sim.day;
+	/* City information, then back: no time. */
+	CHECK(game_script(g, "click:300,40 wait:40") == 0 &&
+	    g->screen == &screen_cityinfo);
+	CHECK(game_script(g, "enter wait:40") == 0 &&
+	    g->screen == &screen_town && g->sim.day == day);
+	/* On foot, the town is seen by land (VA 0x19c8a). */
+	if (!(t->flags & TOWN_INLAND)) {
+		g->sim.fleet.ashore = 1;
+		CHECK(game_script(g, "click:300,40 wait:40") == 0 &&
+		    g->screen == &screen_cityinfo);
+		CHECK(pic_load(packs, "pic/arr_land", &want) == 0);
+		CHECK(g->bg.pixels != NULL && want.pixels != NULL &&
+		    g->bg.w == want.w && g->bg.h == want.h &&
+		    memcmp(g->bg.pixels, want.pixels,
+		    (size_t)want.w * want.h) == 0);
+		image_free(&want);
+		CHECK(game_script(g, "enter wait:40") == 0);
+		g->sim.fleet.ashore = 0;
+	}
+	/* The cabin: Space opens it, Space continues (VA 0xb3a5); no
+	 * time either. */
+	game_event(g, &space);
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_cabin);
+	game_event(g, &space);
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_town &&
+	    g->sim.day == day);
+	/* The Ship's Log without entries: its title alone (VA 0x1fce0). */
+	g->sim.nnews = 0;
+	game_goto(g, &screen_logbook);
+	CHECK(game_script(g, "wait:40 enter wait:1") == 0 &&
+	    g->log_page == 1);
+	CHECK(inked(g, 140, 100, 520, 140) <= 0);
+	game_goto(g, &screen_town);
+	CHECK(game_script(g, "wait:40") == 0);
+	day = g->sim.day;
+	/* Back from a building: three days. */
+	CHECK(game_script(g, "click:60,400 wait:40") == 0 &&
+	    g->screen == &screen_shipwright);
+	/* His notes at (100, 300) up to x 540 (VA 0x21932). */
+	g->wright_stage = 3;
+	g->wright_note = 282;		/* "I see nothing wrong" */
+	CHECK(game_script(g, "wait:1") == 0);
+	CHECK(inked(g, 40, 300, 98, 340) <= 0 &&
+	    inked(g, 100, 300, 540, 340) > 50);
+	CHECK(game_script(g, "enter enter wait:40") == 0 &&
+	    g->screen == &screen_town && g->sim.day == day + 3);
+	/* The recruits are offered by the rank with the town's nation
+	 * (VA 0x10f2f). */
+	g->sim.recruits = 10;
+	g->sim.rank[t->nation] = 0;
+	game_goto(g, &screen_recruit);
+	CHECK(game_script(g, "wait:40") == 0);
+	a = inked(g, 60, 300, 560, 400);
+	g->sim.rank[t->nation] = 6;
+	CHECK(game_script(g, "wait:1") == 0);
+	b = inked(g, 60, 300, 560, 400);
+	CHECK(a != b);
+	/* The governor's news: the call to arms only with enemies (VA
+	 * 0x1208e). */
+	g->sim.standing[t->nation] = 2;
+	for (k = 0; k < 4; k++)
+		g->sim.relations[t->nation][k] = 0;
+	g->sim.visit_flags &= ~VISIT_GOVERNOR;
+	game_goto(g, &screen_governor);
+	CHECK(game_script(g, "wait:40") == 0 &&
+	    g->screen == &screen_governor && g->music_request == MUS_NEWS);
+	g->sim.relations[t->nation][NATION_SPAIN] = -1;
+	g->sim.visit_flags &= ~VISIT_GOVERNOR;
+	game_switch(g, &screen_governor);
+	CHECK(g->music_request == MUS_NEWS_TITLED);
 	game_free(g);
 }
 
@@ -2077,6 +2214,7 @@ main(void)
 	test_cabin();
 	test_assault();
 	test_tavern_people();
+	test_town_time();
 	test_landing();
 	test_crew();
 	test_land_battle();

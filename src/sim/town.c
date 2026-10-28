@@ -68,6 +68,21 @@ damage_level(const struct sim_fleet *f, int i)
 	return (d > DAMAGE_LEVELS ? DAMAGE_LEVELS : d);
 }
 
+/*
+ * The class the prices count (VA 0xd1db): the type's low three bits, a
+ * galleon (5) counting as the fast galleon (8) while the era code is
+ * below 4, 1560 to 1620.  The engine keeps the fast galleons it meets
+ * as type 8 (see pick_ship), counted the same.
+ */
+static int
+price_class(const struct sim *s, int type)
+{
+	if ((type & 0xF) == 8 || ((type & 7) == 5 && s->world != NULL &&
+	    s->world->era < 3))
+		return (8);
+	return (type & 7);
+}
+
 int
 sim_repair_cost(const struct sim *s, int i)
 {
@@ -75,7 +90,8 @@ sim_repair_cost(const struct sim *s, int i)
 
 	if (i < 0 || i >= f->nships)
 		return (0);
-	return (SHIP_PRICE * ((f->ships[i] & 0xF) + 1) * damage_level(f, i));
+	return (SHIP_PRICE * (price_class(s, f->ships[i]) + 1) *
+	    damage_level(f, i));
 }
 
 int
@@ -85,7 +101,7 @@ sim_ship_price(const struct sim *s, int i)
 
 	if (i < 0 || i >= f->nships)
 		return (0);
-	return (SHIP_PRICE * ((f->ships[i] & 0xF) + 1) *
+	return (SHIP_PRICE * (price_class(s, f->ships[i]) + 1) *
 	    (10 - damage_level(f, i)));
 }
 
@@ -256,8 +272,9 @@ sim_trade(struct sim *s, int good, int n)
 	held = cargo(f, good);
 	price = m->price[good];
 	for (; n > 0; n--, done++) {		/* buying */
+		/* Only a hold exactly full refuses (VA 0x20c2c). */
 		if (m->stock[good] <= 0 || price > f->gold ||
-		    sim_hold_space(s) <= 0)
+		    sim_hold_space(s) == 0)
 			break;
 		(*held)++;
 		m->stock[good]--;
@@ -322,11 +339,7 @@ sim_tavern_open(struct sim *s)
 		n = 1;
 	s->recruits = n;
 people:
-	/* The mystery man (VA 0x10ffe): a villain hiding here, or the
-	 * mission's contact. */
-	if (sim_villain_at(s, s->player_town) < 0 &&
-	    !sim_mission_contact(s, s->player_town))
-		s->tavern_spots &= ~TAVERN_MYSTERY;
+	sim_tavern_stranger(s);
 	/* The traveller (VA 0x110c7): a price and a town not known yet,
 	 * tried until one is found or the price comes out at 50. */
 	if (s->tavern_spots & TAVERN_NEWS) {
@@ -347,14 +360,26 @@ people:
 		s->tavern_spots &= ~TAVERN_MAPS;
 }
 
+/* The mystery man (VA 0x10ffe): a villain hiding here, or the
+ * mission's contact; once gone, gone for the stay. */
+void
+sim_tavern_stranger(struct sim *s)
+{
+	if ((s->tavern_spots & TAVERN_MYSTERY) &&
+	    sim_villain_at(s, s->player_town) < 0 &&
+	    !sim_mission_contact(s, s->player_town))
+		s->tavern_spots &= ~TAVERN_MYSTERY;
+}
+
 int
 sim_buy_map(struct sim *s)
 {
+	/* He leaves for the stay, sold or not (VA 0x1191b). */
+	s->tavern_spots &= ~TAVERN_MAPS;
 	if (s->fleet.gold < MAP_PRICE)
 		return (0);
 	s->fleet.gold -= MAP_PRICE;
 	sim_map_piece(s, MAP_PIRATE);
-	s->tavern_spots &= ~TAVERN_MAPS;
 	return (1);
 }
 
@@ -373,12 +398,13 @@ learn_town(struct sim *s, int town)
 int
 sim_buy_news(struct sim *s)
 {
+	/* He leaves for the stay, sold or not (VA 0x11935). */
+	s->tavern_spots &= ~TAVERN_NEWS;
 	if (s->fleet.gold < s->news_price || s->news_town < 0 ||
 	    (size_t)s->news_town >= s->ntowns)
 		return (-1);
 	s->fleet.gold -= s->news_price;
 	learn_town(s, s->news_town);
-	s->tavern_spots &= ~TAVERN_NEWS;
 	return (s->news_town);
 }
 
@@ -594,6 +620,8 @@ sim_fresh_crew(struct sim *s, long gold)
 	f->food = NEW_FOOD;
 	f->goods = f->sugar = 0;
 	f->crew = s->reputation + 16;
+	/* The original turns only exactly 0 into 1 (VA 0x1f025); the
+	 * engine allows no fewer than one man. */
 	if (f->crew <= 0)
 		f->crew = 1;
 	s->months = 0;
@@ -666,7 +694,7 @@ sim_sail_in(struct sim *s, int town)
 }
 
 /*
- * Sneaking in (VA 0x195f5): the stay is marked (visit flags 2 and 8);
+ * Sneaking in (VA 0x195f8): the stay is marked (visit flags 2 and 8);
  * the player gets in when the town's standing x the reputation is above
  * -rand(50), and is otherwise recognized by a guard.
  */

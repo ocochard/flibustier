@@ -27,7 +27,7 @@ with a message. Numbers are integers only.
 | `battle` | `ticks` (1..10000; default 1), `turn` (-1, 0, +1), `fire` (0, 1: on the first tick only), `sails` (-1 battle, 0 keep, +1 full: a sail key pressed when they differ, as either key only flips them) | `events` (bits, below), `battle` (with `quiet`, the ticks since the last hit, which sunset counts) |
 | `flagship` | `ship` (fleet index): with several ships, the one to command, before the battle's first tick; it swaps places with ship 0 | `battle` |
 | `finish` | `keep` (0, 1): a captured ship joins the fleet | `outcome`, `aboard` after a fort battle's landing (the men left with the fleet: `assault` `start` `aboard`), `fleet_ships`, `crew`, `gold`; after a capture `loot_gold` (already aboard), `loot` (food, goods, sugar, cannon: take with `merchant` `loot`), `volunteers` (`crew` `volunteers` with `accept`); after a capture near a town whose villains' trail it holds, `villain_news` (`town`, `villains`: ask with `villain` `news`) |
-| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), `fort` (after `attack`, from the sea at a town with forts: the fort battle, fought with `battle`), or `leave` | `player_town`, `visit_flags`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
+| `town` | `action`: `enter` (the town `sail` stopped at), `sail_in`, `sneak`, `guard` (the caught sneak's duel; `weapon` 0..2), `duel_end`, `attack` (before a fort battle, a land battle or an assault: the convoys' guards join the garrison), `fort` (after `attack`, from the sea at a town with forts: the fort battle, fought with `battle`), `back` (out of a building, back to the town's menu), or `leave` | `player_town`, `visit_flags`, `day`, and after `leave` `deserted` and `crew`; `arrival` (`enter`, `fired`, `sunk`, `caught`) and `fleet_ships`; `disgraced` and `reputation` after `duel_end` |
 | `shipwright` | `action`: `prices`, `repair` or `sell`; `ships` (fleet indices) | `result`, or `repair` and `price` lists; `gold`, `shipwright_gold` |
 | `shipwright` | `action`: `sell_cannon` or `buy_cannon`; `count` (1..1000; default 1) | `traded`, `guns`; `gold`, `shipwright_gold` |
 | `land` | the land battle at the town reached: `action` `start`, `tick` (`dx`, `dy` -1..1, `button` 0/1, `ticks`), `end` | `active`, `pass`, `result` (0, 2 won, 3 lost), `won` after `end`, `units` (`[x, y, men, flags, morale]` for units 1-7; 1-3 the party) |
@@ -43,7 +43,7 @@ with a message. Numbers are integers only.
 | `assault` | `action`: `start` (`weapon`, `aboard`: men left with the fleet), `end` (after `sword` ticks), `sack`, or `governor` (`nation` 0..3, when the sack allows a conquest), at the town `sail` stopped at | `result` (1 won, 0 repelled, -1 defeated), `gold`, `hidden`, `goods`, `cannon`, `conquest`, `crew` |
 | `bank` | `action`: `divide` (the plunder), or `continue` (another expedition; `advance`: 0 or 1) | `share`, `mood` (0-3), `yours`, `fortune`, `gold`, `crew`, `difficulty` |
 | `merchant` | `action`: `open`, `buy`, `sell` (`good`: food, goods, sugar; `count`), `close` (`traded` then 2: dinner with the wife, 1: his daughter, 0: nobody), `propose` (297 refused, 298 his debt) or `pay_debt` (300 short, 299 married); `loot` opens the board on the last capture's cargo anywhere, free, with `cannon` as a fourth good, `close` ends it | `traded`, `gold`, `merchant_gold`, `hold_space`, `stock`, `price` |
-| `tavern` | `action`: `open` (counts the recruits), `recruit` (`accept`: 0 or 1) or `buy_map` (a piece of the pirate's map from the map seller, `tavern_spots` bit 0, for 50 gold) | `recruits`, `crew`, `tavern_spots`; the piece is in the state's `maps` |
+| `tavern` | `action`: `open` (counts the recruits), `recruit` (`accept`: 0 or 1) or `buy_map` (a piece of the pirate's map from the map seller, `tavern_spots` bit 0, for 50 gold; he leaves even when the player cannot pay) | `recruits`, `crew`, `tavern_spots`, `bought` (0 or 1) after `buy_map`; the piece is in the state's `maps` |
 | `governor` | `action`: `visit` (once a stay: the mission's report or an offer, promotion, a new villain, then his offer) or `pay` | `promoted`, `acres`, `paid`, `offer` (none, marque, pardon, daughter), `price`, `gold`, `villain_here` (a villain hiding in the town, or -1: fight him with `villain`), `report` (1, 2 the pirate, -1 failed, 0), `mission_offer` (its type, 0 none) and `mission_dest`, `villain` (the slot named, or -1) |
 | `career_end` | none | the reckoning retiring now would give (see "Retirement" in game-rules): `points`, `score`, `rating` (0 best), `ranks` (the nations' ranks added), `member`, `wealth`, `repute`, `mood` (the summary's CSTN entries), `age`; the game goes on |
 | `board` | `weapon` (0 rapier, 1 longsword, 2 cutlass; default 2), after a `boarding` outcome | `sword` |
@@ -126,6 +126,13 @@ with a message. Numbers are integers only.
   map cell) with 1/8-pixel remainders. `heading` and `wind` are
   directions in 256ths of a turn, 0 north, 64 east; `wind` is the
   direction it blows toward. `leaving` is the town just left, or -1.
+- Time passes in town as in the original's town menu: getting in
+  (`town` `enter`, or `sail_in` and `sneak` when they get in) and each
+  `town` `back` advance the calendar by 3 days, with the month's world
+  updates. A client sends `back` after each building it visits
+  (governor, merchant, bank, tavern, shipwright), not after the city
+  information or the cabin, which cost nothing. Loading a state in town
+  costs nothing either.
 - `sail` also stops with `encounter` when a sail is sighted. The
   `encounter` command then answers its dialogs one at a time: `stage`
   goes `sighted`, `identified`, `colours`, and is `none` once the

@@ -3900,6 +3900,151 @@ test_old_state(void)
 	jb_free(&st);
 }
 
+/*
+ * Town rules checked against the original: time in town, the visit
+ * flags after a battle or the daughter's favour, a fort sinking the
+ * last ship, the shipwright's classes, the overfull hold, the tavern's
+ * people.
+ */
+static void
+test_town_rules(void)
+{
+	struct sim s;
+	struct daughter d;
+	int32_t day;
+	int k, won;
+
+	/* Three days a pass through the menu, the month's update with
+	 * them (VA 0x18771, 0x1dd0e). */
+	sea_game(&s, 300, 300, 0);
+	sim_enter_town(&s, 1);
+	s.day_of_year = 28;
+	s.month = 0;
+	day = s.day;
+	sim_town_pass(&s);
+	CHECK(s.day == day + 3 && s.day_of_year == 31 && s.month == 1);
+	CHECK(s.crew_event == CREW_NONE);	/* no word in port */
+
+	/* Through the protocol: getting in is a pass, and each "back". */
+	{
+		struct session ss;
+		struct jbuf o = { 0 };
+
+		memset(&ss, 0, sizeof(ss));
+		ss.load = loader;
+		ss.load_world = world_cb;
+		proto_handle(&ss, "{\"cmd\":\"new_game\",\"era\":1660}", &o);
+		jb_free(&o);
+		ss.sim.fleet.leaving = 1;
+		ss.sim.player_town = -1;
+		day = ss.sim.day;
+		proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"enter\"}",
+		    &o);
+		CHECK(ss.sim.player_town == 1 && ss.sim.day == day + 3);
+		jb_free(&o);
+		proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"back\"}", &o);
+		CHECK(o.s != NULL && strstr(o.s, "\"ok\":true") != NULL &&
+		    ss.sim.day == day + 6);
+		jb_free(&o);
+		/* The map seller leaves even unpaid: "bought" 0. */
+		ss.sim.tavern_spots |= TAVERN_MAPS;
+		ss.sim.fleet.gold = 10;
+		proto_handle(&ss, "{\"cmd\":\"tavern\",\"action\":\"buy_map\"}",
+		    &o);
+		CHECK(o.s != NULL && strstr(o.s, "\"ok\":true") != NULL &&
+		    strstr(o.s, "\"bought\":0") != NULL &&
+		    !(ss.sim.tavern_spots & TAVERN_MAPS));
+		jb_free(&o);
+		proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"leave\"}", &o);
+		jb_free(&o);
+		proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"back\"}", &o);
+		CHECK(o.s != NULL && strstr(o.s, "\"ok\":false") != NULL);
+		jb_free(&o);
+		session_free(&ss);
+	}
+
+	/* Every battle forgets the stay (VA 0xe25a): the governor again. */
+	sea_game(&s, 300, 300, 0);
+	s.visit_flags = VISIT_GOVERNOR | VISIT_KEPT | VISIT_SNEAKED;
+	sim_battle_start(&s);
+	CHECK(s.visit_flags == 0);
+	s.towns[1].forts = 2;
+	s.visit_flags = VISIT_GOVERNOR;
+	sim_fort_battle_start(&s, 1);
+	CHECK(s.visit_flags == 0);
+	/* The last ship sunk by a fort: the town's prison (VA 0xe6b3). */
+	s.fleet.nships = 1;
+	s.battle.outcome = BAT_PLAYER_SUNK;
+	sim_battle_finish(&s, 0);
+	CHECK(s.jail.fresh && s.jail.cause == JAIL_FORT && s.jail.town == 1);
+	/* At sea it maroons. */
+	sea_game(&s, 300, 300, 0);
+	sim_battle_start(&s);
+	s.battle.outcome = BAT_PLAYER_SUNK;
+	sim_battle_finish(&s, 0);
+	CHECK(s.jail.fresh && s.jail.cause == JAIL_MAROONED);
+
+	/* The daughter won over reopens the bank (VA 0x12ce5). */
+	for (k = 0, won = 0; k < 20 && !won; k++) {
+		sea_game(&s, 300, 300, 0);
+		rng_seed(&s.rng, (uint64_t)k + 1, 1);
+		s.visit_flags = VISIT_KEPT | VISIT_SNEAKED;
+		d.town = 0;
+		d.charm = 16;
+		d.niece = 0;
+		d.suitor = 1;
+		won = sim_daughter_talk(&s, &d);
+		CHECK(!won || s.visit_flags == VISIT_KEPT);
+	}
+	CHECK(won);
+
+	/* The shipwright's class (VA 0xd1db): type & 7, a galleon as the
+	 * fast galleon (8) while the era code is below 4. */
+	sea_game(&s, 300, 300, 0);
+	sim_enter_town(&s, 1);
+	s.fleet.nships = 2;
+	s.fleet.ships[0] = 5;
+	s.fleet.ships[1] = 9;
+	s.fleet.damage[0] = s.fleet.damage[1] = 16;
+	CHECK(sim_repair_cost(&s, 0) == 50 * 6 && sim_ship_price(&s, 1) ==
+	    50 * 2 * 9);
+	test_world.era = 0;			/* 1560 */
+	CHECK(sim_repair_cost(&s, 0) == 50 * 9 && sim_ship_price(&s, 0) ==
+	    50 * 9 * 9);
+	test_world.era = 3;			/* 1640: code 4 */
+	CHECK(sim_repair_cost(&s, 0) == 50 * 6);
+	test_world.era = 4;
+
+	/* An overfull hold still buys; only exactly full refuses (VA
+	 * 0x20c2c). */
+	sim_merchant_open(&s);
+	s.fleet.gold = 100000;
+	s.fleet.capacity = 4;
+	s.fleet.guns = 8;
+	s.fleet.goods = s.fleet.sugar = 0;
+	s.fleet.food = 37;			/* 40 - 4 - 37 = -1 */
+	CHECK(sim_hold_space(&s) == -1 && sim_trade(&s, 1, 1) == 1);
+	s.fleet.goods = 1;
+	s.fleet.food = 35;			/* 40 - 4 - 35 - 1 */
+	CHECK(sim_hold_space(&s) == 0 && sim_trade(&s, 1, 1) == 0);
+
+	/* The traveller leaves even unpaid (VA 0x11935); the mystery man
+	 * stays while a villain hides here (VA 0x119de). */
+	s.tavern_spots = TAVERN_ALL;
+	s.fleet.gold = 0;
+	s.news_price = 60;
+	s.news_town = 2;
+	CHECK(sim_buy_news(&s) == -1 && !(s.tavern_spots & TAVERN_NEWS));
+	CHECK(sim_buy_map(&s) == 0 && !(s.tavern_spots & TAVERN_MAPS));
+	s.villains[0].active = 1;
+	s.villains[0].town = 1;
+	sim_tavern_stranger(&s);
+	CHECK(s.tavern_spots & TAVERN_MYSTERY);
+	s.villains[0].active = 0;
+	sim_tavern_stranger(&s);
+	CHECK(!(s.tavern_spots & TAVERN_MYSTERY));
+}
+
 int
 main(void)
 {
@@ -3957,6 +4102,7 @@ main(void)
 	test_food();
 	test_reef();
 	test_storm();
+	test_town_rules();
 	if (failures > 0) {
 		fprintf(stderr, "%d check(s) failed\n", failures);
 		return (1);

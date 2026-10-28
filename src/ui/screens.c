@@ -8,7 +8,6 @@
  * famous expedition.  The texts are the game's own (CSTR and CSTN).
  */
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1604,6 +1603,7 @@ master_event(struct game *g, const struct ui_event *ev)
 	}
 	/* The career begins in the start town. */
 	sim_enter_town(&g->sim, g->sim.fleet.leaving);
+	g->town_free = 0;
 	game_goto(g, &screen_town);
 }
 
@@ -1771,12 +1771,10 @@ news_body(const struct game *g, const struct sim_news *n, char *out,
 		break;
 	case NEWS_CAPTURED:
 	case NEWS_ENGAGED:
-		/* "a Spanish" "galleon", lowercased (VA 0x2d914). */
-		snprintf(name, sizeof(name), "%s", game_word(g, 8,
-		    (size_t)n->a & 15));
-		name[0] = (char)tolower((unsigned char)name[0]);
+		/* "a Spanish" "Galleon": the original's tolower at VA
+		 * 0x1e2a8 is discarded. */
 		fill(out, len, fmt, game_word(g, 68, (size_t)(n->a / 16) % 5),
-		    name);
+		    game_word(g, 8, (size_t)n->a & 15));
 		break;
 	case NEWS_WAR:
 	case NEWS_PEACE:
@@ -1823,7 +1821,7 @@ date_text(const struct game *g, char *out, size_t len)
  * 100) up to x 500.  Each page has its title (CSTN 95) centred at (320,
  * 40) in PIRATE4 and waits for a click or a key:
  * - Ship's Log (VA 0x1fc0f): every log entry (codes 1-36), 10 a leaf
- *   at (140, 100) up to x 520 ("(no entries)", CSTN 18.3, when none);
+ *   at (140, 100) up to x 520 (none: the title alone, VA 0x1fce0);
  *   the arrows of the picture (200, 420)-(240, 450) and (380, 420)-(420,
  *   450) turn the leaves, the bookmark (0, 360)-(100, 479) leaves.
  * - Party Status (VA 0xa2ca): CSTR 104 at (160, 100) up to x 560.
@@ -1985,8 +1983,7 @@ logbook_draw(struct game *g)
 			strncat(text, line, sizeof(text) - strlen(text) - 2);
 			strcat(text, "\r");
 		}
-		if (n == 0)
-			snprintf(text, sizeof(text), "%s", game_word(g, 18, 3));
+		/* No entries: the title alone (VA 0x1fce0). */
 		draw(g, FONT_BODY, 140, 100, 380, text, 0);
 		return;
 	case LOG_PARTY:
@@ -2164,11 +2161,15 @@ cabin_enter(struct game *g)
 static void
 cabin_choose(struct game *g, int i)
 {
+	const struct screen *next;
+
 	g->msg[0] = '\0';
 	switch (i) {
 	case CABIN_CONTINUE:
-		game_goto(g, g->sim.player_town >= 0 ? &screen_town :
-		    g->world != NULL ? &screen_sail : &screen_town);
+		next = g->sim.player_town >= 0 || g->world == NULL ?
+		    &screen_town : &screen_sail;
+		g->town_free = next == &screen_town;	/* VA 0x18901 */
+		game_goto(g, next);
 		break;
 	case CABIN_CAVE:
 		g->cave_back = &screen_cabin;
@@ -2255,6 +2256,11 @@ cabin_event(struct game *g, const struct ui_event *ev)
 		else if (ev->key == UI_KEY_ENTER)
 			cabin_choose(g, g->cabin_key);
 		else if (ev->key == UI_KEY_ESCAPE)
+			cabin_choose(g, CABIN_CONTINUE);
+		break;
+	case EV_CHAR:
+		/* Space continues too (VA 0xb3a5, keys at VA 0x32a60). */
+		if (ev->ch == ' ')
 			cabin_choose(g, CABIN_CONTINUE);
 		break;
 	default:
@@ -3880,7 +3886,7 @@ sword_outcome_done(struct game *g)
 	}
 	if (g->sw_guard) {
 		g->sw_guard = 0;
-		/* Back to sea either way (VA 0x195f5); a loss or a retreat
+		/* Back to sea either way (VA 0x195f8); a loss or a retreat
 		 * is a disgrace (VA 0x165b8). */
 		game_goto(g, sim_duel_end(&g->sim) ? &screen_disgrace :
 		    &screen_sail);
@@ -4252,6 +4258,12 @@ town_enter(struct game *g)
 	game_portrait(g, NULL);
 	load_bank(g, game_town_asset(g, "spr/town", id, sizeof(id)), 0,
 	    &g->town_spr);
+	/* Three days a pass, but none back from the city information or
+	 * the cabin, nor on resuming a saved game (VA 0x18771). */
+	if (g->town_free)
+		g->town_free = 0;
+	else
+		sim_town_pass(&g->sim);
 	g->town_spot = -1;
 	g->ink[0] = g->ink[1] = g->ink[2] = 0;
 	g->highlight[0] = g->highlight[1] = g->highlight[2] = 0;
@@ -4401,8 +4413,9 @@ cityinfo_enter(struct game *g)
 {
 	const struct sim_town *t = info_town(g);
 
-	game_background(g, t != NULL && (t->flags & TOWN_INLAND) ?
-	    "pic/arr_land" : "pic/arr_sea");
+	/* By land for an inland town or a party on foot (VA 0x19c8a). */
+	game_background(g, t != NULL && ((t->flags & TOWN_INLAND) ||
+	    g->sim.fleet.ashore) ? "pic/arr_land" : "pic/arr_sea");
 	game_portrait(g, NULL);
 	g->ink[0] = 240;	/* light, on black */
 	g->ink[1] = 220;
@@ -4414,6 +4427,7 @@ cityinfo_event(struct game *g, const struct ui_event *ev)
 {
 	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
 	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))) {
+		g->town_free = g->info_back == NULL;	/* VA 0x188b2 */
 		game_goto(g, g->info_back != NULL ? g->info_back :
 		    &screen_town);
 		g->info_town = -1;
@@ -4490,6 +4504,8 @@ const struct screen screen_cityinfo = {
 #define WRIGHT_TEXT_X		40
 #define WRIGHT_TEXT_Y		300
 #define WRIGHT_TEXT_W		540
+#define WRIGHT_NOTE_X		100	/* his notes, up to x 540 (VA 0x21932) */
+#define WRIGHT_NOTE_W		440
 
 static void
 wright_note(struct game *g, int cstr)
@@ -4663,7 +4679,7 @@ shipwright_draw(struct game *g)
 		    text, 1);
 		break;
 	default:
-		draw(g, FONT_BODY, WRIGHT_TEXT_X, WRIGHT_TEXT_Y, WRIGHT_TEXT_W,
+		draw(g, FONT_BODY, WRIGHT_NOTE_X, WRIGHT_TEXT_Y, WRIGHT_NOTE_W,
 		    game_str(g, g->wright_note), 0);
 		continue_prompt(g);
 		return;
@@ -5078,6 +5094,9 @@ tavern_enter(struct game *g)
 	    &g->tavern_spr);
 	g->tavern_spot = -1;
 	g->ink[0] = g->ink[1] = g->ink[2] = 0;
+	/* Back from the mystery man: still there while a villain hides
+	 * here or the contact is due (VA 0x119de). */
+	sim_tavern_stranger(&g->sim);
 }
 
 static void
@@ -5100,9 +5119,8 @@ tavern_choose(struct game *g, int i)
 	else if (i == SPOT_CABIN)
 		game_goto(g, &screen_cabin);
 	else if (i == TAVERN_STRANGER) {
-		/* The mystery man (VA 0x11867): a villain, else the
-		 * mission's contact; he then leaves. */
-		g->sim.tavern_spots &= ~TAVERN_MYSTERY;
+		/* The mystery man (VA 0x119b5): a villain, else the
+		 * mission's contact; he leaves when neither is left. */
 		g->villain_back = &screen_tavern;
 		g->villain = sim_villain_at(&g->sim, g->sim.player_town);
 		if (g->villain >= 0) {
@@ -5112,7 +5130,8 @@ tavern_choose(struct game *g, int i)
 		    g->sim.player_town)) {
 			sim_mission_done(&g->sim);
 			game_goto(g, &screen_contact);
-		}
+		} else
+			sim_tavern_stranger(&g->sim);
 	} else
 		snprintf(g->msg, sizeof(g->msg), "(Not implemented yet.)");
 }
@@ -5228,6 +5247,7 @@ static void
 recruit_draw(struct game *g)
 {
 	const char *arg[4];
+	const struct sim_town *t = here(g);
 	char text[600], men[16];
 	int r = g->sim.reputation / 4 + 1;
 
@@ -5241,7 +5261,9 @@ recruit_draw(struct game *g)
 	snprintf(men, sizeof(men), "%d", g->sim.recruits);
 	arg[0] = game_word(g, W_REPUTATION, (size_t)(r < 0 ? 0 : r > 5 ? 5 :
 	    r));
-	arg[1] = game_word(g, W_RANK, 0);	/* ranks: not modelled yet */
+	/* The rank with the town's nation (VA 0x10f2f). */
+	arg[1] = game_word(g, W_RANK, t != NULL && t->nation <= NATION_PIRATE ?
+	    g->sim.rank[t->nation] : 0);
 	arg[2] = g->sim.player.name;
 	arg[3] = men;
 	fill_args(text, sizeof(text), game_str(g, S_RECRUITS), arg, 4);
@@ -5272,11 +5294,20 @@ rumours_enter(struct game *g)
 static void
 rumours_event(struct game *g, const struct ui_event *ev)
 {
-	/* Then what he knows of villains (VA 0x10b10, 0x1eba6). */
-	if (ev->type == EV_CLICK || (ev->type == EV_KEY &&
-	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)))
-		if (!vnews_offer(g, 1, g->sim.player_town, &screen_tavern))
-			game_goto(g, &screen_tavern);
+	struct sim_news pub[1];
+
+	if (!(ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE))))
+		return;
+	/* With news he stays.  Without, after the gossip, what he knows of
+	 * villains, and he leaves for the stay (VA 0x1184c, 0x10b10,
+	 * 0x1eba6). */
+	if (public_news(g, pub, 1) == 0) {
+		g->sim.tavern_spots &= ~TAVERN_BAR;
+		if (vnews_offer(g, 1, g->sim.player_town, &screen_tavern))
+			return;
+	}
+	game_goto(g, &screen_tavern);
 }
 
 /*
@@ -5290,7 +5321,7 @@ gossip_text(const struct game *g, char *out, size_t len)
 {
 	const struct sim_news *n = NULL;
 	size_t i = sim_news_kept(&g->sim);
-	char word[160], ship[40];
+	char word[160];
 	int code = 0;
 
 	if (i > 0 && sim_news_at(&g->sim, i - 1)->code == NEWS_VISITED)
@@ -5318,11 +5349,11 @@ gossip_text(const struct game *g, char *out, size_t len)
 	case NEWS_CAPTURED:
 	case 5:
 	case NEWS_ENGAGED:
-		snprintf(ship, sizeof(ship), "%s", game_word(g, 8,
-		    (size_t)n->a & 15));
-		ship[0] = (char)tolower((unsigned char)ship[0]);
+		/* The class as written: the tolower at VA 0x10ce5 is
+		 * discarded. */
 		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
-		    game_word(g, 68, (size_t)(n->a / 16) % 5), ship);
+		    game_word(g, 68, (size_t)(n->a / 16) % 5),
+		    game_word(g, 8, (size_t)n->a & 15));
 		break;
 	case NEWS_TAKEN:
 		fill(word, sizeof(word), game_word(g, W_GOSSIP, (size_t)code),
@@ -5484,6 +5515,9 @@ static void	governor_next(struct game *);
 static void
 governor_enter(struct game *g)
 {
+	const struct sim_town *t;
+	int k, enemies = 0;
+
 	governor_inks(g, "pic/governor");
 	if (g->gov_resume) {
 		g->gov_resume = 0;
@@ -5499,9 +5533,12 @@ governor_enter(struct game *g)
 		return;
 	}
 	g->sim.visit_flags |= VISIT_GOVERNOR;
-	/* His news, warmer for a titled player (VA 0x11d64). */
-	game_music(g, g->sim.player_town >= 0 && g->sim.standing[
-	    g->sim.towns[g->sim.player_town].nation & 3] >= 2 ?
+	/* His news, a call to arms when his nation has enemies and the
+	 * player's standing is 2 or more (VA 0x1208e). */
+	t = here(g);
+	for (k = 0; t != NULL && t->nation < 4 && k < 4; k++)
+		enemies += g->sim.relations[t->nation][k] == -1;
+	game_music(g, enemies > 0 && g->sim.standing[t->nation] >= 2 ?
 	    MUS_NEWS_TITLED : MUS_NEWS);
 	g->gov_rank = g->gov_acres = 0;
 	g->gov_villain = -1;
@@ -6846,7 +6883,8 @@ mapman_enter(struct game *g)
 static void
 mapman_choose(struct game *g, int i)
 {
-	if (i != 0) {
+	if (i != 0) {			/* he leaves anyway (VA 0x1191b) */
+		g->sim.tavern_spots &= ~TAVERN_MAPS;
 		game_goto(g, &screen_tavern);
 		return;
 	}
@@ -6896,7 +6934,8 @@ traveller_choose(struct game *g, int i)
 {
 	int town;
 
-	if (i != 0) {
+	if (i != 0) {			/* he leaves anyway (VA 0x11935) */
+		g->sim.tavern_spots &= ~TAVERN_NEWS;
 		game_goto(g, &screen_tavern);
 		return;
 	}
@@ -8576,13 +8615,9 @@ ending_life(struct game *g, char *out, size_t len)
 		    (size_t)(g->sim.married + 1)), NULL);
 	strncat(out, part, len - strlen(out) - 1);
 	if (g->sim.relative > 0) {
-		char count[24];
-
-		/* "one", the number word lowercased (VA 0x2d914). */
-		snprintf(count, sizeof(count), "%s", game_word(g, 79,
-		    (size_t)g->sim.relative));
-		count[0] = (char)tolower((unsigned char)count[0]);
-		arg[0] = count;
+		/* The number word as written: the tolower at VA 0x4ed8
+		 * is discarded. */
+		arg[0] = game_word(g, 79, (size_t)g->sim.relative);
 		arg[1] = g->sim.relative == 1 ? "" : game_word(g, 79, 0);
 		fill_args(part, sizeof(part), game_str(g, 77), arg, 2);
 		strncat(out, " ", len - strlen(out) - 1);

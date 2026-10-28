@@ -1843,7 +1843,8 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 }
 
 /* "enter" the town the fleet just reached (sail stopped at it), or
- * "leave" the town the player is in. */
+ * "leave" the town the player is in.  Getting in and each "back" from a
+ * building are passes through the town's menu: three days each. */
 static void
 cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
@@ -1876,6 +1877,14 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 			}
 			sim_guard_duel(s, s->fleet.leaving, (int)w);
 		}
+		if (s->player_town >= 0)
+			sim_town_pass(s);
+	} else if (action != NULL && strcmp(action, "back") == 0) {
+		if (s->player_town < 0) {
+			reply_error(out, "not in a town");
+			return;
+		}
+		sim_town_pass(s);
 	} else if (action != NULL && strcmp(action, "duel_end") == 0) {
 		if (!s->sword.active || s->sword.kind != SWORD_DUEL ||
 		    s->sword.result == SWORD_NONE) {
@@ -1909,13 +1918,15 @@ cmd_town(struct session *ss, const struct json *cmd, struct jbuf *out)
 		sim_leave_town(s);
 	} else {
 		reply_error(out, "town needs \"action\": enter, sail_in, sneak, "
-		    "guard, duel_end, attack, fort or leave");
+		    "guard, duel_end, attack, fort, back or leave");
 		return;
 	}
 	jb_raw(out, "{\"ok\":true,\"player_town\":");
 	jb_int(out, s->player_town);
 	jb_raw(out, ",\"visit_flags\":");
 	jb_int(out, s->visit_flags);
+	jb_raw(out, ",\"day\":");
+	jb_int(out, s->day);
 	if (arrival >= 0) {
 		jb_raw(out, ",\"arrival\":");
 		jb_str(out, arrivals[arrival]);
@@ -2180,6 +2191,7 @@ cmd_tavern(struct session *ss, const struct json *cmd, struct jbuf *out)
 {
 	const char *action = json_get_str(cmd, "action");
 	struct sim *s = &ss->sim;
+	int bought = -1;
 
 	if (s->player_town < 0) {
 		reply_error(out, "not in a town");
@@ -2198,10 +2210,8 @@ cmd_tavern(struct session *ss, const struct json *cmd, struct jbuf *out)
 			reply_error(out, "no map seller");
 			return;
 		}
-		if (!sim_buy_map(s)) {
-			reply_error(out, "not enough gold");
-			return;
-		}
+		/* He leaves even when the player cannot pay. */
+		bought = sim_buy_map(s);
 	} else {
 		reply_error(out, "tavern needs \"action\": open, recruit or "
 		    "buy_map");
@@ -2213,6 +2223,10 @@ cmd_tavern(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_int(out, s->fleet.crew);
 	jb_raw(out, ",\"tavern_spots\":");
 	jb_int(out, s->tavern_spots);
+	if (bought >= 0) {
+		jb_raw(out, ",\"bought\":");
+		jb_int(out, bought);
+	}
 	jb_raw(out, "}");
 }
 

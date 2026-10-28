@@ -21,6 +21,7 @@
 #define FLAG_OBSOLETE		0x20	/* an event made it out of date */
 #define STANDING_FLOOR		(-3)	/* after an amnesty */
 #define TICKS_PER_DAY		64
+#define TOWN_DAYS		3	/* a pass through the town's menu */
 #define WIND_TICKS		128	/* the wind may shift this often */
 #define WIND_START		0xC0	/* blowing west: the trade winds */
 #define SPEED_MIN		4
@@ -1414,13 +1415,25 @@ sim_enter_town(struct sim *s, int town)
 		return;
 	sim_arrive(s, town);
 	/* Every arrival is logged (VA 0x17e78, from the main loop at VA
-	 * 0x1da14).  The original stops logging for good once a saved game
-	 * is loaded (VA 0x45e84 bit 1, never cleared); the engine goes on. */
+	 * 0x1da14).  The original skips it only for the arrival a saved
+	 * game resumes (VA 0x45e84 bit 1, cleared by the town menu at VA
+	 * 0x186c3), which does not come through here. */
 	log_news(s, NEWS_VISITED, town, 0);
 	s->player_town = town;
 	s->tavern_spots = TAVERN_ALL;		/* VA 0x18fa9 */
 	t = &s->towns[town];
 	t->flags = (uint16_t)((t->flags | FLAG_KNOWN) & ~FLAG_OBSOLETE);
+}
+
+/*
+ * Time in town (VA 0x18771): each pass through the menu advances the
+ * calendar by three days, the month's updates with it, as at sea (VA
+ * 0x1dd0e).  The crew does not speak in port.
+ */
+void
+sim_town_pass(struct sim *s)
+{
+	sim_advance(s, TOWN_DAYS);
 }
 
 void

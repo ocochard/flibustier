@@ -621,6 +621,10 @@ enum sail_stop	sim_march(struct sim *s, int dx, int dy, int ticks, int *town);
 
 /* Enter a town (arriving or returning to it), and leave it. */
 void	sim_enter_town(struct sim *s, int town);
+/* A pass through the town's menu (VA 0x18771): three days.  Callers
+ * make one on the way in and on each return from a building, none from
+ * the city information or the cabin, nor on resuming a saved game. */
+void	sim_town_pass(struct sim *s);
 /* At the arrival menu (VA 0x18fa9): the stay's memory of the town is
  * kept for the same town, forgotten for another. */
 void	sim_arrive(struct sim *s, int town);
@@ -693,6 +697,7 @@ void	sim_merchant_close(struct sim *s);
 #define TAVERN_CREW	((1u << 2) | (1u << 7) | (1u << 8) | (1u << 9))
 #define TAVERN_MAPS	(1u << 0)	/* the map seller */
 #define TAVERN_NEWS	(1u << 1)	/* the traveller */
+#define TAVERN_BAR	(1u << 3)	/* the bartender */
 #define TAVERN_MAID	(1u << 4)
 #define TAVERN_MYSTERY	(1u << 5)
 #define MAP_PRICE	50	/* the map seller's text says 500 */
@@ -721,11 +726,16 @@ int	sim_search(struct sim *s, struct sim_find found[SIM_MAPS]);
 void	sim_tavern_open(struct sim *s);
 /* Sign them up (or not); the crew is then gone until next time. */
 void	sim_recruit(struct sim *s, int accept);
+/* The mystery man (VA 0x10ffe), checked on entering and again after
+ * meeting him: he stays while a villain hides here or the mission's
+ * contact is due. */
+void	sim_tavern_stranger(struct sim *s);
 /* The map seller (VA 0x112ef): a piece of a treasure map for 50 gold;
- * 0 when the player cannot pay. */
+ * 0 when the player cannot pay.  He leaves either way. */
 int	sim_buy_map(struct sim *s);
 /* The traveller (VA 0x1116f): news of his town for his price; returns
- * the town now known, or -1 when the player cannot pay. */
+ * the town now known, or -1 when the player cannot pay.  He leaves
+ * either way. */
 int	sim_buy_news(struct sim *s);
 /* The barmaid (VA 0x114d4).  sim_barmaid_meet: 0 she offers a drink
  * (CSTR 301), 1 she asks what the player wants (CSTR 302), 2 she

@@ -234,6 +234,8 @@ sim_battle_start(struct sim *s)
 
 	memset(bt, 0, sizeof(*bt));
 	bt->active = 1;
+	/* Every battle forgets the stay in town (VA 0xe25a). */
+	s->visit_flags = 0;
 	bt->wind = s->wind;
 	bt->wind_strength = rng_below(&s->rng, 3);
 	choose_screens(s);
@@ -292,6 +294,7 @@ sim_fort_battle_start(struct sim *s, int town)
 	e->town = town;
 	memset(bt, 0, sizeof(*bt));
 	bt->active = 1;
+	s->visit_flags = 0;		/* VA 0xe25a, as at sea */
 	bt->fort = 1;
 	bt->wind = s->wind;
 	bt->wind_strength = rng_below(&s->rng, 3);
@@ -981,9 +984,12 @@ sim_battle_finish(struct sim *s, int keep)
 		    (s->encounter.type & 0xF), 0);
 	bt->active = 0;
 	/* Beaten aboard: prison in the ship (VA 0x16647); the last ship
-	 * sunk: marooned (VA 0x1f2a1). */
+	 * sunk: marooned, or by a fort the town's prison, as the battle
+	 * passes its fort flag on (VA 0xe6b3, 0x1f2a1). */
 	if (o == BAT_DEFEATED)
 		sim_imprison(s, JAIL_SHIP, -1);
+	else if (o == BAT_PLAYER_SUNK && last && bt->fort)
+		sim_imprison(s, JAIL_FORT, s->encounter.town);
 	else if (o == BAT_PLAYER_SUNK && last)
 		sim_imprison(s, JAIL_MAROONED, -1);
 	/* A boarding that fails, beaten back or beaten (the latter after

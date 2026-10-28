@@ -342,6 +342,9 @@ sim_daughter_talk(struct sim *s, const struct daughter *d)
 		return (0);
 	s->towns[d->town].governor |= GOV_INFORMANT;
 	s->romances++;
+	/* She lets the player off the stealth: the bank opens again (VA
+	 * 0x12ce5). */
+	s->visit_flags &= ~VISIT_SNEAKED;
 	return (1);
 }
 

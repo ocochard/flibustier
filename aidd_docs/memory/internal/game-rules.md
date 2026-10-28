@@ -347,8 +347,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     "in the ship" (CSTN 77.4), after the flagship is lost.
   - The last ship sunk in a sea battle (VA `0x1f2a1`, `from_fort` 0):
     marooned.
-  - The last ship sunk by a fort's salvo on arrival (`from_fort` 1):
-    prison in the town.
+  - The last ship sunk by a fort's salvo on arrival, or in a fort
+    battle (the battle passes its fort flag as `from_fort`, VA `0xe6b3`
+    and `0xe811`): prison in the town.
 - **Pages:** on `prison.pcx` (picture 10) at (300, 150) up to x 560,
   "You are imprisoned in %s" (CSTR 175, the town or "the ship"); after
   a fort's salvo (VA `0x1f2a1`) that page and the next ones at (320,
@@ -1627,7 +1628,7 @@ move) and `0x38a1a` to `0x38b99`.
     (CSTR 117): a random ship is lost with its share of the cargo (see
     losing a ship). With the last ship, the prison path: CSTR 175 and
     190.
-- **Sneaking in (VA `0x195f5`):** visit flags 2 and 8 are set. The
+- **Sneaking in (VA `0x195f8`):** visit flags 2 and 8 are set. The
   player is in when `town word 9 x reputation > -rand(50)`. Otherwise,
   on `landpir.pcx`, a guard recognizes the player (CSTR 163, at (40,
   150) up to x 240), then a duel in the alley (scene 0), with the
@@ -1648,8 +1649,16 @@ move) and `0x38a1a` to `0x38b99`.
 - The last ship: marooned after a sea battle, or imprisoned in the town
   when `from_fort` (see "Prison"); the ship stays in the fleet's first
   slot, and the fresh start that follows keeps her type.
-- Callers: a ship sold (keep 1), the flagship lost in battle (VA
-  `0xe81d`, keep 0), the fort's salvo on arrival (keep 0, from_fort 1).
+- Callers (seven sites):
+  - VA `0xe6bc`, the flagship sunk in battle: `(0, 0, fort)`, the
+    battle's fort flag (its first argument, set by the town's attack
+    at VA `0x18e35`, 0 at sea at VA `0x28503`);
+  - VA `0xe81d`, the flagship taken: `([0x45f10], 0, fort)`;
+  - VA `0x195d1`, the fort's salvo on arrival (keep 0, from_fort 1);
+  - VA `0x1f6fc`, manning the fleet with one ship;
+  - VA `0x1f748`, manning abandons ship `[0x49b0c]` (keep 1);
+  - VA `0x21d37`, a ship sold (keep 1);
+  - VA `0x286d0`, the reefs.
 
 Every way in marks the town's information as current: flag 0x80 set,
 0x20 cleared. A random town event (see the world update) clears 0x80
@@ -1659,12 +1668,22 @@ and, when it was set, sets 0x20 ("information obsolete").
 
 | Bit | Meaning |
 |---|---|
-| 1 | the governor has been seen this stay |
+| 1 | the governor has been seen this stay, or the town has fewer than 6 citizens (set by the menu, VA `0x18739`) |
 | 2 | set when sneaking in and by the traveller's draw, kept on a return; nothing reads it |
 | 8 | sneaked in: the bank is closed |
 
 On entering a different town the flags are cleared; on re-entering the
-same town only bits 1 and 2 are kept.
+same town only bits 1 and 2 are kept. They are also cleared:
+- at the start of every battle, at sea or against a fort (VA `0xe25a`,
+  both through VA `0xe245`): after a battle the governor receives again
+  in the same town;
+- by a fresh start (VA `0x1f036`);
+- by the calendar at each month crossed (VA `0x1df19`, in VA
+  `0x1dd0e`) unless VA `0x47aca` has bit 2 (set on arriving with a
+  ship). The engine does not model VA `0x47aca` and leaves this out.
+
+Bit 8 alone is cleared when the governor's daughter is won over (VA
+`0x12ce5`, `and [0x45f0a], 0xf7`): the bank opens again.
 
 ### Town screen (VA `0x1869b`, picture VA `0x18547`)
 
@@ -1685,6 +1704,21 @@ same town only bits 1 and 2 are kept.
   - 5 city information (the scroll);
   - 6 leave town.
 - **Choice 7:** the captain's cabin, from the Space key.
+- **Labels:** pointing at a building shows its label (CSTN group 84) on
+  the scroll; pointing elsewhere restores the name.
+- **Keyboard:** the arrows step through the open buildings, wrapping
+  around. Enter or Escape goes into the selected one.
+- **Time in town (VA `0x18771`):** each pass through the menu loop
+  calls VA `0x1dd0e` with `si` days, which advances the day counter (VA
+  `0x46052`) and runs the month-boundary updates as at sea (the crew
+  does not speak in port: VA `0x47aca` is not 0). `si` is 3 after every
+  pass (VA `0x1878d`), so getting in costs 3 days, and so does each
+  return from the governor, the merchant, the bank, the tavern or the
+  shipwright. The city information and the cabin set `si` to 0 (VA
+  `0x188b2`, `0x18901`): they cost nothing. Leaving ends the loop before
+  the next pass. The first pass is free when bit 2 of VA `0x45e84` is
+  set (a saved game just loaded), and the bit is then cleared (VA
+  `0x186bb`-`0x186c3`).
 
 ### The captain's cabin (VA `0x9ffc`)
 
@@ -1716,8 +1750,9 @@ same town only bits 1 and 2 are kept.
   its title (CSTN 95) centred at (320, 40) in PIRATE4, then waits:
   - **Ship's Log (VA `0x1fc0f`):** the log's entries with codes 1-36
     (VA `0x1fa07`), oldest first, 10 a leaf, each a dated line (VA
-    `0x1e144`), at (140, 100) up to x 520; "(no entries)" (CSTN 18.3)
-    when none. The picture's arrows (200, 420)-(240, 450) and (380,
+    `0x1e144`), at (140, 100) up to x 520. With none, the leaf is
+    skipped (VA `0x1fcd9`-`0x1fce0`, before VA `0x1fa91`): the page
+    shows its title alone. The picture's arrows (200, 420)-(240, 450) and (380,
     420)-(420, 450) turn the leaves when there are more; the EXIT
     bookmark (0, 360)-(100, 479) leaves (table at VA `0x34638`).
   - **Party Status (VA `0xa2ca`):** CSTR 104 at (160, 100) up to x 560:
@@ -1782,15 +1817,16 @@ same town only bits 1 and 2 are kept.
   3) against the first mate (title 5): 200 men of factor 32 a side, the
   weapon chosen first. Afterwards the practice value (VA `0x45e90`)
   rises by 5, to at most 30.
-- **Labels:** pointing at a building shows its label (CSTN group 84) on
-  the scroll; pointing elsewhere restores the name.
-- **Keyboard:** the arrows step through the open buildings, wrapping
-  around. Enter or Escape goes into the selected one.
+- **Keys (table at VA `0x32a60`):** Right and Left step through the
+  enabled spots, wrapping around; Enter takes the selected one; Escape
+  and Space both continue the travels (VA `0xb3a5`). `L` opens a
+  language menu, which the engine leaves to its own language option.
 
 ### City information (VA `0x19c62`, text VA `0x196d0`)
 
-- **Picture:** `arr_sea.pcx`, or `arr_land.pcx` for an inland town or a
-  land arrival.
+- **Picture:** `arr_sea.pcx`, or `arr_land.pcx` for an inland town or
+  when the player came on foot (VA `0x47aca` bit 0; VA `0x19c8a`-
+  `0x19ca7`).
 - **Text:** at (400, 150), up to x 620.
   - With current information (flag 0x80), CSTN 23.0 is filled with:
     - the name and nation;
@@ -1809,7 +1845,7 @@ same town only bits 1 and 2 are kept.
     `rank with Spain x 25 + the era's tolerance` (VA `0x45e7f`, and
     `0x4707f`, the era block's byte `0xF9`: 105 in 1560, 150 in 1600,
     135, 110, 115, 145) is below the town's wealth (word 8). The same
-    test guards the merchant (VA `0x21424`).
+    test guards the merchant (VA `0x21ed3`).
   - "You have nothing of worth" (CSTR 278) when the arrival mode (VA
     `0x47aca`) is 3, probably a party on foot.
 - **His gold (once per stay, VA `0x45f08`):**
@@ -1817,9 +1853,14 @@ same town only bits 1 and 2 are kept.
   - `gold = ((citizens + 10) x x / 150) x 600`, at most 50,000.
   - It is kept for the stay, and reset in another town.
 - **Menu (CSTR 277):** parting company, repairing a ship, selling a
-  ship, selling some cannon.
-- **Prices (VA `0xffae`):** with class `c` (type `& 0xF`) and damage
-  level `d = min(damage / 16, 3)`:
+  ship, selling some cannon, at (40, 300) up to x 580. His notes (the
+  refusals, CSTR 279, 282-284, 319) are at (100, 300) up to x 540 (VA
+  `0x21932` and the like).
+- **Prices (VA `0xffae`):** with class `c` and damage level `d =
+  min(damage / 16, 3)`. The class comes from VA `0xd1db` (called at VA
+  `0x100d0`): `type & 7`, a galleon (5) counting as the fast galleon
+  (8) while the era code (VA `0x45e8c`) is below 4, 1560 to 1620. The
+  engine keeps the fast galleons it meets as type 8 and counts them so.
   - a repair costs `50 x (c + 1) x d`;
   - a ship sells for `50 x (c + 1) x (10 - d)`.
 - **Repairing:**
@@ -1886,7 +1927,9 @@ sign, the texts at (40, 280) up to x 620.
      flagship alone, repaired, with a tenth of the gold; when the gold
      is 0, a tenth of the fortune less a tenth. The fleet gets that
      ship's capacity, `type x 2 + 6` guns, 15 food, no goods, and a new
-     crew of `reputation + 16` (at least 1).
+     crew of `reputation + 16`, of which only exactly 0 becomes 1 (VA
+     `0x1f017`-`0x1f029` tests the word unsigned); the engine makes any
+     count below 1 one man (an engine fix).
 
 ### Cargo
 
@@ -1930,7 +1973,8 @@ sign, the texts at (40, 280) up to x 620.
 - **Trading:**
   - One price both ways, one unit at a time.
   - **Buying** needs merchant stock, the price in gold and space in the
-    hold.
+    hold: only a hold exactly full refuses (VA `0x20c2c`, `cmp
+    [0x49b0e], 0; je`), so an overfull one still buys.
   - **Selling** needs a unit and the merchant's gold.
   - The gold changes hands; the merchant's stock rises and falls.
 - **Closing:** if the player's gold moved by more than 20, the town's
@@ -1986,7 +2030,15 @@ sign, the texts at (40, 280) up to x 620.
 A signed byte, 0 at the start:
 - +1 for each capture (VA `0xdb7b`);
 - -2 for a failed boarding, beaten back or beaten (VA `0xe775`);
-- set to -1 after a disgrace in a duel (CSTR 174).
+- set to -1 after a disgrace in a duel (CSTR 174);
+- -1 for an assault on a town that fails (VA `0x18f57`);
+- +2 for a sack that yields 100 gold or more (VA `0x22af1`);
+- -4 for a mutiny (VA `0x1de82`);
+- each month, `r -= r >> 3` (VA `0xcf0c`);
+- the bank moves it halfway to the crew's share (VA `0x181fb`, see
+  "Bank").
+
+The prison reads it for its spells, `rep / 2 + 7` (VA `0x1f834`).
 
 It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
 5)`]: cowardly ... infamous) and brings recruits.
@@ -2004,8 +2056,20 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - 4 the barmaid;
   - 5 a stranger (frame 2 at (349, 199));
   - 6 the door.
-- **Presence:** whoever is spoken to leaves; all are back on the next
-  arrival in town (VA `0x18fa9`). On each entry (VA `0x11867`):
+- **Presence:** all are back on the next arrival in town (VA
+  `0x18fa9`). Spoken to:
+  - the map seller and the traveller leave for the stay whatever the
+    answer, a refusal or no gold included (spots cleared after their
+    calls, VA `0x1191b`, `0x11935`);
+  - the four seamen spots all leave, with no recruits or a refusal too
+    (VA `0x10fdf`-`0x10ff3`);
+  - the bartender leaves only when he had no public news (VA `0x1185b`);
+  - the barmaid leaves after her report;
+  - the mystery man's presence is checked again after the meeting (VA
+    `0x119de` calls VA `0x10ffe`): he stays while a villain still hides
+    here or a contact is due.
+
+  On each entry (VA `0x11867`):
   - The traveller (VA `0x110c7`) draws a price `(rand(10) + 5) x 10`
     and a random town, again while that town's information is current
     and the price is not 50. He stays away when the price is 50 or the
@@ -2015,8 +2079,9 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
     map is whole and shown (its slot reads `0x1f`).
   - The mystery man (VA `0x10ffe`) is there while a villain hides in
     the town or the mission's contact lives there (see "Villains" and
-    "Missions"). Clicking him meets the villain, else hands over the
-    letter or papers; he then leaves for the stay.
+    "Missions"). Clicking him meets the villain (VA `0x18913`), else
+    hands over the letter or papers (VA `0x1f8f7`), by the reason VA
+    `0x10ffe` left at VA `0x44ae4`.
 - **Labels:** pointing at someone writes their name on the scroll
   (CSTN 90: Map Seller, Traveller, Unemployed Sailors, Bartender,
   Barmaid, Mystery Man, Exit).
@@ -2044,14 +2109,15 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - `n = (rep + 7 - difficulty) x (citizens + rand(citizens)) / 9`;
   - with fewer than `4m` men aboard, at least `m = (4 - difficulty) x
     6`;
-  - at most `(ships x 2 + capacity) x 16 - crew`, and at least 1.
+  - at most `(ships x 2 + capacity) x 16 - crew`; a negative count
+    becomes 1 (VA `0x10ef4`, `jns`).
 - **Inks:** the tavern sets ink entry 1 (palette index 2) and highlight
   entry 2 (index 6) for its pages.
 - **Recruiting (VA `0x10f04`), on `crew.pcx`:**
   - Written on the picture at (60, 300) up to x 620, the choice up to x
     560, without a box.
-  - CSTR 151 offers the men, naming the player by reputation, rank and
-    name.
+  - CSTR 151 offers the men, naming the player by reputation, rank with
+    the town's nation (`rank[0x4605c]`, VA `0x10f2f`) and name.
   - Signing them up adds them to the crew; all four seamen spots then
     leave.
   - With no recruits: CSTR 309.
@@ -2059,20 +2125,27 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - On `bartenda.pcx`, in ink entry 0, "The Bartender tells you that:"
     (CSTN 18.1), then up to 12 recent public news items, at (222, 40)
     up to x 610 (VA `0x1e78d`, mode 1).
-  - With no public news, he listens to the player's last exploit (CSTR
-    125 with CSTN 33), at (320, 150) up to x 560 (VA `0x10b10`): from
+  - With news, that is all, and he stays. With no public news (VA
+    `0x1184c`, the count at VA `0x49b3a`), he listens to the player's
+    last exploit, gives what he knows of villains here (VA `0x1eba6`,
+    see "Villains"), and leaves for the stay (spot 3 cleared, VA
+    `0x1185b`). The exploit (CSTR 125 with CSTN 33) is at (320, 150) up
+    to x 560 (VA `0x10b10`): from
     the newest log entry back (a visit at the head passed over), the
     first of codes 1-8 or 22-26; none, or a visit to this very town,
     gives "your promising plans" (33.0). Its words: the town (1, 3, 23),
     CSTN 68 by `a / 64` and the rank (2), CSTN 68 by `a / 16` and the
-    ship class lowercased (4-6), the town and CSTN 71 (22), the relative
-    (26).
+    ship class as written (4-6: the `tolower` at VA `0x10ce5` is
+    called on its first letter and the result dropped, as at VA
+    `0x4ed8`, `0xdc0a`, `0xe7db` and `0x1e2a8`), the town and CSTN 71
+    (22), the relative (26).
 - **Personal log entries:** a visit (code 1, the town) on every arrival
   in a town (VA `0x17e78`, called by the main loop at VA `0x1da14`),
-  except once a saved game has been loaded: loading sets bit 1 of VA
-  `0x45e84` (VA `0x134f2`), which only a new career clears, and the
-  original then logs no visit again; the engine goes on logging (an
-  engine fix). A title (2, `nation x 64
+  except the arrival a saved game resumes: loading sets bit 1 of VA
+  `0x45e84` (VA `0x134f2`), which skips that arrival's log and the town
+  menu's first 3 days, and the menu then clears the bit (VA `0x186c3`).
+  The engine resumes a save in the cabin, which logs nothing either. A
+  title (2, `nation x 64
   + rank`, VA `0x12549`); after a sea battle not against a fort, 4 for
   a capture and 6 otherwise, `nation x 16 + class` (VA `0xe986`). Code
   5, a sinking, is never logged.
@@ -2102,6 +2175,8 @@ order:
    nations his own is allied with and at war with (CSTN 25, names from
    CSTN 81). It ends with a charge to fight them when at war and the
    standing is 2 or more. With neither allies nor enemies: CSTR 149.
+   The music is 18 when at least one enemy is named and the standing
+   is 2 or more, else 17 (VA `0x1208e`-`0x120b9`).
 2. A villain hiding in the town (VA `0x18913`, see "Villains"), then
    the mission (VA `0x12e88`, see "Missions"). VA `0x12432` rewards
    prisoners with bit 0x8000, which only the mission's pirate has and
@@ -2112,7 +2187,8 @@ order:
    - CSTR 134 is shown with the proclamation (`gov.spr` frames at
      (140, 35) and (113, 262)).
    - When the surplus plus the town's word 9 is positive, that many
-     times 50 acres are granted (CSTR 135, total at VA `0x45f02`).
+     times 50 acres are granted (CSTR 135). VA `0x45f02` counts the
+     grants in 50-acre units.
    - After a promotion, while a relative is still lost and not in a
      famous expedition (VA `0x45e84` bit 0, set when one is chosen, VA
      `0x15bc6`, cleared by a new career's era menu, VA `0x15a3c`), a new
@@ -2325,7 +2401,8 @@ retiring), or in prison (a famous expedition, or health 3). The cabin's
    - "You retired from privateering at the age of %s" (CSTR 76, years +
      25), the bride (CSTN 41.0, or 41.1 with 41.(married + 1)), "You
      succeeded in rescuing %s member%s of your family" (CSTR 77, CSTN
-     79 lowercased, "s" past one), "You were wounded %s" (CSTR 78, CSTN
+     79 as written, the `tolower` at VA `0x4ed8` dropped, "s" past
+     one), "You were wounded %s" (CSTR 78, CSTN
      80: once, twice, numerous times), "In the course of your travels,
      you become %s" (CSTN 42, entry `clamp((int)(3 x h), 0, 5) + 1` with
      `h = max((relatives / 8 + married / 8 + 1 - injuries / 6) x (25 -

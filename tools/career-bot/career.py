@@ -825,7 +825,8 @@ class Bot:
         self.visited[ti] = s["day"]
         self.hungry = False
         self.food_town = None
-        self.governor(ti)
+        if self.governor(ti):
+            self.back()
         ms = self.refresh()["mission"]
         if ms["type"] in (1, 2) and ms["dest"] == ti:
             d = self.sim("mission", action="deliver", check=False)
@@ -844,9 +845,13 @@ class Bot:
                 m = self.refresh()["maps"]
                 adv = int(bool(m[1]["pieces"] & 0xF or m[2]["pieces"] & 0xF))
             self.sim("bank", action="continue", advance=adv)
+            self.back()
         self.tavern()
+        self.back()
         self.merchant()
+        self.back()
         self.shipwright()
+        self.back()
         s = self.refresh()
         if s["ransom_slot"] < 0 and any(s["prisoners"]):
             self.sim("captain", action="offer")
@@ -858,14 +863,19 @@ class Bot:
         if r.get("deserted"):
             self.stats["deserted"] += r["deserted"]
 
+    def back(self):
+        """Out of a building, back to the town's streets: three days."""
+        self.sim("town", action="back", check=False)
+
     def governor(self, ti):
+        """Visit the governor; False when he was not seen."""
         s = self.st
         t = s["towns"][ti]
         if t["citizens"] < 6 or self.at_war(t["nation"]) or t["nation"] == 4:
-            return
+            return False
         g = self.sim("governor", action="visit", check=False)
         if not g.get("ok"):
-            return
+            return False
         if g["promoted"]:
             self.note("promoted by the %s governor of %s (+%d acres)%s, standing %s" % (
                 NATIONS[t["nation"]], t["name"], g["acres"],
@@ -889,6 +899,7 @@ class Bot:
                 self.note("bought a %s from %s for %d" % (g["offer"], t["name"], g["price"]))
         if g["offer"] == "daughter" and not self.refresh()["married"]:
             self.daughter(t)
+        return True
 
     def daughter(self, t):
         m = self.sim("daughter", action="meet")
@@ -958,7 +969,7 @@ class Bot:
             self.stats["recruited"] += 1
         # the map seller, while the pirate's map is not whole
         if r["tavern_spots"] & 1 and (s["maps"][0]["pieces"] & 0xF) != 0xF and f["gold"] > 500:
-            if self.sim("tavern", action="buy_map", check=False).get("ok"):
+            if self.sim("tavern", action="buy_map", check=False).get("bought"):
                 self.note("bought a piece of a pirate treasure map")
                 self.stats["maps_bought"] += 1
         # a villain hiding here: the mystery man
