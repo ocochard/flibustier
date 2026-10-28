@@ -1528,6 +1528,11 @@ class Bot:
                 return False
             if r["stop"] == "crew":
                 self.crew_stop()
+        if not self.refresh()["fleet"]["ashore"]:
+            # too few men for the last ship: the captain was marooned or
+            # jailed, and the party with him
+            self.note("no party ashore to dig map %d" % mapi)
+            return False
         found = self.sim("search")["found"]
         self.note("dug: %s" % json.dumps(found))
         for item in found:
