@@ -2709,9 +2709,9 @@ sail_event(struct game *g, const struct ui_event *ev)
 			}
 	}
 	if (ev->type == EV_KEY && ev->key == UI_KEY_LEFT)
-		g->turn = -1;
+		g->turn = g->turn_tap = -1;
 	else if (ev->type == EV_KEY && ev->key == UI_KEY_RIGHT)
-		g->turn = 1;
+		g->turn = g->turn_tap = 1;
 	else if (ev->type == EV_KEYUP &&
 	    (ev->key == UI_KEY_LEFT || ev->key == UI_KEY_RIGHT))
 		g->turn = 0;
@@ -2756,7 +2756,7 @@ sail_event(struct game *g, const struct ui_event *ev)
 static void
 sail_tick(struct game *g)
 {
-	int town;
+	int town, turn;
 
 	if (g->fading != 0)
 		return;		/* the ship waits for the screen */
@@ -2766,10 +2766,13 @@ sail_tick(struct game *g)
 	if (g->ashore_prompt)
 		return;
 	g->sail_passes++;
+	/* A tap released between two passes still steers on the next. */
+	turn = g->turn != 0 ? g->turn : g->turn_tap;
+	g->turn_tap = 0;
 	switch (g->sim.fleet.ashore ? sim_march(&g->sim, g->march_held & 1 ?
 	    -1 : g->march_held & 2 ? 1 : 0, g->march_held & 4 ? -1 :
 	    g->march_held & 8 ? 1 : 0, 1, &town) :
-	    sim_sail(&g->sim, g->turn, 1, &town)) {
+	    sim_sail(&g->sim, turn, 1, &town)) {
 	case SAIL_TOWN:
 		g->sail_fast = 0;		/* VA 0x284b6 */
 		g->arrive_stage = 0;

@@ -230,7 +230,14 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 ### Each tick
 
 1. **Steering:** a turn input of -1, 0 or +1 changes the heading by
-   16 x input, except on ticks where bit 2 of the counter is set.
+   16 x input, except on ticks where bit 2 of the counter is set, so a
+   press can wait 4 ticks.
+   - **In the engine:** a press opens that 8-tick window at once: it
+     turns on the press and the next 3 ticks while held, then not for
+     4; a press while the window is closed is kept and turns when the
+     next opens. The ship turns no faster than in the original, and a
+     tap released between two passes still steers on the next (an
+     engine choice).
 2. **Target speed:**
    `(speed_table[class][((heading + 8 - wind) >> 4) & 15] + bonus) x 3`.
    - `class` is the largest ship type in the fleet (`& 7`).

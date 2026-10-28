@@ -994,8 +994,29 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 	turn = turn < 0 ? -1 : turn > 0 ? 1 : 0;
 	while (ticks-- > 0) {
 		f->ticks++;
-		if (turn != 0 && (f->ticks & 4) == 0)
-			f->heading = (uint8_t)(f->heading + 16 * turn);
+		/*
+		 * Steering.  The original turns by 16 on the 4 ticks of
+		 * every 8 where bit 2 of the counter is clear, so a press
+		 * could wait 4 ticks.  The engine opens that 8-tick window
+		 * at the press: 4 ticks turning, 4 not.  A press while it
+		 * is closed is kept and turns when the next one opens.  The
+		 * ship turns no faster than in the original.
+		 */
+		if (turn == 0)
+			f->turn_held = 0;
+		else if (turn != f->turn_held)
+			f->turn_held = f->turn_owed = turn;
+		if (f->turn_wait == 0 && (f->turn_owed != 0 ||
+		    f->turn_held != 0))
+			f->turn_wait = 8;
+		if (f->turn_wait > 4 && (f->turn_owed != 0 ||
+		    f->turn_held != 0)) {
+			f->heading = (uint8_t)(f->heading + 16 *
+			    (f->turn_owed != 0 ? f->turn_owed : f->turn_held));
+			f->turn_owed = 0;
+		}
+		if (f->turn_wait > 0)
+			f->turn_wait--;
 		target = target_speed(s);
 		/* Near a cloud the wind blows twice as hard; caught in it
 		 * (within difficulty x 64), the ship is turned toward the

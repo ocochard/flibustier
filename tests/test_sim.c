@@ -670,12 +670,25 @@ test_sailing(void)
 	s.wind = 0xC0;
 	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_TICKS && s.fleet.speed == 4);
 
-	/* Turning: +16 on each tick where bit 2 of the counter is clear, so
-	 * 8 of 16 consecutive ticks. */
+	/* Turning: 4 ticks of every 8 from the press, 8 of 16 held, at
+	 * any phase of the tick counter. */
 	sea_game(&s, 300, 300, 0x00);
-	s.fleet.ticks = 0;
-	CHECK(sim_sail(&s, 1, 16, &town) == SAIL_TICKS);
+	s.fleet.ticks = 3;
+	CHECK(sim_sail(&s, 1, 1, &town) == SAIL_TICKS);
+	CHECK(s.fleet.heading == 0x10);			/* at once */
+	CHECK(sim_sail(&s, 1, 15, &town) == SAIL_TICKS);
 	CHECK(s.fleet.heading == 0x80);
+	/* A tap while the window is closed is kept, not lost. */
+	sea_game(&s, 300, 300, 0x00);
+	sim_sail(&s, -1, 1, &town);
+	sim_sail(&s, 0, 4, &town);
+	sim_sail(&s, -1, 1, &town);			/* closed: kept */
+	sim_sail(&s, 0, 2, &town);
+	CHECK(s.fleet.heading == 0xF0);
+	sim_sail(&s, 0, 1, &town);			/* window opens */
+	CHECK(s.fleet.heading == 0xE0);
+	sim_sail(&s, 0, 16, &town);
+	CHECK(s.fleet.heading == 0xE0);			/* nothing owed */
 
 	/* Land stops the ship on the water, before the coast. */
 	sea_game(&s, 120, 60, 0x00);

@@ -659,6 +659,12 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.speed);
 	jb_raw(b, ",\"ticks\":");
 	jb_int(b, s->fleet.ticks);
+	jb_raw(b, ",\"turn_wait\":");
+	jb_int(b, s->fleet.turn_wait);
+	jb_raw(b, ",\"turn_held\":");
+	jb_int(b, s->fleet.turn_held);
+	jb_raw(b, ",\"turn_owed\":");
+	jb_int(b, s->fleet.turn_owed);
 	jb_raw(b, ",\"leaving\":");
 	jb_int(b, s->fleet.leaving);
 	jb_raw(b, ",\"ashore\":");
@@ -1071,6 +1077,15 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	f->heading = (uint8_t)json_get_int(j, "heading", 0);
 	f->speed = (int)json_get_int(j, "speed", 0);
 	f->ticks = (uint32_t)json_get_int(j, "ticks", 0);
+	f->turn_wait = (int)json_get_int(j, "turn_wait", 0);
+	f->turn_held = (int)json_get_int(j, "turn_held", 0);
+	f->turn_owed = (int)json_get_int(j, "turn_owed", 0);
+	if (f->turn_wait < 0 || f->turn_wait > 8)
+		f->turn_wait = 0;
+	if (f->turn_held < -1 || f->turn_held > 1)
+		f->turn_held = 0;
+	if (f->turn_owed < -1 || f->turn_owed > 1)
+		f->turn_owed = 0;
 	f->leaving = (int)json_get_int(j, "leaving", -1);
 	f->ashore = json_get_int(j, "ashore", 0) != 0;
 	f->ship_x = (int32_t)json_get_int(j, "ship_x", 0);

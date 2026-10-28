@@ -115,6 +115,8 @@ struct game {
 	struct sea		 sea;
 	struct tileset		 map_art;	/* tiles/map, for its art */
 	int			 turn;		/* steering input: -1, 0, +1 */
+	int			 turn_tap;	/* a sailing press not yet
+						 * seen by a pass */
 	int			 enc_result;	/* -1 while the dialogs go on */
 	struct sprite_bank	 btl_ship[2][2];	/* [you, foe][A, B] */
 	struct sprite_bank	 btl_damage[2];	/* damage pictures */

@@ -142,6 +142,10 @@ struct sim_fleet {
 	uint8_t		heading;	/* 0 north, 0x40 east... */
 	int		speed;		/* 4..12 once under way */
 	uint32_t	ticks;		/* sailing ticks, 64 per day */
+	/* The steering (an engine choice): ticks left in the current
+	 * 8-tick turning window, the direction held, a press not yet
+	 * served. */
+	int		turn_wait, turn_held, turn_owed;
 	int		leaving;	/* town just left, or -1 */
 	/* A landing party (VA 0x231b8): on foot at x, y while the ship
 	 * waits at ship_x, ship_y; land_x, land_y where it went ashore
