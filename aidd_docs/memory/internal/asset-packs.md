@@ -275,6 +275,11 @@ baseline = 19
   the text colour. The 640x480 screen gets 1-bit glyphs (coverage at
   least half), so code reading it still works.
 - No kerning yet.
+- The open pack's fonts (IM Fell English for `pirate1`-`pirate3`, Pirata
+  One for `pirate4` and `caps`, both SIL OFL) are fetched by
+  `tools/font_pack.py`, which also writes their descriptors and
+  `pack.d/fonts.ini`. Their sizes and baselines match the original's
+  x-height and baseline in each line.
 
 ## Open world data
 
