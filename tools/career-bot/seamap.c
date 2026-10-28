@@ -6,6 +6,12 @@
  * flibustier-seamap: print an era's sailing world, one character per map
  * cell, for the career bot's route planning: '.' open sea over the whole
  * cell, ',' sea at its centre only, '#' land, '1' shallows.
+ *
+ * With --pixels, the pixels instead: first the 256 map tiles, one line
+ * of 16 x 16 characters each ('.' sea, '1' shallows, '#' land), then one
+ * line per map row of two hex digits per cell, the tile it draws, then
+ * one line per ship class of the speeds by heading to the wind (16
+ * sectors).
  */
 
 #include <stdio.h>
@@ -27,18 +33,20 @@ main(int argc, char **argv)
 	const struct exe_layout *layout;
 	const char *data = getenv("FLIBUSTIER_DATA");
 	char err[256];
-	int era = -1, x, y, i, j, t, c, u;
+	int era = -1, x, y, i, j, t, c, u, pixels = 0;
 
-	if (argc == 4 && strcmp(argv[1], "--data") == 0) {
-		data = argv[2];
-		argv += 2;
-		argc -= 2;
+	for (i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--data") == 0 && i + 1 < argc)
+			data = argv[++i];
+		else if (strcmp(argv[i], "--pixels") == 0)
+			pixels = 1;
+		else
+			for (j = 0; j < 6; j++)
+				if (atoi(argv[i]) == years[j])
+					era = j;
 	}
-	for (i = 0; argc == 2 && i < 6; i++)
-		if (atoi(argv[1]) == years[i])
-			era = i;
 	if (era < 0 || data == NULL) {
-		fprintf(stderr, "usage: flibustier-seamap [--data PATH] YEAR\n");
+		fprintf(stderr, "usage: flibustier-seamap [--data PATH] [--pixels] YEAR\n");
 		return (2);
 	}
 	if ((packs = packs_new()) == NULL ||
@@ -54,6 +62,29 @@ main(int argc, char **argv)
 		fprintf(stderr, "%s\n", layout == NULL ?
 		    "unknown PIRATESG.EXE build" : err);
 		return (1);
+	}
+	if (pixels) {
+		for (t = 0; t < 256; t++) {
+			for (i = 0; i < WORLD_TILE * WORLD_TILE; i++) {
+				u = w.map_terrain[t * WORLD_TILE * WORLD_TILE + i];
+				putchar(u == TERRAIN_SEA ? '.' :
+				    u == TERRAIN_LAND ? '#' : '1');
+			}
+			putchar('\n');
+		}
+		for (y = 0; y < WORLD_CELLS_H; y++) {
+			for (x = 0; x < WORLD_CELLS_W; x++)
+				printf("%02x", w.map[y * WORLD_CELLS_W + x]);
+			putchar('\n');
+		}
+		for (t = 0; t < SHIP_CLASSES; t++) {
+			for (i = 0; i < WIND_SECTORS; i++)
+				printf("%d%c", w.speed[t][i],
+				    i == WIND_SECTORS - 1 ? '\n' : ' ');
+		}
+		blob_free(&b);
+		packs_free(packs);
+		return (0);
 	}
 	for (y = 0; y < WORLD_CELLS_H; y++) {
 		for (x = 0; x < WORLD_CELLS_W; x++) {
