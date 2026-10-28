@@ -2268,13 +2268,13 @@ cabin_draw(struct game *g)
 	const char *label;
 	int w;
 
-	if (g->quit_prompt && g->misc.count > QUIT_FRAME)
-		fb_frame(&g->fb, &g->misc.frames[QUIT_FRAME], 268, 218);
-
 	/* The chart on the table covers the maps' spot while there are
 	 * none (VA 0xa060). */
 	if (g->cabin_spr.count > 0 && !any_map(g))
 		fb_frame(&g->fb, &g->cabin_spr.frames[0], 325, 229);
+	/* The prompt over the chart, which it overlaps. */
+	if (g->quit_prompt && g->misc.count > QUIT_FRAME)
+		fb_frame(&g->fb, &g->misc.frames[QUIT_FRAME], 268, 218);
 	label = g->cabin_spot >= 0 ?
 	    game_word(g, W_CABIN, (size_t)g->cabin_spot) :
 	    game_word(g, W_CABIN_TITLE, CABIN_TITLE);
