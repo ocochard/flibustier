@@ -285,7 +285,10 @@ menu_event(struct game *g, const struct ui_event *ev, int count,
  * Intro (VA 0x3325): the MicroProse logo; "and", "MPS Labs" and
  * "Present" on black, each faded in and out; then the moonlit ship
  * (moon03) with its palette cycling, where the "Pirates! Gold" title
- * dissolves in on the right.  A key or a click skips to the menu.
+ * dissolves in on the right.  Enter, Escape or a click (VA 0x2246)
+ * skips: at once from the first three steps, to the moon from
+ * "Present", to the title from the lead before it, and out from the
+ * title with its fade.
  */
 static void	load_bank(struct game *, const char *, int,
 		    struct sprite_bank *);
@@ -394,19 +397,61 @@ intro_enter(struct game *g)
 }
 
 static void
-intro_leave(struct game *g)
+intro_free(struct game *g)
 {
 	free(g->intro_title);
 	free(g->intro_shown);
 	g->intro_title = g->intro_shown = NULL;
+}
+
+static void
+intro_leave(struct game *g)
+{
+	intro_free(g);
 	game_goto(g, &screen_credits);
+}
+
+/* The keys that skip the intro and the credits (VA 0x2246): Enter,
+ * Escape or the left button; the others are ignored. */
+static int
+intro_skip_key(const struct ui_event *ev)
+{
+	return (ev->type == EV_CLICK || (ev->type == EV_KEY &&
+	    (ev->key == UI_KEY_ENTER || ev->key == UI_KEY_ESCAPE)));
+}
+
+static void
+intro_skip(struct game *g)
+{
+	g->intro_queued = 0;
+	if (g->intro_step < 3) {
+		/* The logo and the first two sprites: cut to black, no
+		 * fade out (VA 0x35f4); the credits fade in. */
+		intro_free(g);
+		g->brightness = 0;
+		game_goto(g, &screen_credits);
+	} else if (g->intro_step == 3) {
+		/* "Present": its wait cut short, then the moon (VA
+		 * 0x34fb). */
+		g->intro_next = 1;
+		game_goto(g, &screen_intro);
+	} else if (g->intro_iter < TITLE_LEAD)
+		g->intro_iter = TITLE_LEAD;	/* on to the title (0x3781) */
+	else
+		intro_leave(g);
 }
 
 static void
 intro_event(struct game *g, const struct ui_event *ev)
 {
-	if (ev->type == EV_KEY || ev->type == EV_CLICK)
-		intro_leave(g);
+	if (!intro_skip_key(ev))
+		return;
+	/* The fades do not read the keys: one pressed meanwhile waits in
+	 * the queue for the next step. */
+	if (g->fading != 0)
+		g->intro_queued = 1;
+	else
+		intro_skip(g);
 }
 
 /* One pass of the title screen's loop (VA 0x36e4, then 0x379f).
@@ -431,6 +476,12 @@ title_pass(struct game *g)
 		}
 		g->intro_iter++;
 		return (0);
+	}
+	if (g->intro_iter == TITLE_LEAD) {
+		/* The title starts its cycles afresh (VA 0x3855). */
+		g->intro_timer[0] = 300;
+		g->intro_timer[1] = 50;
+		g->intro_timer[2] = 100;
 	}
 	if (g->intro_left != 0) {
 		/* Visit the cells in the order of x = 5x + 1, skipping
@@ -485,6 +536,10 @@ intro_tick(struct game *g)
 
 	if (g->fading != 0)
 		return;
+	if (g->intro_queued) {
+		intro_skip(g);
+		return;
+	}
 	if (g->intro_step == INTRO_STEPS - 1) {
 		for (i = 0; i < PASSES_PER_TICK; i++)
 			if (title_pass(g)) {
@@ -526,13 +581,15 @@ const struct screen screen_intro = {
  * Credits (VA 0x1fe91): on the ship picture, six blocks of the credits
  * picture appear one at a time on the right.  Each fades in as its ink
  * (palette entry 0x20) steps from the parchment colour to black, stays
- * 1.6 s and fades out.  A key skips to the last block; another ends it.
+ * 1.6 s, fades out, and 0.4 s pass before the next (VA 0x20114).
+ * Enter, Escape or a click skips to the last block; another ends it.
  */
 #define CRED_BLOCKS		6
 #define CRED_INK		0x20
 #define CRED_STEPS		20
 #define CRED_STEP_MS		40
 #define CRED_HOLD_MS		1600
+#define CRED_GAP_MS		400
 #define CRED_CX			508	/* the blocks' centre */
 #define CRED_CY			240
 
@@ -580,7 +637,7 @@ credits_enter(struct game *g)
 	image_free(&g->credits);
 	pic_load(g->packs, credits_picture(g), &g->credits);
 	g->cred_block = 0;
-	g->cred_ms = 0;
+	g->cred_ticks = 0;
 	credit_ink(g, 0);
 }
 
@@ -594,11 +651,11 @@ credits_done(struct game *g)
 static void
 credits_event(struct game *g, const struct ui_event *ev)
 {
-	if (ev->type != EV_KEY && ev->type != EV_CLICK)
+	if (!intro_skip_key(ev))
 		return;
 	if (g->cred_block < CRED_BLOCKS - 1) {
 		g->cred_block = CRED_BLOCKS - 1;
-		g->cred_ms = 0;
+		g->cred_ticks = 0;
 		credit_ink(g, 0);
 	} else
 		credits_done(g);
@@ -611,8 +668,7 @@ credits_tick(struct game *g)
 
 	if (g->fading != 0)
 		return;
-	g->cred_ms += 1000 / 60;
-	t = g->cred_ms;
+	t = ++g->cred_ticks * 1000 / 60;
 	if (t < fade)
 		credit_ink(g, t / CRED_STEP_MS);
 	else if (t < fade + CRED_HOLD_MS)
@@ -620,8 +676,10 @@ credits_tick(struct game *g)
 	else if (t < 2 * fade + CRED_HOLD_MS)
 		credit_ink(g, CRED_STEPS - 1 - (t - fade - CRED_HOLD_MS) /
 		    CRED_STEP_MS);
+	else if (t < 2 * fade + CRED_HOLD_MS + CRED_GAP_MS)
+		credit_ink(g, 0);	/* the block gone, a pause */
 	else if (++g->cred_block < CRED_BLOCKS) {
-		g->cred_ms = 0;
+		g->cred_ticks = 0;
 		credit_ink(g, 0);
 	} else
 		credits_done(g);

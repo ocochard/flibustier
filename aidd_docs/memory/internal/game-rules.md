@@ -2265,30 +2265,45 @@ order:
    - `present.spr` at (134, 231), 1 s.
 3. `moon03.pcx`, faded in:
    - **Palette cycling:** 2000 loop passes (VA `0x36e4`). Each step
-     rotates a range of palette entries up by one: 0xee-0xfe every 300
-     passes, 100-163 every 50, 0xc2-0xce every 100.
+     rotates a range of palette entries up by one: 0xee-0xfe every 301
+     passes, 100-163 every 51, 0xc2-0xce every 101 (each counter fires
+     when it drops below 0, then reloads 300, 50 or 100, VA `0x370a`).
+     The fades take 0x40 steps for the logo and the sprites, 0x80 for
+     `moon03.pcx`; their speed is the CPU's.
    - **Title (VA `0x379f`):** `title.spr` and `title1.spr`, stacked at
-     x 272, dissolve in by 2 x 2 cells of a 184 x 137 grid. The cells
-     are visited in the order `x = (5x + 1) mod 32768` from a random
-     start; values past the grid are skipped. One cell is revealed per
-     pass, and the same cycling goes on.
-   - **Then:** 0xd3-0xec rotates every 300 passes, 26 times, then pauses
-     for 10000 passes.
-   - **End:** after 45000 passes, at the end of a 26-step cycle, the
-     picture fades out.
-4. A key at any wait ends the intro.
+     x 272, dissolve in by 2 x 2 cells of a 184 x 137 grid (the area
+     is 136 cells high, but row 136 is visited too, VA `0x38a3`). The
+     cells are visited in the order `x = (5x + 1) mod 32768` from a
+     random start; values past the grid are skipped. One cell is
+     revealed per pass, and the same cycling goes on, its counters
+     started afresh (VA `0x3855`).
+   - **Then:** 0xd3-0xec rotates every 301 passes, 26 times, then
+     pauses for 10000 passes; the other three cycles go on.
+   - **End:** after 45000 passes, at the end of a 26-step cycle or
+     during the pause that follows (VA `0x39f5`), the picture fades out.
+4. **Skipping (VA `0x2246`):** only Enter, Escape or the left button
+   (released) count; other keys are read and ignored. During the logo,
+   "and" or "MPS Labs" the intro ends at once, without a fade out (VA
+   `0x35f4`); during "Present" only its wait is cut, and the moon
+   follows (VA `0x34fb`); during the 2000 passes before the title, the
+   title starts (VA `0x3781`); during the title, its fade out follows.
+   The fades read no keys: a key pressed meanwhile waits in the event
+   queue for the next wait.
 
 Then the credits (VA `0x1fe91`):
 - **Picture:** `credpic.pcx`, with the language's credits picture
   (`credtext`, `credtxtf`, `credtxtg`) as the source.
 - **Blocks:** six rectangles of the credits picture (table at VA
   `0x34668`), shown one at a time. Each is centred at (508, 240), with x
-  rounded down to a multiple of 8.
+  rounded down to a multiple of 8, `(504 - w / 2 + 4) & ~7`, and y `240
+  - (y2 - y1) / 2` (VA `0x1ffaf`, `0x1ffce`).
 - **Fades:** the text is palette entry 0x20. Its colour steps through
   20 entries (table at VA `0x34698`) from the parchment colour to black,
-  40 ms each. It then holds 1.6 s and steps back.
-- **Keys:** a key during blocks 0-4 jumps to block 5; a key during
-  block 5 ends the credits.
+  40 ms each. It then holds 1.6 s and steps back, and the screen is
+  left without a block for 0.4 s (VA `0x2010f`, `0x20114`).
+- **Keys:** the intro's (Enter, Escape, the left button). One during
+  blocks 0-4 jumps to block 5; one during block 5 ends the credits.
+  The ink steps read no keys.
 
 The welcome menu (VA `0x1443e`) is full screen on `textback.pcx`
 (its last option, "Return to DOS?", reads as the cabin's "Exit game"
@@ -2299,7 +2314,11 @@ language):
 - the 6 heading lines use PIRATE4, and the 4 options PIRATE1. The game
   loads its fonts in the order PIRATE1, PIRATE2, CAPS, PIRATE3,
   PIRATE4;
-- each option's mouse area is a full-width row 30 pixels high.
+- each option's mouse area is a full-width row 30 pixels high;
+- every line is in ink entry 0 (word VA `0x3421c`, VA `0x14460`).
+
+A word at VA `0x4c0e2`, set from the command line, skips the intro (VA
+`0x3027`), the credits (VA `0x1fe98`) and the menu loop (VA `0x144fb`).
 
 The title screen's passes wait 1/10 of a 10 ms tick, which is 0. So
 their speed is the CPU's. The engine runs 167 passes per 1/60 s frame,

@@ -795,6 +795,26 @@ test_intro(void)
 	CHECK(game_script(g, "enter wait:40") == 0);
 	CHECK(g->screen == &screen_welcome);
 	game_free(g);
+
+	/* Only Enter, Escape or a click skip (VA 0x2246).  "Present" and
+	 * the lead before the title only skip ahead (VA 0x34fb, 0x3781). */
+	g = play("eng", "wait:200 down type:x wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_intro);
+	for (i = 0; i < 2000 && (g->intro_step < 3 || g->fading != 0); i++)
+		CHECK(game_script(g, "wait:1") == 0);
+	CHECK(g->intro_step == 3);
+	CHECK(game_script(g, "enter") == 0);
+	for (i = 0; i < 100 && (g->intro_step != 4 || g->fading != 0); i++)
+		CHECK(game_script(g, "wait:1") == 0);
+	CHECK(g->screen == &screen_intro && g->intro_step == 4);
+	CHECK(g->intro_iter < 2000);
+	CHECK(game_script(g, "enter wait:1") == 0);
+	CHECK(g->screen == &screen_intro && g->intro_iter >= 2000);
+	CHECK(game_script(g, "enter wait:40") == 0);
+	CHECK(g->screen == &screen_credits);
+	game_free(g);
 }
 
 /* A town: the buildings, their labels, City Information, leaving. */
