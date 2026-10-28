@@ -16,7 +16,7 @@
 #define ESCAPE_RANGE	240	/* pixels apart on an axis: out of range */
 #define SUNSET_TICKS	4500
 #define SAIL_TICKS	160	/* to change sails */
-#define TURN_TICKS	8	/* steering applies every 8 ticks */
+#define TURN_TICKS	8	/* a turn of 16 at most this often */
 #define AI_TICKS	64	/* the enemy reconsiders this often */
 #define WIND_TICKS	512	/* the wind may shift this often */
 #define SINK_LEVEL	4	/* damage / 16 that sinks a ship */
@@ -629,9 +629,27 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	bt->quiet++;
 	bt->sound = bt->sound_rank = 0;
 
-	/* Steering, sails and reloading. */
-	if (bt->tick % TURN_TICKS == 0 && turn != 0)
-		y->heading = (uint8_t)(y->heading + 16 * sign(turn));
+	/*
+	 * Steering.  The original turns by 16 only on ticks that are
+	 * multiples of 8 and drops a key pressed on any other (VA 0x7e97,
+	 * 0x1b58a).  The engine turns at the press, then every 8 ticks
+	 * while it is held; a press during those 8 ticks turns when they
+	 * are over.  The ship turns no faster than in the original.
+	 */
+	if (bt->turn_wait > 0)
+		bt->turn_wait--;
+	if (turn == 0)
+		bt->turn_held = 0;
+	else if (sign(turn) != bt->turn_held) {
+		bt->turn_held = sign(turn);
+		bt->turn_owed = bt->turn_held;
+	}
+	if (bt->turn_wait == 0 && (bt->turn_owed != 0 || bt->turn_held != 0)) {
+		y->heading = (uint8_t)(y->heading + 16 * (bt->turn_owed != 0 ?
+		    bt->turn_owed : bt->turn_held));
+		bt->turn_owed = 0;
+		bt->turn_wait = TURN_TICKS;
+	}
 	if (y->sail_timer > 0) {
 		if (--y->sail_timer == 0) {
 			y->full_sails = !y->full_sails;

@@ -351,6 +351,9 @@ struct sim_battle {
 	int		active;
 	uint32_t	tick;
 	uint32_t	quiet;		/* ticks since the last hit */
+	/* The player's steering (an engine choice): ticks before the
+	 * next turn, the direction held, a press not yet served. */
+	int		turn_wait, turn_held, turn_owed;
 	uint8_t		wind;		/* direction it blows toward */
 	int		wind_strength;	/* 0..2 */
 	int		decision;	/* the enemy's: 0 close, 1 broadside,

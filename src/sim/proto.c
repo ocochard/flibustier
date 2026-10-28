@@ -398,6 +398,12 @@ battle_json(const struct sim_battle *bt, struct jbuf *out)
 	jb_int(out, bt->tick);
 	jb_raw(out, ",\"quiet\":");
 	jb_int(out, bt->quiet);
+	jb_raw(out, ",\"turn_wait\":");
+	jb_int(out, bt->turn_wait);
+	jb_raw(out, ",\"turn_held\":");
+	jb_int(out, bt->turn_held);
+	jb_raw(out, ",\"turn_owed\":");
+	jb_int(out, bt->turn_owed);
 	jb_raw(out, ",\"wind\":");
 	jb_int(out, bt->wind);
 	jb_raw(out, ",\"wind_strength\":");
@@ -447,6 +453,15 @@ battle_from_json(struct sim_battle *bt, const struct json *j)
 	bt->active = json_get_int(j, "active", 0) != 0;
 	bt->tick = (uint32_t)json_get_int(j, "tick", 0);
 	bt->quiet = (uint32_t)json_get_int(j, "quiet", bt->tick);
+	bt->turn_wait = (int)json_get_int(j, "turn_wait", 0);
+	bt->turn_held = (int)json_get_int(j, "turn_held", 0);
+	bt->turn_owed = (int)json_get_int(j, "turn_owed", 0);
+	if (bt->turn_wait < 0 || bt->turn_wait > 8)
+		bt->turn_wait = 0;
+	if (bt->turn_held < -1 || bt->turn_held > 1)
+		bt->turn_held = 0;
+	if (bt->turn_owed < -1 || bt->turn_owed > 1)
+		bt->turn_owed = 0;
 	bt->wind = (uint8_t)json_get_int(j, "wind", 0);
 	bt->wind_strength = (int)json_get_int(j, "wind_strength", 0);
 	bt->decision = (int)json_get_int(j, "decision", 0);

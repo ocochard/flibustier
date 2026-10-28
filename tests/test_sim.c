@@ -1059,12 +1059,33 @@ test_battles(void)
 		ev |= sim_battle_tick(&s, 0, 0, 0);
 	CHECK((ev & BEV_SAILS) && !bt->you.full_sails);
 
-	/* Steering: 16 per 8 ticks. */
+	/* Steering: 16 at the press, then 16 per 8 ticks held, never
+	 * faster. */
 	battle_game(&s);
 	gx = bt->you.heading;
-	for (i = 0; i < 8; i++)
+	sim_battle_tick(&s, 1, 0, 0);
+	CHECK(bt->you.heading == ((gx + 16) & 0xFF));	/* at once */
+	for (i = 0; i < 7; i++)
 		sim_battle_tick(&s, 1, 0, 0);
 	CHECK(bt->you.heading == ((gx + 16) & 0xFF));
+	sim_battle_tick(&s, 1, 0, 0);
+	CHECK(bt->you.heading == ((gx + 32) & 0xFF));	/* held: 8 later */
+	/* A tap during the wait is kept and served when it ends; taps do
+	 * not turn faster than holding. */
+	battle_game(&s);
+	gx = bt->you.heading;
+	sim_battle_tick(&s, -1, 0, 0);			/* turns */
+	sim_battle_tick(&s, 0, 0, 0);
+	sim_battle_tick(&s, -1, 0, 0);			/* kept */
+	for (i = 0; i < 4; i++)
+		sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->you.heading == ((gx - 16) & 0xFF));
+	sim_battle_tick(&s, 0, 0, 0);
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->you.heading == ((gx - 32) & 0xFF));	/* 8 after the first */
+	for (i = 0; i < 8; i++)
+		sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->you.heading == ((gx - 32) & 0xFF));	/* nothing owed */
 
 	/* A shot at point blank hits: the hull takes guns x 4 / (class + 2),
 	 * halved under battle sails, and half again at difficulty 0. */
