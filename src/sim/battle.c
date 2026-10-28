@@ -656,7 +656,9 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 			ev |= BEV_SAILS;
 		}
 	} else {
-		if (sails != 0)		/* either key (VA 0x7f1d) */
+		/* The original flips them on either key (VA 0x7f1d); the
+		 * engine raises them on Up and lowers them on Down only. */
+		if (sails != 0 && (sails > 0) != (y->full_sails != 0))
 			y->sail_timer = SAIL_TICKS;
 		else if (y->reload > 0 && --y->reload == 0)
 			ev |= BEV_RELOADED;

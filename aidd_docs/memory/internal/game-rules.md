@@ -1166,10 +1166,13 @@ fight computes its level the same way with fencing.
     The ship turns no faster than in the original, and no press is
     lost (an engine choice).
 - **Sails:** either sail key, Up or Down, starts a change that flips
-  them (VA `0x7f1d`, `0x7eff`). Changing sails takes 160 ticks, while
-  the panel says "Raising sail" or "Lowering sail" (CSTN 30.4, 30.5, VA
-  `0xef06` event 10) and reloading waits. Then it shows "Full sails" or
-  "Battle sails" (30.3, 30.2), and full sails multiply the speed by 1.5.
+  them (VA `0x7f1d`, `0x7eff`).
+  - **In the engine:** Up raises them and Down lowers them; the other
+    key does nothing (an engine choice).
+  - Changing sails takes 160 ticks, while the panel says "Raising sail"
+    or "Lowering sail" (CSTN 30.4, 30.5, VA `0xef06` event 10) and
+    reloading waits. Then it shows "Full sails" or "Battle sails" (30.3,
+    30.2), and full sails multiply the speed by 1.5.
 - **Speed:**
   - Start from `(speed_table[class][sector] x 4 - damage / 4)`, with
     `sector = ((heading + 8 - wind) >> 4) & 15`.

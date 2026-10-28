@@ -1066,11 +1066,13 @@ test_battles(void)
 	for (i = 0, ev = 0; i < 160 && bt->outcome == BAT_NONE; i++)
 		ev |= sim_battle_tick(&s, 0, 0, 0);
 	CHECK((ev & BEV_SAILS) && bt->you.full_sails);
-	/* Either key changes them: "full" again lowers them. */
-	CHECK(sim_battle_tick(&s, 0, 0, 1) == 0 && bt->you.sail_timer == 160);
+	/* Up again keeps them full; Down lowers them. */
+	CHECK(sim_battle_tick(&s, 0, 0, 1) == 0 && bt->you.sail_timer == 0);
+	CHECK(sim_battle_tick(&s, 0, 0, -1) == 0 && bt->you.sail_timer == 160);
 	for (i = 0, ev = 0; i < 160 && bt->outcome == BAT_NONE; i++)
 		ev |= sim_battle_tick(&s, 0, 0, 0);
 	CHECK((ev & BEV_SAILS) && !bt->you.full_sails);
+	CHECK(sim_battle_tick(&s, 0, 0, -1) == 0 && bt->you.sail_timer == 0);
 
 	/* Steering: 16 at the press, then 16 per 8 ticks held, never
 	 * faster. */

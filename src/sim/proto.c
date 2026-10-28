@@ -1811,11 +1811,9 @@ cmd_battle(struct session *ss, const struct json *cmd, struct jbuf *out)
 		    "\"turn\" and \"sails\" (-1, 0, 1), \"fire\" (0, 1)");
 		return;
 	}
-	/* "sails" asks for full or battle sails: a key press when they
-	 * differ, as the keys only toggle them. */
 	for (i = 0; i < ticks && ss->sim.battle.outcome == BAT_NONE; i++)
 		ev |= sim_battle_tick(&ss->sim, (int)turn, i == 0 && fire != 0,
-		    sails != 0 && (sails > 0) != ss->sim.battle.you.full_sails);
+		    (int)sails);
 	jb_raw(out, "{\"ok\":true,\"events\":");
 	jb_int(out, ev);
 	jb_raw(out, ",\"battle\":");

@@ -994,8 +994,9 @@ void	sim_fort_battle_start(struct sim *s, int town);
 void	sim_battle_command(struct sim *s, int ship);
 
 /*
- * One battle tick: turn -1, 0 or +1; fire when nonzero; sails nonzero
- * when a sail key is pressed, which starts changing them either way.
+ * One battle tick: turn -1, 0 or +1; fire when nonzero; sails +1 (Up)
+ * for full sails, -1 (Down) for battle sails, 0 none: a change starts
+ * when they differ.
  * Returns BEV_* bits;
  * sim.battle.outcome tells when it is over.
  */
