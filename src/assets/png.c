@@ -19,7 +19,9 @@
 #define STBI_NO_STDIO
 #define STBI_NO_LINEAR
 #define STBI_NO_HDR
-#define STBI_MAX_DIMENSIONS	8192
+/* Room for 4K art: the sea battle's tile sheet, 64 tiles a row, runs
+ * 9216 pixels wide there. */
+#define STBI_MAX_DIMENSIONS	16384
 #include "external/stb_image.h"
 
 #define SCREEN_H	480
