@@ -72,14 +72,27 @@ load_fonts(struct game *g)
 /*
  * The mouse pointer, a sword, is a raw picture in the executable: u16
  * width and height, then the pixels, colour 0 transparent.  Its palette
- * entries (0x1a-0x1f) are the same greys in the game's pictures.
+ * entries (0x1a-0x1f) are the same greys in the game's pictures.  A pack
+ * may replace it with ui/pointer.
  */
 static void
 load_cursor(struct game *g)
 {
+	struct sprite_bank bank;
 	const uint8_t *p;
 	int w, h, i;
 
+	/* A pack's pointer: the first frame of ui/pointer, a sprite sheet
+	 * drawn as the original's, its tip at the top left. */
+	if (bank_load(g->packs, "ui/pointer", BANK_RUNS, &bank) == 0) {
+		if (bank.count > 0) {
+			g->cursor = bank.frames[0];
+			memset(&bank.frames[0], 0, sizeof(bank.frames[0]));
+		}
+		bank_free(&bank);
+		if (g->cursor.pixels != NULL)
+			return;
+	}
 	if ((p = exe_at(g->layout, g->exe, g->exe_len, g->layout->cursor_va,
 	    4)) == NULL)
 		return;
@@ -191,6 +204,7 @@ game_free(struct game *g)
 	tileset_free(&g->map_art);
 	free(g->cursor.pixels);
 	free(g->cursor.mask);
+	free(g->cursor.rgba);
 	bank_free(&g->intro_spr[0]);
 	bank_free(&g->intro_spr[1]);
 	free(g->intro_title);

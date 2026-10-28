@@ -2566,3 +2566,49 @@ flat shapes with hard edges, no shading, no texture, no detail, filling
 the whole picture edge to edge on a plain solid black background: a
 white skull with wild red and yellow hair like flames, over a cutlass.
 """
+
+# The mouse pointer: a cutlass, its point at the top left where the
+# pointer clicks (the original's is 24x27), cut out of its photograph.
+# A cutlass of about 1700 (https://en.wikipedia.org/wiki/Cutlass): a
+# short broad blade, straight or slightly curved, a brass shell or cup
+# guard, a wire-bound grip; here gilded with a red grip.
+[[asset]]
+id = "ui/pointer"
+file = "art/pointer.sheet"
+atlas = "art/pointer.png"
+seed = 1660
+source = "the game's pointer, described"
+sprite = { size = [24, 27] }
+prompt = """
+Photograph of a single cutlass of about 1700 lying diagonally across a
+plain flat light grey background, seen from above, its point at the
+top left corner and its hilt at the bottom right: a short, broad,
+slightly curved steel blade sharpened on one edge, a polished gilded
+brass shell guard and knuckle bow shining gold, and a deep red grip
+wrapped with fine gold wire, a round gilt pommel. Studio light, sharp
+focus, realistic.
+"""
+
+# The sailing map's clouds (cur/cloud, 50x17 in the game): three clouds
+# seen from above, then their shadows, which the game draws 30 pixels
+# left and down.
+[[asset]]
+id = "cur/cloud"
+file = "art/clouds.sheet"
+atlas = "art/clouds.png"
+seed = 1660
+source = "the game's clouds, described"
+prompt = ""
+[asset.clouds]
+size = [50, 17]
+prompts = [
+    """Aerial photograph taken straight down from high above of a single long, flat
+white cumulus cloud alone on a pure black background, soft fluffy edges,
+nothing else.""",
+    """Aerial photograph taken straight down from high above of a single round, puffy
+white cumulus cloud alone on a pure black background, soft fluffy edges,
+nothing else.""",
+    """Aerial photograph taken straight down from high above of a single ragged, broken
+white cumulus cloud alone on a pure black background, soft fluffy edges,
+nothing else.""",
+]

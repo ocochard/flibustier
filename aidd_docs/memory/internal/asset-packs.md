@@ -23,6 +23,7 @@ the [roadmap](../../plans/roadmap.md).
 | `tiles15/<name>` | 15x15 battle tiles | `<NAME>.BMP` |
 | `font/<name>` | 1-bit font | `<NAME>.CHR` |
 | `ui/<name>` | UI sprite bank | `<NAME>.CRS` |
+| `ui/pointer` | the mouse pointer, frame 0, its tip at the top left (packs only; the original's is a picture in the executable) | none |
 | `driver/<name>` | sound driver (music, effects) | `<NAME>.PIR` |
 | `text/<lang>/<name>` | string table | `<NAME>.<LANG>`, e.g. `CSTR.ENG` |
 | `program/main` | original executable (data tables) | `PIRATESG.EXE` |

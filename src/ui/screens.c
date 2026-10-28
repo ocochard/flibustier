@@ -2568,7 +2568,9 @@ const struct screen screen_hof = {
  * -40..480 down from the view, it comes back at the right edge at a
  * random height.  Only a cloud found in view by its move is drawn (VA
  * 0x4c792), so one put back at the edge waits for the next pass.  Each is drawn with its shadow 30 pixels left and down,
- * which darkens what it covers through the table at VA 0x3400c.
+ * which darkens what it covers through the table at VA 0x3400c.  A
+ * pack's cloud sheet holds the three clouds then their three shadows,
+ * dark and see-through.
  */
 #define CLOUD_SHADOW		30
 
@@ -2597,6 +2599,15 @@ clouds_draw(struct game *g)
 		f = &g->cloud_spr.frames[c->frame];
 		sx = c->x - g->sim.view_x;
 		sy = c->y - g->sim.view_y;
+		if (f->rgba != NULL) {
+			/* A pack's cloud: its shadow the frame 3 further on,
+			 * dark and see-through, then the cloud over it. */
+			if ((size_t)c->frame + 3 < g->cloud_spr.count)
+				fb_frame(&g->fb, &g->cloud_spr.frames[c->frame +
+				    3], sx - CLOUD_SHADOW, sy + CLOUD_SHADOW);
+			fb_frame(&g->fb, f, sx, sy);
+			continue;
+		}
 		if (shade != NULL)
 			for (y = 0; y < f->h; y++)
 				for (x = 0; x < f->w; x++) {
