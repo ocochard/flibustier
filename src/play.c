@@ -213,6 +213,10 @@ sounds_unload(struct sounds *sd)
  * device, no music; without the driver, only the replacements.
  */
 #define MUSIC_CHUNK	2048	/* frames per stream buffer */
+/* A recording's stream buffers: long enough to ride out a frame spent
+ * decoding a pack's picture (150 ms and more), which would starve the
+ * driver's short ones.  Only the effects need those short. */
+#define TUNE_CHUNK	32768
 #define TUNE_FADE	3.0f	/* seconds, about the driver's fade */
 
 struct jukebox {
@@ -306,7 +310,9 @@ tune_start(struct game *g, struct jukebox *j, int cmd, const char *alt)
 		return (0);
 	snprintf(type, sizeof(type), ".%s", b.ext);
 	tune_stop(j);
+	SetAudioStreamBufferSizeDefault(TUNE_CHUNK);
 	j->tune = LoadMusicStreamFromMemory(type, b.data, (int)b.len);
+	SetAudioStreamBufferSizeDefault(MUSIC_CHUNK);
 	if (!IsMusicValid(j->tune)) {
 		fprintf(stderr, "%s: cannot play this %s file\n", id, b.ext);
 		blob_free(&b);
