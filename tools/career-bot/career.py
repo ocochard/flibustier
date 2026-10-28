@@ -393,6 +393,17 @@ class Bot:
                 return m
         return -1
 
+    def wrecked(self, r):
+        """Did this sail step lose a ship on a reef?"""
+        return r["stop"] == "crew" and self.sim.state()["crew_event"] == 6
+
+    def wrecks_ahead(self, turn):
+        """Would one step of 4 ticks on this turn lose a ship on a reef?"""
+        before = self.sim.state()
+        wreck = self.wrecked(self.sim("sail", turn=turn, ticks=4))
+        self.sim("load", state=before)
+        return wreck
+
     def rollout(self, turn, before, wrecks_only=False):
         """Sail REEF_HORIZON chunks of 4 ticks on one turn and report the
         least room from shallows met on the way (-1: ran onto it or land);
@@ -402,11 +413,14 @@ class Bot:
         least = 99
         for _ in range(REEF_HORIZON):
             r = self.sim("sail", turn=turn, ticks=4)
-            if wrecks_only:
-                room = -1 if r["stop"] == "land" or r["stop"] == "crew" and \
-                    self.sim.state()["crew_event"] == 6 else 0
+            # a wreck counts whatever the ship stands on afterwards: a lone
+            # ship's loss puts the marooned player back on the shore
+            if r["stop"] == "land" or self.wrecked(r):
+                room = -1
+            elif wrecks_only:
+                room = 0
             else:
-                room = -1 if r["stop"] == "land" else self.room(r["x"], r["y"])
+                room = self.room(r["x"], r["y"])
             least = min(least, room)
             if room < 0 or r["stop"] not in ("ticks", "town"):
                 break
@@ -1435,6 +1449,14 @@ class Bot:
             want = (self.bearing(lx * 16 + 8 - f["x"], ly * 16 + 8 - f["y"]) + 8) & 0xF0
             diff = ((want - f["heading"] + 128) & 0xFF) - 128
             turn = 0 if abs(diff) < 8 else (1 if diff > 0 else -1)
+            # the run in to the beach crosses the shallows: no step that
+            # loses a ship (a lone one strands the captain)
+            if self.wrecks_ahead(turn):
+                turn = next((t for t in (0, -1, 1) if t != turn and not self.wrecks_ahead(t)), None)
+                if turn is None:
+                    self.note("no way ashore near map %d without striking a reef" % mapi)
+                    self.stats["dig_reefed"] += 1
+                    return False
             r = self.sim("sail", turn=turn, ticks=4)
             if r["stop"] == "land":
                 self.sim("shore", ashore=1)
