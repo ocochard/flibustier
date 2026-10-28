@@ -980,6 +980,56 @@ Where the original's behaviour is not traced yet, the engine does this:
   `0x40fbc`: a circle of about 50 pixels around (32, 23)) plus (3, 2).
   It marks the player's ship and where her bow points; the guns fire
   abeam, not at it. The engine centres the circle on the ship.
+- **Objects drawn (VA `0xf6eb`-`0xf888`):** eight slots each pass, in
+  order: 0 the player's ship, 1 the enemy's, 2-3 the player's shot
+  (shadow, then balls), 4-5 the enemy's, 6 the burst of a hit on the
+  player, 7 on the enemy. Their sprite ids are written each pass (VA
+  `0x7e50`); positions are the sprites' corners on the field.
+- **`sbtlmisc.cur` frames:** 0-3 the balls' shadows and 4-7 the balls,
+  42 x 8, three balls each, the spread widening from the first to the
+  last, never rotated; 8-12 a splash, 24-28 a burst (42 x 12); 20 the
+  cross; 32-47 the wind compass (45 x 24), frame 32 pointing up and the
+  next ones a sixteenth clockwise each.
+- **A shot drawn (VA `0x83ef`-`0x8545`, the enemy's `0x9080`-`0x91d0`):**
+  - At the shot, the flight `T` ticks (VA `0x9f9e`) sets a period `P =
+    T >> 4` and a step 0 (VA `0x8395`). Each pass of the flight, the
+    step picks a height `h` (16 signed words at VA `0x32544`, 0 or
+    below, rising to the top mid-flight and back) and a spread frame `f`
+    (16 words at VA `0x32564`, 0-3, widening), both indexed by the step
+    kept within 15. Then the step moves on every `P` passes; with `P`
+    0 it stays 0 (the countdown wraps first).
+  - In flight: the balls (frame `4 + f`) with their corner at (shot x -
+    21, shot y - 6), their shadow (frame `f`) `|h|` below that (VA
+    `0x844c`-`0x8479`, `0x90d7`-`0x9104`).
+  - When the flight ends the hit test runs, and a landing count
+    (word at VA `0x44a02`, the enemy's `0x44a40`; negative during the
+    flight) is set to 1. Each pass after, it goes up by 1 and shows
+    frame `count >> 3`, then clears on reaching 39 (VA `0x84dc`-`0x8545`,
+    `0x9167`-`0x91d0`): frame 0 for 6 passes, then 8 each for frames 1
+    to 4, 38 passes in all.
+  - A miss: the balls go; the shadow's slot shows splash frame `8 + k`
+    at (shot x - 21, shot y - 6 - h). A hit (flag at VA `0x44a2c`, the
+    enemy's `0x44a2e`): both shot slots go, and the burst frame `24 +
+    k` has its corner 21, 6 before the centre of the ship hit (VA
+    `0x8494`-`0x84d6`, `0x911f`-`0x9161`).
+  - A side fires only once its count is 0 (VA `0x8284`, `cmp [0x44a02],
+    0`; the enemy's likewise): neither in flight nor for the 38 passes
+    of the splash or burst, whatever the reload.
+  - The fire pass itself neither moves nor draws the shot (it jumps
+    past the flight code to VA `0x8729`), and each later pass draws it
+    where it was before moving it. The engine moves it on the fire tick
+    already and draws it where it is after the tick: its shots land a
+    tick early and are drawn two moves ahead (engine choice, kept from
+    before; about 4 pixels).
+- **The wind indicator (VA `0xee2b`, at setup `0x978a`, `0x9c36`, and
+  for panel event 4 when the wind shifts):** the strength word, CSTN
+  group 12 entry `strength & 3` ("light", "medium", "strong"), left
+  aligned at (524, 234), and the compass, frame `32 + wind / 16` with
+  its corner at (584, 229), pointing where the wind blows.
+- **Palette (VA `0x939b`-`0x93ba`):** every 8 passes the battle turns
+  the sailing sea's palette ranges once each (the rotations of VA
+  `0x2ae26`, `0x2b009`, `0x2aed6`); the battle tiles use 208-215 and
+  64-79.
 
 Helper names below are those `tools/ghidra/RegParams.java` gives:
 `div16(a, b)` is `a / b`, or 0 when `a < b` or `b == 0`; `sine_mul`
@@ -1068,6 +1118,8 @@ fight computes its level the same way with fencing.
   - The player fires on demand when reloaded and with guns.
   - The enemy fires when the player is within 6 of abeam (90° off its
     bow) and it is reloaded.
+  - Neither fires while its last shot flies or splashes (see "A shot
+    drawn").
   - A shot flies abeam, toward the target's side, at
     `sine_mul(h, 0x80) x 4` per tick, for `d / 2` ticks with
     `d = max(|dx|, |dy|) + min(|dx|, |dy|) / 4`, at least 16 (VA

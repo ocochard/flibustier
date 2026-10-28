@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	32
+#define STATE_VERSION	33
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -306,6 +306,17 @@ static const struct {
 };
 #define NSHIPINTS	(sizeof(ship_ints) / sizeof(ship_ints[0]))
 
+/* A shot's arc and landing, absent before them: none. */
+#define SFIELD(f)	{ "shot_" #f, offsetof(struct battle_shot, f) }
+static const struct {
+	const char	*name;
+	size_t		 off;
+} shot_ints[] = {
+	SFIELD(period), SFIELD(wait), SFIELD(step), SFIELD(landing),
+	SFIELD(hit),
+};
+#define NSHOTINTS	(sizeof(shot_ints) / sizeof(shot_ints[0]))
+
 static void
 battle_ship_json(const struct battle_ship *b, struct jbuf *out)
 {
@@ -333,7 +344,15 @@ battle_ship_json(const struct battle_ship *b, struct jbuf *out)
 	jb_int(out, b->shot.y);
 	jb_raw(out, ",");
 	jb_int(out, b->shot.heading);
-	jb_raw(out, "]}");
+	jb_raw(out, "]");
+	for (i = 0; i < NSHOTINTS; i++) {
+		jb_raw(out, ",\"");
+		jb_raw(out, shot_ints[i].name);
+		jb_raw(out, "\":");
+		jb_int(out, *(const int *)((const char *)&b->shot +
+		    shot_ints[i].off));
+	}
+	jb_raw(out, "}");
 }
 
 static int
@@ -360,6 +379,13 @@ battle_ship_from_json(struct battle_ship *b, const struct json *j)
 	b->shot.x = (int32_t)shot->items[1]->num;
 	b->shot.y = (int32_t)shot->items[2]->num;
 	b->shot.heading = (uint8_t)shot->items[3]->num;
+	for (i = 0; i < NSHOTINTS; i++)
+		*(int *)((char *)&b->shot + shot_ints[i].off) =
+		    (int)json_get_int(j, shot_ints[i].name, 0);
+	if (b->shot.step < 0 || b->shot.step >= SHOT_STEPS)
+		b->shot.step = 0;
+	if (b->shot.landing < 0 || b->shot.landing > 39)
+		b->shot.landing = 0;
 	return (b->type < 0 || b->type > 9 ? -1 : 0);
 }
 
@@ -583,6 +609,8 @@ sim_to_json(const struct sim *s, struct jbuf *b)
 	jb_int(b, s->fleet.food);
 	jb_raw(b, ",\"food_frac\":");
 	jb_int(b, s->fleet.food_frac);
+	jb_raw(b, ",\"reef_wait\":");
+	jb_int(b, s->fleet.reef_wait);
 	jb_raw(b, ",\"goods\":");
 	jb_int(b, s->fleet.goods);
 	jb_raw(b, ",\"sugar\":");
@@ -1005,6 +1033,9 @@ fleet_from_json(struct sim_fleet *f, const struct json *j, char *err,
 	    0));
 	f->food = (int)json_get_int(j, "food", 0);
 	f->food_frac = (int)(json_get_int(j, "food_frac", 0) & 0xFF);
+	f->reef_wait = (int)json_get_int(j, "reef_wait", 0);
+	if (f->reef_wait < 0 || f->reef_wait > 100)
+		f->reef_wait = 0;
 	f->goods = (int)json_get_int(j, "goods", 0);
 	f->sugar = (int)json_get_int(j, "sugar", 0);
 	f->capacity = (int)json_get_int(j, "capacity", 0);
@@ -1793,7 +1824,7 @@ cmd_finish(struct session *ss, const struct json *cmd, struct jbuf *out)
 	}
 	o = sim_battle_finish(&ss->sim, json_get_int(cmd, "keep", 0) != 0);
 	/* Landed by the fort: the garrison left to face the assault (VA
-	 * 0x18c2c); the men who stayed with the fleet do not fight. */
+	 * 0x18e3d); the men who stayed with the fleet do not fight. */
 	if (o == BAT_LANDED && ss->sim.battle.fort)
 		sim_fort_battle_garrison(&ss->sim, ss->sim.encounter.town);
 	jb_raw(out, "{\"ok\":true,\"outcome\":");

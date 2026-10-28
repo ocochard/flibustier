@@ -17,7 +17,9 @@
  * read by the scenario loader (VA 0x1386c).  The sailing loop (VA 0x231b8)
  * uses the sine and colour class tables, and the per-era block that VA
  * 0x1361c copies, which starts with the speed table.  The battle loop
- * (VA 0x7db8) uses the hit box tables.
+ * (VA 0x7db8) uses the hit box tables, and draws its shots' arc from
+ * the height and frame tables (VA 0x8405); its bow cross (VA 0xf903)
+ * sits on a circle of offsets.
  */
 static const struct exe_layout layouts[] = {
 	{
@@ -51,6 +53,9 @@ static const struct exe_layout layouts[] = {
 		0x34228,
 		0x33b18,
 		0x32f90,
+		0x32544,
+		0x32564,
+		0x40fbc,
 	},
 };
 

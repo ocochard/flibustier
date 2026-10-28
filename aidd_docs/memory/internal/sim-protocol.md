@@ -64,7 +64,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 32,
+  "version": 33,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -87,7 +87,9 @@ with a message. Numbers are integers only.
                      "target": 0, "speed": 0, "type": 1, "guns": 10,
                      "crew": 40, "damage": 0, "full_sails": 0,
                      "sail_timer": 0, "reload": 0, "turn_rate": 3,
-                     "role": 0, "shot": [0, 0, 0, 0]},
+                     "role": 0, "shot": [0, 0, 0, 0], "shot_period": 0,
+                     "shot_wait": 0, "shot_step": 0, "shot_landing": 0,
+                     "shot_hit": 0},
              "foe": {"...": "same fields"}},
   "sword": {"active": 0, "kind": 0, "level": 0, "title": 4,
             "nation": 1, "counter": 1, "result": "none", "beaten": 0,
@@ -164,6 +166,11 @@ with a message. Numbers are integers only.
     before the shallows can hurt again.
   - Positions are in 1/256 pixels on a 480 x 480 field. `shot` is
     `[ticks left, x, y, heading]`; 0 ticks means no shot in flight.
+    `shot_step` (0-15) is its arc's step, moving on every
+    `shot_period` ticks (`shot_wait` counts them down). Once it lands,
+    `shot_landing` runs 1 to 39 while the splash, or the burst when
+    `shot_hit`, shows; that side cannot fire before it reaches 39.
+    All five read as 0 when absent.
   - A `boarding` outcome needs a sword fight: `board` starts it and
     `sword` fights it. `finish` then returns `surrender` for a win
     (the prize may be kept), `repelled` when the player was driven
@@ -188,6 +195,8 @@ with a message. Numbers are integers only.
   - the sword fight's `sound` (the tick's FM effect, a driver command, 0
     none) and `effect` (the digitised effect replacing it, -1 none)
     (version 32);
+  - the fleet's `reef_wait`, passes before a reef can strike again
+    (version 33; older states load it as 0);
     `deserted` the men lost at the last roll call.
 - `ship_classes` is read-only, for bots: each class's battle `guns` and
   `hull`, and its sailing speed per wind sector in `sectors` (sector

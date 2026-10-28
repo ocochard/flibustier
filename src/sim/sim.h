@@ -323,6 +323,13 @@ struct battle_shot {
 	int		ticks;		/* flight ticks left; 0: none */
 	int32_t		x, y;		/* 1/256 pixels */
 	uint8_t		heading;
+	/* Its arc (VA 0x83ef): the step, 0..15, moves on every "period"
+	 * ticks, "wait" counting them down. */
+	int		period, wait, step;
+	/* After it lands: 1..39 while the splash or the burst shows (39
+	 * the last), the guns waiting until then (VA 0x84dc); 0 none. */
+	int		landing;
+	int		hit;		/* it landed on the target */
 };
 
 struct battle_ship {

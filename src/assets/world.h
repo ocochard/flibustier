@@ -26,6 +26,7 @@
 #define BATTLE_AI_CASES		27
 #define BATTLE_TYPES		10	/* 9 ship types and the fort */
 #define BATTLE_LEVELS		5
+#define SHOT_STEPS		16	/* a shot's arc, start to fall */
 #define SWORD_MOVES		16
 #define SWORD_FRAMES		6	/* table stride per move */
 #define SWORD_WEAPONS		3	/* rapier, longsword, cutlass */
@@ -132,6 +133,12 @@ struct world {
 	int16_t		half_w[BATTLE_TYPES];
 	int16_t		half_h[BATTLE_TYPES];
 	int16_t		hit_steps[BATTLE_LEVELS];
+	/* A shot's arc, by step (VA 0x8405): the balls' height above
+	 * their shadow (0 or less), and the spread frame 0-3. */
+	int16_t		shot_rise[SHOT_STEPS];
+	int16_t		shot_frame[SHOT_STEPS];
+	/* The bow cross's offset by heading / 16 (VA 0xf903), x and y. */
+	int16_t		bow_mark[16 * 2];
 	struct sword_tables sword;
 };
 

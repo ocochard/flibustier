@@ -55,6 +55,10 @@ struct exe_layout {
 						 * side (0x11, 0x22, 0x33) */
 	uint32_t	 jolly_va;		/* 4 x 16 u16: a named captain's
 						 * Jolly Roger, 1-20 */
+	uint32_t	 shot_rise_va;		/* 16 x i16: a shot's height */
+	uint32_t	 shot_frame_va;		/* 16 x u16: its spread frame */
+	uint32_t	 bow_mark_va;		/* 16 x (i16 x, i16 y): the bow
+						 * cross around the ship */
 };
 
 /* Returns the layout of a known build, or NULL. */

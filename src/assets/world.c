@@ -457,7 +457,12 @@ world_load(struct world *w, struct packs *packs,
 	    BATTLE_TYPES) != 0 || read_words(layout, exe, len,
 	    layout->half_h_va, w->half_h, BATTLE_TYPES) != 0 ||
 	    read_words(layout, exe, len, layout->hit_steps_va, w->hit_steps,
-	    BATTLE_LEVELS) != 0 || sword_load(layout, exe, len, &w->sword) != 0)
+	    BATTLE_LEVELS) != 0 || read_words(layout, exe, len,
+	    layout->shot_rise_va, w->shot_rise, SHOT_STEPS) != 0 ||
+	    read_words(layout, exe, len, layout->shot_frame_va, w->shot_frame,
+	    SHOT_STEPS) != 0 || read_words(layout, exe, len,
+	    layout->bow_mark_va, w->bow_mark, 16 * 2) != 0 ||
+	    sword_load(layout, exe, len, &w->sword) != 0)
 		goto bad;
 	return (load_places(w, packs, err, errlen));
 bad:
