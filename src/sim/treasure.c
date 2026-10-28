@@ -15,14 +15,17 @@
 #define LOST_GOLD	100000L
 #define RELATIVES	4
 
-/* The town nearest a cell by |dx| + |dy| (VA 0x1adfc, which walks a
- * list of town cells kept at VA 0x4ca58). */
+/* The town nearest a cell by |dx| + |dy| (VA 0x1adfc, over the era's
+ * arrival cells); by the towns' cells when there are none. */
 static int
 town_nearest(const struct sim *s, int x, int y)
 {
 	int best = 0, bestd = -1, d;
 	size_t i;
 
+	if ((d = world_nearest_town(s->world, x, y)) >= 0 &&
+	    (size_t)d < s->ntowns)
+		return (d);
 	for (i = 0; i < s->ntowns; i++) {
 		d = abs(s->towns[i].x - x) + abs(s->towns[i].y - y);
 		if (bestd < 0 || d < bestd) {

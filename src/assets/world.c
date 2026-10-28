@@ -385,8 +385,6 @@ load_arrival(struct world *w, struct packs *packs,
     int era, char *err, size_t errlen)
 {
 	struct era_towns *towns;
-	const struct town *t;
-	size_t i, k;
 
 	if ((towns = malloc(sizeof(*towns))) == NULL) {
 		snprintf(err, errlen, "out of memory");
@@ -397,15 +395,8 @@ load_arrival(struct world *w, struct packs *packs,
 		free(towns);
 		return (-1);
 	}
-	for (i = 0; i < towns->count; i++) {
-		t = &towns->towns[i];
-		for (k = 0; k < t->narrival; k++) {
-			w->arrival[w->narrival].x = (int16_t)t->arrival[k][0];
-			w->arrival[w->narrival].y = (int16_t)t->arrival[k][1];
-			w->arrival[w->narrival].town = (int16_t)i;
-			w->narrival++;
-		}
-	}
+	memcpy(w->arrival, towns->arrival, sizeof(w->arrival));
+	w->narrival = towns->narrival;
 	free(towns);
 	return (0);
 }
@@ -514,4 +505,10 @@ world_arrival(const struct world *w, int x, int y)
 		if (w->arrival[i].x == x && w->arrival[i].y == y)
 			return (w->arrival[i].town);
 	return (-1);
+}
+
+int
+world_nearest_town(const struct world *w, int x, int y)
+{
+	return (town_cells_nearest(w->arrival, w->narrival, x, y));
 }

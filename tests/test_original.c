@@ -308,21 +308,26 @@ find_town(const struct era_towns *era, const char *name)
 	return (NULL);
 }
 
-/* A town's arrival cells: a few, close to it, never its harbour mouth
- * (where a fleet leaving it is put). */
+/* An era's arrival cells: a few for each town, close to it, never its
+ * harbour mouth (where a fleet leaving it is put). */
 static void
-arrival_cells(const struct town *t)
+arrival_cells(const struct era_towns *era)
 {
-	size_t k;
-	int dx, dy;
+	const struct town *t;
+	size_t i, k, n;
 
-	CHECK(t->narrival >= 2);
-	for (k = 0; k < t->narrival; k++) {
-		dx = abs(t->arrival[k][0] - t->x);
-		dy = abs(t->arrival[k][1] - t->y);
-		CHECK(dx <= 3 && dy <= 3);
-		CHECK(t->sea_x == 0 || t->arrival[k][0] != t->sea_x ||
-		    t->arrival[k][1] != t->sea_y);
+	for (i = 0; i < era->count; i++) {
+		t = &era->towns[i];
+		for (k = 0, n = 0; k < era->narrival; k++) {
+			if (era->arrival[k].town != (int)i)
+				continue;
+			n++;
+			CHECK(abs(era->arrival[k].x - t->x) <= 3 &&
+			    abs(era->arrival[k].y - t->y) <= 3);
+			CHECK(t->sea_x == 0 || era->arrival[k].x != t->sea_x ||
+			    era->arrival[k].y != t->sea_y);
+		}
+		CHECK(n >= 2);
 	}
 }
 
@@ -360,8 +365,8 @@ test_towns(struct packs *packs)
 			per[era.towns[i].nation]++;
 			CHECK(era.towns[i].x < 640 && era.towns[i].y < 480);
 			CHECK(era.towns[i].wealth <= 255);
-			arrival_cells(&era.towns[i]);
 		}
+		arrival_cells(&era);
 		CHECK(memcmp(per, nations[e], sizeof(per)) == 0);
 	}
 	CHECK(towns_load(layout, b.data, b.len, 4, &era) == 0);

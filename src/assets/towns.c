@@ -68,20 +68,54 @@ parse_town(const uint8_t *r, struct town *t)
 	t->citymap_y = t->raw[30];
 }
 
-/* A town without arrival cells: its own and the eight around it. */
-static void
-default_arrival(struct town *t)
+int
+town_cells_nearest(const struct town_cell *cells, size_t n, int x, int y)
 {
+	size_t i;
+	int best = -1, bestd = 0, d;
+
+	for (i = 0; i < n; i++) {
+		d = abs(cells[i].x - x) + abs(cells[i].y - y);
+		if (best < 0 || d < bestd) {
+			best = cells[i].town;
+			bestd = d;
+		}
+	}
+	return (best);
+}
+
+static int
+add_cell(struct era_towns *era, int x, int y, size_t town)
+{
+	struct town_cell *c;
+
+	if (era->narrival == TOWN_CELLS)
+		return (-1);
+	c = &era->arrival[era->narrival++];
+	c->x = x;
+	c->y = y;
+	c->town = (int)town;
+	return (0);
+}
+
+/* Towns without arrival cells: their own and the eight around them. */
+static void
+default_arrival(struct era_towns *era)
+{
+	size_t i, k;
 	int dx, dy;
 
-	if (t->narrival > 0)
-		return;
-	for (dy = -1; dy <= 1; dy++)
-		for (dx = -1; dx <= 1; dx++) {
-			t->arrival[t->narrival][0] = t->x + dx;
-			t->arrival[t->narrival][1] = t->y + dy;
-			t->narrival++;
-		}
+	for (i = 0; i < era->count; i++) {
+		for (k = 0; k < era->narrival; k++)
+			if (era->arrival[k].town == (int)i)
+				break;
+		if (k < era->narrival)
+			continue;
+		for (dy = -1; dy <= 1; dy++)
+			for (dx = -1; dx <= 1; dx++)
+				(void)add_cell(era, era->towns[i].x + dx,
+				    era->towns[i].y + dy, i);
+	}
 }
 
 /*
@@ -93,7 +127,6 @@ load_arrival(const struct exe_layout *layout, const uint8_t *exe, size_t len,
     int era, struct era_towns *out)
 {
 	const uint8_t *b;
-	struct town *t;
 	size_t i;
 	unsigned town;
 
@@ -106,13 +139,9 @@ load_arrival(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 		if (le16(b + i) == 0xFFFF)
 			return (0);
 		town = le16(b + i + 4);
-		if (town >= out->count ||
-		    out->towns[town].narrival == TOWN_ARRIVALS)
+		if (town >= out->count || add_cell(out, (int)le16(b + i),
+		    (int)le16(b + i + 2), town) != 0)
 			return (-1);
-		t = &out->towns[town];
-		t->arrival[t->narrival][0] = (int)le16(b + i);
-		t->arrival[t->narrival][1] = (int)le16(b + i + 2);
-		t->narrival++;
 	}
 	return (-1);
 }
@@ -154,8 +183,7 @@ towns_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	}
 	if (load_arrival(layout, exe, len, era, out) != 0)
 		return (-1);
-	for (i = 0; i < out->count; i++)
-		default_arrival(&out->towns[i]);
+	default_arrival(out);
 	return (0);
 }
 
@@ -219,8 +247,11 @@ number(const struct json *j, int *out)
 }
 
 static int
-decode_town(const struct json *o, struct town *t, char *why, size_t len)
+decode_town(const struct json *o, struct era_towns *era, size_t index,
+    char *why, size_t len)
 {
+	struct town *t = &era->towns[index];
+	int xy[2];
 	const struct json *p;
 	const char *s;
 	size_t k, i;
@@ -260,17 +291,14 @@ decode_town(const struct json *o, struct town *t, char *why, size_t len)
 		if (p->type != JSON_ARRAY || p->count == 0 ||
 		    p->count > TOWN_ARRIVALS)
 			goto bad;
-		for (i = 0; i < p->count; i++) {
+		for (i = 0; i < p->count; i++)
 			if (p->items[i]->type != JSON_ARRAY ||
 			    p->items[i]->count != 2 ||
-			    number(p->items[i]->items[0], &t->arrival[i][0]) !=
-			    0 || number(p->items[i]->items[1],
-			    &t->arrival[i][1]) != 0)
+			    number(p->items[i]->items[0], &xy[0]) != 0 ||
+			    number(p->items[i]->items[1], &xy[1]) != 0 ||
+			    add_cell(era, xy[0], xy[1], index) != 0)
 				goto bad;
-		}
-		t->narrival = p->count;
 	}
-	default_arrival(t);
 	return (0);
 bad:
 	snprintf(why, len, "%s: a member is missing or out of range",
@@ -347,9 +375,9 @@ towns_decode(const uint8_t *data, size_t len, int era, struct era_towns *out,
 	out->year = town_era_years[era];
 	out->count = list->count;
 	for (i = 0; i < list->count; i++)
-		if (decode_town(list->items[i], &out->towns[i], err,
-		    errlen) != 0)
+		if (decode_town(list->items[i], out, i, err, errlen) != 0)
 			goto out;
+	default_arrival(out);
 	/* The convoys' routes, as town indices; none when absent. */
 	for (i = 0; i < CONVOY_STOPS; i++)
 		out->fleet_route[i] = out->train_route[i] = -1;
@@ -395,14 +423,16 @@ towns_encode(const struct era_towns *era, struct jbuf *b)
 			}
 			jb_raw(b, "]");
 		}
-		for (n = 0; n < t->narrival; n++) {
-			jb_raw(b, n == 0 ? ",\n   \"arrival\": [[" : ", [");
-			jb_int(b, t->arrival[n][0]);
+		for (n = 0, k = 0; n < era->narrival; n++) {
+			if (era->arrival[n].town != (int)i)
+				continue;
+			jb_raw(b, k++ == 0 ? ",\n   \"arrival\": [[" : ", [");
+			jb_int(b, era->arrival[n].x);
 			jb_raw(b, ", ");
-			jb_int(b, t->arrival[n][1]);
+			jb_int(b, era->arrival[n].y);
 			jb_raw(b, "]");
 		}
-		if (t->narrival > 0)
+		if (k > 0)
 			jb_raw(b, "]");
 		jb_raw(b, "}");
 	}

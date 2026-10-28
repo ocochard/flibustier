@@ -752,8 +752,14 @@ test_towns(void)
 	put16(r + 12, 0xFFFF);
 	r = exe + 16 + 36;
 	CHECK(towns_load(&layout, exe, sizeof(exe), 4, &era) == 0);
-	CHECK(era.towns[0].narrival == 2 && era.towns[0].arrival[0][1] == 180 &&
-	    era.towns[0].arrival[1][0] == 246);
+	CHECK(era.narrival == 2 && era.arrival[0].y == 180 &&
+	    era.arrival[1].x == 246 && era.arrival[1].town == 0);
+	/* The nearest: the first of two cells at the same distance. */
+	CHECK(town_cells_nearest(era.arrival, era.narrival, 246, 180) == 0);
+	era.arrival[1].town = 1;
+	CHECK(town_cells_nearest(era.arrival, era.narrival, 246, 180) == 0);
+	CHECK(town_cells_nearest(era.arrival, era.narrival, 247, 179) == 1);
+	CHECK(town_cells_nearest(era.arrival, 0, 247, 179) == -1);
 	CHECK(era.year == 1660 && era.count == 1);
 	CHECK(strcmp(era.towns[0].name, "Havana") == 0);
 	CHECK(era.towns[0].x == 245 && era.towns[0].y == 179 &&
@@ -766,8 +772,8 @@ test_towns(void)
 	CHECK(towns_load(&layout, exe, sizeof(exe), 0, &era) == 0);
 	CHECK(strlen(era.towns[0].name) == 16);
 	/* No list for 1560: the town's cell and the eight around. */
-	CHECK(era.towns[0].narrival == 9 && era.towns[0].arrival[4][0] == 245 &&
-	    era.towns[0].arrival[4][1] == 179);
+	CHECK(era.narrival == 9 && era.arrival[4].x == 245 &&
+	    era.arrival[4].y == 179 && era.arrival[8].town == 0);
 	/* A cell for a town past the count, or no end, is refused. */
 	put16(exe + 16 + 0xF24 + 4, 1);
 	CHECK(towns_load(&layout, exe, sizeof(exe), 4, &era) == -1);
@@ -1513,23 +1519,23 @@ test_town_files(void)
 	    t->sea_heading == 12);
 
 	/* No arrival cells given: its cell and the eight around. */
-	CHECK(t->narrival == 9 && t->arrival[0][0] == 244 &&
-	    t->arrival[8][1] == 180);
+	CHECK(era.narrival == 9 && era.arrival[0].x == 244 &&
+	    era.arrival[8].y == 180);
 
 	/* What the engine writes, it reads. */
 	towns_encode(&era, &b);
 	CHECK(b.s != NULL && towns_decode((const uint8_t *)b.s, b.len, 4,
 	    &back, err, sizeof(err)) == 0 && back.count == 1 &&
 	    back.towns[0].party_x == 8 && back.towns[0].governor == 3 &&
-	    back.towns[0].narrival == 9);
+	    back.narrival == 9);
 	jb_free(&b);
 
 	/* Arrival cells given; an empty list is refused. */
 	snprintf(text, sizeof(text), "%.*s, \"arrival\": [[245, 180], "
 	    "[246, 179]]}]}", (int)(strlen(one) - 3), one);
 	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,
-	    sizeof(err)) == 0 && t->narrival == 2 &&
-	    t->arrival[1][0] == 246 && t->arrival[1][1] == 179);
+	    sizeof(err)) == 0 && era.narrival == 2 &&
+	    era.arrival[1].x == 246 && era.arrival[1].y == 179);
 	snprintf(text, sizeof(text), "%.*s, \"arrival\": []}]}",
 	    (int)(strlen(one) - 3), one);
 	CHECK(towns_decode((const uint8_t *)text, strlen(text), 4, &era, err,

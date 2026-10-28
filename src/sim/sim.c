@@ -75,25 +75,18 @@ sim_news_at(const struct sim *s, size_t i)
 	return (&s->news[(first + i) % SIM_NEWS_MAX]);
 }
 
-/* Nearest town within "reach" cells of the fleet, or -1. */
+/* The town the fleet starts in: the nearest by the era's arrival cells
+ * (VA 0x1386c), when its own cell is within "reach" cells; else -1. */
 static int
-town_near(const struct sim *s, int reach)
+start_town(const struct sim *s, const struct era_towns *era, int reach)
 {
-	int cx = s->fleet.x / WORLD_TILE, cy = s->fleet.y / WORLD_TILE;
-	int best = -1, bestd = 0, d;
-	size_t i;
+	int cx = s->fleet.x / WORLD_TILE, cy = s->fleet.y / WORLD_TILE, t;
 
-	for (i = 0; i < s->ntowns; i++) {
-		if (abs(s->towns[i].x - cx) > reach ||
-		    abs(s->towns[i].y - cy) > reach)
-			continue;
-		d = abs(s->towns[i].x - cx) + abs(s->towns[i].y - cy);
-		if (best < 0 || d < bestd) {
-			best = (int)i;
-			bestd = d;
-		}
-	}
-	return (best);
+	t = town_cells_nearest(era->arrival, era->narrival, cx, cy);
+	if (t < 0 || (size_t)t >= s->ntowns ||
+	    abs(s->towns[t].x - cx) > reach || abs(s->towns[t].y - cy) > reach)
+		return (-1);
+	return (t);
 }
 
 /*
@@ -267,7 +260,7 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	sim_restore_towns(s, era);
 	/* The start position is in a town; the voyage starts on the water
 	 * outside its harbour. */
-	s->fleet.leaving = town_near(s, START_CELLS);
+	s->fleet.leaving = start_town(s, era, START_CELLS);
 	if (s->fleet.leaving >= 0)
 		sim_harbour_mouth(s, s->fleet.leaving);
 	start_log(s);
@@ -1236,6 +1229,11 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 	return (SAIL_TICKS);
 }
 
+/*
+ * The nearest town by the era's arrival cells (VA 0x24629 asks VA
+ * 0x1adfc), and the distance to its own cell, |dx| + |dy|, at least 1.
+ * Without a world, by the towns' cells.
+ */
 int
 sim_nearest_town(const struct sim *s, int *dist)
 {
@@ -1244,6 +1242,15 @@ sim_nearest_town(const struct sim *s, int *dist)
 	size_t i;
 
 	*dist = 0;
+	if (s->world != NULL &&
+	    (best = world_nearest_town(s->world, cx, cy)) >= 0 &&
+	    (size_t)best < s->ntowns) {
+		*dist = abs(s->towns[best].x - cx) + abs(s->towns[best].y - cy);
+		if (*dist < 1)
+			*dist = 1;
+		return (best);
+	}
+	best = -1;
 	for (i = 0; i < s->ntowns; i++) {
 		d = abs(s->towns[i].x - cx) + abs(s->towns[i].y - cy);
 		if (best < 0 || d < *dist) {

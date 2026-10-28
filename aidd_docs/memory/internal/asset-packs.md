@@ -286,7 +286,7 @@ original files and executable.
 | `map/<year>` | Tiled map, 640 x 480 cells | the era's map (1560 ... 1680), one tile number per cell |
 | `screens/sea` | Tiled map, 15 x 15 cells, 108 tile layers | sea battle screens, in layer order |
 | `screens/land` | Tiled map, 15 x 15 cells, 61 tile layers | land battle screens |
-| `data/towns/<year>` | JSON (`towns.h`) | the era's towns: position, nation, wealth, garrison, harbour, fort and battle cells, dot on the Map of the Caribbean, `arrival` (optional: 1 to 16 `[x, y]` map cells where the town is reached; absent, its cell and the eight around); `treasure_fleet` and `silver_train`, each up to 15 stops as town indices (-1 unused), the convoys' routes (absent: no convoys) |
+| `data/towns/<year>` | JSON (`towns.h`) | the era's towns: position, nation, wealth, garrison, harbour, fort and battle cells, dot on the Map of the Caribbean, `arrival` (optional: 1 to 16 `[x, y]` map cells where the town is reached, also the cells the nearest-town search measures to; absent, its cell and the eight around); `treasure_fleet` and `silver_train`, each up to 15 stops as town indices (-1 unused), the convoys' routes (absent: no convoys) |
 | `data/treasure` | JSON (`world.h`) | 256 treasure spots, world cells |
 | `data/battle-sets` | JSON (`world.h`) | sea battle screens offered by a coast north, east, south, west, or in open sea |
 

@@ -194,9 +194,9 @@ A start scenario (VA `0x1386c`) sets the player block at VA `0x45f92`:
 | +0x1e | `+0x21` | 8 bytes of ship types: 0 pinnace … 7 galleon (CSTN group 8 order) |
 | +0x28 | `+0x18` | gold, x 10 |
 
-The town the player is in is the nearest entry of the era's coordinate
-list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
-`0xFFFF`.
+The town the player is in is the nearest entry of the era's arrival
+cells (VA `0x1adfc`, from the scenario loader at VA `0x1386c`). That
+list holds (x, y, town) triplets, ending in `0xFFFF`.
 
 ### Ship state
 
@@ -800,6 +800,11 @@ Run at each start of sailing (VA `0x28789`), after leaving a town (VA
   asset-formats.md). A town has 2 to 13 cells, mostly its own and some
   next to it, at most 3 cells away; the harbour mouth (fields 26, 27) is never
   one, so a fleet leaving a town does not re-enter it.
+- **Nearest town (VA `0x1adfc`):** the town of the cell nearest a map
+  cell by `|dx| + |dy|`, the first in the list on a tie. The sailing
+  loop's nearest town (sightings, the town an encounter or a battle
+  belongs to), the start town and a treasure spot's town all come from
+  it; with no world loaded the engine measures to the towns' own cells.
 - **Test:** every pass, after the move and before the terrain test, the
   cell under the ship or the party (`x >> 4`, `y >> 4`) is looked up;
   the first matching entry wins (VA `0x29dd9`). A match stops the
@@ -892,7 +897,9 @@ Where the original's behaviour is not traced yet, the engine does this:
 
 1. **When:** every 32 ticks (when `(ticks + 4) & 31 == 0`), the game
    finds the nearest town and its distance `d` in map cells (`|dx| +
-   |dy|`, at least 1, VA `0x4c0a0`).
+   |dy|`, at least 1, VA `0x4c0a0`). The town is the one of the nearest
+   arrival cell (VA `0x24629` asks VA `0x1adfc`; see "Arriving"); `d`
+   is measured to that town's own cell (fields 1, 2).
 2. **Lingering counter:** a counter `h` resets to 0 when the nearest
    town changes (VA `0x23df7`). In the sailing loop it is the word at VA
    `0x4d288`; VA `0x4c09e` is its saved copy (loaded at VA `0x28890`,

@@ -17,7 +17,8 @@
 #define TOWN_MAX	48	/* records per era block, used or not */
 #define TOWN_FIELDS	32
 #define CONVOY_STOPS	15	/* a convoy's route */
-#define TOWN_ARRIVALS	16	/* arrival cells per town */
+#define TOWN_ARRIVALS	16	/* arrival cells per town, in a pack */
+#define TOWN_CELLS	(TOWN_MAX * TOWN_ARRIVALS)
 
 enum nation {
 	NATION_SPAIN,
@@ -60,11 +61,6 @@ struct town {
 	/* f29, f30: the town's dot on the Map of the Caribbean
 	 * (pic/citymap). */
 	int		 citymap_x, citymap_y;
-	/* The map cells where a ship or a party reaches the town (the
-	 * era's arrival list, VA 0x4ca58); without one, the town's cell
-	 * and the eight around it. */
-	int		 arrival[TOWN_ARRIVALS][2];
-	size_t		 narrival;
 	uint16_t	 raw[TOWN_FIELDS];	/* original data only */
 };
 
@@ -84,9 +80,23 @@ struct era_towns {
 	 * or -1 (the block's first 32 bytes, VA 0x4605e, 0x4606e). */
 	int		 fleet_route[CONVOY_STOPS];
 	int		 train_route[CONVOY_STOPS];
+	/* The map cells where a ship or a party reaches a town, in the
+	 * game's order (VA 0x4ca58): the first match, or the first of the
+	 * nearest, wins.  A town without any is reached on its own cell
+	 * and the eight around it. */
+	struct town_cell {
+		int	 x, y;
+		int	 town;	/* index in towns[] */
+	}		 arrival[TOWN_CELLS];
+	size_t		 narrival;
 };
 
 extern const int town_era_years[EXE_ERAS];
+
+/* The town of the cell nearest map cell (x, y) by |dx| + |dy|, the
+ * first of the nearest (VA 0x1adfc); -1 with no cells. */
+int	town_cells_nearest(const struct town_cell *cells, size_t n, int x,
+	    int y);
 
 /* era: 0 (1560) to 5 (1680).  Returns 0, or -1 on malformed data. */
 int	towns_load(const struct exe_layout *layout, const uint8_t *exe,
@@ -113,7 +123,7 @@ int	towns_for_era(struct packs *packs, const struct exe_layout *layout,
  *	    "citymap": [x, y], "arrival": [[x, y], ...] }, ... ] }
  *
  * Every member is required but "arrival" (1 to TOWN_ARRIVALS map
- * cells); numbers are 0..65535, nations "spain", "england", "france" or
+ * cells, kept in town order); numbers are 0..65535, nations "spain", "england", "france" or
  * "holland".  towns_encode() writes that form.
  */
 int	towns_decode(const uint8_t *data, size_t len, int era,
