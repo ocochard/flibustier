@@ -2051,6 +2051,16 @@ test_fort_battle(void)
 	}
 	CHECK(s.battle.outcome == BAT_NONE && shots >= 2);
 	CHECK(s.battle.foe.x == fx && s.battle.foe.y == fy);
+	/* Its shot is timed corner to corner (fort 224, 96; ship 208,
+	 * 336): d = 240 + 16 / 4, 122 ticks less the one flown at once and
+	 * the ship's first pixels north; centre to centre would be 128. */
+	s.battle.you.x = (6 * 32 + 16 + 40) * 256;
+	s.battle.you.y = (10 * 32 + 16 + 30) * 256;
+	s.battle.you.speed = 0;
+	s.battle.foe.shot.ticks = 0;
+	s.battle.foe.reload = 1;
+	CHECK(sim_battle_tick(&s, 0, 0, 0) & BEV_FOE_FIRED);
+	CHECK(s.battle.foe.shot.ticks >= 118 && s.battle.foe.shot.ticks <= 121);
 	/* The player's shots count against the fort, which never sinks. */
 	s.battle.foe.damage = 0;
 	s.battle.you.shot.ticks = 1;
@@ -2107,6 +2117,84 @@ test_command(void)
 	sim_battle_tick(&s, 0, 0, 0);
 	sim_battle_command(&s, 1);
 	CHECK(s.fleet.ships[0] == 5);
+}
+
+/* Through the protocol: the fort battle from the sea, the ship to
+ * command, and the landing's garrison. */
+static void
+test_fort_protocol(void)
+{
+	struct session ss;
+	struct jbuf out = { 0 };
+	struct sim_town *t;
+
+	memset(&ss, 0, sizeof(ss));
+	ss.load = loader;
+	ss.load_world = world_cb;
+	proto_handle(&ss, "{\"cmd\":\"new_game\",\"era\":1660}", &out);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"flagship\",\"ship\":0}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+	t = &ss.sim.towns[1];
+	t->forts = 0;
+	ss.sim.fleet.leaving = 1;
+	ss.sim.fleet.ashore = 0;
+	ss.sim.player_town = -1;
+	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"fort\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+	t->forts = 2;
+	t->soldiers = 41;
+	ss.sim.fleet.nships = 2;
+	ss.sim.fleet.ships[0] = 1;
+	ss.sim.fleet.ships[1] = 5;
+	ss.sim.fleet.damage[0] = 0;
+	ss.sim.fleet.damage[1] = 0;
+	ss.sim.fleet.crew = 100;
+	ss.sim.fleet.guns = 30;
+	proto_handle(&ss, "{\"cmd\":\"town\",\"action\":\"fort\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":true") != NULL);
+	CHECK(ss.sim.battle.active && ss.sim.battle.fort);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"flagship\",\"ship\":2}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"flagship\",\"ship\":1}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":true") != NULL);
+	CHECK(ss.sim.fleet.ships[0] == 5 && ss.sim.battle.you.type == 5);
+	CHECK(ss.sim.battle.you.crew == 92 && ss.sim.battle.crew_ashore == 8);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"battle\"}", &out);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"flagship\",\"ship\":1}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"ok\":false") != NULL);
+	jb_free(&out);
+	/* Landed: half the garrison and a tenth of the fort's crew stay;
+	 * the men left with the fleet are reported. */
+	ss.sim.battle.outcome = BAT_LANDED;
+	ss.sim.battle.foe.crew = 60;
+	proto_handle(&ss, "{\"cmd\":\"finish\"}", &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"outcome\":\"landed\"") !=
+	    NULL && strstr(out.s, "\"aboard\":8") != NULL);
+	CHECK(t->soldiers == 21 + 6);
+	jb_free(&out);
+	/* The fort, left as the encounter, loads back. */
+	{
+		struct jbuf st = { 0 }, cmd = { 0 };
+
+		sim_to_json(&ss.sim, &st);
+		jb_raw(&cmd, "{\"cmd\":\"load\",\"state\":");
+		jb_raw(&cmd, st.s);
+		jb_raw(&cmd, "}");
+		proto_handle(&ss, cmd.s, &out);
+		CHECK(out.s != NULL && strcmp(out.s, "{\"ok\":true}") == 0);
+		CHECK(ss.sim.encounter.type == FORT_TYPE);
+		jb_free(&out);
+		jb_free(&st);
+		jb_free(&cmd);
+	}
+	session_free(&ss);
 }
 
 /* The land battle: the forces, moving, the fort reached, the count. */
@@ -3660,6 +3748,16 @@ test_reef(void)
 	s.crew_event = CREW_NONE;
 	s.fleet.reef_wait = 0;
 	CHECK(sim_sail(&s, 0, 64, &town) != SAIL_CREW);
+	/* A lone ship bigger than a sloop: her loss maroons the player. */
+	sea_game(&s, 300, 300, 0x00);
+	s.encounters = 0;
+	s.fleet.food = 1000;
+	s.fleet.nships = 1;
+	s.fleet.ships[0] = 4;
+	s.fleet.crew = 100;
+	stop = sim_sail(&s, 0, 1, &town);
+	CHECK(stop == SAIL_CREW && s.crew_event == CREW_WRECKED &&
+	    s.jail.fresh && s.jail.cause == JAIL_MAROONED);
 	for (y = 280; y < 320; y++)
 		for (x = 280; x < 320; x++)
 			test_world.map[y * WORLD_CELLS_W + x] = 0;
@@ -3795,6 +3893,7 @@ main(void)
 	test_coast();
 	test_screens();
 	test_fort_battle();
+	test_fort_protocol();
 	test_leave_heading();
 	test_assault();
 	test_tavern_people();

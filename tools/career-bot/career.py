@@ -17,6 +17,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 DATA = os.environ.get("FLIBUSTIER_DATA")
 BUILD = os.path.join(REPO, "build")
 OUT = "."
+FORT_MARGIN = 8		# hull to spare, by fort_margin, before fighting a fort
 FALLBACK_YEARS = int(os.environ.get("BOT_FALLBACK", 9))	# after this, a governor's daughter will do instead of his niece
 NATIONS = ["spain", "england", "france", "holland"]
 
@@ -44,6 +45,31 @@ FOOD_DIV = int(os.environ.get("BOT_FOOD_DIV", 4))
 CONQUER = int(os.environ.get("BOT_CONQUER", 1))
 CONQUER_FORTS = int(os.environ.get("BOT_CQ_FORTS", 1))
 CONQUER_MEN = int(os.environ.get("BOT_CQ_MEN", 15))
+
+
+def fort_margin(st, town, ship, damage):
+    """The hull a ship would have left on reaching the fort of town
+    "town" under battle sails, by the fort battle rules: half speed, the
+    best way the wind allows (a ship makes about 0.023 pixels a tick per
+    point of sector speed, measured), the fort firing every 144 ticks
+    for forts x 12 guns, each hit doing guns x 4 / (class + 2), halved by
+    battle sails.  The fort aims from its corner and misses small ships
+    more: it hits about a quarter, half and nine tenths of its shots on
+    classes 0-2, 3-5 and 6-8 (measured).  Below 0, she sinks first; the
+    fight also slows her as she takes damage."""
+    t = st["towns"][town]
+    cls = ship & 7
+    dx = t["fort_x"] * 32 + 16 - (t["ship_x"] * 32 + 56)
+    dy = t["fort_y"] * 32 + 16 - (t["ship_y"] * 32 + 46)
+    want = Bot.bearing(dx, dy)
+    sectors = st["ship_classes"][cls]["sectors"]
+    way = max(sectors[((h + 8 - st["wind"]) >> 4) & 15] *
+              math.cos((h - want) * math.pi / 128) for h in range(0, 256, 8))
+    if way <= 0:
+        return -64
+    ticks = max(0, math.hypot(dx, dy) - 24) / (way * 0.023)
+    hit = max(1, (t["forts"] & 7) * 12 * 4 // (cls + 2) // 2)
+    return 0.75 * (64 - damage) - ticks / 144 * hit * (0.25, 0.55, 0.9)[cls // 3]
 
 
 class Fail(Exception):
@@ -149,6 +175,8 @@ class Bot:
         self.food_town = None
         self.reefs = set()	# cells where a ship was lost on shallows
         self.wrecks = 0	# ships lost on shallows so far
+        self.forts_lost = set()	# towns whose fort beat us off
+        self.bad_landings = set()	# dig landings whose voyage wrecked us
         self.dig_fails = collections.Counter()	# failed trips, per map
         self.visited = {}
         self.mission_tries = 0
@@ -195,6 +223,24 @@ class Bot:
                                 comp[q] = n
                                 stack.append(q)
         self.comp = comp
+        # the same over open water alone: a lagoon behind a reef is apart
+        deep = {}
+        n = 0
+        for y in range(self.H):
+            for x in range(self.W):
+                if self.grid[y][x] == "." and (x, y) not in deep:
+                    n += 1
+                    stack = [(x, y)]
+                    deep[(x, y)] = n
+                    while stack:
+                        cx, cy = stack.pop()
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            q = (cx + dx, cy + dy)
+                            if 0 <= q[0] < self.W and 0 <= q[1] < self.H and \
+                                    self.grid[q[1]][q[0]] == "." and q not in deep:
+                                deep[q] = n
+                                stack.append(q)
+        self.deep = deep
         # open cells touching a ',' cell or land: ships drift onto shallows there
         self.shore = {(x, y) for y in range(self.H) for x in range(self.W)
                       if self.grid[y][x] == "." and any(
@@ -560,9 +606,58 @@ class Bot:
             self.note("abandoned the last ship")
 
     # --------------------------------------------------------- sea battle
+    def battle_score(self, i, fort):
+        """What fleet ship i brings to the battle, from the battle rules:
+        the men and guns she can carry, the hits she can take (a hit does
+        guns x 4 / (class + 2), 64 sinks her) and her speed, which hull
+        damage slows.  The weighting is a guess.  Before a fort, reaching
+        the landing comes first (fort_margin), then her men, who are the
+        assault party; her guns barely matter, as the bot runs for the
+        landing."""
+        f = self.st["fleet"]
+        cls = f["ships"][i] & 7
+        crew = max(1, min(f["crew"] + 8 - 8 * len(f["ships"]), (cls + 2) * 32))
+        if fort:
+            margin = fort_margin(self.st, self.st["fleet"]["leaving"],
+                                 f["ships"][i], f["damage"][i])
+            return (margin > 0, crew, margin)
+        guns = max(1, min(f["guns"], crew // 4, (cls + 2) * 4))
+        hull = (64 - f["damage"][i]) * (cls + 2)
+        speed = max(1, self.st["ship_classes"][cls]["speed"] - f["damage"][i])
+        return (True, crew * hull * speed * guns, 0)
+
+    def choose_ship(self):
+        """With several ships, command the best one for this battle."""
+        s = self.refresh()
+        f = s["fleet"]
+        if len(f["ships"]) < 2:
+            return
+        fort = s["battle"]["fort"]
+        best = max(range(len(f["ships"])), key=lambda i: self.battle_score(i, fort))
+        if best != 0:
+            self.sim("flagship", ship=best)
+            self.note("commanding ship %d (%s) for the %s" % (
+                best, f["ships"][best], "fort" if fort else "battle"))
+        self.stats["flagship_changed"] += best != 0
+
+    def beat(self, you, want, wind):
+        """The heading that makes the most way toward bearing "want": a
+        fort is often upwind, where a ship heading straight at it stops.
+        Keep the current heading unless another one is clearly better,
+        so as not to flip between tacks."""
+        sectors = self.st["ship_classes"][you["type"] & 7]["sectors"]
+
+        def way(h):
+            v = sectors[((h + 8 - wind) >> 4) & 15]
+            return v * math.cos((h - want) * math.pi / 128)
+        best = max(range(0, 256, 8), key=way)
+        return you["heading"] if way(you["heading"]) >= 0.8 * way(best) > 0 else best
+
     def battle(self):
-        """Steer at the foe and board her; returns the finish reply."""
+        """Steer at the foe and board her (or land by the fort); returns
+        the finish reply."""
         self.battle_day = self.st["day"]
+        self.choose_ship()
         b = self.sim("battle", ticks=1)["battle"]
         n = 0
         fleeing = False
@@ -575,11 +670,16 @@ class Bot:
             want = self.bearing(foe["x"] - you["x"], foe["y"] - you["y"])
             if fleeing:
                 want = (want + 128) & 0xFF
+            if b.get("fort"):
+                want = self.beat(you, want, b["wind"])
             diff = ((want - you["heading"] + 128) & 0xFF) - 128
             turn = 0 if abs(diff) < 6 else (1 if diff > 0 else -1)
             dist = math.hypot(foe["x"] - you["x"], foe["y"] - you["y"]) / 256
             fire = 1 if not fleeing and (b.get("fort") or dist > 60) and you["reload"] == 0 and abs(diff) > 40 else 0
-            b = self.sim("battle", ticks=4, turn=turn, fire=fire, sails=1)["battle"]
+            # before a fort, battle sails halve its hits for a third
+            # less speed: less damage on the way in
+            b = self.sim("battle", ticks=4, turn=turn, fire=fire,
+                         sails=-1 if b.get("fort") else 1)["battle"]
             n += 1
         out = b["outcome"]
         self.stats["battle_" + out] += 1
@@ -1067,8 +1167,31 @@ class Bot:
         train = s["train_town"] == ti
         day0 = s["day"]
         fleet_there = s["fleet_town"] == ti
+        aboard = 0
+        fort = t["forts"] and not s["fleet"]["ashore"]
+        if fort:
+            f = s["fleet"]
+            margin = max(fort_margin(s, ti, f["ships"][i], f["damage"][i])
+                         for i in range(len(f["ships"])))
+            if margin < FORT_MARGIN or ti in self.forts_lost:
+                # the fort would sink us before the landing: not today
+                self.note("the fort at %s is too strong %s (margin %d)" % (
+                    t["name"], "for us" if ti in self.forts_lost else "in this wind", margin))
+                self.stats["fort_avoided"] += 1
+                return "fortified"
         self.sim("town", action="attack")
-        self.sim("assault", action="start", weapon=2, aboard=0)
+        if fort:
+            # from the sea the fort fights first; only a landing goes on
+            self.sim("town", action="fort")
+            fin = self.battle()
+            self.note("fort battle at %s: %s" % (t["name"], fin["outcome"]))
+            if fin["outcome"] != "landed":
+                # the estimate missed (the coast, most likely): not again
+                self.forts_lost.add(ti)
+                self.after_battle(fin)
+                return "repulsed"
+            aboard = fin["aboard"]
+        self.sim("assault", action="start", weapon=2, aboard=aboard)
         res = self.fight()
         e = self.sim("assault", action="end")
         self.note("assault on %s: %s (result %d), crew %d" % (t["name"], res, e["result"], e["crew"]))
@@ -1177,20 +1300,36 @@ class Bot:
         m = s["maps"][mapi]
         tx, ty = m["x"], m["y"]
         self.note("going to dig map %d near %d,%d (pieces %d)" % (mapi, tx, ty, m["pieces"]))
-        # nearest water cell to the spot
+        # nearest open water to the spot on the fleet's own sea: a cell in
+        # the shallows, or in a lagoon behind a reef, wrecks the fleet on
+        # its way in; a landing that wrecked it anyway is not tried again
+        f = s["fleet"]
+        sea = self.deep.get((f["x"] // 16, f["y"] // 16))
         best = None
-        for r in range(1, 40):
-            for dy in range(-r, r + 1):
-                for dx in range(-r, r + 1):
-                    if max(abs(dx), abs(dy)) == r and self.water(tx + dx, ty + dy):
-                        best = (tx + dx, ty + dy)
+        for open_sea in (True, False):
+            for r in range(1, 40):
+                for dy in range(-r, r + 1):
+                    for dx in range(-r, r + 1):
+                        c = (tx + dx, ty + dy)
+                        if max(abs(dx), abs(dy)) != r or not self.water(*c) or c in self.bad_landings:
+                            continue
+                        if open_sea and (c not in self.deep or sea is not None and self.deep[c] != sea):
+                            continue
+                        best = c
+                        break
+                    if best:
                         break
                 if best:
                     break
             if best:
                 break
+        if best is None:
+            return False
+        wrecks = self.wrecks
         res = self.go(best[0], best[1])
         if res != "arrived":
+            if self.wrecks > wrecks:
+                self.bad_landings.add(best)
             return False
         # steer into the land toward the spot, or its nearest land when the
         # spot itself lies in the shallows

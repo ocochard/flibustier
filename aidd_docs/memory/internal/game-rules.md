@@ -752,7 +752,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
   a jarring crash, one of your ships grinds onto a shallow reef and
   rapidly fills with water!" (CSTR 182). She is lost with her share of
   the cargo and gold (VA `0x1f2a1`), and the crew is cut to the rest's
-  `(class + 2) x 32`.
+  `(class + 2) x 32`. When she is the last ship, the player is
+  marooned, as after a sea battle (see "Losing a ship" and "Prison"),
+  once the master's word is heard.
 - Sails and speed play no part; small ships are safe only because
   they never count.
 - The original sizes the fleet once a voyage (VA `0x24523`), reading
@@ -1067,7 +1069,15 @@ fight computes its level the same way with fencing.
     bow) and it is reloaded.
   - A shot flies abeam, toward the target's side, at
     `sine_mul(h, 0x80) x 4` per tick, for `d / 2` ticks with
-    `d = max(|dx|, |dy|) + min(|dx|, |dy|) / 4`, at least 16.
+    `d = max(|dx|, |dy|) + min(|dx|, |dy|) / 4`, at least 16 (VA
+    `0x9f9e`).
+  - The bearing (VA `0x87bf`, toward where the player will be next
+    tick) and `d` run between the two sprites' corners, but a shot
+    starts from the firer's centre (VA `0x835a`, `0x8fee`): 40, 30 from
+    a ship's corner, 16, 16 from a fort's. Between ships it lands on
+    target; a fort's shot lands 24, 14 short of the player's centre,
+    so small ships (half box 20 x 10) are hit only when the spread
+    brings it back.
 - **Hits:** when the shot lands, it hits if it is inside the target's
   box.
   - Half sizes by type: 20 x 10 (0-2), 30 x 20 (3-5), 40 x 30 (6-8).
@@ -1179,7 +1189,8 @@ the fort.
     10..430 that ends the battle: it never scrolls.
   - The fort neither decides nor moves (VA `0x8914`). Before each
     shot it turns to `bearing + 0x3C + rand(8)`, so it fires whenever
-    reloaded.
+    reloaded, its shot within 4/256 of the bearing. It aims from its
+    corner (see "Firing"), so it misses small ships more often.
   - The player's hits count in a fort damage counter, with class 8
     in the damage formula and no bonus. The panel shows `fortbtl.cur`
     stage `damage / 20` (at most 3). The fort is never sunk.

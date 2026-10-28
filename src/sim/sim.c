@@ -823,9 +823,9 @@ eat(struct sim *s)
  * Reefs (VA 0x231b8, 0x2849c): on the shallows, with a ship bigger
  * than a sloop in the fleet and the 100-pass wait over, the last such
  * ship grinds onto a reef and is lost with her share of the cargo
- * (CSTR 182); the crew is cut to what the rest can carry.  The original
- * sizes the fleet once a voyage from every other slot; the engine looks
- * at every ship.
+ * (CSTR 182); the crew is cut to what the rest can carry.  Losing the
+ * last ship maroons the player.  The original sizes the fleet once a
+ * voyage from every other slot; the engine looks at every ship.
  */
 static int
 reef(struct sim *s, int terrain)
@@ -844,6 +844,13 @@ reef(struct sim *s, int terrain)
 	if (victim < 0)
 		return (0);
 	f->reef_wait = 100;
+	/* The last ship: marooned, as after a sea battle (VA 0x1f2a1),
+	 * once the master's word is heard. */
+	if (f->nships == 1) {
+		sim_imprison(s, JAIL_MAROONED, -1);
+		s->crew_event = CREW_WRECKED;
+		return (1);
+	}
 	sim_drop_ship(s, victim, 0);
 	for (k = 0, room = 0; k < f->nships; k++)
 		room += ((f->ships[k] & 0xF) + 2) * 32;

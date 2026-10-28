@@ -77,8 +77,8 @@ void	fb_image(struct fb *fb, const struct image *img, int x, int y,
 
 /*
  * Draw the (sx, sy, w, h) part of a picture at (dx, dy), clipped; pixels
- * of colour "key" are skipped unless it is negative.  This draws the
- * palette indices only.
+ * of colour "key" are skipped unless it is negative.  True colours, when
+ * the picture has them, go to the canvas, where the key lets them.
  */
 void	fb_image_part(struct fb *fb, const struct image *img, int sx, int sy,
 	    int w, int h, int dx, int dy, int key);

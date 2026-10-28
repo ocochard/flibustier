@@ -1955,3 +1955,203 @@ side: a hard face with a black beard, a polished steel morion helmet
 with a crest and an upturned rim. Plain flat grey-blue background.
 Historical reenactment photography, sharp focus, realistic.
 """
+
+[portraits]
+seed = 1660
+background = """
+Photograph of the open Caribbean sea seen from low over the water on a
+bright day: blue water with small white crests in the lower third, the
+horizon a third of the way up, and above it a soft blue sky with a few
+white clouds, nothing on the sea, no land, no ship.
+"""
+
+# The encounter's ship portraits: each class's model as a lookout sees
+# her, low over the water with her bow towards him, redrawn as a
+# photograph at sea, in the 5 spyglass views the game shows in turn.
+[[asset]]
+id = "pic/s_pinn"
+file = "art/s_pinn.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "pinnace" }
+denoise = 0.75
+prompt = """
+Photograph of a small, slim Dutch three-masted pinnace in dark oiled
+oak: a low single-deck hull with a modest raised stern ending in a flat,
+square transom, a short beakhead, square course and topsail on the fore
+and main masts, a triangular lateen sail on the small mizzen, a square
+spritsail under the bowsprit, a few gun ports, under sail at sea, seen
+from low over the water, her bow to the left and a little towards us, a
+blue sea with white crests and the open sea running to the horizon all
+round her and a sky of soft even blue with a few white clouds, a natural
+photograph with no frame, no border and no circle. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_sloop"
+file = "art/s_sloop.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "sloop" }
+denoise = 0.75
+prompt = """
+Photograph of a low, sleek single-masted Caribbean sloop of the 1670s
+with a flush deck and a small square transom: one tall mast raked aft
+with a large gaff mainsail on a long boom, two triangular jibs on a
+long, nearly level bowsprit, a small square topsail high on the mast, a
+bare cedar hull with a black wale and a handful of small cannon along
+the rail, under sail at sea, seen from low over the water, her bow to
+the left and a little towards us, a blue sea with white crests and the
+open sea running to the horizon all round her and a sky of soft even
+blue with a few white clouds, a natural photograph with no frame, no
+border and no circle. Historical reenactment photography, sharp focus,
+realistic. The whole ship is built of planked wood: no tower, nothing of
+stone.
+"""
+[[asset]]
+id = "pic/s_barque"
+file = "art/s_barque.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "barque" }
+denoise = 0.75
+prompt = """
+Photograph of a small three-masted Elizabethan bark with a stout, plain
+wooden hull, a modest raised bow deck and a raised square stern: square
+course and topsail on the fore and main masts, a single lateen sail on
+the short mizzen, a spritsail under the raked bowsprit, a tarred brown
+hull with a few red gun-port lids, under sail at sea, seen from low over
+the water, her bow to the left and a little towards us, a blue sea with
+white crests and the open sea running to the horizon all round her and a
+sky of soft even blue with a few white clouds, a natural photograph with
+no frame, no border and no circle. Historical reenactment photography,
+sharp focus, realistic. The whole ship is built of planked wood: no
+tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_fluyt"
+file = "art/s_fluyt.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "fluyt" }
+denoise = 0.75
+prompt = """
+Photograph of a Dutch fluyt of the 1650s, a long narrow cargo ship whose
+sides curve sharply inward above the waterline, a rounded stern topped
+by a tall, narrow, flat transom with a small carved panel, almost no
+raised bow deck, three tall masts with square sails on the fore and
+main, a lateen mizzen and a spritsail, a dark varnished hull with green
+and ochre trim and few gun ports, under sail at sea, seen from low over
+the water, her bow to the left and a little towards us, a blue sea with
+white crests and the open sea running to the horizon all round her and a
+sky of soft even blue with a few white clouds, a natural photograph with
+no frame, no border and no circle. Historical reenactment photography,
+sharp focus, realistic. The whole ship is built of planked wood: no
+tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_merch"
+file = "art/s_merch.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "merchantman" }
+denoise = 0.75
+prompt = """
+Photograph of a sturdy English merchant ship of about 1620 with a broad,
+deep hull, a raised wooden stern two decks high, its poop and
+quarterdeck planked like the rest of the hull, and a smaller raised bow
+deck: square course and topsail on the fore and main masts, a lateen
+sail on the mizzen, a square spritsail under the steeply raked bowsprit,
+weathered buff and black paint, simple trim and a few small gun ports,
+under sail at sea, seen from low over the water, her bow to the left and
+a little towards us, a blue sea with white crests and the open sea
+running to the horizon all round her and a sky of soft even blue with a
+few white clouds, a natural photograph with no frame, no border and no
+circle. Historical reenactment photography, sharp focus, realistic. The
+whole ship is built of planked wood: no tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_frig"
+file = "art/s_frig.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "frigate" }
+denoise = 0.75
+prompt = """
+Photograph of a sleek Dutch light frigate of about 1665, a low-slung,
+fine-lined hull with one continuous row of gun ports and a short raised
+bow deck, a modest raised quarterdeck ending in a flat carved transom
+with light gilding: square courses, topsails and topgallants, a lateen
+mizzen under a small square topsail, a spritsail and spritsail topsail,
+a black hull with yellow-ochre bands and red gun-port lids, under sail
+at sea, seen from low over the water, her bow to the left and a little
+towards us, a blue sea with white crests and the open sea running to the
+horizon all round her and a sky of soft even blue with a few white
+clouds, a natural photograph with no frame, no border and no circle.
+Historical reenactment photography, sharp focus, realistic. The whole
+ship is built of planked wood: no tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_war"
+file = "art/s_war.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "war galleon" }
+denoise = 0.75
+prompt = """
+Photograph of a massive war galleon of the 1620s with two full rows of
+red-lidded gun ports, a high wooden stern several decks tall, heavily
+carved with galleries, deep red and covered in gilded and painted
+sculpture, a long ornate beakhead with a lion figurehead: square
+courses, topsails and topgallants, a lateen mizzen with a small topsail,
+two square sails on the raked bowsprit, under sail at sea, seen from low
+over the water, her bow to the left and a little towards us, a blue sea
+with white crests and the open sea running to the horizon all round her
+and a sky of soft even blue with a few white clouds, a natural
+photograph with no frame, no border and no circle. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_gal"
+file = "art/s_gal.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "galleon" }
+denoise = 0.75
+prompt = """
+Photograph of a Spanish treasure galleon of about 1600 with a broad
+hull, a high wooden stern rising three decks, its flat planked transom
+painted with saints and quarter galleries, a lower raised bow deck and a
+long, low beakhead: square courses and topsails on the fore and main
+masts, a lateen mizzen, two square sails on the bowsprit, an ochre and
+dark red hull with gilded trim and gun ports, under sail at sea, seen
+from low over the water, her bow to the left and a little towards us, a
+blue sea with white crests and the open sea running to the horizon all
+round her and a sky of soft even blue with a few white clouds, a natural
+photograph with no frame, no border and no circle. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
+"""
+[[asset]]
+id = "pic/s_fast"
+file = "art/s_fast.png"
+seed = 1660
+source = "a ship model of this pack, rendered"
+portrait = { class = "fast galleon" }
+denoise = 0.75
+prompt = """
+Photograph of a sleek English race-built galleon of the 1580s, a low,
+long hull with a low stern and bow, a small raised bow deck and a
+moderately raised stern with a square transom and a small gallery, one
+row of gun ports: square courses and topsails on the fore and main
+masts, a lateen mizzen, a spritsail, the hull painted in bold red, gold
+and black bands, red below and black above, under sail at sea, seen from
+low over the water, her bow to the left and a little towards us, a blue
+sea with white crests and the open sea running to the horizon all round
+her and a sky of soft even blue with a few white clouds, a natural
+photograph with no frame, no border and no circle. Historical
+reenactment photography, sharp focus, realistic. The whole ship is built
+of planked wood: no tower, nothing of stone.
+"""
