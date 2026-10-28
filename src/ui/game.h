@@ -198,8 +198,9 @@ struct game {
 	int			 btl_chosen;	/* the ship to command is chosen */
 	int			 ashore_prompt;	/* "go ashore?" waits for Y or N */
 	int			 march_held;	/* bits 1 W, 2 E, 4 N, 8 S */
-	int			 march_tap;	/* on foot, presses not yet
-						 * seen by a pass */
+	int			 march_tap;	/* on foot and in land battles,
+						 * presses not yet seen by a
+						 * pass */
 	struct sprite_bank	 party_spr;	/* sailmisc.spr */
 	struct sprite_bank	 land_spr[5];	/* lbtlmisc, urlbtl, hsilbtl,
 						 * hsclbtl, fortbtl */

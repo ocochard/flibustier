@@ -699,7 +699,9 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
     fight the attack fails.
   - The button (Space, Enter, a click), pressed anew, selects the next
     unit of the party; held, every unit without a goal follows the
-    arrows. The selected unit follows them anyway.
+    arrows. The selected unit follows them anyway. In the engine an
+    arrow tapped and released between two passes still counts on the
+    next, as the button does (an engine choice).
   - The selected unit within 32 pixels of the fort wins (VA `0x7885`).
   - Each unit: exposed unless in cover; speed `(9 / (terrain + 3)) x
     2` (water counts as clear for the town), +4 for horsemen on clear

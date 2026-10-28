@@ -7471,7 +7471,7 @@ land_enter(struct game *g)
 		load_bank(g, land_banks[i], 1, &g->land_spr[i]);
 	if (g->btl_tiles.tile_w != 32)
 		tileset_load(g->packs, "tiles/battle", &g->btl_tiles);
-	g->march_held = 0;
+	g->march_held = g->march_tap = 0;
 	g->land_button = 0;
 	g->land_wait = 0;
 	g->land_stage = 0;
@@ -7524,9 +7524,10 @@ land_event(struct game *g, const struct ui_event *ev)
 		return;
 	for (i = 0; i < sizeof(walk) / sizeof(walk[0]); i++)
 		if (walk[i].key == ev->key) {
-			if (ev->type == EV_KEY)
+			if (ev->type == EV_KEY) {
 				g->march_held |= walk[i].bits;
-			else
+				g->march_tap |= walk[i].bits;
+			} else
 				g->march_held &= ~walk[i].bits;
 		}
 }
@@ -7534,14 +7535,18 @@ land_event(struct game *g, const struct ui_event *ev)
 static void
 land_tick(struct game *g)
 {
+	int walk;
+
 	if (g->fading != 0 || g->land_stage != 0)
 		return;
 	if (++g->land_wait < LAND_FRAMES)
 		return;
 	g->land_wait = 0;
-	sim_land_tick(&g->sim, g->march_held & 1 ? -1 : g->march_held & 2 ?
-	    1 : 0, g->march_held & 4 ? -1 : g->march_held & 8 ? 1 : 0,
-	    g->land_button > 0);
+	/* A tap released between two passes still moves on the next. */
+	walk = g->march_held | g->march_tap;
+	g->march_tap = 0;
+	sim_land_tick(&g->sim, walk & 1 ? -1 : walk & 2 ? 1 : 0, walk & 4 ?
+	    -1 : walk & 8 ? 1 : 0, g->land_button > 0);
 	play_sound(g, g->sim.land.sound, -1);
 	if (g->land_button > 0)
 		g->land_button--;
