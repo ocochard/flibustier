@@ -226,6 +226,12 @@ SBAT_BOXES = [
 ]
 
 
+# The land battle's panel (pic/lbat): the sea battle's boxes, its
+# terrain pictures drawn at (489, 137) and (489, 260).
+LBAT_BOXES = [b for b in SBAT_BOXES if b != (488, 258, 634, 344)] + \
+    [(488, 259, 634, 346)]
+
+
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
     rect(160, 80, 300, 150), rect(330, 80, 470, 150),	# stern windows
@@ -382,6 +388,7 @@ if __name__ == "__main__":
     draw("wpnsel.png", WPNSEL, WPNSEL_SIZE)
     draw("boarding.png", BOARDING)
     bevel("sbat-panel", SBAT_BOXES, [])
+    bevel("lbat-panel", LBAT_BOXES, [])
     f, i = BOARDING_FRAME, BOARDING_FIELD
     # The frame raised; its inner rim, two pixels in from the velvet.
     bevel("boarding-panel", [f, (i[0] - 2, i[1] - 2, i[2] + 2, i[3] + 2)],

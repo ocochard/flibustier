@@ -1778,3 +1778,97 @@ prompt = """
 Photograph from the side of a small black iron cannon on a wooden
 carriage, on a polished honey-coloured oak board, filling the image.
 """
+
+# The land battle's terrain pictures: the troops a unit is, on the ground
+# it stands on (clear, cover, swamp, water, the game's order), in the
+# panel's windows.  hscl the town's horsemen, hsil its infantry, url the
+# player's party.
+[[asset]]
+id = "cur/hsclbtl"
+file = "art/hsclbtl.sheet"
+atlas = "art/hsclbtl.png"
+size = [145, 86]
+seed = 1660
+source = "the game's terrain classes"
+prompt = ""
+pictures = [
+    "Photograph of three colonial horsemen in blue coats and broad hats galloping to the right on brown horses, raising sabres, in open grassy hills under a blue sky, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of three colonial horsemen in blue coats and broad hats galloping to the right on brown horses, raising sabres, in a dense tropical jungle of tall trees, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of three colonial horsemen in blue coats and broad hats galloping to the right on brown horses, raising sabres, in a swamp of dead trees and tall reeds, with mangrove roots, under a teal sky, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of three colonial horsemen in blue coats and broad hats galloping to the right on brown horses, raising sabres, the surf of a beach, wading through white foaming water up to their knees, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+]
+[[asset]]
+id = "cur/hsilbtl"
+file = "art/hsilbtl.sheet"
+atlas = "art/hsilbtl.png"
+size = [145, 86]
+seed = 1660
+source = "the game's terrain classes"
+prompt = ""
+pictures = [
+    "Photograph of a company of colonial soldiers in red coats and morion helmets advancing to the right with muskets and pikes, in open grassy hills under a blue sky, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of a company of colonial soldiers in red coats and morion helmets advancing to the right with muskets and pikes, in a dense tropical jungle of tall trees, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of a company of colonial soldiers in red coats and morion helmets advancing to the right with muskets and pikes, in a swamp of dead trees and tall reeds, with mangrove roots, under a teal sky, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of a company of colonial soldiers in red coats and morion helmets advancing to the right with muskets and pikes, the surf of a beach, wading through white foaming water up to their knees, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+]
+[[asset]]
+id = "cur/urlbtl"
+file = "art/urlbtl.sheet"
+atlas = "art/urlbtl.png"
+size = [145, 86]
+seed = 1660
+source = "the game's terrain classes"
+prompt = ""
+pictures = [
+    "Photograph of a band of buccaneers in rough shirts, kerchiefs and breeches running to the right, waving cutlasses and muskets, in open grassy hills under a blue sky, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of a band of buccaneers in rough shirts, kerchiefs and breeches running to the right, waving cutlasses and muskets, in a dense tropical jungle of tall trees, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of a band of buccaneers in rough shirts, kerchiefs and breeches running to the right, waving cutlasses and muskets, in a swamp of dead trees and tall reeds, with mangrove roots, under a teal sky, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+    "Photograph of a band of buccaneers in rough shirts, kerchiefs and breeches running to the right, waving cutlasses and muskets, the surf of a beach, wading through white foaming water up to their knees, seen from the side in daylight. Historical reenactment photography, sharp focus, realistic.",
+]
+
+# The land battle's screen: the battle area is the sea battle's tiles,
+# the panel the sea battle's with a musket for the guns; the game writes
+# the sides' names (y 9, 354), morale (55, 400), men and muskets (85,
+# 429) and ground (113, 457), and draws the terrain pictures.
+[[asset]]
+id = "pic/lbat"
+file = "art/lbat.png"
+seed = 1660
+source = "layout described from the original screen"
+scene_area = [480, 0, 160, 480]	# the battle area is drawn over
+trim = 0.15			# the model darkens the board's edges
+bevel = "layouts/lbat-panel"
+grade = false
+prompt = """
+Close-up photograph, straight on and flat, of a tall board of polished
+honey-coloured oak, its fine straight grain running from top to bottom,
+filling the whole image with no seam, edge, border or shadow, warm even
+light.
+"""
+[[asset.pieces]]
+rect = [480, 0, 8, 480]		# the panel's dark left edge, as the original's
+colour = "#2A1A0C"
+[[asset.pieces]]
+rect = [490, 79, 24, 21]	# the men
+prompt = """
+Photograph, straight on, of two crossed steel cutlasses with brass hilts
+lying on a polished honey-coloured oak board, filling the image.
+"""
+[[asset.pieces]]
+rect = [566, 79, 26, 21]	# the muskets
+prompt = """
+Photograph, straight on, of a 17th-century flintlock musket lying
+diagonally on a polished honey-coloured oak board, filling the image.
+"""
+[[asset.pieces]]
+rect = [490, 423, 24, 21]	# the men
+prompt = """
+Photograph, straight on, of two crossed steel cutlasses with brass hilts
+lying on a polished honey-coloured oak board, filling the image.
+"""
+[[asset.pieces]]
+rect = [566, 423, 26, 21]	# the muskets
+prompt = """
+Photograph, straight on, of a 17th-century flintlock musket lying
+diagonally on a polished honey-coloured oak board, filling the image.
+"""
