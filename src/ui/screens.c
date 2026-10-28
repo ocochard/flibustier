@@ -38,6 +38,7 @@
 #define W_MONTH_SHORT		6	/* Jan, Feb... */
 #define W_DIFFICULTY		35
 #define W_NATION		71	/* Spanish, English, French, Dutch */
+#define NATION_UNKNOWN		5	/* its "unknown" */
 #define W_ABILITY		83
 #define W_ERA			98
 #define W_EXPEDITION		99
@@ -53,7 +54,6 @@
 #define S_LOOKS_LIKE		120	/* "She looks like %s" */
 #define S_COLOURS		122	/* "She's flying %s colors" */
 #define S_OVERTAKEN		126
-#define S_CHASING		311	/* "He's chasing us" */
 #define S_NAMED_CHASE		121	/* "Arrgh! It's the %s %s, %s!" */
 #define S_UNANSWERED		315
 #define W_A_SHIP		11	/* "a pinnace"... by ship type */
@@ -2948,6 +2948,22 @@ flag_composite(struct game *g)
 	image_free(&base);
 }
 
+/*
+ * The flag's next frame (VA 0xfc0a): it is due 2w + 1 ticks on, w the
+ * battle's wind strength (VA 0xd58f), one less when rand(4) is 0, one
+ * more when it is 3, and comes once that tick is passed.  The jitter is
+ * cosmetic: it comes from the front end's own draws.
+ */
+static void
+flag_advance(struct game *g)
+{
+	int r = rng_below(&g->fx_rng, 4);
+
+	g->flag_next = g->ticks + 2 * (unsigned)g->sim.encounter.wind_strength +
+	    1 + (r == 3) - (r == 0);
+	g->flag_frame = (g->flag_frame + 1) % FLAG_FRAMES;
+}
+
 static void
 encounter_background(struct game *g)
 {
@@ -2962,6 +2978,9 @@ encounter_background(struct game *g)
 	case ENC_COLOURS:
 		game_background(g, encounter_flag(g, flag, sizeof(flag)));
 		flag_composite(g);
+		/* The first change comes at once (VA 0x32df8). */
+		g->flag_frame = 0;
+		flag_advance(g);
 		break;
 	default:
 		game_background(g, "pic/sail-ho");
@@ -3003,7 +3022,7 @@ encounter_choose(struct game *g, int i)
 	    sighted[i % 2];
 	/* After a named captain's hail is answered (VA 0xd1fc). */
 	if (g->sim.encounter.stage == ENC_COLOURS &&
-	    g->sim.encounter.hostile && g->sim.encounter.captain != 0)
+	    g->sim.encounter.captain != 0)
 		game_sfx(g, SFX_HAIL);
 	r = sim_encounter_act(&g->sim, (enum encounter_action)action);
 	if (r == RES_CONTINUE) {
@@ -3044,14 +3063,22 @@ encounter_event(struct game *g, const struct ui_event *ev)
 	menu_event(g, ev, count, NULL, encounter_choose, NULL);
 }
 
+static void
+encounter_tick(struct game *g)
+{
+	if (g->enc_result < 0 && g->sim.encounter.stage == ENC_COLOURS &&
+	    g->ticks > g->flag_next)
+		flag_advance(g);
+}
+
 
 /*
  * Ship portraits are sheets of 5 round views of about 200 pixels, and
  * flags sheets of 8 waving frames of 200x200 on a green key, both shown
  * in a 200x200 window at (220, 10) while the question waits (VA 0xfb24,
- * 0xfc0a; tables at VA 0x32d90, 0x32dc0).  A frame lasts n + 1 ticks of
- * the 60.9 Hz clock: the ship 11, the flag 2 on average (1 + rand jitter
- * of -1..+1).
+ * 0xfc0a; views at VA 0x32da8, 0x32db4, flag frames at VA 0x32dd8,
+ * 0x32de8).  A ship's view lasts 11 ticks of the 60.9 Hz clock (delay
+ * 10, VA 0x32e00); a flag's frame 2w + 2, give or take 1 (flag_advance).
  */
 #define PORTRAIT_VIEW	200
 
@@ -3073,7 +3100,7 @@ encounter_picture(struct game *g)
 		    PORTRAIT_VIEW, (FB_W - PORTRAIT_VIEW) / 2, 10, -1);
 		return;
 	}
-	f = (int)(g->ticks / 2) % FLAG_FRAMES;
+	f = g->flag_frame;
 	/* Composed over the sky; a replacement flag keeps its key. */
 	key = g->flag_composed ? -1 : fb_nearest(&g->fb, 0, 255, 0);
 	fb_image_part(&g->fb, &g->bg, (f % 4) * FLAG_FRAME,
@@ -3086,8 +3113,9 @@ encounter_draw(struct game *g)
 {
 	const struct sim_encounter *e = &g->sim.encounter;
 	char text[512], waters[160];
+	struct sim_news pub[NEWS_SHOWN];
 	const struct sim_news *n;
-	size_t i, kept;
+	size_t i, np;
 	int y, w;
 
 	if (g->enc_result < 0)
@@ -3095,23 +3123,21 @@ encounter_draw(struct game *g)
 
 	if (g->enc_result == RES_NEWS) {
 		/* The ship's news (VA 0x1e78d): the title and the latest
-		 * items left of the picture, or "(no entries)". */
+		 * items others tell at (20, 100) up to x 300, left of the
+		 * picture, or "(no entries)" when none is told. */
 		w = text_width(&g->font[FONT_TITLE],
 		    game_word(g, W_NEWS, NEWS_TITLE));
 		draw(g, FONT_TITLE, 160 - w / 2, 40, 300,
 		    game_word(g, W_NEWS, NEWS_TITLE), 0);
-		kept = sim_news_kept(&g->sim);
+		np = public_news(g, pub, NEWS_SHOWN);
 		y = 100;
-		if (kept == 0)
-			draw(g, FONT_BODY, 20, y, 290,
+		if (np == 0)
+			draw(g, FONT_BODY, 20, y, 280,
 			    game_word(g, W_NEWS, NEWS_NONE), 0);
-		struct sim_news pub[NEWS_SHOWN];
-		size_t np = public_news(g, pub, NEWS_SHOWN);
-
 		for (i = np; i > 0 && y < 420; i--) {
 			n = &pub[i - 1];
 			news_text(g, n, text, sizeof(text));
-			y += draw(g, FONT_BODY, 20, y, 290, text, 0) + 8;
+			y += draw(g, FONT_BODY, 20, y, 280, text, 0) + 8;
 		}
 		continue_prompt(g);
 		return;
@@ -3134,11 +3160,15 @@ encounter_draw(struct game *g)
 	}
 	switch (e->stage) {
 	case ENC_SIGHTED:
+		/* Whose waters, below difficulty 2: the nearest town's
+		 * nation, "unknown" (CSTN 71.5) more than 12 cells away
+		 * (VA 0xd25f). */
 		waters[0] = '\0';
 		if (g->sim.player.difficulty < 2 && e->town >= 0)
 			fill(waters, sizeof(waters), game_str(g, S_WATERS),
-			    game_word(g, W_NATION,
-			    (size_t)g->sim.towns[e->town].nation & 3), NULL);
+			    game_word(g, W_NATION, e->dist > 12 ?
+			    NATION_UNKNOWN : (size_t)g->sim.towns[e->town].nation &
+			    3), NULL);
 		fill(text, sizeof(text), game_str(g, S_SAIL_HO), waters, NULL);
 		break;
 	case ENC_IDENTIFIED:
@@ -3146,10 +3176,10 @@ encounter_draw(struct game *g)
 		    game_word(g, W_A_SHIP, (size_t)e->type), NULL);
 		break;
 	default:
-		if (e->hostile && e->captain != 0) {
-			/* "Arrgh! It's the %s %s, %s!" (CSTR 121, VA
-			 * 0xd1fc): his repute, pirate or pirate-hunter,
-			 * his name. */
+		if (e->hostile || e->named) {
+			/* A chaser or the hunted pirate: "Arrgh! It's the
+			 * %s %s, %s!" (CSTR 121, VA 0xd1fc): his repute,
+			 * pirate or pirate-hunter, his name. */
 			const char *arg[3];
 			char name[80];
 
@@ -3161,9 +3191,7 @@ encounter_draw(struct game *g)
 			arg[2] = name;
 			fill_args(text, sizeof(text), game_str(g, S_NAMED_CHASE),
 			    arg, 3);
-		} else if (e->hostile)
-			snprintf(text, sizeof(text), "%s", game_str(g, S_CHASING));
-		else
+		} else
 			fill(text, sizeof(text), game_str(g, S_COLOURS),
 			    game_word(g, W_COLOURS, (size_t)e->nation), NULL);
 		break;
@@ -3178,7 +3206,8 @@ encounter_draw(struct game *g)
 }
 
 const struct screen screen_encounter = {
-	"encounter", encounter_enter, encounter_event, NULL, encounter_draw,
+	"encounter", encounter_enter, encounter_event, encounter_tick,
+	encounter_draw,
 };
 
 /*

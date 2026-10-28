@@ -121,6 +121,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 
 	memset(g, 0, sizeof(*g));
 	g->packs = packs;
+	rng_seed(&g->fx_rng, 1, 0x46580000ULL);
 	if (fb_init(&g->fb, packs_art_height(packs)) != 0) {
 		snprintf(g->err, sizeof(g->err), "cannot set up a %d pixel "
 		    "high screen", packs_art_height(packs));

@@ -238,7 +238,9 @@ sim_battle_start(struct sim *s)
 	/* Every battle forgets the stay in town (VA 0xe25a). */
 	s->visit_flags = 0;
 	bt->wind = s->wind;
-	bt->wind_strength = rng_below(&s->rng, 3);
+	/* Drawn when her colours were asked about (VA 0xd581). */
+	bt->wind_strength = e->wind_strength >= 0 && e->wind_strength <= 2 ?
+	    e->wind_strength : 0;
 	choose_screens(s);
 
 	flagship(s);
@@ -298,7 +300,7 @@ sim_fort_battle_start(struct sim *s, int town)
 	s->visit_flags = 0;		/* VA 0xe25a, as at sea */
 	bt->fort = 1;
 	bt->wind = s->wind;
-	bt->wind_strength = rng_below(&s->rng, 3);
+	bt->wind_strength = rng_below(&s->rng, 3);	/* VA 0x18e21 */
 	bt->set = SET_FORT;
 	bt->screen = t->id < BATTLE_SCREENS ? t->id : 0;
 	flagship(s);

@@ -227,6 +227,9 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 	memcpy(s->rank, scn->rank, sizeof(s->rank));
 	s->standing[NATION_PIRATE] = -1;
 	s->fortune = 200;
+	/* The surnames 0-3 start as used, so the first captain named is
+	 * surname 4 (VA 0x32e06 holds 15 in the program's data). */
+	s->surnames = 0x0F;
 	s->encounters = 1;
 	s->heat_town = -1;
 	s->ntowns = era->count;
@@ -1227,12 +1230,14 @@ sim_nearest_town(const struct sim *s, int *dist)
 	return (best);
 }
 
-/* Pick the ship met, from the era's records. */
+/* Pick the ship met, from the era's records, once "Sail ho!" is
+ * answered with investigate (VA 0xd310; sailing on picks none). */
 static void
-pick_ship(struct sim *s, int town, int dist)
+pick_ship(struct sim *s)
 {
 	struct sim_encounter *e = &s->encounter;
 	const uint8_t *rec;
+	int town = e->town, dist = e->dist;
 	int nation = s->towns[town].nation & 3, k = 0, range, r;
 
 	range = s->fleet.crew / 50 + s->heat / 6 -
@@ -1269,7 +1274,9 @@ pick_ship(struct sim *s, int town, int dist)
 	    rng_below(&s->rng, 24) > s->heat)
 		rec = s->world->treasure_ship;
 	memset(e, 0, sizeof(*e));
-	e->stage = ENC_SIGHTED;
+	e->stage = ENC_IDENTIFIED;
+	e->town = town;
+	e->dist = dist;
 	e->type = rec[0] & 7;
 	/* Shown as a fast galleon while the era code is below 4, 1560
 	 * to 1620 (VA 0xd1db). */
@@ -1282,13 +1289,25 @@ pick_ship(struct sim *s, int town, int dist)
 	e->cargo = rec[5];
 	e->gold = rec[6];
 	e->hostile = e->role > 5 && s->standing[e->nation] < 0;
-	e->town = town;
 	/* Off the town a governor sent the player to: the pirate he
 	 * hunts (VA 0xd1fc). */
 	e->named = s->mission.type == MISSION_PIRATE &&
 	    s->mission.dest == town && e->nation == NATION_PIRATE;
-	/* A hostile warship or pirate has a named captain; the hunted
-	 * pirate is the mission's (VA 0xd1fc). */
+}
+
+/*
+ * Her colours, the third question (VA 0xd581-0xd71d): the battle's wind
+ * strength is drawn for every ship asked about; then a hostile warship or
+ * pirate gets a named captain, the hunted pirate the mission's.
+ */
+static void
+show_colours(struct sim *s)
+{
+	struct sim_encounter *e = &s->encounter;
+	int town = e->town;
+
+	e->stage = ENC_COLOURS;
+	e->wind_strength = rng_below(&s->rng, 3);
 	if (e->named)
 		e->captain = s->mission.pirate;
 	else if (e->hostile)
@@ -1322,7 +1341,11 @@ sighting(struct sim *s)
 		chance = (r & 63) < 4;
 	if (!chance)
 		return (0);
-	pick_ship(s, town, dist);
+	/* Only the nearest town is known until she is investigated. */
+	memset(&s->encounter, 0, sizeof(s->encounter));
+	s->encounter.stage = ENC_SIGHTED;
+	s->encounter.town = town;
+	s->encounter.dist = dist;
 	return (1);
 }
 
@@ -1341,9 +1364,10 @@ to_battle(struct sim *s, enum encounter_result r)
 {
 	int dist, town = sim_nearest_town(s, &dist);
 
-	/* Fighting within 7 cells of a town lowers its field 9 (VA
-	 * 0xd1fc). */
-	if (town >= 0 && dist < 7)
+	/* Closing for battle (VA 0xdb56) or an unanswered hail (VA
+	 * 0xdb31) within 7 cells of a town lowers its field 9; being
+	 * overtaken does not (VA 0xd999-0xda3f). */
+	if (r != RES_OVERTAKEN && town >= 0 && dist < 7)
 		s->towns[town].standing =
 		    (uint16_t)((int16_t)s->towns[town].standing - 1);
 	sim_battle_start(s);
@@ -1361,17 +1385,24 @@ sim_encounter_act(struct sim *s, enum encounter_action action)
 	case ENC_SIGHTED:
 		if (action == ACT_IGNORE)
 			return (end_encounter(s, RES_ESCAPED));
-		e->stage = ENC_IDENTIFIED;
+		/* A ship set by hand (no town known) is kept as it is. */
+		if (s->world != NULL && e->town >= 0 &&
+		    (size_t)e->town < s->ntowns)
+			pick_ship(s);
+		else
+			e->stage = ENC_IDENTIFIED;
 		return (RES_CONTINUE);
 	case ENC_IDENTIFIED:
 		/* A hunter, or the pirate hunted, cannot be avoided once
 		 * she is seen. */
 		if (action == ACT_IGNORE && !e->hostile && !e->named)
 			return (end_encounter(s, RES_ESCAPED));
-		e->stage = ENC_COLOURS;
+		show_colours(s);
 		return (RES_CONTINUE);
 	case ENC_COLOURS:
-		if (action != ACT_BATTLE && e->hostile &&
+		/* A ship with a captain may overtake a player who does not
+		 * close for battle, hailing or not (VA 0xd98b). */
+		if (action != ACT_BATTLE && e->captain != 0 &&
 		    rng_below(&s->rng, 3) < s->player.difficulty)
 			return (to_battle(s, RES_OVERTAKEN));
 		if (action == ACT_BATTLE)

@@ -10,7 +10,7 @@
 
 #include "proto.h"
 
-#define STATE_VERSION	33
+#define STATE_VERSION	34
 #define STATE_OLDEST	14	/* the oldest state still read */
 #define TOWN_FIELDS_14	21	/* the town fields version 14 has */
 #define MAX_ADVANCE	(100 * 365)
@@ -495,10 +495,14 @@ encounter_json(const struct sim_encounter *e, struct jbuf *b)
 	jb_int(b, e->hostile);
 	jb_raw(b, ",\"town\":");
 	jb_int(b, e->town);
+	jb_raw(b, ",\"dist\":");
+	jb_int(b, e->dist);
 	jb_raw(b, ",\"named\":");
 	jb_int(b, e->named);
 	jb_raw(b, ",\"captain\":");
 	jb_int(b, e->captain);
+	jb_raw(b, ",\"wind_strength\":");
+	jb_int(b, e->wind_strength);
 	jb_raw(b, "}");
 }
 
@@ -523,11 +527,14 @@ encounter_from_json(struct sim_encounter *e, const struct json *j)
 	e->gold = (int)json_get_int(j, "gold", 0);
 	e->hostile = (int)json_get_int(j, "hostile", 0);
 	e->town = (int)json_get_int(j, "town", -1);
+	e->dist = (int)json_get_int(j, "dist", 1);
 	e->named = json_get_int(j, "named", 0) != 0;
 	e->captain = (int)(json_get_int(j, "captain", 0) & 0xFFFF);
+	e->wind_strength = (int)json_get_int(j, "wind_strength", 0);
 	/* A fort battle leaves the fort as the encounter. */
 	return (e->type < 0 || e->type > FORT_TYPE || e->nation < 0 ||
-	    e->nation > NATION_PIRATE ? -1 : 0);
+	    e->nation > NATION_PIRATE || e->dist < 0 || e->dist > 63 ||
+	    e->wind_strength < 0 || e->wind_strength > 2 ? -1 : 0);
 }
 
 /* A governor's mission, as "name":{type, giver, dest, nation, pirate}. */

@@ -64,7 +64,7 @@ with a message. Numbers are integers only.
 
 ```json
 {
-  "version": 33,
+  "version": 34,
   "rng": ["<state hex>", "<inc hex>"],
   "player": {"name": "Olivier", "title": "English Buccaneer",
              "nation": 1, "difficulty": 1, "ability": 2,
@@ -77,7 +77,8 @@ with a message. Numbers are integers only.
   "wind": 192, "encounters": 1, "heat": 0, "heat_town": -1,
   "encounter": {"stage": "none", "type": 4, "nation": 1, "crew": 8,
                 "guns": 8, "role": 5, "cargo": 60, "gold": 25,
-                "hostile": 0, "town": 20},
+                "hostile": 0, "town": 20, "dist": 4, "named": 0,
+                "captain": 0, "wind_strength": 1},
   "battle": {"active": 0, "tick": 0, "quiet": 0, "wind": 192, "wind_strength": 1,
              "decision": 1, "outcome": "none", "crew_ashore": 0,
              "guns_ashore": 0, "fort": 0, "fort_damage": 0, "set": 4,
@@ -139,9 +140,15 @@ with a message. Numbers are integers only.
   `encounter` command then answers its dialogs one at a time: `stage`
   goes `sighted`, `identified`, `colours`, and is `none` once the
   encounter is over. Sailing waits until then.
+  - At `sighted` only `town` and `dist` are known; the ship (`type`,
+    `nation`, `crew`, `guns`, `role`, `cargo`, `gold`, `hostile`,
+    `named`) is picked by the first `investigate`, and a named
+    `captain` and the battle's `wind_strength` come with `colours`.
   - Encounter `type` follows CSTN group 8: 0 pinnace … 8 fast galleon.
     `nation` 4 is pirates.
   - `hostile` ships chase the player and cannot be avoided once seen.
+    A ship with a `captain` may overtake a player who does not close
+    for battle (result `overtaken`).
   - `encounters` set to 0 (with `set`) stops sightings, for tests and
     bots that only sail. `heat` is the counter that thins sightings near
     towns.
@@ -197,6 +204,9 @@ with a message. Numbers are integers only.
     (version 32);
   - the fleet's `reef_wait`, passes before a reef can strike again
     (version 33; older states load it as 0);
+  - the encounter's `dist`, the nearest town's distance in cells when
+    the sail was sighted, and `wind_strength`, the battle's, drawn at
+    her colours (version 34; older states load 1 and 0);
     `deserted` the men lost at the last roll call.
 - `ship_classes` is read-only, for bots: each class's battle `guns` and
   `hull`, and its sailing speed per wind sector in `sectors` (sector
@@ -254,7 +264,7 @@ A saved game is one file per slot, `save0.json` to `save9.json`
   the career starting the current year.
 - **Captains:** the encounter's `captain` (an id, 0 none); `prisoners`
   (8 slots, id | 256 for pirates), `hostage` (waiting for an answer),
-  `escaped` (at the last roll call), `surnames` (used lately),
+  `escaped` (at the last roll call), `surnames` (a mask of those used lately, 15 in a new game),
   `ransom_slot` and `ransom_gold` (an offer pending). Absent before
   version 23: none.
 - **Convoys:** `fleet_town`, `train_town` (-1 away), `fleet_step`,

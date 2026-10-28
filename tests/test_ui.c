@@ -520,6 +520,133 @@ test_encounter_screens(void)
 	game_free(g);
 }
 
+/* The encounter screen at the current stage, drawn into "out". */
+static void
+encounter_page(struct game *g, uint8_t *out)
+{
+	game_switch(g, &screen_encounter);
+	game_draw(g);
+	memcpy(out, g->fb.px, sizeof(g->fb.px));
+}
+
+/* The hail's news page with the log as it is, drawn into "out". */
+static void
+news_page(struct game *g, uint8_t *out)
+{
+	memset(&g->sim.encounter, 0, sizeof(g->sim.encounter));
+	g->sim.encounter.stage = ENC_COLOURS;
+	g->sim.encounter.type = 1;
+	g->sim.encounter.nation = NATION_ENGLAND;
+	g->sim.encounter.town = -1;
+	g->sim.standing[NATION_ENGLAND] = 0;
+	game_switch(g, &screen_encounter);
+	CHECK(game_script(g, "down enter") == 0 && g->enc_result == RES_NEWS);
+	game_draw(g);
+	memcpy(out, g->fb.px, sizeof(g->fb.px));
+}
+
+/* What the encounter's pages say and how her flag waves. */
+static void
+test_encounter_pages(void)
+{
+	static uint8_t a[FB_W * FB_H], b[FB_W * FB_H];
+	struct sim_encounter *e;
+	struct game *g;
+	int i, w, y, last, len, bad, changes, same;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300");
+	if (g == NULL)
+		return;
+	e = &g->sim.encounter;
+	CHECK(strcmp(game_word(g, 71, 5), "unknown") == 0);
+	/* "Sail ho!" more than 12 cells from the nearest town: unknown
+	 * waters; nearer, the town's nation. */
+	g->sim.player.difficulty = 0;
+	memset(e, 0, sizeof(*e));
+	e->stage = ENC_SIGHTED;
+	e->town = 0;
+	e->dist = 12;
+	encounter_page(g, a);
+	e->dist = 5;
+	encounter_page(g, b);
+	CHECK(memcmp(a, b, sizeof(a)) == 0);
+	e->dist = 13;
+	encounter_page(g, b);
+	CHECK(memcmp(a, b, sizeof(a)) != 0);
+	encounter_page(g, a);
+	e->dist = 40;
+	encounter_page(g, b);
+	CHECK(memcmp(a, b, sizeof(a)) == 0);
+
+	/* The hunted pirate hails with his name (CSTR 121) even when he
+	 * does not chase; another pirate shows her colours (CSTR 122). */
+	memset(e, 0, sizeof(*e));
+	e->stage = ENC_COLOURS;
+	e->type = 1;
+	e->nation = NATION_PIRATE;
+	e->role = 4;
+	e->town = 0;
+	e->captain = 2 << 3 | 1 << 6;
+	e->named = 0;
+	encounter_page(g, a);
+	e->named = 1;
+	encounter_page(g, b);
+	CHECK(memcmp(a, b, sizeof(a)) != 0);
+
+	/* The flag: a frame lasts 2w + 2 ticks, give or take 1. */
+	for (w = 0; w < 3; w++) {
+		e->named = 0;
+		e->captain = 0;
+		e->nation = NATION_ENGLAND;
+		e->wind_strength = w;
+		encounter_page(g, a);
+		last = 0;
+		bad = changes = 0;
+		for (i = 1; i < 400; i++) {
+			game_tick(g);
+			game_draw(g);
+			same = 1;
+			for (y = 10; y < 210 && same; y++)
+				same = memcmp(a + y * FB_W + 220,
+				    g->fb.px + y * FB_W + 220, 200) == 0;
+			if (same)
+				continue;
+			memcpy(a, g->fb.px, sizeof(a));
+			len = i - last;
+			last = i;
+			if (changes++ > 0)	/* the first follows the fade */
+				bad += len < 2 * w + 1 || len > 2 * w + 3;
+		}
+		CHECK(changes > 400 / (2 * w + 3) - 2 && bad == 0);
+	}
+
+	/* The hail's page: "(no entries)" when nothing is told, even with
+	 * the player's own deeds in the log; the items up to x 300. */
+	g->sim.nnews = 0;
+	news_page(g, a);
+	g->sim.nnews = 1;
+	g->sim.news[0].code = NEWS_PLUNDERED - 1;
+	g->sim.news[0].date = g->sim.year * 360;
+	news_page(g, b);
+	CHECK(memcmp(a, b, sizeof(a)) == 0);
+	for (i = 0; i < 6; i++) {	/* lines that reach x 300 */
+		g->sim.news[i].code = NEWS_PEACE;
+		g->sim.news[i].a = NATION_ENGLAND;
+		g->sim.news[i].b = i % 2 ? NATION_HOLLAND : NATION_ENGLAND;
+		g->sim.news[i].date = g->sim.year * 360 + i;
+	}
+	g->sim.nnews = 6;
+	news_page(g, b);
+	for (y = 100, bad = 0; y < 440; y++)
+		bad += memcmp(a + y * FB_W + 300, b + y * FB_W + 300, 20) != 0;
+	CHECK(bad == 0);
+	for (y = 100, same = 1; y < 440 && same; y++)
+		same = memcmp(a + y * FB_W + 20, b + y * FB_W + 20, 280) == 0;
+	CHECK(!same);
+	game_free(g);
+}
+
 /* A sea battle: fight, see the outcome, take the prize, sail on. */
 /* After a capture: leave her cargo board, answer her sailors. */
 static void
@@ -2214,6 +2341,7 @@ main(void)
 	test_hall_of_fame();
 	test_sailing();
 	test_encounter_screens();
+	test_encounter_pages();
 	test_debug_mode();
 	test_tune_ids();
 	test_battle_screen();

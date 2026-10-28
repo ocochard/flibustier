@@ -458,11 +458,15 @@ list (VA `0x1adfc`). That list holds (x, y, town) triplets, ending in
 
 - **Who:** a ship that chases the player (role above 5, the player's
   standing with her nation below 0) has a named captain; the mission's
-  pirate is the hunted one.
+  pirate is the hunted one. Both are named at the encounter's third
+  question (VA `0xd60d`-`0xd71d`), so a ship left earlier names nobody.
 - **The id:** `surname x 8 + rand(8) x 2 + nation x 64`. The surname is
   `rand(5)`, moved on while used lately (a 5-bit mask at VA `0x32e06`,
-  cleared when full); the nation is the ship's, or for pirates the
-  nearest town's; an id of 0 is drawn again. Named as captains are (VA
+  cleared when all five are used, 0x1F); the nation is the ship's, or
+  for pirates the nearest town's; an id of 0 is drawn again. The mask
+  starts at 15 in the program's data, surnames 0-3 used, so a game's
+  first captain gets surname 4. `rand(8) x 2` reaches bit 3, so it can
+  carry into the surname field, which then reads up to 5. Named as captains are (VA
   `0x19fbb`): rank CSTN 78 entry `(id & 7) + 2`, surname from CSTN 2 +
   `(id >> 6 & 3)` entry `(id >> 3) & 7`.
 - **Battle:** the level rises by `(id & 7) / 3` (1 for the hunted
@@ -851,10 +855,14 @@ Where the original's behaviour is not traced yet, the engine does this:
 
 1. **When:** every 32 ticks (when `(ticks + 4) & 31 == 0`), the game
    finds the nearest town and its distance `d` in map cells (`|dx| +
-   |dy|`, at least 1).
-2. **Lingering counter:** a counter `h` (VA `0x4c09e`) resets to 0 when
-   the nearest town changes.
-3. **Chance of a sail:** with `r` random:
+   |dy|`, at least 1, VA `0x4c0a0`).
+2. **Lingering counter:** a counter `h` resets to 0 when the nearest
+   town changes (VA `0x23df7`). In the sailing loop it is the word at VA
+   `0x4d288`; VA `0x4c09e` is its saved copy (loaded at VA `0x28890`,
+   stored at VA `0x28958`).
+3. **Only at sea:** after that reset, a sail is looked for only while
+   the fleet is at sea (word `0x4d28a` is 0, VA `0x23e00`).
+4. **Chance of a sail:** with `r` random:
 
 | `d` | A sail is sighted when |
 |---|---|
@@ -863,25 +871,29 @@ Where the original's behaviour is not traced yet, the engine does this:
 | 16 to 31 | `r & 31 < 4` (1 in 8) |
 | 32 or more (capped at 63) | `r & 63 < 4` (1 in 16) |
 
-4. **Lingering raises the counter:** the game reaches it through
+5. **Lingering raises the counter:** the game reaches it through
    `h += 8 - d`, so near towns sightings thin out the longer the fleet
    stays.
-5. **Ignoring raises it too:** an encounter that ends without a fight
-   adds 16 to `h` (VA `0x2849c`).
+6. **Ignoring raises it too:** an encounter that ends without a fight
+   (the encounter function at VA `0xd1fc` returns 0: sailing on at any
+   question, or a hail answered with news) adds 16 to `h` (VA `0x284ef`,
+   in the dispatcher at VA `0x2849c`).
 
 ### Encounter (VA `0xd1fc`)
 
 1. **"Sail ho!"**
    - The lookout reports a sail (CSTR 118). Below difficulty 2, it adds
-     whose waters these are (CSTR 119, with the nation word of the
-     nearest town).
-   - Choices: investigate or continue the voyage. Continuing ends the
-     encounter.
+     whose waters these are (CSTR 119): the nation word (CSTN 71) of
+     the nearest town, or entry 5, "unknown", when that town is more
+     than 12 cells away (VA `0xd25f`-`0xd279`).
+   - Choices: investigate or continue the voyage (the menu at VA
+     `0xd2e6`). Continuing ends the encounter (VA `0xd309`) before any
+     ship is picked.
    - Layout: no box; the text and choices are written at (100, 300) up
      to x 540. The later questions are at (200, 256), below the ship's
      portrait or flag, on a screen cleared to colour 0 (black in those
      pictures, VA `0x247b`).
-2. **Which ship:**
+2. **Which ship (VA `0xd310`-`0xd47f`, once investigated):**
    - The ship comes from the per-era block (offset `0x100`, VA
      `0x47086`): 4 nations x 5 records of 7 bytes.
    - Normally it is record `k` of the nearest town's nation, with
@@ -910,60 +922,95 @@ Where the original's behaviour is not traced yet, the engine does this:
 | 5, 6 | not decoded |
 
 4. **"She looks like %s, captain"** (CSTR 120, with the article and
-   type name from CSTN group 11). Choices: investigate or sail away.
-5. **Hostility:**
-   - A ship whose role is above 5, of a nation with which the player's
-     standing is negative, chases the player.
-   - Pirates (nation 4) start at standing -1, so they always do.
-   - A chasing pirate gets CSTR 121 ("It's the %s %s! He's chasing us"),
-     any other ship CSTR 122 ("She's flying %s colors").
+   type name from CSTN group 11). Choices: investigate or sail away. A
+   chasing ship (below) or the hunted pirate forces investigate (VA
+   `0xd560`).
+5. **Her colours, the third question:**
+   - **The battle's wind strength** is drawn first, for every ship that
+     gets this far: `w = rand(3)` (VA `0xd581`, the word at VA
+     `0x44ad2`); the same value sets the flag's frame delay, the word at
+     VA `0x32e02`, to `2w + 1` (VA `0xd58f`-`0xd593`).
+   - **Chasing ships:** a ship whose role is above 5, of any nation with
+     which the player's standing is negative, chases the player. Pirates
+     (nation 4) start at standing -1, so a pirate of role above 5 always
+     does.
+   - **Named:** a chasing ship or the hunted pirate is named only now
+     (VA `0xd60d`-`0xd71d`; see "Named captains") and hails with CSTR
+     121, "Arrgh! It's the %s %s, %s!", with three parameters: his
+     repute, CSTN 34 entry `(id & 7) / 3` (1 for the hunted pirate),
+     CSTN 105 entry 0 ("pirate") for a pirate or 1 ("pirate-hunter")
+     otherwise, and his name.
+   - **Any other ship:** "She's flying %s colors" (CSTR 122) with her
+     nation's word from CSTN 106.
    - Choices: close for battle, hail for news, or sail away.
 6. **Outcomes:**
-   - **Sailing away:** when `rand(3) <` difficulty, the other ship
-     overtakes the player (CSTR 126) and there is a battle anyway.
-   - **Hailing:** a nation with standing below -3 does not answer
-     (CSTR 315) and attacks; otherwise the player gets news (VA
-     `0x1e78d`).
-   - **Closing for battle:** starts a sea battle (phase 6).
+   - **Overtaken:** when the ship has a captain (the word at VA
+     `0x449d2` is not 0, VA `0xd98b`), any answer but closing for
+     battle, hailing included, is first met by `rand(3) <` difficulty:
+     she overtakes the player (CSTR 126) and there is a battle anyway.
+     That branch (VA `0xd999`-`0xda3f`) leaves the town's field 9 alone.
+   - **Closing for battle** (VA `0xdb56`) starts a sea battle (phase 6).
+   - **Hailing:** the game stores today, `year x 360 + day`, at VA
+     `0x45f0e` (VA `0xda71`). A nation with standing below -3 does not
+     answer (CSTR 315) and attacks (VA `0xdb31`); otherwise the player
+     gets the ship's news.
+   - **Near a town:** closing for battle and the unanswered hail, and
+     only they, lower the nearest town's field 9 (`[town + 0x12]`) by 1
+     when it is less than 7 cells away (VA `0x4c0a0`).
+7. **The ship's news (VA `0x1e78d` mode 2):** `pic/shipnews`, the title
+   CSTN 18.2, then the 6 latest items others tell (the filter at VA
+   `0x1e040`: code 22, a town the player took, reads as 19, a capture,
+   and 3, a town he plundered, as 15; only codes 10-19 are kept, dated
+   up to the day stored at the hail) at (20, 100) up to x 300, newest
+   first. When the filter leaves none, "(no entries)" (CSTN 18.3).
+8. **Pictures:**
+   - Ship portraits (`S_*.PCX`) hold 5 views of 200x200 at (1, 1), (202,
+     1), (403, 1), (1, 202), (202, 202) (the view tables at VA `0x32da8`
+     and `0x32db4`), shown in turn while the question waits (VA
+     `0xfb24`) in the window whose rectangle is at VA `0x32d90`, at
+     (220, 10); each view lasts 11 ticks of the 60.9 Hz clock (the delay
+     word at VA `0x32e00` is 10, and the view changes once the clock is
+     past the due tick); the ship rocks.
+   - The flag uses the same place (its window rectangle at VA
+     `0x32dc0`), 8 frames (tables at VA `0x32dd8` and `0x32de8`). Each
+     frame (VA `0xfc0a`) is due `2w + 1` ticks on (VA `0x32e02`), one
+     less when `rand(4)` is 0, one more when it is 3 (VA
+     `0xfc49`-`0xfc7d`), and changes once the clock is past that, so a
+     frame lasts `2w + 2` ticks, give or take 1. The first change comes
+     at once (flag VA `0x32df8`).
+   - **Which flag (VA `0xd1fc`):** a named captain flies a Jolly Roger,
+     `FJOLLYnn.PCX` with nn the word at VA `0x32f90` + `(id >> 6 & 3) x
+     32 + (id >> 3 & 7) x 2` (pictures 0x5d-0x70 from the name table at
+     VA `0x31dd0`); anyone else the nation's flag (pictures 0x43-0x46,
+     `F-SPAN`, `F-ENGL`, `F-FRENCH`, `F-DUTCH`). The surname field of an
+     id reaches 5 (see "Named captains"), so some captains share a flag.
+     An unnamed pirate would get picture 0x47, `null.pcx`, which the
+     game does not have.
+   - **Over the sky (VA `0x108cf`):** flags hold 8 frames of 200x200 in a
+     4 x 2 sheet, drawn in colours 8-15 with 0 see-through (green, red
+     in `F-FRENCH`). Each frame is laid over `BASEFLAG.PCX` (picture 3,
+     the spyglass's sky and mast, colours 0 and 64 up): a see-through
+     pixel takes the base's, the others move up 24; the base's palette
+     takes the flag's colours 8-15 at 32-39 (the palette at VA
+     `0x45ac8`). In 16 colours the flag keeps its colours.
+   - **The first named pirate's quiz (VA `0x10747`, flag `0x449be`):** the
+     first time a named captain is met, the original shows a random flag
+     and asks which pirate it belongs to; a wrong answer sets the
+     difficulty to 4 (VA `0x45e6f`), the guns to 0 (player block +0x0a),
+     the gold to 8 (+0x28) and the injuries to 8 (VA `0x45e88`). That is
+     the game's copy protection. "He's chasing us" (CSTR 311) follows
+     only that quiz (VA `0xd8a7`). **Project decision: it stays
+     disabled**; the engine never asks and never applies the penalties,
+     so every named captain hails with CSTR 121.
 
-### Engine choices for encounters (not traced)
+### Engine choices for encounters
 
-- **Picking the ship:** it is picked when the sail is sighted, not after
-  the first answer. The draws are the same; only their order differs.
-- **Hailing** (traced, VA `0x1e78d` mode 2): the "Ship's News" page
-  (`pic/shipnews`, CSTN 18.2) lists the 6 latest public news items
-  (types 10-19) dated up to today, or "(no entries)" (CSTN 18.3). The
-  game also records the date of the hail.
-- **Hostile ships:** a named captain hails (CSTR 121, see "Named
-  captains"); any other hostile ship uses "He's chasing us" (CSTR 311).
-- **Pictures:**
-  - Ship portraits (`S_*.PCX`) hold 5 views of 200x200 at (1, 1), (202,
-    1), (403, 1), (1, 202), (202, 202), shown in turn in a window at
-    (220, 10) while the question waits (VA `0xfb24`, table at VA
-    `0x32d90`), each for 11 ticks of the 60.9 Hz clock; the ship rocks.
-  - The flag uses the same window, 8 frames, each for 1 + rand jitter
-    (-1..+1) + 1 ticks (VA `0xfc0a`, table at VA `0x32dc0`).
-  - **Which flag (VA `0xd1fc`):** a named captain flies a Jolly Roger,
-    `FJOLLYnn.PCX` with nn the word at VA `0x32f90` + `(id >> 6 & 3) x
-    32 + (id >> 3 & 7) x 2` (pictures 0x5d-0x70 from the name table at
-    VA `0x31dd0`; the ids' surnames 0-4 reach all 20); anyone else the
-    nation's flag (pictures 0x43-0x46, `F-SPAN`, `F-ENGL`, `F-FRENCH`,
-    `F-DUTCH`). An unnamed pirate would get picture 0x47, `null.pcx`,
-    which the game does not have; the engine shows `FJOLLY01`.
-  - **Over the sky (VA `0x108cf`):** flags hold 8 frames of 200x200 in a
-    4 x 2 sheet, drawn in colours 8-15 with 0 see-through (green, red
-    in `F-FRENCH`). Each frame is laid over `BASEFLAG.PCX` (picture 3,
-    the spyglass's sky and mast, colours 0 and 64 up): a see-through
-    pixel takes the base's, the others move up 24; the base's palette
-    takes the flag's colours 8-15 at 32-39 (the palette at VA
-    `0x45ac8`). In 16 colours the flag keeps its colours.
-  - **The first named pirate's quiz (VA `0x10747`, flag `0x449be`):** the
-    first time a named captain is met, the original shows a random flag
-    and asks which pirate it belongs to; a wrong answer sets the
-    difficulty to 4 (VA `0x45e6f`), the guns to 0 (player block +0x0a),
-    the gold to 8 (+0x28) and the injuries to 8 (VA `0x45e88`). That is
-    the game's copy protection. **Project decision: it stays disabled**;
-    the engine never asks and never applies the penalties.
+- **The flag's jitter** comes from the front end's own random numbers,
+  not the rules', so that a cosmetic draw never changes a game.
+- **An unnamed pirate's flag:** the engine shows `FJOLLY01` where the
+  original would load the missing `null.pcx`.
+- **Ships set by hand:** an encounter with no nearest town (a test, a
+  state written by hand) keeps the ship it holds when investigated.
 
 ## Sea battles (VA `0xe245`; loop at VA `0x7db8`)
 
@@ -1065,7 +1112,8 @@ fight computes its level the same way with fencing.
   player's heading, give or take 16: `heading - 0x60 + (rand & 31) -
   16` (VA `0x9bbd`).
 - **Battle state:** the wind keeps its direction from sailing, with
-  strength `w = rand(3)` rolled during the encounter (VA `0xd1fc`).
+  the strength `w = rand(3)` drawn at the encounter's third question
+  (VA `0xd581`; the fort battle draws its own, VA `0x18e21`).
   Both ships start with battle sails.
 - **Enemy reload:** `|144 - 8 x role|` ticks (VA `0x9046`).
 - **Class 5 shown as 8:** when the byte at VA `0x45e8c` is below 4, a
@@ -1097,7 +1145,13 @@ fight computes its level the same way with fencing.
 ### Each tick
 
 - **Steering:** the player's heading changes by 16 x turn input every
-  8 ticks.
+  8 ticks. The original reads the keys every tick and clears the turn
+  request each time (VA `0x1b58a`; the handlers at VA `0x1b6b3` and
+  `0x1b6ca` set -16 or +16 for that tick only), but applies it only on
+  ticks that are multiples of 8 (VA `0x7e97`): a single tap turns the
+  ship only when it falls on such a tick, and a held key (the
+  keyboard's repeat) turns her 16 every 8 ticks. The engine treats the
+  key as held while it is down (an engine choice).
 - **Sails:** either sail key, Up or Down, starts a change that flips
   them (VA `0x7f1d`, `0x7eff`). Changing sails takes 160 ticks, while
   the panel says "Raising sail" or "Lowering sail" (CSTN 30.4, 30.5, VA
@@ -1343,8 +1397,9 @@ byte), return to the fleet.
 - **Near a town (VA `0x4c0a0`):** the distance `|dx| + |dy|` in cells
   to the nearest town, at least 1, measured when `(ticks + 4) & 31` is
   0 at sea (VA `0x23e0e`) and copied there at the voyage's end (VA
-  `0x2896d`). A fight starting within 7 cells lowers that town's field 9
-  by 1 (VA `0xd1fc`); after any sea battle within 12 cells the heat
+  `0x2896d`). Closing for battle or an unanswered hail within 7 cells
+  lowers that town's field 9 by 1, being overtaken does not (see
+  "Encounter"); after any sea battle within 12 cells the heat
   rises by `24 - 2 x distance` (VA `0xe245`); a capture within `class +
   5` cells takes 10 from its wealth (to 0 below 11) and its crew tells
   of the villains there (VA `0xdb7b`), after the prize's slot and

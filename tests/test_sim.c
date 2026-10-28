@@ -773,6 +773,7 @@ test_encounters(void)
 		s.fleet.y = 300 * WORLD_TILE;
 		if (sim_sail(&s, 0, 32, &town) == SAIL_ENCOUNTER) {
 			far++;
+			sim_encounter_act(&s, ACT_INVESTIGATE);
 			hostile += s.encounter.hostile;
 		}
 	}
@@ -803,10 +804,12 @@ test_encounters(void)
 	}
 	CHECK(sighted == 0 && s.heat > 100);
 
-	/* While an encounter is open, sailing waits for an answer. */
+	/* While an encounter is open, sailing waits for an answer.  A ship
+	 * set by hand, with no town, is kept when investigated. */
 	sea_game(&s, 300, 300, 0x00);
 	s.encounter.stage = ENC_SIGHTED;
 	s.encounter.nation = 1;
+	s.encounter.town = -1;
 	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_ENCOUNTER);
 	CHECK(s.fleet.ticks == 0);
 
@@ -832,11 +835,14 @@ test_encounters(void)
 	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_ENCOUNTER);	/* fight! */
 	s.battle.active = 0;
 
-	/* A hunter cannot be avoided once seen; at the hardest level she
-	 * catches a fleeing player 2 times in 3. */
+	/* A hunter cannot be avoided once seen, and is named at her
+	 * colours; at the hardest level a captain always catches a player
+	 * who does not close for battle. */
 	s.encounter.stage = ENC_IDENTIFIED;
 	s.encounter.hostile = 1;
+	s.encounter.captain = 0;
 	CHECK(sim_encounter_act(&s, ACT_IGNORE) == RES_CONTINUE);
+	CHECK(s.encounter.captain != 0);
 	s.player.difficulty = 3;
 	for (i = 0, hostile = 0; i < 300; i++) {
 		s.encounter.stage = ENC_COLOURS;
@@ -851,6 +857,134 @@ test_encounters(void)
 		hostile += sim_encounter_act(&s, ACT_IGNORE) == RES_OVERTAKEN;
 	}
 	CHECK(hostile == 0);	/* rand(3) < 0 never */
+}
+
+static void	battle_game(struct sim *);
+
+/* Find a sail far from the towns; 0 if none comes. */
+static int
+far_sail(struct sim *s)
+{
+	int i, town;
+
+	for (i = 0; i < 400; i++) {
+		s->encounter.stage = ENC_NONE;
+		s->fleet.x = 300 * WORLD_TILE;
+		s->fleet.y = 300 * WORLD_TILE;
+		if (sim_sail(s, 0, 32, &town) == SAIL_ENCOUNTER)
+			return (1);
+	}
+	return (0);
+}
+
+/* What each question reveals, and what each answer costs. */
+static void
+test_encounter_steps(void)
+{
+	struct sim s, t;
+	struct rng before;
+	struct jbuf st = { 0 };
+	struct json *j;
+	char err[128];
+	int i, k, mask, dist, town, standing, w, found = 0;
+
+	/* "Sail ho!" knows only the nearest town: sailing on draws
+	 * nothing and names nobody. */
+	sea_game(&s, 300, 300, 0x00);
+	s.encounters = 1;
+	CHECK(far_sail(&s));
+	CHECK(s.encounter.stage == ENC_SIGHTED && s.encounter.crew == 0 &&
+	    s.encounter.captain == 0 && s.encounter.town >= 0 &&
+	    s.encounter.dist > 12);
+	before = s.rng;
+	mask = s.surnames;
+	CHECK(sim_encounter_act(&s, ACT_IGNORE) == RES_ESCAPED);
+	CHECK(memcmp(&before, &s.rng, sizeof(before)) == 0 &&
+	    s.surnames == mask);
+
+	/* Saved at "Sail ho!", loaded, investigated: the ship is picked
+	 * then; a hostile one is named only at her colours. */
+	for (i = 0; i < 40 && !found; i++) {
+		CHECK(far_sail(&s));
+		sim_to_json(&s, &st);
+		j = json_parse(st.s, err, sizeof(err));
+		CHECK(j != NULL && sim_from_json(&t, j, err, sizeof(err)) == 0);
+		json_free(j);
+		jb_free(&st);
+		t.world = &test_world;
+		CHECK(t.encounter.stage == ENC_SIGHTED &&
+		    t.encounter.town == s.encounter.town &&
+		    t.encounter.dist == s.encounter.dist);
+		CHECK(sim_encounter_act(&t, ACT_INVESTIGATE) == RES_CONTINUE);
+		CHECK(t.encounter.stage == ENC_IDENTIFIED &&
+		    t.encounter.crew > 0 && t.encounter.captain == 0 &&
+		    t.encounter.dist == s.encounter.dist);
+		if (!t.encounter.hostile) {
+			sim_encounter_act(&s, ACT_IGNORE);
+			continue;
+		}
+		found = 1;
+		mask = t.surnames;
+		CHECK(sim_encounter_act(&t, ACT_INVESTIGATE) == RES_CONTINUE);
+		CHECK(t.encounter.stage == ENC_COLOURS &&
+		    t.encounter.captain != 0 && t.surnames != mask);
+		CHECK(t.encounter.wind_strength >= 0 &&
+		    t.encounter.wind_strength <= 2);
+	}
+	CHECK(found);
+
+	/* The battle's wind strength is the one drawn at her colours. */
+	for (w = 0; w < 3; w++) {
+		battle_game(&s);
+		s.battle.active = 0;
+		s.encounter.wind_strength = w;
+		sim_battle_start(&s);
+		CHECK(s.battle.wind_strength == w);
+	}
+
+	/* A captain, hostile or not, overtakes a player who sails away or
+	 * hails, at the hardest level always; a ship without one never. */
+	sea_game(&s, 300, 300, 0x00);
+	s.player.difficulty = 3;
+	s.encounter.nation = 1;
+	s.encounter.town = -1;
+	for (k = 0; k < 2; k++) {
+		s.encounter.stage = ENC_COLOURS;
+		s.encounter.hostile = 0;
+		s.encounter.captain = 3 << 3 | 1 << 6;
+		CHECK(sim_encounter_act(&s, k ? ACT_HAIL : ACT_IGNORE) ==
+		    RES_OVERTAKEN);
+		s.battle.active = 0;
+		s.encounter.stage = ENC_COLOURS;
+		s.encounter.hostile = 1;
+		s.encounter.captain = 0;
+		CHECK(sim_encounter_act(&s, k ? ACT_HAIL : ACT_IGNORE) ==
+		    (k ? RES_NEWS : RES_ESCAPED));
+	}
+
+	/* Within 7 cells of a town: closing for battle and an unanswered
+	 * hail lower its field 9, being overtaken does not. */
+	sea_game(&s, 120, 112, 0x00);	/* 2 cells from Beta */
+	town = sim_nearest_town(&s, &dist);
+	CHECK(town >= 0 && dist < 7);
+	s.player.difficulty = 3;
+	s.encounter.nation = 1;
+	s.encounter.town = -1;
+	standing = (int16_t)s.towns[town].standing;
+	s.encounter.stage = ENC_COLOURS;
+	s.encounter.captain = 3 << 3 | 1 << 6;
+	CHECK(sim_encounter_act(&s, ACT_IGNORE) == RES_OVERTAKEN);
+	CHECK((int16_t)s.towns[town].standing == standing);
+	s.battle.active = 0;
+	s.encounter.stage = ENC_COLOURS;
+	s.encounter.captain = 0;
+	CHECK(sim_encounter_act(&s, ACT_BATTLE) == RES_BATTLE);
+	CHECK((int16_t)s.towns[town].standing == standing - 1);
+	s.battle.active = 0;
+	s.encounter.stage = ENC_COLOURS;
+	s.standing[1] = -4;
+	CHECK(sim_encounter_act(&s, ACT_HAIL) == RES_UNANSWERED);
+	CHECK((int16_t)s.towns[town].standing == standing - 2);
 }
 
 /* A battle against a merchantman (type 4, 8 guns, 80 men). */
@@ -3144,6 +3278,12 @@ test_prisoners(void)
 	long gold;
 
 	sea_game(&s, 300, 300, 0);
+	/* A new game starts with surnames 0-3 used: the first captain is
+	 * surname 4 (5 when 2 x rand(8) carries into bit 3). */
+	CHECK(s.surnames == 0x0F);
+	id = sim_name_captain(&s, 2);
+	CHECK(((id >> 3) & 7) == 4 || ((id >> 3) & 7) == 5);
+	CHECK(s.surnames == 0x1F);
 	/* Five surnames before one comes back; nation in bits 6-7. */
 	for (k = 0; k < 5; k++) {
 		id = sim_name_captain(&s, 2);
@@ -3583,6 +3723,7 @@ test_hunted_pirate(void)
 		    s.encounter.town != 1)
 			continue;
 		met++;
+		sim_encounter_act(&s, ACT_INVESTIGATE);
 		named += s.encounter.named;
 	}
 	CHECK(met > 20 && named * 10 > met * 6);	/* about 4 in 5 */
@@ -4117,6 +4258,7 @@ main(void)
 	test_sailing();
 	test_sail_snapshot();
 	test_encounters();
+	test_encounter_steps();
 	test_battles();
 	test_battle_protocol();
 	test_sword();

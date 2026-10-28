@@ -266,6 +266,11 @@ struct game {
 	 * last asked wins, as the original's request word (VA 0x49a7e). */
 	int			 fm_request;
 	int			 flag_composed;	/* the flag is over the sky */
+	int			 flag_frame;	/* the waving flag's frame */
+	unsigned		 flag_next;	/* the tick it changes after */
+	/* Cosmetic randomness, apart from the rules' deterministic draws
+	 * so that it never changes a game (the flag's jitter). */
+	struct rng		 fx_rng;
 	/* The original's debug mode (its "RDM" argument; --debug): keys
 	 * while sailing, and a right click on the map moves the ship. */
 	int			 debug;

@@ -427,8 +427,10 @@ struct sim_encounter {
 	int		cargo, gold;	/* record bytes 5 and 6, not decoded */
 	int		hostile;	/* she chases the player */
 	int		town;		/* nearest town when sighted */
+	int		dist;		/* its distance in cells, 1..63 */
 	int		named;		/* the pirate a mission hunts */
 	int		captain;	/* a named captain's id, or 0 */
+	int		wind_strength;	/* the battle's, 0..2 (VA 0x44ad2) */
 };
 
 struct sim {
