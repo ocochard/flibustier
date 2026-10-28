@@ -42,6 +42,11 @@ them; `BOT_REEF_GUARD=0` turns that off.
 It enters a town by sailing onto one of the town's arrival cells
 (`flibustier-seamap --arrivals` lists them), as the game requires.
 
+After each division of the plunder the journal gets a `reckoning` line,
+the score retiring there would give. `BOT_RETIRE=N` retires at the first
+division N years into the career instead of playing all the years; on
+500 careers, 10 scored best (mean 13.7 against 12.8 for 12 years).
+
 The bot is a mediocre captain: it runs onto reefs, takes some fights it
 should not, and its choices are not meant to be optimal. It is not part of
 `ctest`, since a career takes a few minutes.

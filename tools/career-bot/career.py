@@ -47,6 +47,7 @@ FOOD_DIV = int(os.environ.get("BOT_FOOD_DIV", 4))
 CONQUER = int(os.environ.get("BOT_CONQUER", 1))
 CONQUER_FORTS = int(os.environ.get("BOT_CQ_FORTS", 1))
 CONQUER_MEN = int(os.environ.get("BOT_CQ_MEN", 15))
+RETIRE = int(os.environ.get("BOT_RETIRE", 0))	# retire at the first division this many years into the career (0: never)
 
 
 def fort_margin(st, town, ship, damage):
@@ -76,6 +77,10 @@ def fort_margin(st, town, ship, damage):
 
 class Fail(Exception):
     pass
+
+
+class Retired(Exception):
+    """The career ended at the bank: nothing more is played."""
 
 
 class Sim:
@@ -932,6 +937,7 @@ class Bot:
             self.note("divided the plunder at %s: share %d, mine %d, fortune %d" % (
                 t["name"], d["share"], d["yours"], d["fortune"]))
             self.stats["divides"] += 1
+            self.retire_now()
             adv = 0
             if ADVANCE == 1:
                 adv = 1
@@ -1592,6 +1598,26 @@ class Bot:
     def friendly(self, t):
         return t["nation"] < 4 and not self.at_war(t["nation"]) and t["citizens"] >= 6
 
+    def retire_now(self):
+        """Just after a division, the one moment the game offers
+        retirement: log the reckoning, and retire BOT_RETIRE years into
+        the career.  The score is the points cut by a twentieth for each
+        year; on 500 careers, rules following the points' recent pace
+        retired too early (they grow in jumps), and a fixed 10 years
+        scored best."""
+        e = self.sim("career_end")
+        s = self.st
+        years = s["year"] - self.start_year
+        # straight to the journal: the sword fights are seeded by the
+        # number of events, which a note would change
+        self.journal.write("%d-%02d reckoning: points %d, score %d, years %d\n" % (
+            s["year"], s["month"] + 1, e["points"], e["score"], years))
+        if not RETIRE or years < RETIRE:
+            return
+        self.note("retired: score %d, points %d" % (e["score"], e["points"]))
+        self.stats["retired"] += 1
+        raise Retired()
+
     def career(self, years=12):
         self.hungry = False
         self.married_town = None
@@ -1699,8 +1725,13 @@ class Bot:
                     ti = self.nearest_town(lambda t: t["nation"] < 4 and not self.at_war(t["nation"]))
                 else:
                     ti = self.nearest_town(lambda t: t["nation"] == self.mynation() and t["citizens"] >= 6)
-                self.go_town(ti)
-                continue
+                    if ti is None:
+                        # no town of its own in this era: any friendly one
+                        ti = self.nearest_town(self.friendly)
+                if ti is not None:
+                    self.go_town(ti)
+                    continue
+                # none at all: cruise on, so the months still pass
             # cruise toward a random Spanish town to meet ships
             sp = [i for i, t in enumerate(s["towns"]) if t["nation"] == 0 and t["sea_x"]]
             # one of the nearest, so the voyage fits its time cap
@@ -1751,6 +1782,8 @@ def main():
         out = b.career(a.years)
     except Fail as e:
         b.odd("protocol failure: %s" % e)
+        out = b.report()
+    except Retired:
         out = b.report()
     print("\n".join(out))
     print("Journal: %s" % b.journal.name)
