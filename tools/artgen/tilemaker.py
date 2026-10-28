@@ -297,7 +297,7 @@ def tile_crests(terrain, tw, tile, n, side):
 
 def compose(terrain_pgm, textures, side, placed, seed, looks=None,
             beach=0.06, shallows=0.22, band=0.25, town_size=0.95,
-            frames=1, drift=2):
+            frames=1, drift=2, columns=16):
     """The 256 tiles at "side" pixels as rows of RGBA bytes (16 tiles a
     row), "frames" sets of them one below the other ("placed" maps a
     cut-out texture, a house or a fort, to the tiles it stands on): the
@@ -320,8 +320,11 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
         band * side
     turquoise = (64, 170, 170)
     foam = (225, 235, 235)
-    rows = 16 * side
-    atlas = [bytearray(16 * side * 4) for _ in range(rows * frames)]
+    # "columns" tiles a row: the engine reads the columns from the
+    # sheet's width; wide rows keep a sheet of many frames from growing
+    # too tall for a PNG decoder.
+    rows = -(-256 // columns) * side
+    atlas = [bytearray(columns * side * 4) for _ in range(rows * frames)]
     # The sea's motion, the same for every tile so their edges still
     # meet: a whole number of pixels each frame, back where it began.
     shifts = [(round(drift * math.cos(2 * math.pi * f / frames)),
@@ -349,7 +352,7 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
         for f in range(frames):
             dx, dy = shifts[f]
             for y in range(side):
-                out = atlas[f * rows + t // 16 * side + y]
+                out = atlas[f * rows + t // columns * side + y]
                 for x in range(side):
                     e = edge_weight(x, y, side, band_px)
 
@@ -380,16 +383,16 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
                             d = min((f - g) % frames, (g - f) % frames)
                             if d < 2:
                                 c = mix(c, foam, 0.55 if d == 0 else 0.2)
-                    i = (t % 16 * side + x) * 4
+                    i = (t % columns * side + x) * 4
                     out[i:i + 4] = bytes((*c, 255))
             for k, tiles in placed.items():
                 if t in tiles and any_land:
                     place_town(atlas, t, side, is_land, tex[k], town_size,
-                               f * rows)
+                               f * rows, columns)
     return atlas
 
 
-def place_town(atlas, t, side, is_land, town, scale, top=0):
+def place_town(atlas, t, side, is_land, town, scale, top=0, columns=16):
     """A house on a town tile: the town picture, scaled to "scale" of the
     tile, centred on its land, in the frame from atlas row "top"."""
     pts = [(x, y) for y in range(side) for x in range(side) if is_land[y][x]]
@@ -410,7 +413,7 @@ def place_town(atlas, t, side, is_land, town, scale, top=0):
             a = town.alpha(sx, sy) / 255
             if a <= 0:
                 continue
-            row = atlas[top + t // 16 * side + py]
-            i = (t % 16 * side + px) * 4
+            row = atlas[top + t // columns * side + py]
+            i = (t % columns * side + px) * 4
             under = tuple(row[i:i + 3])
             row[i:i + 3] = bytes(mix(under, town.at(sx, sy), a))

@@ -381,6 +381,8 @@ seed = 1660
 source = "layout described from the original screen"
 frame = [12, 29, 363, 404]
 field = "#CD9462"
+trim = 0.0		# cut at the frame's own edge instead (frame_fit)
+frame_fit = true
 prompt = """
 Photograph of the stern of a 17th-century galleon at sea, its carved and
 gilded transom with lanterns and rows of windows, sails above, blue sea,
@@ -1871,4 +1873,85 @@ rect = [566, 423, 26, 21]	# the muskets
 prompt = """
 Photograph, straight on, of a 17th-century flintlock musket lying
 diagonally on a polished honey-coloured oak board, filling the image.
+"""
+
+# The sword fight's two fencers (fencers/fencer.py): jointed figures
+# posed in the game's 16 moves, each sprite group a layer of them.  The
+# body and the opponent's heads are redrawn as photographs, one seed for
+# all, cut to the render's outline; the weapons and wounds are drawn as
+# rendered.
+[[asset]]
+id = "fencer/my"
+file = "art/mybody.sheet"
+seed = 1660
+source = "a fencer model of this pack, rendered"
+denoise = 0.6
+prompt = ""
+[asset.fencer]
+side = "my"
+[asset.fencer.groups]
+body = ["grp/mybody", "art/mybody.sheet"]
+rapier = ["grp/myrapier", "art/myrapier.sheet"]
+cutlass = ["grp/mycutlas", "art/mycutlas.sheet"]
+sword = ["grp/mysword", "art/mysword.sheet"]
+head = ["grp/myhead", "art/myhead.sheet"]
+chest = ["grp/mychest", "art/mychest.sheet"]
+legs = ["grp/mylegs", "art/mylegs.sheet"]
+[asset.fencer.redraw]
+body = """
+Photograph of a 17th-century buccaneer fighting with a sword, seen from
+the side, his bare head and face uncovered: a
+lean young man with long brown hair, a loose white linen shirt with full
+sleeves, a red sash at the waist, dark brown breeches and tall black
+boots; his empty left hand open, no second weapon, no mask, no helmet.
+Plain flat grey-blue
+background. Historical reenactment photography, sharp focus, realistic.
+"""
+
+[[asset]]
+id = "fencer/he"
+file = "art/hebody.sheet"
+seed = 1661
+source = "a fencer model of this pack, rendered"
+denoise = 0.6
+prompt = ""
+[asset.fencer]
+side = "he"
+[asset.fencer.groups]
+body = ["grp/hebody", "art/hebody.sheet"]
+head1 = ["grp/hehead1", "art/hehead1.sheet"]
+head2 = ["grp/hehead2", "art/hehead2.sheet"]
+head3 = ["grp/hehead3", "art/hehead3.sheet"]
+rapier = ["grp/herapier", "art/herapier.sheet"]
+cutlass = ["grp/hecutlas", "art/hecutlas.sheet"]
+sword = ["grp/hesword", "art/hesword.sheet"]
+head = ["grp/hehead", "art/hehead.sheet"]
+chest = ["grp/hechest", "art/hechest.sheet"]
+legs = ["grp/helegs", "art/helegs.sheet"]
+[asset.fencer.redraw]
+body = """
+Photograph of a 17th-century soldier fighting with a sword, seen from
+the side, his bare face uncovered, a red kerchief on his hair, a black
+beard: a stocky man in a loose green linen shirt, a
+brown leather belt, black breeches and tall black boots; his empty left
+hand open, no second weapon. Plain flat grey-blue background. Historical
+reenactment photography, sharp focus, realistic.
+"""
+head1 = """
+Photograph of the head of a 17th-century sailor seen from the side: a
+hard face with a black beard, a red kerchief tied over his hair. Plain
+flat grey-blue background. Historical reenactment photography, sharp
+focus, realistic.
+"""
+head2 = """
+Photograph of the head of a 17th-century colonial officer seen from the
+side: a hard face with a black beard, a broad-brimmed black hat. Plain
+flat grey-blue background. Historical reenactment photography, sharp
+focus, realistic.
+"""
+head3 = """
+Photograph of the head of a 17th-century Spanish soldier seen from the
+side: a hard face with a black beard, a polished steel morion helmet
+with a crest and an upturned rim. Plain flat grey-blue background.
+Historical reenactment photography, sharp focus, realistic.
 """
