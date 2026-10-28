@@ -17,8 +17,33 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 DATA = os.environ.get("FLIBUSTIER_DATA")
 BUILD = os.path.join(REPO, "build")
 OUT = "."
-FALLBACK_YEARS = 9	# after this, a governor's daughter will do instead of his niece
+FALLBACK_YEARS = int(os.environ.get("BOT_FALLBACK", 9))	# after this, a governor's daughter will do instead of his niece
 NATIONS = ["spain", "england", "france", "holland"]
+
+
+# Tuning knobs, from 144-seed comparisons: with the reef guard the fleet
+# limit makes no difference (2, 3 and 4 ships average 13.9, 14.0, 14.2).
+REEF_GUARD = int(os.environ.get("BOT_REEF_GUARD", 1))
+REEF_MARGIN = int(os.environ.get("BOT_REEF_MARGIN", 10))	# pixels kept clear of shallows
+REEF_HORIZON = int(os.environ.get("BOT_REEF_HORIZON", 6))	# chunks of 4 ticks looked ahead
+DIVIDE_MONTHS = int(os.environ.get("BOT_DIVIDE_MONTHS", 6))
+CREW_MAX = int(os.environ.get("BOT_CREW_MAX", 160))
+RECRUIT_AHEAD = int(os.environ.get("BOT_RECRUIT_AHEAD", 0))	# months the mood is sized for
+CREW_HUNT = int(os.environ.get("BOT_CREW_HUNT", 0))	# men enough to hunt ships; 0: always CREW_MAX
+DIVIDE_ANY = int(os.environ.get("BOT_DIVIDE_ANY", 1))	# divide in any town entered openly (144 seeds: 14.0 -> 15.5, mutinies halved)
+HUNT_WAR = int(os.environ.get("BOT_HUNT_WAR", 0))	# hunt villains in towns at war, sneaking in
+MISSIONS = [int(c) for c in os.environ.get("BOT_MISSIONS", "")]	# governors' mission types to take: 1 letter, 2 papers
+ADVANCE = int(os.environ.get("BOT_ADVANCE", 0))	# raise the difficulty at the bank: 1 always, 2 with a treasure map in hand
+WIND = int(os.environ.get("BOT_WIND", 0))	# price routes by the wind
+RANK_NATIONS = [int(c) for c in os.environ.get("BOT_RANKS", "")]	# nations to win rank with besides its own: 2 France, 3 Holland
+HOME_MONTHS = int(os.environ.get("BOT_HOME_MONTHS", 8))	# months without a division before heading for a bank
+HOME_ANY = int(os.environ.get("BOT_HOME_ANY", 0))	# any friendly town will do, not only the bot's own nation's
+MAX_SHIPS = int(os.environ.get("BOT_MAXSHIPS", 3))
+SHIPS = os.environ.get("BOT_SHIPS", "rating")	# rating, big, small or proof
+FOOD_DIV = int(os.environ.get("BOT_FOOD_DIV", 4))
+CONQUER = int(os.environ.get("BOT_CONQUER", 1))
+CONQUER_FORTS = int(os.environ.get("BOT_CQ_FORTS", 1))
+CONQUER_MEN = int(os.environ.get("BOT_CQ_MEN", 15))
 
 
 class Fail(Exception):
@@ -54,8 +79,9 @@ class Search:
     cells asked for.  Costs: shallows and shores are dear (in base), cells
     that wrecked us dearer still."""
 
-    def __init__(self, base, w2, reefs, goal, far):
+    def __init__(self, base, w2, reefs, goal, far, muls=None):
         self.base, self.w2, self.reefs = base, w2, reefs
+        self.muls = muls or (1.0,) * 8	# time per step, by direction, as steps
         self.dist = [far] * len(base)
         self.dist[goal] = 0
         self.q = [(0, goal)]
@@ -66,12 +92,13 @@ class Search:
         """Settle every cell at most as costly as target; returns the
         distances (final for those cells, which is all a descent needs)."""
         dist, q, base, w2, reefs = self.dist, self.q, self.base, self.w2, self.reefs
+        muls = self.muls
         pop, push = heapq.heappop, heapq.heappush
         while q and (not q[0][0] > dist[target] or dist[target] >= (1 << 40)):
             d0, cur = pop(q)
             if d0 > dist[cur]:
                 continue
-            for o, diag, cost in self.steps:
+            for k, (o, diag, cost) in enumerate(self.steps):
                 n = cur + o
                 m = base[n]
                 if not m:
@@ -82,7 +109,7 @@ class Search:
                     oy = w2 if diag in (1, 2) else -w2
                     if not (base[cur + ox] and base[cur + oy]):
                         continue
-                d = d0 + cost * m * (40 if n in reefs else 1)
+                d = d0 + cost * m * (40 if n in reefs else 1) * muls[k]
                 if d < dist[n]:
                     dist[n] = d
                     push(q, (d, n))
@@ -104,6 +131,8 @@ class Bot:
             check=True).stdout.splitlines()
         self.H, self.W = len(self.grid), len(self.grid[0])
         self.components()
+        if REEF_GUARD or WIND:
+            self.load_pixels(era)
         # per-cell cost factor on a grid padded by one cell; 0 is not water
         self.base = [0] * ((self.W + 2) * (self.H + 2))
         for y in range(self.H):
@@ -122,6 +151,7 @@ class Bot:
         self.wrecks = 0	# ships lost on shallows so far
         self.dig_fails = collections.Counter()	# failed trips, per map
         self.visited = {}
+        self.mission_tries = 0
         self.dead_ends = set()
         self.bumps = collections.Counter()
         self.st = self.sim.state()
@@ -209,6 +239,9 @@ class Bot:
         W2 = self.W + 2
         sp = (start[1] + 1) * W2 + start[0] + 1
         gp = (goal[1] + 1) * W2 + goal[0] + 1
+        if self.wind_key() != getattr(self, 'fields_key', None):
+            self.fields.clear()
+            self.fields_key = self.wind_key()
         search = self.fields.get(goal)
         if search is None:
             search = self.fields[goal] = self.search(goal)
@@ -229,12 +262,37 @@ class Bot:
 
     FAR = 1 << 40
 
+    def wind_key(self):
+        """What the wind costs depends on the fleet's biggest ship class and
+        the wind's sector; routes are searched afresh when it changes."""
+        if not WIND:
+            return None
+        f = self.st["fleet"]
+        return (max(t & 7 for t in f["ships"]), self.st["wind"] >> 4)
+
+    def speed_at(self, heading):
+        """The fleet's speed on a heading, as the game works it out."""
+        cls, _ = self.wind_key()
+        sector = ((heading + 8 - self.st["wind"]) >> 4) & 15
+        d = max(self.st["player"]["difficulty"] - (self.st["player"]["ability"] == 2), 0)
+        return min(max((self.speed_table[cls][sector] + ((5 - min(d, 4)) >> 1)) * 3, 4), 12)
+
+    def wind_muls(self):
+        """Time per step in the order of Search.steps: the step is sailed
+        from the cell found to the one searched from, so against the offset."""
+        if not WIND:
+            return None
+        out = []
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)):
+            out.append(12.0 / self.speed_at(self.bearing(-dx, -dy)))
+        return tuple(out)
+
     def search(self, goal):
         """A resumable Dijkstra from goal: cost of sailing from each cell to
         it (see Search.reach)."""
         reefs = {(y + 1) * (self.W + 2) + x + 1 for x, y in self.reefs}
         gp = (goal[1] + 1) * (self.W + 2) + goal[0] + 1
-        return Search(self.base, self.W + 2, reefs, gp, self.FAR)
+        return Search(self.base, self.W + 2, reefs, gp, self.FAR, self.wind_muls())
 
     def los(self, a, b):
         n = max(abs(b[0] - a[0]), abs(b[1] - a[1]), 1)
@@ -244,6 +302,84 @@ class Bot:
             if self.grid[y][x] != "." if 0 <= y < self.H and 0 <= x < self.W else True:
                 return False	# ',' cells hide shallows: never cut across them
         return True
+
+    def load_pixels(self, era):
+        """The exact terrain a ship sails on, as the player sees it: the 256
+        map tiles' pixels, and the tile each cell draws."""
+        lines = subprocess.run(
+            [os.path.join(BUILD, "flibustier-seamap"), "--data", DATA,
+             "--pixels", str(era)], stdout=subprocess.PIPE, text=True,
+            check=True).stdout.splitlines()
+        self.tile_px = lines[:256]
+        self.cell_tile = [[int(row[i:i + 2], 16) for i in range(0, len(row), 2)]
+                          for row in lines[256:736]]
+        self.speed_table = [[int(v) for v in row.split()] for row in lines[736:744]]
+        # cells within two cells of anything but open sea: where to look
+        self.reef_zone = set()
+        for y in range(self.H):
+            for x in range(self.W):
+                if self.grid[y][x] != ".":
+                    for dy in range(-2, 3):
+                        for dx in range(-2, 3):
+                            self.reef_zone.add((x + dx, y + dy))
+
+    def sea_at(self, px, py):
+        """Is the pixel open water (not shallows, not land)?"""
+        if not (0 <= px < self.W * 16 and 0 <= py < self.H * 16):
+            return False
+        t = self.cell_tile[py >> 4][px >> 4]
+        return self.tile_px[t][(py & 15) * 16 + (px & 15)] == "."
+
+    def room(self, x, y):
+        """Pixels of open water kept clear of shallows and land around a
+        point, to the nearest of 16, 12, 8, 4, 2 and 0; -1 when the pixel
+        itself is not open water."""
+        for m in (16, 12, 8, 4, 2, 0):
+            ok = True
+            for dx, dy in ((0, 0), (m, 0), (-m, 0), (0, m), (0, -m),
+                           (m, m), (m, -m), (-m, m), (-m, -m)):
+                if not self.sea_at(x + dx, y + dy):
+                    ok = False
+                    break
+            if ok:
+                return m
+        return -1
+
+    def rollout(self, turn, before):
+        """Sail REEF_HORIZON chunks of 4 ticks on one turn and report the
+        least room from shallows met on the way (-1: ran onto it or land);
+        the game state is put back afterwards."""
+        least = 99
+        for _ in range(REEF_HORIZON):
+            r = self.sim("sail", turn=turn, ticks=4)
+            room = -1 if r["stop"] == "land" else self.room(r["x"], r["y"])
+            least = min(least, room)
+            if room < 0 or r["stop"] not in ("ticks", "town"):
+                break
+        self.sim("load", state=before)
+        return least
+
+    def guarded_sail(self, turn, ticks, f):
+        """One sail step that keeps clear of shallows: the turn the bot
+        wants is run ahead (a rollout), and when it comes within
+        REEF_MARGIN pixels of shallows the other turns are too; the one
+        keeping the most room is sailed for one chunk. Returns the sail
+        reply, or None when the wanted turn is safe enough (the caller
+        sails it as usual)."""
+        before = self.sim.state()
+        want = self.rollout(turn, before)
+        if want >= REEF_MARGIN:
+            return None
+        best = (want, turn)
+        for t in (0, -1, 1):
+            if t == turn:
+                continue
+            room = self.rollout(t, before)
+            if room > best[0]:
+                best = (room, t)
+        self.stats["reef_avoided"] += best[1] != turn
+        self.stats["reef_unsafe"] += best[0] < 0
+        return self.sim("sail", turn=best[1], ticks=4)
 
     def back_off(self, tries):
         """After a grounding (the ship turned about): sail clear, trying
@@ -302,6 +438,9 @@ class Bot:
             j = idx
             for k in range(idx, min(len(route), idx + 14)):
                 if self.los((cx, cy), route[k]):
+                    if WIND and self.speed_at(self.bearing(route[k][0] - cx, route[k][1] - cy)) < \
+                            self.speed_at(self.bearing(route[idx][0] - cx, route[idx][1] - cy)):
+                        continue	# a shortcut that heads into the wind
                     j = k
             wx, wy = route[j]
             want = self.bearing(wx * 16 + 8 - x, wy * 16 + 8 - y)
@@ -309,7 +448,13 @@ class Bot:
             diff = ((want - f["heading"] + 128) & 0xFF) - 128
             turn = 0 if abs(diff) < 8 else (1 if diff > 0 else -1)
             ticks = 4 if turn else 16
-            r = self.sim("sail", turn=turn, ticks=ticks)
+            r = None
+            self.guard_mode = "outside"
+            if REEF_GUARD and (cx, cy) in self.reef_zone:
+                r = self.guarded_sail(turn, ticks, f)
+                self.guard_mode = "steered" if r else "safe"
+            if r is None:
+                r = self.sim("sail", turn=turn, ticks=ticks)
             f.update(x=r["x"], y=r["y"], heading=r["heading"])
             stop = r["stop"]
             if stop != "ticks":
@@ -373,7 +518,11 @@ class Bot:
     def crew_stop(self):
         ev = self.sim("crew")["event"]
         if ev == "mutiny":
-            self.note("mutiny!")
+            st = self.refresh()
+            f = st["fleet"]
+            self.note("mutiny! mood %d, months %d, crew %d, gold %d, %d days since a visit, %d ships" % (
+                f["mood"], st["months"], f["crew"], f["gold"],
+                st["day"] - max(self.visited.values(), default=st["day"]), len(f["ships"])))
             self.sim("crew", action="duel", weapon=2)
             res = self.fight()
             self.sim("crew", action="end")
@@ -389,8 +538,10 @@ class Bot:
             if ev == "wrecked":
                 f = self.refresh()["fleet"]
                 cx, cy = f["x"] // 16, f["y"] // 16
-                self.note("wrecked on a reef at %d,%d (cell %s, %d ships)" % (
-                    cx, cy, self.grid[cy][cx], len(f["ships"])))
+                self.note("wrecked on a reef at %d,%d (cell %s, %d ships, %s)" % (
+                    cx, cy, self.grid[cy][cx], len(f["ships"]),
+                    getattr(self, "guard_mode", "?")))
+                self.stats["wreck_" + getattr(self, "guard_mode", "other")] += 1
                 self.reefs.add((cx, cy))	# plan around it from now on
                 self.wrecks += 1
                 self.fields.clear()
@@ -436,7 +587,12 @@ class Bot:
             self.sim("board", weapon=2)
             res = self.fight()
             self.note("boarding fight: %s" % res)
-        r = self.sim("finish", keep=1)
+        # a proof fleet leaves the ships a reef can take (bigger than a
+        # sloop) to their owners, except when she is all there is
+        keep = 1
+        if SHIPS == "proof" and (b["foe"]["type"] & 7) > 1 and (self.st["fleet"]["ships"][0] & 7) <= 1:
+            keep = 0
+        r = self.sim("finish", keep=keep)
         if self.st["fleet"]["ships"] and r.get("fleet_ships", 0) > 8:
             pass
         return r
@@ -510,6 +666,19 @@ class Bot:
             self.after_battle(fin)
 
     # ------------------------------------------------------------- towns
+    def pick_nation(self):
+        """The nation a conquered town goes to: the one whose rank is lowest
+        of the bot's own and those it builds a rank with (never Spain)."""
+        st = self.refresh()
+        nations = [self.mynation()] + RANK_NATIONS
+        return min(nations, key=lambda n: (st["rank"][n], -st["standing"][n]))
+
+    def promotable(self):
+        """The nations whose governor would promote the bot now."""
+        st = self.st
+        return [n for n in [self.mynation()] + RANK_NATIONS
+                if st["rank"][n] < 9 and st["standing"][n] >= (st["rank"][n] + 1) ** 2 + 2]
+
     def mynation(self):
         return self.st["player"]["nation"]
 
@@ -542,12 +711,24 @@ class Bot:
         self.hungry = False
         self.food_town = None
         self.governor(ti)
-        if t["nation"] == self.mynation() and (s["months"] >= 6 or s["fleet"]["mood"] < 2):
+        ms = self.refresh()["mission"]
+        if ms["type"] in (1, 2) and ms["dest"] == ti:
+            d = self.sim("mission", action="deliver", check=False)
+            if d.get("ok"):
+                self.note("delivered the mission to %s" % t["name"])
+                self.stats["missions_delivered"] += 1
+        if (DIVIDE_ANY and not self.at_war(t["nation"]) or t["nation"] == self.mynation()) and (s["months"] >= DIVIDE_MONTHS or s["fleet"]["mood"] < 2):
             d = self.sim("bank", action="divide")
             self.note("divided the plunder at %s: share %d, mine %d, fortune %d" % (
                 t["name"], d["share"], d["yours"], d["fortune"]))
             self.stats["divides"] += 1
-            self.sim("bank", action="continue", advance=0)
+            adv = 0
+            if ADVANCE == 1:
+                adv = 1
+            elif ADVANCE == 2:
+                m = self.refresh()["maps"]
+                adv = int(bool(m[1]["pieces"] & 0xF or m[2]["pieces"] & 0xF))
+            self.sim("bank", action="continue", advance=adv)
         self.tavern()
         self.merchant()
         self.shipwright()
@@ -571,14 +752,22 @@ class Bot:
         if not g.get("ok"):
             return
         if g["promoted"]:
-            self.note("promoted by the %s governor of %s (+%d acres)%s" % (
+            self.note("promoted by the %s governor of %s (+%d acres)%s, standing %s" % (
                 NATIONS[t["nation"]], t["name"], g["acres"],
-                ", a new villain appears" if g["villain"] >= 0 else ""))
+                ", a new villain appears" if g["villain"] >= 0 else "",
+                self.refresh()["standing"]))
             self.stats["promotions"] += 1
         if g["report"]:
             self.note("mission report: %d" % g["report"])
         if g["villain_here"] >= 0:
             self.villain_duel("governor's tip at " + t["name"])
+        if g["mission_offer"] in MISSIONS and self.refresh()["mission"]["type"] == 0:
+            m = self.sim("mission", action="accept", check=False)
+            if m.get("ok"):
+                self.note("took a mission (type %d) from %s to %s" % (
+                    m["type"], t["name"], self.st["towns"][m["dest"]]["name"]))
+                self.stats["missions_taken"] += 1
+                self.mission_tries = 0
         if g["offer"] in ("marque", "pardon") and 0 < g["price"] <= s["fleet"]["gold"] // 3:
             p = self.sim("governor", action="pay")
             if p["paid"]:
@@ -620,6 +809,26 @@ class Bot:
         if e["won"]:
             self.stats["villains_beaten"] += 1
 
+    def crew_goal(self):
+        """The men to sail with: enough to board ships, or what the cheapest
+        city worth attacking asks, whichever is more (at most CREW_MAX)."""
+        if not CREW_HUNT:
+            return CREW_MAX
+        s = self.st
+        goal = CREW_HUNT
+        need = []
+        for tt in (s["train_town"], s["fleet_town"]):
+            if 0 <= tt < len(s["towns"]) and s["towns"][tt]["sea_x"] and s["towns"][tt]["nation"] == 0:
+                need.append(2 * s["towns"][tt]["soldiers"] + 30)
+        if CONQUER:
+            for i, t in enumerate(s["towns"]):
+                if t["nation"] == 0 and t["sea_x"] and i not in self.unreachable and t["forts"] <= CONQUER_FORTS:
+                    need.append(max(2 * t["soldiers"] + 30, t["citizens"] * CONQUER_MEN))
+        need = [n for n in need if n <= CREW_MAX]
+        if need:
+            goal = max(goal, min(need))
+        return goal
+
     def tavern(self):
         r = self.sim("tavern", action="open")
         s = self.refresh()
@@ -627,9 +836,9 @@ class Bot:
         room = (len(f["ships"]) * 2 + f["capacity"]) * 16 - f["crew"]
         # the crew the gold keeps content (mood >= 2): sqrt(gold/10/crew) x 2
         # - months + 4 - difficulty >= 2
-        need = s["months"] + s["player"]["difficulty"] - 2
+        need = s["months"] + RECRUIT_AHEAD + s["player"]["difficulty"] - 2
         cap = room if need <= 0 else int((f["gold"] / 10) / ((need / 2) ** 2)) - f["crew"]
-        if r["recruits"] > 0 and room > 0 and min(room, cap) >= r["recruits"] // 2 and f["crew"] < 160:
+        if r["recruits"] > 0 and room > 0 and min(room, cap) >= r["recruits"] // 2 and f["crew"] < self.crew_goal():
             r = self.sim("tavern", action="recruit", accept=1)
             self.stats["recruited"] += 1
         # the map seller, while the pirate's map is not whole
@@ -682,14 +891,35 @@ class Bot:
         c = self.st["ship_classes"][ship & 7]
         return (c["guns"] + 4 * c["hull"]) * c["speed"]
 
+    def keep_value(self, ship):
+        """How much the bot wants to keep a ship: the lowest is sold first."""
+        if SHIPS == "big":
+            return ship & 7
+        if SHIPS in ("small", "proof"):
+            return -(ship & 7)
+        return self.rating(ship)
+
     def shipwright(self):
         p = self.sim("shipwright", action="prices", check=False)
         if not p.get("ok"):
             return
         f = self.refresh()["fleet"]
-        if len(f["ships"]) > 3:
+        if SHIPS == "flag" and len(f["ships"]) > 1:
+            # the best ship takes the lead: the ships ahead of her go, then
+            # the extras beyond the limit, the weakest first
+            rate = [self.rating(t) for t in f["ships"]]
+            best = max(range(len(rate)), key=lambda i: (rate[i], -i))
+            rest = sorted(range(best + 1, len(rate)), key=lambda i: rate[i])
+            idx = list(range(best)) + rest[: max(len(rest) - (MAX_SHIPS - 1), 0)]
+            if idx:
+                self.sim("shipwright", action="sell", ships=idx, check=False)
+                self.stats["ships_sold"] += len(idx)
+                if best:
+                    self.stats["flagship_changes"] += 1
+            f = self.refresh()["fleet"]
+        if len(f["ships"]) > MAX_SHIPS:
             # sell the worst extras
-            idx = sorted(range(1, len(f["ships"])), key=lambda i: self.rating(f["ships"][i]))[: len(f["ships"]) - 3]
+            idx = sorted(range(1, len(f["ships"])), key=lambda i: self.keep_value(f["ships"][i]))[: len(f["ships"]) - MAX_SHIPS]
             r = self.sim("shipwright", action="sell", ships=idx, check=False)
             self.stats["ships_sold"] += len(idx)
         f = self.refresh()["fleet"]
@@ -856,8 +1086,9 @@ class Bot:
                 self.note("CAPTURED THE TREASURE FLEET at %s" % t["name"])
                 self.stats["treasure_fleet"] += 1
             if k["conquest"]:
-                self.sim("assault", action="governor", nation=self.mynation())
-                self.note("%s is now %s" % (t["name"], NATIONS[self.mynation()]))
+                gov = self.pick_nation()
+                self.sim("assault", action="governor", nation=gov)
+                self.note("%s is now %s" % (t["name"], NATIONS[gov]))
                 self.stats["conquests"] += 1
             if self.refresh()["player_town"] >= 0:
                 self.sim("town", action="leave")
@@ -1114,7 +1345,7 @@ class Bot:
             f = s["fleet"]
             # 1. food and repairs, before any long trip
             hurt = sum(f["damage"]) > 0 and f["gold"] > 1500 and s["day"] >= self.no_repair_until
-            if (self.hungry or f["food"] < f["crew"] // 4 + 5 or hurt) and f["gold"] >= 100:
+            if (self.hungry or f["food"] < f["crew"] // FOOD_DIV + 5 or hurt) and f["gold"] >= 100:
                 ti = self.food_town
                 if ti is None:
                     ti = self.nearest_town(lambda t: self.friendly(t) and self.visited.get(
@@ -1138,10 +1369,21 @@ class Bot:
                 mapi = None
             if mapi is not None:
                 continue
+            # 2b. a mission under way: to its destination, then back to the
+            # governor who gave it, who only thanks and rewards it there
+            ms = s["mission"]
+            if MISSIONS and ms["type"] != 0 and self.mission_tries < 12:
+                goal = ms["dest"] if ms["type"] > 0 else ms["giver"]
+                if ms["type"] in (1, 2) or ms["type"] < 0:
+                    self.mission_tries += 1
+                    res = self.go_town(goal)
+                    if res in ("noroute", "slow"):
+                        self.mission_tries += 3
+                    continue
             # 3. a known villain
             vill = [v for v in s["villains"] if v["active"] and
                     s["towns"][v["town"]]["sea_x"] and
-                    not self.at_war(s["towns"][v["town"]]["nation"]) and
+                    (HUNT_WAR or not self.at_war(s["towns"][v["town"]]["nation"])) and
                     v["town"] not in self.unreachable and
                     self.visited.get(v["town"], -99) <= s["day"] - 7]
             if vill:
@@ -1159,9 +1401,33 @@ class Bot:
             if convoy is not None:
                 self.go_town(convoy, attack=True)
                 continue
+            # 4b. a small Spanish town the crew can hold: a conquest is
+            # +3 standing with the nation, which is what promotions cost
+            if CONQUER and self.at_war(0):
+                prey = [i for i, t in enumerate(s["towns"])
+                        if t["nation"] == 0 and t["sea_x"] and i not in self.unreachable and
+                        t["forts"] <= CONQUER_FORTS and f["crew"] >= 2 * t["soldiers"] + 30 and
+                        f["crew"] >= t["citizens"] * CONQUER_MEN]
+                if prey:
+                    prey.sort(key=lambda i: max(abs(s["towns"][i]["sea_x"] - f["x"] // 16),
+                                                abs(s["towns"][i]["sea_y"] - f["y"] // 16)))
+                    self.go_town(prey[0], attack=True)
+                    continue
             # 5. back home for promotions every few loops, else hunt prizes
-            if loops % 4 == 0 or s["months"] >= 8:
-                ti = self.nearest_town(lambda t: t["nation"] == self.mynation() and t["citizens"] >= 6)
+            # a nation's standing only climbs through the sacks once it is 2
+            # or more: its governor's letter of marque gets it there
+            due = [n for n in RANK_NATIONS if s["standing"][n] < 2 and not self.at_war(n)]
+            due += [n for n in self.promotable() if n != self.mynation() and n not in due]
+            if due and not self.at_war(due[0]):
+                ti = self.nearest_town(lambda t: t["nation"] in due and t["citizens"] >= 6 and not self.at_war(t["nation"]))
+                if ti is not None and self.go_town(ti) != "recent":
+                    continue
+            if loops % 4 == 0 or s["months"] >= HOME_MONTHS:
+                if HOME_ANY:
+                    # any town where the bank is open, the nearest first
+                    ti = self.nearest_town(lambda t: t["nation"] < 4 and not self.at_war(t["nation"]))
+                else:
+                    ti = self.nearest_town(lambda t: t["nation"] == self.mynation() and t["citizens"] >= 6)
                 self.go_town(ti)
                 continue
             # cruise toward a random Spanish town to meet ships
