@@ -1626,6 +1626,10 @@ def shrink_workflow(image, out_w, out_h, prefix):
     }
 
 
+# The fencers drawn this much lower (640x480 pixels) than the game draws
+# its own (SW_Y 140): there they stand on the scenes' open floor, which
+# in the pack's alley, fort and deck lies lower than the original's.
+FENCER_DROP = 60
 FENCER_BANKS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 6, 6, 10, 6]
 FENCER_RENDER = (951, 609)	# a fight frame as rendered (3 x 317x203)
 
@@ -1748,8 +1752,9 @@ def make_fencer(args, spec, a, profile, seed):
                      "image = " + os.path.basename(atlas), "", "[frames]"]
             for m in range(len(FENCER_BANKS)):
                 for f in range(FENCER_BANKS[m]):
-                    lines.append("%d.%d = %d %d %d %d" % (
-                        m, f, f * fw, m * fh, fw, fh))
+                    lines.append("%d.%d = %d %d %d %d 0 %d" % (
+                        m, f, f * fw, m * fh, fw, fh,
+                        round(FENCER_DROP * k)))
             with open(os.path.join(args.pack, gfile), "w") as fp:
                 fp.write("\n".join(lines) + "\n")
             record[gid] = {"layer": layer, "redrawn": redraw,
@@ -1962,6 +1967,162 @@ def make_portrait(args, spec, a, profile, seed):
             .hexdigest()}
 
 
+FLAG_FRAME = 200			# a flag's frame, 4 x 2 on its picture
+FLAG_RENDER = 450			# a flag frame as rendered
+
+
+def flag_sheet_workflow(frames, sky, mask, k, prefix):
+    """A flag's 8 frames, each the waving flag over the sky, seen through
+    the spyglass, laid 4 by 2 on black as the game reads them."""
+    side = round(FLAG_FRAME * k)
+    g = {
+        "sky": {"class_type": "LoadImage", "inputs": {"image": sky}},
+        "skyfit": {"class_type": "ImageScale", "inputs": {
+            "image": ["sky", 0], "upscale_method": "lanczos",
+            "width": side, "height": side, "crop": "center"}},
+        "glass": {"class_type": "LoadImage", "inputs": {"image": mask}},
+        "gfit": {"class_type": "ImageScale", "inputs": {
+            "image": ["glass", 0], "upscale_method": "bilinear",
+            "width": side, "height": side, "crop": "disabled"}},
+        "gmask": {"class_type": "ImageToMask", "inputs": {
+            "image": ["gfit", 0], "channel": "red"}},
+        "canvas": {"class_type": "EmptyImage", "inputs": {
+            "width": 4 * side, "height": 2 * side, "batch_size": 1,
+            "color": 0}},
+        "black": {"class_type": "EmptyImage", "inputs": {
+            "width": side, "height": side, "batch_size": 1, "color": 0}},
+    }
+    last = ["canvas", 0]
+    for n, frame in enumerate(frames):
+        g["f%d" % n] = {"class_type": "LoadImage", "inputs": {
+            "image": frame}}
+        g["fs%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["f%d" % n, 0], "upscale_method": "lanczos",
+            "width": side, "height": side, "crop": "disabled"}}
+        g["fm%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["f%dm" % n, 0], "upscale_method": "bilinear",
+            "width": side, "height": side, "crop": "disabled"}}
+        g["f%dm" % n] = {"class_type": "MaskToImage", "inputs": {
+            "mask": ["f%di" % n, 0]}}
+        g["f%di" % n] = {"class_type": "InvertMask", "inputs": {
+            "mask": ["f%d" % n, 1]}}
+        g["fa%d" % n] = {"class_type": "ImageToMask", "inputs": {
+            "image": ["fm%d" % n, 0], "channel": "red"}}
+        g["on%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["skyfit", 0], "source": ["fs%d" % n, 0],
+            "x": 0, "y": 0, "resize_source": False,
+            "mask": ["fa%d" % n, 0]}}
+        g["view%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": ["black", 0], "source": ["on%d" % n, 0],
+            "x": 0, "y": 0, "resize_source": False, "mask": ["gmask", 0]}}
+        g["p%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": last, "source": ["view%d" % n, 0],
+            "x": (n % 4) * side, "y": (n // 4) * side,
+            "resize_source": False}}
+        last = ["p%d" % n, 0]
+    g["save"] = {"class_type": "SaveImage", "inputs": {
+        "images": last, "filename_prefix": prefix}}
+    return g
+
+
+def design_workflow(spec, profile, seed, prompt, w, h, prefix):
+    """A flag's design, flat, filling a w x h picture."""
+    g = texture_workflow(spec, profile, seed, prompt, w, prefix)
+    g["latent"]["inputs"].update(width=1248, height=832)
+    g["small"]["inputs"].update(width=w, height=h, crop="disabled")
+    return g
+
+
+def flatten_inks(path, inks):
+    """Bring a design to its few inks, each pixel the nearest: a period
+    flag's figures are flat paint, which the image model shades like a
+    photograph however it is asked."""
+    import tilemaker
+    w, h, ch, rows = tilemaker.png_read(open(path, "rb").read())
+    pal = [tuple(int(c[i:i + 2], 16) for i in (1, 3, 5)) for c in inks]
+    out = []
+    for r in rows:
+        line = bytearray(w * 4)
+        for x in range(w):
+            c = (r[x * ch], r[x * ch + 1], r[x * ch + 2])
+            best = min(pal, key=lambda q: (q[0] - c[0]) ** 2 * 3 +
+                       (q[1] - c[1]) ** 2 * 4 + (q[2] - c[2]) ** 2 * 2)
+            line[x * 4:x * 4 + 4] = bytes((*best, 255))
+        out.append(line)
+    tilemaker.png_write(path, w, h, out)
+
+
+def make_flag(args, spec, a, profile, seed):
+    """A ship's colours: the design painted flat, waved on its staff in
+    Blender on the render host (flags/flag.py), and each of the 8 frames
+    set over the spyglass's sky."""
+    k = spec["pack"]["art_height"] / SCREEN_H
+    fl = a["flag"]
+    host = args.render_host
+    work = "flibustier-flags/%s" % a["id"].replace("/", "-")
+    local = os.path.join(args.pack, a["file"] + ".work")
+    script = os.path.join(HERE, "flags", "flag.py")
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    os.makedirs(local, exist_ok=True)
+    free(args.server)
+    try:
+        design = render(args.server, design_workflow(
+            spec, profile, seed, fl["design"], 1200, 800,
+            prefix + "-design"))
+        dpath = os.path.join(local, "design.png")
+        with open(dpath, "wb") as f:
+            f.write(design)
+        if fl.get("inks"):
+            flatten_inks(dpath, fl["inks"])
+        sky = render(args.server, texture_workflow(
+            spec, profile, spec["flags"]["seed"], spec["flags"]["sky"],
+            FLAG_RENDER, prefix + "-sky"))
+        spath = os.path.join(local, "sky.png")
+        with open(spath, "wb") as f:
+            f.write(sky)
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    try:
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "mkdir -p %s" % work], check=True,
+                       stdin=subprocess.DEVNULL)
+        subprocess.run(["scp", "-q", script, dpath, "%s:%s/" % (host, work)],
+                       check=True)
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "cd %s && rm -rf out && blender -b -P flag.py -- "
+                        "--design design.png --out out --frame %d %s "
+                        "> blender.log 2>&1" % (
+                            work, FLAG_RENDER,
+                            "--torn" if fl.get("torn") else "")],
+                       check=True, stdin=subprocess.DEVNULL)
+        subprocess.run(["scp", "-q", "%s:%s/out/*.png" % (host, work),
+                        local + "/"], check=True)
+    except subprocess.CalledProcessError as e:
+        print("%s: blender on %s failed: %s" % (a["id"], host, e),
+              file=sys.stderr)
+        return None
+    try:
+        frames = [upload(args.server, os.path.join(local, "%d.png" % n),
+                         "flibustier-flag-%d.png" % n) for n in range(8)]
+        sup = upload(args.server, spath, "flibustier-flag-sky.png")
+        mask = upload(args.server, os.path.join(HERE, "layouts",
+                                                "spyglass.png"),
+                      "flibustier-spyglass.png")
+        sheet = render(args.server, flag_sheet_workflow(
+            frames, sup, mask, k, prefix + "-sheet"))
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    with open(os.path.join(args.pack, a["file"]), "wb") as f:
+        f.write(sheet)
+    shutil.rmtree(local)
+    return {"design": " ".join(fl["design"].split()),
+            "torn": bool(fl.get("torn")),
+            "model_sha256": hashlib.sha256(open(script, "rb").read())
+            .hexdigest()}
+
+
 def write_manifest(pack, spec):
     """pack.ini: every asset that has art in the pack."""
     lines = ["# Generated by tools/artgen/artgen.py; see provenance/.",
@@ -2101,6 +2262,28 @@ def main():
                 f.write("\n")
             print("%s: %s tiles, %.0f s" % (a["id"], profile,
                                             time.time() - t0))
+            continue
+        if a.get("flag"):
+            t0 = time.time()
+            record = make_flag(args, spec, a, profile, seed)
+            if record is None:
+                failed.append(a["id"])
+                continue
+            pdir = os.path.join(args.pack, "provenance")
+            os.makedirs(pdir, exist_ok=True)
+            with open(os.path.join(pdir, a["id"].replace("/", "-") +
+                                   ".json"), "w") as f:
+                json.dump(dict(record, id=a["id"], file=a["file"],
+                               profile=profile, seed=seed,
+                               model="flags/flag.py",
+                               comfyui=system.get("comfyui_version"),
+                               generator=git_rev(),
+                               date=datetime.datetime.now(
+                                   datetime.timezone.utc)
+                               .isoformat(timespec="seconds")), f, indent=2)
+                f.write("\n")
+            print("%s: %s flag, %.0f s" % (a["id"], profile,
+                                          time.time() - t0))
             continue
         if a.get("portrait"):
             t0 = time.time()

@@ -167,21 +167,26 @@ id = "pic/plunder"
 file = "art/plunder.png"
 seed = 1660
 source = "layout described from the original screen"
+control = "layouts/plunder.png"
+control_strength = 0.7
+control_end = 0.5
 prompt = """
-Photograph on the deck of a 17th-century sailing ship under a clear pale
-blue sky. Along the bottom third of the frame, four very different
-pirates haul treasure across the deck by the rail: on the left a burly
-bald man in his forties with a thick black beard and a sleeveless brown
-leather jerkin, bent under a heavy wooden chest; next to him a skinny
+Photograph on the deck of a 17th-century sailing ship, seen from low on
+the deck, under a clear, plain, cloudless pale blue sky that fills the
+whole middle and top of the picture: the game writes its text there, so
+nothing stands in the sky's middle, no rigging, no clouds. A white sail
+at the very left edge and another at the very right edge. Only along
+the bottom third of the picture, four very different pirates haul
+treasure across the deck by the rail: on the left a burly bald man in
+his forties with a thick black beard and a sleeveless brown leather
+jerkin, bent under a heavy wooden chest; next to him a skinny
 red-haired young man of twenty, freckled and clean-shaven, in a striped
 shirt and a blue headscarf, dragging a sack; then a grey-haired old
 sailor with a white stubble and a wide-brimmed straw hat, carrying a
 small iron-bound casket; on the right a tall dark-skinned man in his
 thirties with braided hair, a red sash and an open white shirt, lifting
-a chest onto his shoulder. White sails at the left and right edges. The
-upper two thirds of the frame are open plain sky. Bright sunlight.
-Historical reenactment photography, natural textures, sharp focus,
-realistic.
+a chest onto his shoulder. Bright sunlight. Historical reenactment
+photography, natural textures, sharp focus, realistic.
 """
 
 [[asset]]
@@ -2154,4 +2159,410 @@ her and a sky of soft even blue with a few white clouds, a natural
 photograph with no frame, no border and no circle. Historical
 reenactment photography, sharp focus, realistic. The whole ship is built
 of planked wood: no tower, nothing of stone.
+"""
+
+# The ships' colours (flags/flags.md for what is known of each): each
+# flag's design painted flat, waved on its staff
+# by flags/flag.py (the same cloth for all, a Jolly Roger torn at its
+# fly), its 8 frames set over the spyglass's sky, 4 by 2 as the game
+# reads them (screens.c, encounter_picture).
+[flags]
+seed = 1660
+sky = """
+Photograph straight up into a bright Caribbean sky, soft deep blue with
+a few small white clouds, nothing else.
+"""
+[[asset]]
+id = "pic/f-span"
+file = "art/f-span.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+torn = false
+design = """
+Flat straight-on photograph of a whole rectangular flag of old, worn,
+hand-sewn linen, laid flat and filling the whole picture edge to edge,
+no pole, no background: the royal colours of Spain: quartered red and
+white, on the red quarters a golden castle with three towers, on the
+white quarters a crowned red lion standing, the colours slightly faded.
+"""
+[[asset]]
+id = "pic/f-engl"
+file = "art/f-engl.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+torn = false
+design = """
+Flat straight-on photograph of a whole rectangular flag of old, worn,
+hand-sewn linen, laid flat and filling the whole picture edge to edge,
+no pole, no background: the flag of England: white with a broad red
+cross of Saint George, the colours slightly faded.
+"""
+[[asset]]
+id = "pic/f-french"
+file = "art/f-french.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+torn = false
+design = """
+Flat straight-on photograph of a whole rectangular flag of old, worn,
+hand-sewn linen, laid flat and filling the whole picture edge to edge,
+no pole, no background: the royal flag of France: deep blue scattered
+with golden fleurs-de-lis, the colours slightly faded.
+"""
+[[asset]]
+id = "pic/f-dutch"
+file = "art/f-dutch.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+torn = false
+design = """
+Flat straight-on photograph of a whole rectangular flag of old, worn,
+hand-sewn linen, laid flat and filling the whole picture edge to edge,
+no pole, no background: the flag of Holland: golden yellow with a red
+lion standing on its hind legs, holding a sword, the colours slightly
+faded.
+"""
+[[asset]]
+id = "pic/fjolly01"
+file = "art/fjolly01.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skeleton holding an hourglass in one hand and a spear in the
+other, facing a man raising a cup.
+"""
+[[asset]]
+id = "pic/fjolly02"
+file = "art/fjolly02.png"
+size = [800, 400]
+seed = 1661
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a man
+with a raised sword standing with each foot on a small skull, the
+letters ABH under one skull and AMH under the other. No frame, no
+border, no box around it.
+"""
+[[asset]]
+id = "pic/fjolly03"
+file = "art/fjolly03.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: three
+small white skulls in a row, each over crossed bones.
+"""
+[[asset]]
+id = "pic/fjolly04"
+file = "art/fjolly04.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull over two crossed bones.
+"""
+[[asset]]
+id = "pic/fjolly05"
+file = "art/fjolly05.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull above two long crossed bones.
+"""
+[[asset]]
+id = "pic/fjolly06"
+file = "art/fjolly06.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull over crossed bones, with a white hourglass beside it.
+"""
+[[asset]]
+id = "pic/fjolly07"
+file = "art/fjolly07.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull in profile wearing a headscarf, over two crossed bones.
+"""
+[[asset]]
+id = "pic/fjolly08"
+file = "art/fjolly08.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull above two crossed curved cutlasses.
+"""
+[[asset]]
+id = "pic/fjolly09"
+file = "art/fjolly09.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+large white skull with a single long white bone across below it.
+"""
+[[asset]]
+id = "pic/fjolly10"
+file = "art/fjolly10.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull over a crossed bone and a straight sword.
+"""
+[[asset]]
+id = "pic/fjolly11"
+file = "art/fjolly11.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull wearing a broad hat, over a crossed bone and a sword.
+"""
+[[asset]]
+id = "pic/fjolly12"
+file = "art/fjolly12.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0", "#B01810"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull over a bone, with a white dagger and a red heart beside it.
+"""
+[[asset]]
+id = "pic/fjolly13"
+file = "art/fjolly13.png"
+size = [800, 400]
+seed = 1661
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white bent arm reaching in from the left edge of the flag, its hand
+gripping a curved cutlass held up. No frame, no border, no box around
+it.
+"""
+[[asset]]
+id = "pic/fjolly14"
+file = "art/fjolly14.png"
+size = [800, 400]
+seed = 1661
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white man walking with a cutlass, and a small white skull and
+crossbones. No frame, no border, no box around it.
+"""
+[[asset]]
+id = "pic/fjolly15"
+file = "art/fjolly15.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0", "#B01810"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skeleton with horns holding a spear pointed at a red bleeding
+heart, and an hourglass in the other hand.
+"""
+[[asset]]
+id = "pic/fjolly16"
+file = "art/fjolly16.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0", "#B01810"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull and a red heart.
+"""
+[[asset]]
+id = "pic/fjolly17"
+file = "art/fjolly17.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0", "#B01810"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull over crossed bones, with a red heart above it.
+"""
+[[asset]]
+id = "pic/fjolly18"
+file = "art/fjolly18.png"
+size = [800, 400]
+seed = 1661
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0", "#B01810"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+whole standing skeleton, skull, ribs, arms and legs, all in red paint.
+No frame, no border, no box around it.
+"""
+[[asset]]
+id = "pic/fjolly19"
+file = "art/fjolly19.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#B01810", "#E8E2D0", "#E0B020"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid red background: a white
+arm holding a sword and a yellow skull over crossed bones. The flag is a
+worn red wool bunting "bloody flag" about 3 by 2, its figures crudely
+painted on it in flat white paint, as a pirate crew made one aboard ship
+in 1700: simple bold flat shapes of one colour, unshaded, no detail, no
+picture, sun-faded and powder-stained, frayed at the fly.
+"""
+[[asset]]
+id = "pic/fjolly20"
+file = "art/fjolly20.png"
+size = [800, 400]
+seed = 1660
+source = "the game's flags, described"
+prompt = ""
+[asset.flag]
+inks = ["#151413", "#E8E2D0", "#B01810"]
+torn = true
+design = """
+A simple flat emblem in the style of a crude stencil or woodcut, solid
+flat shapes with hard edges, no shading, no texture, no detail, filling
+the whole picture edge to edge on a plain solid black background: a
+white skull with wild red and yellow hair like flames, over a cutlass.
 """

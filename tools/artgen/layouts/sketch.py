@@ -232,6 +232,21 @@ LBAT_BOXES = [b for b in SBAT_BOXES if b != (488, 258, 634, 344)] + \
     [(488, 259, 634, 346)]
 
 
+# Plunder: the game writes on the clear sky in the middle (from (40, 50),
+# 580 wide), so the sails stand at the sides and the pirates and their
+# loot along the bottom, below y 300, as on the original.
+PLUNDER = [
+    line((0, 0), (40, 0), (60, 260)), line((0, 260), (60, 260)),	# a sail, left
+    line((640, 0), (560, 0), (520, 300), (640, 320)),		# a sail, right
+    line((0, 465), (640, 465)), line((0, 440), (640, 440)),	# the rail
+    ellipse(60, 300, 18, 22), line((40, 320), (30, 440)), line((80, 320), (95, 440)),
+    ellipse(170, 330, 18, 22), line((150, 350), (145, 440)), line((190, 350), (200, 440)),
+    rect(230, 330, 330, 400),					# a chest
+    ellipse(380, 320, 18, 22), line((360, 340), (355, 440)), line((400, 340), (410, 440)),
+    ellipse(480, 330, 18, 22), line((460, 350), (455, 440)), line((500, 350), (510, 440)),
+]
+
+
 # Cabin: the captain's cabin, its objects at the spots.
 CABIN = sign(212, 0, 436, 66) + [
     rect(160, 80, 300, 150), rect(330, 80, 470, 150),	# stern windows
@@ -382,6 +397,7 @@ if __name__ == "__main__":
     draw("town.png", TOWN)
     draw("tavern.png", TAVERN)
     draw("cabin.png", CABIN)
+    draw("plunder.png", PLUNDER)
     draw("alley.png", ALLEY + [rect(*b) for b in DUEL_BOXES])
     draw("fort.png", FORT + [rect(*b) for b in DUEL_BOXES])
     draw("deck.png", DECK + [rect(*b) for b in DUEL_BOXES])

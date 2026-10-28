@@ -3101,8 +3101,10 @@ encounter_picture(struct game *g)
 		return;
 	}
 	f = g->flag_frame;
-	/* Composed over the sky; a replacement flag keeps its key. */
-	key = g->flag_composed ? -1 : fb_nearest(&g->fb, 0, 255, 0);
+	/* Composed over the sky, or a replacement brings its own sky in its
+	 * true colours; else the flag keeps its key. */
+	key = g->flag_composed || g->bg.rgba != NULL ? -1 :
+	    fb_nearest(&g->fb, 0, 255, 0);
 	fb_image_part(&g->fb, &g->bg, (f % 4) * FLAG_FRAME,
 	    (f / 4) * FLAG_FRAME, FLAG_FRAME, FLAG_FRAME,
 	    (FB_W - FLAG_FRAME) / 2, 10, key);
