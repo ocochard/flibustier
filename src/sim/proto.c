@@ -306,6 +306,17 @@ static const struct {
 };
 #define NSHIPINTS	(sizeof(ship_ints) / sizeof(ship_ints[0]))
 
+/* A shot's arc and landing, absent before them: none. */
+#define SFIELD(f)	{ "shot_" #f, offsetof(struct battle_shot, f) }
+static const struct {
+	const char	*name;
+	size_t		 off;
+} shot_ints[] = {
+	SFIELD(period), SFIELD(wait), SFIELD(step), SFIELD(landing),
+	SFIELD(hit),
+};
+#define NSHOTINTS	(sizeof(shot_ints) / sizeof(shot_ints[0]))
+
 static void
 battle_ship_json(const struct battle_ship *b, struct jbuf *out)
 {
@@ -333,7 +344,15 @@ battle_ship_json(const struct battle_ship *b, struct jbuf *out)
 	jb_int(out, b->shot.y);
 	jb_raw(out, ",");
 	jb_int(out, b->shot.heading);
-	jb_raw(out, "]}");
+	jb_raw(out, "]");
+	for (i = 0; i < NSHOTINTS; i++) {
+		jb_raw(out, ",\"");
+		jb_raw(out, shot_ints[i].name);
+		jb_raw(out, "\":");
+		jb_int(out, *(const int *)((const char *)&b->shot +
+		    shot_ints[i].off));
+	}
+	jb_raw(out, "}");
 }
 
 static int
@@ -360,6 +379,13 @@ battle_ship_from_json(struct battle_ship *b, const struct json *j)
 	b->shot.x = (int32_t)shot->items[1]->num;
 	b->shot.y = (int32_t)shot->items[2]->num;
 	b->shot.heading = (uint8_t)shot->items[3]->num;
+	for (i = 0; i < NSHOTINTS; i++)
+		*(int *)((char *)&b->shot + shot_ints[i].off) =
+		    (int)json_get_int(j, shot_ints[i].name, 0);
+	if (b->shot.step < 0 || b->shot.step >= SHOT_STEPS)
+		b->shot.step = 0;
+	if (b->shot.landing < 0 || b->shot.landing > 39)
+		b->shot.landing = 0;
 	return (b->type < 0 || b->type > 9 ? -1 : 0);
 }
 

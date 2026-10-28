@@ -40,6 +40,7 @@
 #define FORT_BOX	32	/* its box, not quartered (VA 0xe3f0) */
 #define SCRAPE_TICKS	20	/* after the shallows hurt a ship */
 #define SCRAPE_DAMAGE	16
+#define LANDING_END	39	/* the splash or burst's last tick */
 
 struct sideinfo {
 	int	half_w, half_h;
@@ -440,6 +441,23 @@ fire(struct sim_battle *bt, struct battle_ship *b, int bearing, int enemy)
 	b->shot.x = b->x;
 	b->shot.y = b->y;
 	b->shot.ticks = flight_ticks(bt);
+	/* The arc steps on every ticks / 16 (VA 0x8395). */
+	b->shot.period = b->shot.ticks >> 4;
+	b->shot.wait = b->shot.period;
+	b->shot.step = 0;
+	b->shot.landing = 0;
+	b->shot.hit = 0;
+}
+
+/*
+ * A side's guns wait for its shot: in flight, then while it splashes or
+ * bursts (VA 0x8284, the enemy's at 0x44a40 likewise).
+ */
+static int
+shot_busy(const struct battle_shot *sh)
+{
+	return (sh->ticks > 0 || (sh->landing > 0 &&
+	    sh->landing < LANDING_END));
 }
 
 /* Does the shot land inside the target's box, widened by "steps"
@@ -507,22 +525,38 @@ sound(struct sim_battle *bt, int rank, int fm)
 	}
 }
 
-/* A shot in flight: 0 still flying (or none), 1 it hits, -1 it falls in
- * the water. */
+/*
+ * A shot in flight: 0 still flying (or none), 1 it hits, -1 it falls in
+ * the water.  Its arc steps on (VA 0x841f, the enemy's 0x90aa); once it
+ * has landed, the landing count runs 1 to 39, then clears (VA 0x84dc,
+ * 0x9167).
+ */
 static int
 fly_shot(struct sim *s, struct battle_ship *from, struct battle_ship *to,
     int steps, int bonus)
 {
 	struct battle_shot *sh = &from->shot;
 
+	if (sh->landing > 0) {
+		sh->landing = sh->landing == LANDING_END ? 0 :
+		    sh->landing + 1;
+		return (0);
+	}
 	if (sh->ticks == 0)
 		return (0);
+	if (sh->period > 0 && --sh->wait == 0) {
+		sh->wait = sh->period;
+		if (sh->step < SHOT_STEPS - 1)
+			sh->step++;
+	}
 	sh->x += sim_sine_mul(s->world, sh->heading, SHOT_SPEED) * 4;
 	sh->y -= sim_sine_mul(s->world, sh->heading + 0x40, SHOT_SPEED) * 4;
 	if (--sh->ticks > 0)
 		return (0);
+	sh->landing = 1;
 	if (!shot_hits(s, sh, to, steps))
 		return (-1);
+	sh->hit = 1;
 	hit(s, to, from->guns, bonus);
 	return (1);
 }
@@ -613,7 +647,8 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	    y->speed) * 4) - corner_y(bt, e, e->y);
 	bearing = sim_bearing(lx, ly);
 
-	if (fire_now && y->reload == 0 && y->guns > 0 && y->shot.ticks == 0) {
+	if (fire_now && y->reload == 0 && y->guns > 0 &&
+	    !shot_busy(&y->shot)) {
 		fire(bt, y, bearing, 0);
 		/* A happy crew reloads faster. */
 		y->reload = abs(144 - 8 * clampi(s->fleet.mood / 2 + 4, 0,
@@ -655,7 +690,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 	if (bt->fort) {
 		if (e->reload > 0)
 			e->reload--;
-		if (e->shot.ticks == 0 && e->guns > 0 && e->reload == 0 &&
+		if (!shot_busy(&e->shot) && e->guns > 0 && e->reload == 0 &&
 		    !s->invulnerable) {
 			e->heading = (uint8_t)(rng_below(&s->rng, 8) +
 			    bearing + 0x3C);
@@ -685,7 +720,7 @@ sim_battle_tick(struct sim *s, int turn, int fire_now, int sails)
 		e->reload--;
 	/* The debug mode's invulnerability holds the enemy's fire (VA
 	 * 0x8ecd). */
-	if (e->shot.ticks == 0 && e->guns > 0 && e->reload == 0 &&
+	if (!shot_busy(&e->shot) && e->guns > 0 && e->reload == 0 &&
 	    !s->invulnerable &&
 	    abs(abs(heading_diff(bearing, e->heading)) - 0x40) < 6) {
 		fire(bt, e, bearing, 1);

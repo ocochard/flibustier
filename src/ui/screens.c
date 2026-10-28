@@ -107,6 +107,12 @@
 #define FONT_SMALL		2	/* PIRATE3, 14 px */
 #define FONT_PIRATE4		3
 #define BOW_MARK		20	/* sbtlmisc.cur: the red cross */
+#define SHOT_SHADOW		0	/* sbtlmisc.cur: + the spread, 0-3 */
+#define SHOT_BALLS		4
+#define SHOT_SPLASH		8	/* + landing / 8, 0-4 */
+#define SHOT_BURST		24
+#define WIND_COMPASS		32	/* + wind / 16, clockwise from up */
+#define W_WIND			12	/* "light", "medium", "strong" */
 #define W_RANK			78	/* Mr., Ensign, Captain... */
 #define W_MOOD			72	/* angry .. happy */
 #define W_UNKNOWN		92	/* 5: "?", 9: "NONE" */
@@ -3161,6 +3167,7 @@ battle_enter(struct game *g)
 	battle_sprites(g, 1, g->sim.battle.foe.type);
 	tileset_free(&g->btl_tiles);
 	tileset_load(g->packs, "tiles/battle", &g->btl_tiles);
+	sea_init(&g->sea, g->fb.pal);	/* its sea turns too (VA 0x939b) */
 	g->btl_fire = g->btl_sails = 0;
 	g->btl_stage = g->sim.battle.outcome == BAT_NONE ? 0 : 1;
 	if (g->sim.battle.outcome == BAT_BOARDING &&
@@ -3507,6 +3514,29 @@ battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 }
 
 /*
+ * Raw sbtlmisc.cur frame "n" with its corner at (x, y), colour 0 clear;
+ * "field": clipped to the battle field.
+ */
+static void
+battle_misc(struct game *g, int n, int x, int y, int field)
+{
+	const struct frame *f;
+	int fx, fy, w = field ? AREA : FB_W, h = field ? AREA : FB_H;
+
+	if (n < 0 || (size_t)n >= g->btl_misc.count)
+		return;
+	f = &g->btl_misc.frames[n];
+	for (fy = 0; fy < f->h; fy++)
+		for (fx = 0; fx < f->w; fx++) {
+			uint8_t c = f->pixels[fy * f->w + fx];
+
+			if (c != 0 && x + fx >= 0 && x + fx < w &&
+			    y + fy >= 0 && y + fy < h)
+				fb_put(&g->fb, (y + fy) * FB_W + x + fx, c);
+		}
+}
+
+/*
  * The red cross off the player's bow (VA 0xf903, object type 0x30):
  * sbtlmisc.cur frame 20, at the ship plus the offset for heading / 16
  * (table at VA 0x40fbc, a circle of about 50 pixels around (32, 23))
@@ -3517,28 +3547,48 @@ battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 static void
 battle_bow_mark(struct game *g, const struct battle_ship *b)
 {
-	static const int8_t off[16][2] = {
-		{ 32, -28 }, { 52, -24 }, { 68, -13 }, { 79, 3 }, { 83, 23 },
-		{ 78, 45 }, { 65, 62 }, { 50, 72 }, { 32, 74 }, { 12, 70 },
-		{ -3, 61 }, { -14, 45 }, { -19, 23 }, { -16, 5 }, { -5, -12 },
-		{ 13, -24 },
-	};
 	const struct frame *f;
-	int i = (b->heading >> 4) & 15, x, y, sx, sy;
+	int i = (b->heading >> 4) & 15;
 
 	if (g->btl_misc.count <= BOW_MARK)
 		return;
 	f = &g->btl_misc.frames[BOW_MARK];
-	sx = b->x / 256 + off[i][0] - 32 + 3 - f->w / 2;
-	sy = b->y / 256 + off[i][1] - 23 + 2 - f->h / 2;
-	for (y = 0; y < f->h; y++)
-		for (x = 0; x < f->w; x++) {
-			uint8_t c = f->pixels[y * f->w + x];
+	battle_misc(g, BOW_MARK, b->x / 256 + g->world->bow_mark[2 * i] - 32 +
+	    3 - f->w / 2, b->y / 256 + g->world->bow_mark[2 * i + 1] - 23 + 2 -
+	    f->h / 2, 1);
+}
 
-			if (c != 0 && sx + x >= 0 && sx + x < AREA &&
-			    sy + y >= 0 && sy + y < AREA)
-				g->fb.px[(sy + y) * FB_W + sx + x] = c;
-		}
+/*
+ * A side's shot (VA 0x83ef-0x8545, the enemy's 0x9080-0x91d0), its
+ * sprites' corner 21, 6 off the shot: in flight, the balls (frame 4 +
+ * the spread) on its line over their shadow (frame 0 + the spread),
+ * the arc's height below them; once landed in the water, the splash
+ * (frames 8-12, one per 8 ticks of landing) where the shadow was.
+ */
+static void
+battle_shot_draw(struct game *g, const struct battle_shot *sh)
+{
+	int x = sh->x / 256 - 21, y = sh->y / 256 - 6, f;
+
+	f = g->world->shot_frame[sh->step & (SHOT_STEPS - 1)] & 3;
+	if (sh->ticks > 0 || sh->landing == 1) {
+		battle_misc(g, SHOT_SHADOW + f, x, y -
+		    g->world->shot_rise[sh->step & (SHOT_STEPS - 1)], 1);
+		battle_misc(g, SHOT_BALLS + f, x, y, 1);
+	} else if (sh->landing > 1 && !sh->hit)
+		battle_misc(g, SHOT_SPLASH + (sh->landing >> 3), x, y -
+		    g->world->shot_rise[sh->step & (SHOT_STEPS - 1)], 1);
+}
+
+/* A hit's burst (frames 24-28) on the centre of the ship hit (VA
+ * 0x8494, 0x911f). */
+static void
+battle_burst_draw(struct game *g, const struct battle_shot *sh,
+    const struct battle_ship *to)
+{
+	if (sh->ticks == 0 && sh->landing > 1 && sh->hit)
+		battle_misc(g, SHOT_BURST + (sh->landing >> 3), to->x / 256 -
+		    21, to->y / 256 - 6, 1);
 }
 
 static void
@@ -3563,7 +3613,7 @@ static void
 battle_draw(struct game *g)
 {
 	const struct sim_battle *bt = &g->sim.battle;
-	char text[600], from[64];
+	char text[600];
 	int cx, cy, lvl;
 
 	if (g->btl_stage == 1 && battle_end_picture(bt->outcome) != NULL) {
@@ -3574,6 +3624,8 @@ battle_draw(struct game *g)
 		prize_draw(g);
 		return;
 	}
+	if (g->btl_stage == 0)
+		sea_turn(&g->sea, bt->tick / 8, g->fb.pal);
 	/* The battle's screen: 15 x 15 battle tiles (VA 0x2a9e8). */
 	if (g->btl_tiles.tile_w == 32)
 		for (cy = 0; cy < BATTLE_SCREEN; cy++)
@@ -3589,12 +3641,12 @@ battle_draw(struct game *g)
 	battle_bow_mark(g, &bt->you);
 	if (!bt->fort)		/* a fort is drawn in its screen (VA 0x8db6) */
 		battle_ship_draw(g, 1, &bt->foe);
-	if (bt->you.shot.ticks > 0)
-		fb_rect(&g->fb, bt->you.shot.x / 256 - 1, bt->you.shot.y / 256 -
-		    1, 3, 3, fb_nearest(&g->fb, 20, 20, 20));
-	if (bt->foe.shot.ticks > 0)
-		fb_rect(&g->fb, bt->foe.shot.x / 256 - 1, bt->foe.shot.y / 256 -
-		    1, 3, 3, fb_nearest(&g->fb, 20, 20, 20));
+	/* Then the shots, and the bursts: on the player, on the enemy (VA
+	 * 0xf6eb, objects 2-7). */
+	battle_shot_draw(g, &bt->you.shot);
+	battle_shot_draw(g, &bt->foe.shot);
+	battle_burst_draw(g, &bt->foe.shot, &bt->you);
+	battle_burst_draw(g, &bt->you.shot, &bt->foe);
 
 	/* The panel: the enemy above, the player below, the wind between. */
 	battle_side_text(g, 14, &bt->foe, -1);
@@ -3611,9 +3663,11 @@ battle_draw(struct game *g)
 	lvl = bt->you.damage / 16 > 4 ? 4 : bt->you.damage / 16;
 	if (g->btl_damage[0].count == 5)
 		fb_frame(&g->fb, &g->btl_damage[0].frames[lvl], 489, 258);
-	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
-	    game_word(g, W_COMPASS, (size_t)(bt->wind >> 4)), NULL);
-	draw(g, FONT_SMALL, PANEL_X + 40, 233, 100, from, 0);
+	/* The wind (VA 0xee2b): its strength, and the compass pointing
+	 * where it blows. */
+	draw(g, FONT_SMALL, 524, 234, 60, game_word(g, W_WIND,
+	    (size_t)(bt->wind_strength & 3)), 0);
+	battle_misc(g, WIND_COMPASS + (bt->wind >> 4), 584, 229, 0);
 
 	if (g->btl_stage == 0)
 		return;

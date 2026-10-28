@@ -24,5 +24,8 @@ struct sea {
 void	sea_init(struct sea *sea, const uint8_t *palette);
 /* Write the ranges for sailing loop pass "pass" into "palette". */
 void	sea_animate(const struct sea *sea, unsigned pass, uint8_t *palette);
+/* Write every range turned "turn" times: the sea battle turns them all
+ * once every 8 passes (VA 0x939b). */
+void	sea_turn(const struct sea *sea, unsigned turn, uint8_t *palette);
 
 #endif

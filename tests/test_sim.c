@@ -968,6 +968,46 @@ test_battles(void)
 			sim_battle_tick(&s, 0, 0, 0);
 		CHECK(bt->foe.damage == (i == 0 ? 3 : 4));
 	}
+
+	/* A shot's arc steps every flight / 16 ticks, up to 15; once it
+	 * lands the guns wait while its splash or burst shows, 38 ticks,
+	 * whatever the reload. */
+	battle_game(&s);
+	bt->foe.x = bt->you.x + 120 * 256;
+	bt->foe.y = bt->you.y;
+	bt->you.heading = bt->foe.heading = bt->foe.target = 0;
+	bt->foe.guns = 0;
+	CHECK(sim_battle_tick(&s, 0, 1, 0) & BEV_FIRED);
+	gx = bt->you.shot.ticks + 1;		/* the flight, one flown */
+	CHECK(gx == 60 && bt->you.shot.period == gx >> 4);
+	CHECK(bt->you.shot.landing == 0 && bt->you.shot.hit == 0);
+	for (i = 1, ev = 1; bt->you.shot.ticks > 0 && bt->outcome == BAT_NONE;
+	    i++) {
+		ev &= bt->you.shot.step == (i / 3 < 15 ? i / 3 : 15);
+		bt->you.reload = 0;
+		ev &= !(sim_battle_tick(&s, 0, 1, 0) & BEV_FIRED);
+	}
+	CHECK(ev && i == gx && bt->you.shot.step == 15);
+	CHECK(bt->you.shot.landing == 1);
+	for (i = 0, ev = 0; i < 38 && bt->outcome == BAT_NONE; i++) {
+		bt->you.reload = 0;
+		ev |= sim_battle_tick(&s, 0, 1, 0) & BEV_FIRED;
+		CHECK(bt->you.shot.landing == i + 2);
+	}
+	CHECK(!ev && i == 38);
+	bt->you.reload = 0;
+	CHECK(sim_battle_tick(&s, 0, 1, 0) & BEV_FIRED);
+	CHECK(bt->you.shot.landing == 0 && bt->you.shot.step == 0);
+	/* Without firing, the count clears after its last tick. */
+	bt->you.shot.ticks = 0;
+	bt->you.shot.landing = 39;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->you.shot.landing == 0);
+	/* A shot of fewer than 16 ticks keeps the first step. */
+	bt->you.shot.ticks = 10;
+	bt->you.shot.period = bt->you.shot.wait = bt->you.shot.step = 0;
+	sim_battle_tick(&s, 0, 0, 0);
+	CHECK(bt->you.shot.step == 0 && bt->you.shot.ticks == 9);
 	battle_game(&s);
 	bt->foe.x = bt->you.x + 60 * 256;
 	bt->foe.y = bt->you.y;
@@ -2086,6 +2126,12 @@ test_fort_battle(void)
 	}
 	CHECK(s.battle.outcome == BAT_NONE && shots >= 2);
 	CHECK(s.battle.foe.x == fx && s.battle.foe.y == fy);
+	/* It holds its fire while its last shot's splash shows. */
+	s.battle.foe.shot.ticks = 0;
+	s.battle.foe.shot.landing = 38;
+	s.battle.foe.reload = 0;
+	CHECK(!(sim_battle_tick(&s, 0, 0, 0) & BEV_FOE_FIRED));
+	CHECK(s.battle.foe.shot.landing == 39);
 	/* Its shot is timed corner to corner (fort 224, 96; ship 208,
 	 * 336): d = 240 + 16 / 4, 122 ticks less the one flown at once and
 	 * the ship's first pixels north; centre to centre would be 128. */
