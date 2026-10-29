@@ -489,7 +489,7 @@ test_terrain(struct packs *packs)
 	static struct world w;
 	static const char *const ids[2] = { "tiles/map", "tiles/battle" };
 	const struct exe_layout *layout;
-	const uint8_t *classes, *terrain;
+	const uint8_t *classes, *terrain, *p;
 	struct tileset ts;
 	struct blob b;
 	char err[256];
@@ -514,6 +514,10 @@ test_terrain(struct packs *packs)
 
 		CHECK(world_load(&w, packs, layout, b.data, b.len, era, err,
 		    sizeof(err)) == 0);
+		/* The computed sine is the original's table. */
+		CHECK((p = exe_at(layout, b.data, b.len, layout->sine_va,
+		    sizeof(w.sine))) != NULL &&
+		    memcmp(w.sine, p, sizeof(w.sine)) == 0);
 		CHECK(w.diplomacy_range == range[era] &&
 		    w.wright_tolerance == wright[era]);
 		for (k = 0; k < 2; k++) {

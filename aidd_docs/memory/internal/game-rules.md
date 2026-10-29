@@ -278,7 +278,9 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
    - `dx = sine[heading] x speed >> 8` and
      `dy = sine[heading + 0x40] x speed >> 8`, in 1/8 pixels.
    - `sine` is a 128-entry half-circle table (0 to 255 and back), and
-     the second half of the circle is the first one negated.
+     the second half of the circle is the first one negated. Its
+     entries are `round(255 x sin(pi x i / 128))`, so the engine
+     computes it.
    - x increases by `dx`, y decreases by `dy`.
 5. **Wind:** every 128 ticks, with `w = wind >> 4` and `r = rand(8)`,
    `wind += 16 x ((r - w + 10) >> 1)`, mod 256. It drifts around

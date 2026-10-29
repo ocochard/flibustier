@@ -272,8 +272,8 @@ sim_new_game(struct sim *s, const struct era_towns *era,
 		s->month = s->day_of_year / DAYS_PER_MONTH;
 	}
 	convoys_start(s, era);
-	/* The expeditions start months at sea (scenario byte 0x58). */
-	s->months = (int8_t)scn->raw[0x58];
+	/* The expeditions start months at sea. */
+	s->months = scn->months;
 	s->start_year = s->year;
 	s->fleet.mood = sim_crew_mood(s);
 }

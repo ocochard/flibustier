@@ -50,7 +50,8 @@ struct scenario {
 					 * the era's first x 360 + the day of
 					 * the year; 0 for careers */
 	uint16_t	 start[SCENARIO_STARTS][2];	/* x, y in map cells */
-	uint8_t		 raw[SCENARIO_LEN];
+	int8_t		 months;	/* an expedition's months already at
+					 * sea; 0 for careers */
 };
 
 /* Returns 0, or -1 if out of range or the data is malformed. */

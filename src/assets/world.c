@@ -4,6 +4,7 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,7 @@ const char *const battle_set_names[BATTLE_SETS] = {
 };
 
 #define ERA_BLOCK_LEN	0x200
+#define PI		3.14159265358979323846
 #define ENCOUNTER_OFF	0x100	/* in the era block */
 #define BATTLE_AI_OFF	0x80
 #define ERA_RANGES_OFF	0xF8	/* diplomacy range, shipwright tolerance */
@@ -449,9 +451,10 @@ world_load(struct world *w, struct packs *packs,
 		return (-1);
 	}
 	memcpy(w->coast, p, 256);
-	if ((p = exe_at(layout, exe, len, layout->sine_va, 128)) == NULL)
-		goto bad;
-	memcpy(w->sine, p, 128);
+	/* The half-circle sine, 0 to 255 and back: the original's table
+	 * exactly (test_original checks it), so no pack needs to give it. */
+	for (i = 0; i < 128; i++)
+		w->sine[i] = (uint8_t)floor(255.0 * sin(PI * i / 128) + 0.5);
 	if ((p = exe_at(layout, exe, len, layout->era_block_va +
 	    (uint32_t)block * ERA_BLOCK_LEN, sizeof(w->speed))) == NULL)
 		goto bad;

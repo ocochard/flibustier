@@ -121,5 +121,5 @@ roadmap decision 1: [open-game-data.md](open-game-data.md).
 1. ~~Tile grid format?~~ Tiled JSON maps (maintainer, 2026-10-26): the
    era maps and battle screens are authored in Tiled, read through
    `sim/json.c`.
-2. Should open data values be tuned to match the original's balance, or
-   are they free to differ?
+2. ~~Should open data values be tuned to match the original's
+   balance?~~ No: they are free to differ (maintainer, 2026-10-29).

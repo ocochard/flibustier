@@ -617,7 +617,7 @@ const struct screen screen_intro = {
  * 1.6 s, fades out, and 0.4 s pass before the next (VA 0x20114).
  * Enter, Escape or a click skips to the last block; another ends it.
  */
-#define CRED_BLOCKS		6
+#define CRED_BLOCKS		UI_CREDIT_BLOCKS
 #define CRED_INK		0x20
 #define CRED_STEPS		20
 #define CRED_STEP_MS		40
@@ -640,14 +640,12 @@ credits_picture(const struct game *g)
 static int
 credit_rect(const struct game *g, int i, int r[4])
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->credits_va + (uint32_t)i * 8, 8);
 	int k;
 
-	if (p == NULL)
+	if (i < 0 || i >= UI_CREDIT_BLOCKS)
 		return (-1);
 	for (k = 0; k < 4; k++)
-		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		r[k] = g->ui.credit_rect[i][k];
 	return (0);
 }
 
@@ -655,12 +653,8 @@ credit_rect(const struct game *g, int i, int r[4])
 static void
 credit_ink(struct game *g, int step)
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->credits_va + CRED_BLOCKS * 8 +
-	    (uint32_t)step * 3, 3);
-
-	if (p != NULL)
-		memcpy(&g->fb.pal[CRED_INK * 3], p, 3);
+	if (step >= 0 && step < UI_CREDIT_STEPS)
+		memcpy(&g->fb.pal[CRED_INK * 3], g->ui.credit_ink[step], 3);
 }
 
 /*
@@ -1659,28 +1653,24 @@ const struct screen screen_confirm = {
 #define STORY_FIGHT		'a'
 #define STORY_ASK		6
 #define S_TREASURE_FLEET	46
-#define STORY_MAX		4096
 
 /* The script for this career: the "index"th, after -1 separators. */
 static const uint8_t *
 story_script(const struct game *g, size_t *len)
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->story_va, STORY_MAX);
+	const uint8_t *p = g->ui.story;
 	int index, n = 0;
 	size_t i = 0, start;
 
-	if (p == NULL)
-		return (NULL);
 	index = g->career.expedition >= 0 ? SCENARIO_CAREERS +
 	    g->career.expedition : scenario_career(g->career.era,
 	    (enum scenario_nation)(g->career.nation == NATION_SPAIN ? 3 :
 	    g->career.nation - 1));
-	for (; i < STORY_MAX && n < index; i++)
+	for (; i < UI_STORY_MAX && n < index; i++)
 		if (p[i] == 0xFF)
 			n++;
 	start = i;
-	while (i < STORY_MAX && p[i] != 0xFF)
+	while (i < UI_STORY_MAX && p[i] != 0xFF)
 		i++;
 	*len = i - start;
 	return (p + start);
@@ -2413,14 +2403,12 @@ enum { CABIN_CONTINUE, CABIN_MAPS, CABIN_CAVE, CABIN_LOG, CABIN_MAP,
 static int
 cabin_rect(const struct game *g, int i, int r[5])
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->cabin_va + (uint32_t)i * 10, 10);
 	int k;
 
-	if (p == NULL)
+	if (i < 0 || i >= UI_CABIN_SPOTS)
 		return (-1);
 	for (k = 0; k < 5; k++)
-		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		r[k] = g->ui.cabin[i][k];
 	return (0);
 }
 
@@ -2913,8 +2901,7 @@ sail_between(int from, int to, int w, int jump)
 static void
 clouds_draw(struct game *g)
 {
-	const uint8_t *shade = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->shade_va, 256);
+	const uint8_t *shade = g->ui.shade;
 	const struct frame *f;
 	const struct sim_cloud *c;
 	int i, n = sim_clouds(&g->sim), sx, sy, w = sail_lag(g);
@@ -2942,9 +2929,8 @@ clouds_draw(struct game *g)
 		}
 		/* The original's: its shape shading the sea, then the
 		 * cloud, colour 0 clear. */
-		if (shade != NULL)
-			fb_shadow(&g->fb, f, sx - CLOUD_SHADOW * SAIL_FRAMES,
-			    sy + CLOUD_SHADOW * SAIL_FRAMES, SAIL_FRAMES, shade);
+		fb_shadow(&g->fb, f, sx - CLOUD_SHADOW * SAIL_FRAMES,
+		    sy + CLOUD_SHADOW * SAIL_FRAMES, SAIL_FRAMES, shade);
 		fb_frame_sub(&g->fb, f, sx, sy, SAIL_FRAMES);
 	}
 }
@@ -3252,13 +3238,11 @@ static const char *
 encounter_flag(struct game *g, char *buf, size_t len)
 {
 	const struct sim_encounter *e = &g->sim.encounter;
-	const uint8_t *p;
 	int n;
 
-	if (e->captain != 0 && (p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->jolly_va + ((e->captain >> 6) & 3) * 32 +
-	    ((e->captain >> 3) & 7) * 2, 2)) != NULL &&
-	    (n = p[0] | p[1] << 8) >= 1 && n <= 20) {
+	if (e->captain != 0 &&
+	    (n = g->ui.jolly[(e->captain >> 6) & 3][(e->captain >> 3) & 7]) >=
+	    1 && n <= 20) {
 		snprintf(buf, len, "pic/fjolly%02d", n);
 		return (buf);
 	}
@@ -4367,16 +4351,11 @@ sword_load(struct game *g)
 static int
 weapon_hit(const struct game *g, int x, int y)
 {
-	const uint8_t *p;
-	int i, k, r[4];
+	const int16_t *r;
+	int i;
 
 	for (i = 0; i < SWORD_WEAPONS; i++) {
-		p = exe_at(g->layout, g->exe, g->exe_len,
-		    g->layout->weapon_spots_va + (uint32_t)i * 10, 8);
-		if (p == NULL)
-			continue;
-		for (k = 0; k < 4; k++)
-			r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		r = g->ui.weapon[i];
 		if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
 			return (i);
 	}
@@ -4832,14 +4811,12 @@ const struct screen screen_sword = {
 static int
 town_rect(const struct game *g, int i, int r[4])
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->town_spots_va + (uint32_t)i * 10, 8);
 	int k;
 
-	if (p == NULL)
+	if (i < 0 || i >= UI_TOWN_SPOTS)
 		return (-1);
 	for (k = 0; k < 4; k++)
-		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		r[k] = g->ui.town[i][k];
 	return (0);
 }
 
@@ -5373,14 +5350,12 @@ static const char *board_files[3][2][3] = {
 static int
 board_piece(const struct game *g, int i, int r[4])
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->board_va + (uint32_t)i * 10, 8);
 	int k;
 
-	if (p == NULL)
+	if (i < 0 || i >= UI_BOARD_PIECES)
 		return (-1);
 	for (k = 0; k < 4; k++)
-		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		r[k] = g->ui.board[i][k];
 	return (0);
 }
 
@@ -5701,14 +5676,12 @@ const struct screen screen_merchant = {
 static int
 tavern_rect(const struct game *g, int i, int r[4])
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->tavern_spots_va + (uint32_t)i * 10, 8);
 	int k;
 
-	if (p == NULL)
+	if (i < 0 || i >= UI_TAVERN_SPOTS)
 		return (-1);
 	for (k = 0; k < 4; k++)
-		r[k] = (int16_t)(p[2 * k] | p[2 * k + 1] << 8);
+		r[k] = g->ui.tavern[i][k];
 	return (0);
 }
 
@@ -6824,15 +6797,12 @@ static const char *cave_pile[8] = {
 static int
 cave_pile_at(const struct game *g, int i, int r[3])
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->cave_va + (uint32_t)i * 12, 12);
 	int k;
 
-	if (p == NULL)
+	if (i < 0 || i >= UI_CAVE_PILES)
 		return (-1);
 	for (k = 0; k < 3; k++)
-		r[k] = (int32_t)(p[4 * k] | p[4 * k + 1] << 8 |
-		    p[4 * k + 2] << 16 | (uint32_t)p[4 * k + 3] << 24);
+		r[k] = g->ui.cave[i][k];
 	return (0);
 }
 
@@ -7762,10 +7732,9 @@ const struct screen screen_barmaid = {
 static int
 panel_word(const struct game *g, uint32_t off, int i)
 {
-	const uint8_t *p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->fleet_panel_va + off + (uint32_t)i * 2, 2);
+	size_t k = off / 2 + (size_t)i;
 
-	return (p != NULL ? (int16_t)(p[0] | p[1] << 8) : 0);
+	return (k < UI_PANEL_WORDS ? g->ui.panel[k] : 0);
 }
 
 static int

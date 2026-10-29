@@ -14,6 +14,7 @@
 #include "assets/digital.h"
 #include "assets/font.h"
 #include "assets/text.h"
+#include "assets/uitables.h"
 #include "data/exe.h"
 #include "data/pack.h"
 #include "assets/image.h"
@@ -89,6 +90,7 @@ struct game {
 	uint8_t			*exe;
 	size_t			 exe_len;
 	const struct exe_layout	*layout;
+	struct ui_tables	 ui;		/* the screens' tables */
 
 	struct fb		 fb;
 	int			 brightness;	/* 0..256, for fades */

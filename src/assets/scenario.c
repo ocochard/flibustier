@@ -25,6 +25,7 @@
 #define RELATIONS_OFF	0x34
 #define STARTS_OFF	0x44
 #define DATE_OFF	0x56	/* an expedition's: years x 360 + day */
+#define MONTHS_OFF	0x58	/* months already at sea */
 
 static unsigned
 le16(const uint8_t *p)
@@ -51,7 +52,6 @@ scenario_load(const struct exe_layout *layout, const uint8_t *exe,
 	if ((r = exe_at(layout, exe, len, layout->scenario_va +
 	    (uint32_t)index * SCENARIO_LEN, SCENARIO_LEN)) == NULL)
 		return (-1);
-	memcpy(out->raw, r, SCENARIO_LEN);
 	memcpy(out->name, r, NAME_LEN);
 	out->name[NAME_LEN] = '\0';
 	out->crew = (int)le16(r + CREW_OFF);
@@ -70,6 +70,7 @@ scenario_load(const struct exe_layout *layout, const uint8_t *exe,
 		out->rank[a] = r[RANK_OFF + a];
 	}
 	out->date = (int)le16(r + DATE_OFF);
+	out->months = (int8_t)r[MONTHS_OFF];
 	for (a = 0; a < SCENARIO_STARTS; a++) {
 		out->start[a][0] = (uint16_t)le16(r + STARTS_OFF + 4 * a);
 		out->start[a][1] = (uint16_t)le16(r + STARTS_OFF + 4 * a + 2);

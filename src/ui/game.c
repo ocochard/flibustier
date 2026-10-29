@@ -101,15 +101,10 @@ load_cursor(struct game *g)
 		if (g->cursor.pixels != NULL)
 			return;
 	}
-	if ((p = exe_at(g->layout, g->exe, g->exe_len, g->layout->cursor_va,
-	    4)) == NULL)
+	if ((w = g->ui.cursor_w) == 0)
 		return;
-	w = p[0] | p[1] << 8;
-	h = p[2] | p[3] << 8;
-	if (w <= 0 || h <= 0 || w > 64 || h > 64 ||
-	    (p = exe_at(g->layout, g->exe, g->exe_len,
-	    g->layout->cursor_va + 4, (size_t)(w * h))) == NULL)
-		return;
+	h = g->ui.cursor_h;
+	p = g->ui.cursor;
 	if ((g->cursor.pixels = malloc((size_t)(w * h))) == NULL ||
 	    (g->cursor.mask = malloc((size_t)(w * h))) == NULL) {
 		free(g->cursor.pixels);
@@ -166,6 +161,9 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	}
 	g->exe = b.data;	/* kept for the town and scenario tables */
 	g->exe_len = b.len;
+	if (ui_tables_load(&g->ui, g->layout, g->exe, g->exe_len, g->err,
+	    sizeof(g->err)) != 0)
+		return (-1);
 	load_cursor(g);
 	load_misc(g);
 	/* The effects are optional: without them the game is silent. */

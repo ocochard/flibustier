@@ -41,7 +41,7 @@ open home proposed for each.
 | `coast` | `world_load()` (prison escape) | the map tile sheet (open-terrain "Remaining map data") |
 | `colour_class`, `land_class`, `tile_class` | `world_load()`, view.c | the tile sheets (open-terrain T2, done); only the read order changes |
 | `sine` | `world_load()` | derived by the engine (G1) |
-| `shade` (a colour's shadow, the clouds) | `clouds_draw()` | derived from the palette by the engine (G1) |
+| `shade` (a colour's shadow, the clouds) | `clouds_draw()` | derived from the palette by the engine (G3) |
 | `cursor`, `credits` | game.c, screens.c | done: `ui/pointer`, `text/<lang>/credits` |
 | `town_va`, `arrival_va` | towns.c | done: `data/towns/<year>` |
 | `treasure`, `battle_sets` | `world_load()` | done: `data/treasure`, `data/battle-sets` |
@@ -72,25 +72,22 @@ The same as the open world data (asset-packs.md):
 
 ### G1: one source for the tables (refactor, no behaviour change)
 
-- Move every `exe_at()` out of `src/ui/screens.c` and `src/ui/game.c`
-  into a loader in `src/assets/` that fills plain structures once, at
-  game start: `struct layouts` (the seven screen layouts), the story
-  scripts as a list of steps, the captain flags. Screens read those
-  structures.
-- Give `struct scenario` a named `months` field and drop `raw[]`, which
-  only `sim.c` reads for that byte.
-- `world_load()`: let the pack's tables be read first and the
-  executable's only for what is missing, instead of always reading the
-  executable and overwriting.
-- `sine`: compute it in the engine if a formula reproduces the
-  original's 128 bytes exactly (`test_original` checks it); otherwise it
-  becomes a field of `data/sea-battle`. A sine is a mathematical
-  function, not game data.
-- `shade`: derive it from the palette (the nearest darker colour) for a
-  pack palette; the original keeps its table. To check: whether a rule
-  reproduces the original's table, which would remove the special case.
-- Check: every replay identical, `test_original` and `test_ui` pass.
-- Size: medium; screens.c is the bulk.
+Status (2026-10-29): done.
+
+- `src/assets/uitables.c` decodes the screens' tables once, at game
+  start, into `struct ui_tables` (`g->ui`): the seven screen layouts,
+  the credits' blocks and ink, the story scripts, the captain flags,
+  the shade table and the pointer. No `exe_at()` is left in `src/ui/`.
+  The story scripts stay bytes for now; G2 gives them steps.
+- `struct scenario` has a named `months` field instead of `raw[]`.
+- `sine` is computed, `round(255 x sin(pi x i / 128))`, which gives the
+  original's 128 bytes exactly (`test_original` compares them; the
+  nearest value is 0.012 from a rounding boundary, far beyond libm
+  error). No pack gives it.
+- Check: `test_original`, `test_ui` and the replays pass; 14 scripted
+  screenshots are byte-identical to the build before.
+- Moved to G3, where they can be tested: the `world_load()` read order,
+  and the shade table for a pack palette.
 
 ### G2: formats, loaders and export
 
@@ -130,6 +127,12 @@ Size: medium to large; it can land one ID at a time, each with its test.
 
 ### G3: start without the executable
 
+- `world_load()`: read the pack's tables first and the executable's
+  only for what is missing, instead of always reading the executable
+  and overwriting.
+- `shade`: derive it from the palette (the nearest darker colour) for a
+  pack palette; the original keeps its table. To check: whether a rule
+  reproduces the original's table, which would remove the special case.
 - `program/main` becomes optional: game.c, sim_main.c, view.c and
   worldfiles.c load it only when an ID it backs is missing from the
   packs.
@@ -161,8 +164,8 @@ Size: medium to large; it can land one ID at a time, each with its test.
 
 ## Decisions for the maintainer
 
-1. Should the open values match the original's balance, or are they
-   free to differ? This is open-terrain decision 2, and the same answer
-   covers both plans.
+1. ~~Should the open values match the original's balance?~~ No: they
+   are free to differ (maintainer, 2026-10-29), here and in
+   open-terrain decision 2.
 2. ~~Format of the tables?~~ Proposed: JSON, one ID per group, as the
    open world data. Open to change before G2.
