@@ -4,6 +4,7 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -234,6 +235,301 @@ cstn_decode(const uint8_t *data, size_t len, struct strgroups *out)
 			strgroups_free(out);
 			return (-1);
 		}
+	}
+	return (0);
+}
+
+/* The open format's indices: decimal, no leading zero. */
+#define TEXT_INDEX_MAX	1023
+
+static int
+json_index(const char *key, size_t *i)
+{
+	size_t n = 0;
+	const char *p;
+
+	if (key[0] == '\0' || (key[0] == '0' && key[1] != '\0'))
+		return (-1);
+	for (p = key; *p != '\0'; p++) {
+		if (*p < '0' || *p > '9' || (n = n * 10 + (size_t)(*p - '0')) >
+		    TEXT_INDEX_MAX)
+			return (-1);
+	}
+	*i = n;
+	return (0);
+}
+
+/* A malloc'ed copy of "s" with each '\n' turned into '\r', or NULL. */
+static char *
+open_text(const char *s)
+{
+	size_t len = strlen(s), i;
+	char *out;
+
+	if ((out = malloc(len + 1)) == NULL)
+		return (NULL);
+	for (i = 0; i <= len; i++)
+		out[i] = s[i] == '\n' ? '\r' : s[i];
+	return (out);
+}
+
+/*
+ * Parse "data" and return the member "key" of its root object, an
+ * object, with the root in "*root"; NULL with a message in "err".
+ */
+static const struct json *
+json_member(const uint8_t *data, size_t len, const char *key,
+    struct json **root, char *err, size_t errlen)
+{
+	const struct json *m;
+	char *text;
+
+	if ((text = malloc(len + 1)) == NULL) {
+		snprintf(err, errlen, "out of memory");
+		return (NULL);
+	}
+	memcpy(text, data, len);
+	text[len] = '\0';
+	*root = json_parse(text, err, errlen);
+	free(text);
+	if (*root == NULL)
+		return (NULL);
+	if ((m = json_get(*root, key)) == NULL || m->type != JSON_OBJECT) {
+		snprintf(err, errlen, "\"%s\" must be an object", key);
+		json_free(*root);
+		*root = NULL;
+		return (NULL);
+	}
+	return (m);
+}
+
+/* Size "out" for the highest index of "obj", every entry "". */
+static int
+alloc_entries(const struct json *obj, struct strtab *out, char *err,
+    size_t errlen)
+{
+	size_t i, k, n = 0;
+
+	for (k = 0; k < obj->count; k++) {
+		if (json_index(obj->keys[k], &i) != 0) {
+			snprintf(err, errlen, "\"%s\": not an index 0-%d",
+			    obj->keys[k], TEXT_INDEX_MAX);
+			return (-1);
+		}
+		if (i + 1 > n)
+			n = i + 1;
+	}
+	out->count = n;
+	if (n > 0 && (out->str = calloc(n, sizeof(*out->str))) == NULL) {
+		snprintf(err, errlen, "out of memory");
+		return (-1);
+	}
+	return (0);
+}
+
+/* Fill the entries "out" leaves NULL with "". */
+static int
+fill_empty(struct strtab *out)
+{
+	size_t i;
+
+	for (i = 0; i < out->count; i++)
+		if (out->str[i] == NULL && (out->str[i] = open_text("")) ==
+		    NULL)
+			return (-1);
+	return (0);
+}
+
+int
+cstr_json_decode(const uint8_t *data, size_t len, struct strtab *out,
+    char *err, size_t errlen)
+{
+	const struct json *obj, *v;
+	struct json *root;
+	size_t i, k;
+
+	memset(out, 0, sizeof(*out));
+	if ((obj = json_member(data, len, "strings", &root, err, errlen)) ==
+	    NULL)
+		return (-1);
+	if (alloc_entries(obj, out, err, errlen) != 0)
+		goto fail;
+	for (k = 0; k < obj->count; k++) {
+		v = obj->items[k];
+		json_index(obj->keys[k], &i);
+		if (v->type != JSON_STRING) {
+			snprintf(err, errlen, "string %zu is not a string", i);
+			goto fail;
+		}
+		if (out->str[i] != NULL) {
+			snprintf(err, errlen, "string %zu given twice", i);
+			goto fail;
+		}
+		if ((out->str[i] = open_text(v->str)) == NULL) {
+			snprintf(err, errlen, "out of memory");
+			goto fail;
+		}
+	}
+	if (fill_empty(out) != 0) {
+		snprintf(err, errlen, "out of memory");
+		goto fail;
+	}
+	json_free(root);
+	return (0);
+fail:
+	json_free(root);
+	strtab_free(out);
+	return (-1);
+}
+
+int
+cstn_json_decode(const uint8_t *data, size_t len, struct strgroups *out,
+    char *err, size_t errlen)
+{
+	const struct json *obj, *v;
+	struct json *root;
+	struct strtab idx = { 0, NULL };
+	struct strtab *g;
+	size_t i, k, w;
+
+	memset(out, 0, sizeof(*out));
+	if ((obj = json_member(data, len, "groups", &root, err, errlen)) ==
+	    NULL)
+		return (-1);
+	/* Size the groups as a table would be, then drop that table. */
+	if (alloc_entries(obj, &idx, err, errlen) != 0)
+		goto fail;
+	out->count = idx.count;
+	free(idx.str);
+	if (out->count > 0 && ((out->groups = calloc(out->count,
+	    sizeof(*out->groups))) == NULL || (out->declared =
+	    calloc(out->count, sizeof(*out->declared))) == NULL)) {
+		snprintf(err, errlen, "out of memory");
+		goto fail;
+	}
+	for (k = 0; k < obj->count; k++) {
+		v = obj->items[k];
+		json_index(obj->keys[k], &i);
+		g = &out->groups[i];
+		if (v->type != JSON_ARRAY) {
+			snprintf(err, errlen, "group %zu is not a list", i);
+			goto fail;
+		}
+		if (g->str != NULL) {
+			snprintf(err, errlen, "group %zu given twice", i);
+			goto fail;
+		}
+		out->declared[i] = (unsigned)v->count;
+		if (v->count == 0)
+			continue;
+		if ((g->str = calloc(v->count, sizeof(*g->str))) == NULL) {
+			snprintf(err, errlen, "out of memory");
+			goto fail;
+		}
+		g->count = v->count;
+		for (w = 0; w < v->count; w++) {
+			if (v->items[w]->type != JSON_STRING) {
+				snprintf(err, errlen, "group %zu, word %zu is "
+				    "not a string", i, w);
+				goto fail;
+			}
+			if ((g->str[w] = open_text(v->items[w]->str)) ==
+			    NULL) {
+				snprintf(err, errlen, "out of memory");
+				goto fail;
+			}
+		}
+	}
+	json_free(root);
+	return (0);
+fail:
+	json_free(root);
+	strgroups_free(out);
+	return (-1);
+}
+
+/* "s" quoted for JSON, '\r' written as "\n". */
+static void
+put_text(struct jbuf *b, const char *s)
+{
+	char tmp[8];
+
+	jb_raw(b, "\"");
+	for (; *s != '\0'; s++) {
+		if (*s == '"' || *s == '\\')
+			snprintf(tmp, sizeof(tmp), "\\%c", *s);
+		else if (*s == '\r')
+			snprintf(tmp, sizeof(tmp), "\\n");
+		else if ((unsigned char)*s < 0x20)
+			snprintf(tmp, sizeof(tmp), "\\u%04x", (unsigned char)*s);
+		else {
+			tmp[0] = *s;
+			tmp[1] = '\0';
+		}
+		jb_raw(b, tmp);
+	}
+	jb_raw(b, "\"");
+}
+
+void
+cstr_json_encode(const struct strtab *tab, struct jbuf *b)
+{
+	size_t i;
+
+	jb_raw(b, "{\"strings\": {");
+	for (i = 0; i < tab->count; i++) {
+		jb_raw(b, i == 0 ? "\n  \"" : ",\n  \"");
+		jb_int(b, (int64_t)i);
+		jb_raw(b, "\": ");
+		put_text(b, tab->str[i]);
+	}
+	jb_raw(b, "\n}}\n");
+}
+
+void
+cstn_json_encode(const struct strgroups *groups, struct jbuf *b)
+{
+	const struct strtab *g;
+	size_t i, w;
+
+	jb_raw(b, "{\"groups\": {");
+	for (i = 0; i < groups->count; i++) {
+		g = &groups->groups[i];
+		jb_raw(b, i == 0 ? "\n  \"" : ",\n  \"");
+		jb_int(b, (int64_t)i);
+		jb_raw(b, "\": [");
+		for (w = 0; w < g->count; w++) {
+			if (w > 0)
+				jb_raw(b, ", ");
+			put_text(b, g->str[w]);
+		}
+		jb_raw(b, "]");
+	}
+	jb_raw(b, "\n}}\n");
+}
+
+int
+strtab_from_blob(const struct blob *b, struct strtab *out, char *err,
+    size_t errlen)
+{
+	if (strcmp(b->ext, "json") == 0)
+		return (cstr_json_decode(b->data, b->len, out, err, errlen));
+	if (cstr_decode(b->data, b->len, out) != 0) {
+		snprintf(err, errlen, "not a string table");
+		return (-1);
+	}
+	return (0);
+}
+
+int
+strgroups_from_blob(const struct blob *b, struct strgroups *out,
+    char *err, size_t errlen)
+{
+	if (strcmp(b->ext, "json") == 0)
+		return (cstn_json_decode(b->data, b->len, out, err, errlen));
+	if (cstn_decode(b->data, b->len, out) != 0) {
+		snprintf(err, errlen, "not a word list table");
+		return (-1);
 	}
 	return (0);
 }

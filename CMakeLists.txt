@@ -42,6 +42,7 @@ add_library(flibustier_core STATIC
 	src/assets/rsd.c
 	src/assets/sprite.c
 	src/assets/text.c
+	src/assets/textfiles.c
 	src/assets/tileset.c
 	src/assets/tiles.c
 	src/assets/scenario.c

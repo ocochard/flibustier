@@ -555,11 +555,11 @@ open_decoded(struct view *v, const struct blob *b, char *err, size_t errlen)
 		v->nframes = 1;
 	} else if (starts(id, "text/") && strstr(id, "/cstr") != NULL) {
 		v->kind = K_CSTR;
-		rc = cstr_decode(b->data, b->len, &v->tab);
+		rc = strtab_from_blob(b, &v->tab, err, errlen);
 		v->nframes = v->tab.count;
 	} else if (starts(id, "text/")) {
 		v->kind = K_CSTN;
-		rc = cstn_decode(b->data, b->len, &v->groups);
+		rc = strgroups_from_blob(b, &v->groups, err, errlen);
 		v->nframes = v->groups.count;
 	} else {
 		v->kind = K_RAW;

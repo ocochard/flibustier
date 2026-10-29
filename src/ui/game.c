@@ -37,21 +37,27 @@ static int
 load_text(struct game *g)
 {
 	struct blob b;
-	char id[32];
+	char id[32], why[128];
 	int rc;
 
 	snprintf(id, sizeof(id), "text/%s/cstr", g->lang);
-	if (packs_load(g->packs, id, &b) != 0)
+	if (packs_load(g->packs, id, &b) != 0) {
+		snprintf(g->err, sizeof(g->err), "missing %s", id);
 		return (-1);
-	rc = cstr_decode(b.data, b.len, &g->cstr);
+	}
+	rc = strtab_from_blob(&b, &g->cstr, why, sizeof(why));
 	blob_free(&b);
+	if (rc == 0) {
+		snprintf(id, sizeof(id), "text/%s/cstn", g->lang);
+		if (packs_load(g->packs, id, &b) != 0) {
+			snprintf(g->err, sizeof(g->err), "missing %s", id);
+			return (-1);
+		}
+		rc = strgroups_from_blob(&b, &g->cstn, why, sizeof(why));
+		blob_free(&b);
+	}
 	if (rc != 0)
-		return (-1);
-	snprintf(id, sizeof(id), "text/%s/cstn", g->lang);
-	if (packs_load(g->packs, id, &b) != 0)
-		return (-1);
-	rc = cstn_decode(b.data, b.len, &g->cstn);
-	blob_free(&b);
+		snprintf(g->err, sizeof(g->err), "%s: %s", id, why);
 	return (rc);
 }
 
@@ -143,10 +149,8 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	if (save_dir != NULL)
 		snprintf(g->save_dir, sizeof(g->save_dir), "%s", save_dir);
 	snprintf(g->lang, sizeof(g->lang), "%s", lang);
-	if (load_text(g) != 0) {
-		snprintf(g->err, sizeof(g->err), "cannot load %s text", lang);
+	if (load_text(g) != 0)
 		return (-1);
-	}
 	if (load_fonts(g) != 0) {
 		snprintf(g->err, sizeof(g->err), "cannot load the fonts");
 		return (-1);

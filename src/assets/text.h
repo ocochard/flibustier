@@ -10,6 +10,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "data/pack.h"
+#include "sim/json.h"
+
 /*
  * Original string tables, converted from Mac Roman to UTF-8.  Markup and
  * control bytes below 0x80 (such as '~' menu lines, '`' paragraph
@@ -32,6 +35,29 @@ struct strgroups {
 /* Both return 0 on success, -1 on malformed input. */
 int	cstr_decode(const uint8_t *data, size_t len, struct strtab *out);
 int	cstn_decode(const uint8_t *data, size_t len, struct strgroups *out);
+
+/*
+ * The open format of the same tables (asset-packs.md, "Open text"):
+ * JSON {"strings": {"<index>": "..."}} and {"groups": {"<index>":
+ * ["...", ...]}}.  Absent entries are empty, '\n' becomes '\r'.  Both
+ * return 0, or -1 with a message in "err".
+ */
+int	cstr_json_decode(const uint8_t *data, size_t len, struct strtab *out,
+	    char *err, size_t errlen);
+int	cstn_json_decode(const uint8_t *data, size_t len,
+	    struct strgroups *out, char *err, size_t errlen);
+/* Write a table in the open format, '\r' as "\n". */
+void	cstr_json_encode(const struct strtab *tab, struct jbuf *b);
+void	cstn_json_encode(const struct strgroups *groups, struct jbuf *b);
+
+/*
+ * Decode a "text/<lang>/cstr" or ".../cstn" asset: the open format for a
+ * ".json" file, else the original's.  0, or -1 with a message in "err".
+ */
+int	strtab_from_blob(const struct blob *b, struct strtab *out, char *err,
+	    size_t errlen);
+int	strgroups_from_blob(const struct blob *b, struct strgroups *out,
+	    char *err, size_t errlen);
 
 void	strtab_free(struct strtab *tab);
 void	strgroups_free(struct strgroups *groups);

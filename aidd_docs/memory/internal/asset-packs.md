@@ -25,7 +25,7 @@ the [roadmap](../../plans/roadmap.md).
 | `ui/<name>` | UI sprite bank | `<NAME>.CRS` |
 | `ui/pointer` | the mouse pointer, frame 0, its tip at the top left (packs only; the original's is a picture in the executable) | none |
 | `driver/<name>` | sound driver (music, effects) | `<NAME>.PIR` |
-| `text/<lang>/<name>` | string table | `<NAME>.<LANG>`, e.g. `CSTR.ENG` |
+| `text/<lang>/<name>` | string table (packs: JSON, see "Open text") | `<NAME>.<LANG>`, e.g. `CSTR.ENG` |
 | `program/main` | original executable (data tables) | `PIRATESG.EXE` |
 | `music/<tune>` | a recording that replaces a tune (packs only) | none |
 | `sound/<name>` | a recording that replaces a sound effect (packs only) | none |
@@ -306,6 +306,99 @@ original files and executable.
   `map.tsj` and `battle.tsj` (images `map.png`, `battle.png` to supply)
   and a `pack.ini`. Exported from the original data, it is for local
   checks and as a starting point only: never distribute it.
+
+## Open text
+
+The game's text, when a pack gives it; otherwise the original `CSTR` and
+`CSTN` files (see asset-formats.md). Implemented in `src/assets/text.c`
+(`strtab_from_blob()`, `strgroups_from_blob()`) and
+`src/assets/textfiles.c`.
+
+| ID | Format | Content |
+|---|---|---|
+| `text/<lang>/cstr` | JSON, `.json` | prose and dialogue: tavern talk, governors, missions, battles, menus, the era and expedition texts |
+| `text/<lang>/cstn` | JSON, `.json` | word lists: captain names, months, ship types, nations, compass points, the log book's sentences |
+
+- The decoder is chosen by the file extension: `.json` is this format,
+  and the original data pack's files stay binary. Both decode to the
+  same `struct strtab` and `struct strgroups` (`src/assets/text.h`), so
+  the rest of the engine does not change.
+- `text/<lang>/cstr`:
+
+  ```json
+  {
+    "strings": {
+      "62": "Pick your voyage:\n~First choice\n~Second choice",
+      "119": "These are %s waters, Captain."
+    }
+  }
+  ```
+
+  `strings` maps an index to its text. Keys are decimal indices with no
+  leading zero, 0 to 1023. The engine looks entries up by the original's
+  index (named `S_*` in `src/ui/screens.c`). Index 322 and above are
+  allowed but unused.
+- `text/<lang>/cstn`:
+
+  ```json
+  {
+    "groups": {
+      "6": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+      "71": ["Spanish", "English", "French", "Dutch"]
+    }
+  }
+  ```
+
+  `groups` maps a group index (0 to 1023, decimal) to its words, in
+  order. The order carries meaning: group 8 lists the ship types in the
+  engine's order, group 20 the log's sentences by news code, and group
+  13 the compass points clockwise from south (`W_*` in
+  `src/ui/screens.c`).
+- **Whole tables.** A pack that gives `text/<lang>/cstr` replaces the
+  whole table. An index it leaves out is an empty string, never the
+  original's entry; a group it leaves out has no words, and a short group
+  has empty words past its end. So a pack can run without the original
+  text.
+- **Errors.** A file that is not valid JSON, has a key that is not an
+  index in range, or has a value of the wrong type is an error when the
+  game loads it, with the file and the reason on stderr. It never falls
+  back silently to the original.
+- **Text.** UTF-8. The fonts draw the Mac Roman repertoire (ASCII plus
+  Western European accents and some symbols). A character outside it is
+  drawn as `?`, even with a replacement font.
+- **Markup**, as in the original (the text renderer, `src/gfx/text.c`):
+  - `%s`: an argument the engine supplies (a name, a town, a sum). The
+    engine fills the `%s` in order, so an entry must keep the original
+    entry's number and order of `%s`. Reordering for a translation needs
+    numbered arguments, which the engine does not support yet. `%%` is
+    not a conversion: a literal `%` is written alone.
+  - `\n` (or `\r`): a line break. The decoder turns each `\n` into
+    `\r`, the original's, since some screens test for it.
+  - `~` at the start of a line: a menu option the player can select.
+  - `` ` `` at the start of a paragraph: the next letter is drawn as a
+    drop capital. Elsewhere it is ignored.
+  - `^`: an apostrophe. A plain `'` draws the same, and a pack may use
+    either.
+  - The original's control bytes (0x01-0x1B) and its `0xCA` placeholder
+    in `CSTN` are not used by the engine: the renderer skips control
+    bytes. A pack does not need them, and may write them as `\u0001`
+    and so on.
+- **Languages.** `<lang>` is three lowercase letters. The original has
+  `eng`, `fre` and `ger`. A pack may add a language (for example
+  `text/spa/cstr` and `text/spa/cstn`), and `--lang` accepts any code
+  for which the pack stack gives both tables.
+- **Writing it.** The open pack's text must be written anew, never
+  copied or paraphrased line by line from the original (see
+  "Licensing" in the roadmap). `flibustier --export-text DIR` writes the
+  installed tables of every language in this format, as
+  `<lang>/cstr.json` and `<lang>/cstn.json` with a `pack.ini`; line
+  breaks are written `\n`. Exported from the original data, it is for
+  checking the format and the indices locally: never distribute it.
+- **Coverage.** `tools/artgen/coverage.py` counts the text IDs with the
+  other assets, and lists per text ID the pack gives the strings the
+  original has (not empty) and the pack lacks, and the groups it gives
+  fewer words.
 
 ## Per-town assets
 

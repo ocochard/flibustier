@@ -653,6 +653,62 @@ test_font(void)
 	CHECK(font_decode(buf, sizeof(buf), &font) == -1);
 }
 
+/* The open text format: absent entries empty, '\n' read as '\r'. */
+static void
+test_text_json(void)
+{
+	static const char cstr[] =
+	    "{\"strings\": {\"2\": \"~One\\n~Two\", \"0\": \"C\\u00f4te %s\"}}";
+	static const char cstn[] =
+	    "{\"groups\": {\"1\": [\"a\", \"\\u00df\"], \"3\": []}}";
+	static const char bad_word[] = "{\"groups\": {\"0\": [1]}}";
+	static const char *const bad[] = {
+		"{\"strings\": {\"01\": \"x\"}}",	/* leading zero */
+		"{\"strings\": {\"1024\": \"x\"}}",	/* out of range */
+		"{\"strings\": {\"x\": \"x\"}}",
+		"{\"strings\": {\"1\": 3}}",
+		"{\"strings\": {\"1\": \"a\", \"1\": \"b\"}}",
+		"{\"strings\": []}",
+		"{\"words\": {}}",
+		"{\"strings\": {",
+		NULL
+	};
+	struct strtab tab;
+	struct strgroups g;
+	struct jbuf b = { 0 };
+	char err[128];
+	size_t i;
+
+	CHECK(cstr_json_decode((const uint8_t *)cstr, strlen(cstr), &tab, err,
+	    sizeof(err)) == 0);
+	CHECK(tab.count == 3 && strcmp(tab.str[0], "C\xc3\xb4te %s") == 0 &&
+	    strcmp(tab.str[1], "") == 0 &&
+	    strcmp(tab.str[2], "~One\r~Two") == 0);
+	/* Written back with "\n", it reads the same. */
+	cstr_json_encode(&tab, &b);
+	CHECK(b.s != NULL && strstr(b.s, "\"~One\\n~Two\"") != NULL);
+	strtab_free(&tab);
+	CHECK(b.s != NULL && cstr_json_decode((const uint8_t *)b.s, b.len,
+	    &tab, err, sizeof(err)) == 0 && tab.count == 3 &&
+	    strcmp(tab.str[2], "~One\r~Two") == 0);
+	strtab_free(&tab);
+	jb_free(&b);
+	for (i = 0; bad[i] != NULL; i++) {
+		err[0] = '\0';
+		CHECK(cstr_json_decode((const uint8_t *)bad[i], strlen(bad[i]),
+		    &tab, err, sizeof(err)) == -1 && err[0] != '\0');
+	}
+
+	CHECK(cstn_json_decode((const uint8_t *)cstn, strlen(cstn), &g, err,
+	    sizeof(err)) == 0);
+	CHECK(g.count == 4 && g.groups[0].count == 0 &&
+	    g.groups[1].count == 2 && g.groups[3].count == 0 &&
+	    strcmp(g.groups[1].str[1], "\xc3\x9f") == 0);
+	strgroups_free(&g);
+	CHECK(cstn_json_decode((const uint8_t *)bad_word, strlen(bad_word),
+	    &g, err, sizeof(err)) == -1);
+}
+
 static void
 test_text(void)
 {
@@ -686,6 +742,8 @@ test_text(void)
 
 	/* Offsets going backwards are rejected. */
 	CHECK(cstr_decode((const uint8_t *)"\4\0\2\0", 4, &tab) == -1);
+
+	test_text_json();
 
 	u = macroman_to_utf8((const uint8_t *)"\xd1\xca", 2);
 	CHECK(u != NULL && strcmp(u, "\xe2\x80\x94\xc2\xa0") == 0);

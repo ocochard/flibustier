@@ -10,6 +10,7 @@
 
 #include "raylib.h"
 
+#include "assets/textfiles.h"
 #include "assets/worldfiles.h"
 #include "data/pack.h"
 #include "play.h"
@@ -29,7 +30,8 @@ usage(void)
 	    "                extracted CD (default: $FLIBUSTIER_DATA)\n"
 	    "  --pack DIR    asset pack with a pack.ini, over the data;\n"
 	    "                later packs take priority\n"
-	    "  --lang LANG   eng, fre or ger, or en, fr, de (default: eng)\n"
+	    "  --lang LANG   eng, fre or ger, or en, fr, de, or a language\n"
+	    "                a pack adds (default: eng)\n"
 	    "  --saves DIR   saved games (default: $FLIBUSTIER_SAVES, else\n"
 	    "                ~/.local/share/flibustier/saves)\n"
 	    "\n"
@@ -54,6 +56,9 @@ usage(void)
 	    "                maps, and the map and battle tiles' terrain\n"
 	    "                for tools (from the original data: do not\n"
 	    "                share)\n"
+	    "  --export-text DIR\n"
+	    "                write the string tables in the open text format\n"
+	    "                (from the original data: do not share)\n"
 	    "  --export ID OUT.png [--frame N] [--tick N]\n"
 	    "                render one asset frame to a PNG, no window\n");
 	exit(2);
@@ -106,9 +111,12 @@ list_ids(struct packs *packs)
 	return (0);
 }
 
-/* The game's language code for "name", which may be the ISO one. */
+/*
+ * The game's language code for "name", which may be the ISO one, or a
+ * language whose text a pack adds; NULL when there is none.
+ */
 static const char *
-game_lang(const char *name)
+game_lang(struct packs *packs, const char *name)
 {
 	static const char *codes[][3] = {
 		{ "eng", "en", "english" },
@@ -121,7 +129,7 @@ game_lang(const char *name)
 		for (k = 0; k < 3; k++)
 			if (strcmp(name, codes[i][k]) == 0)
 				return (codes[i][0]);
-	return (NULL);
+	return (text_has_lang(packs, name) ? name : NULL);
 }
 
 int
@@ -130,7 +138,7 @@ main(int argc, char **argv)
 	const char *data, *pack[MAX_PACKS], *id = NULL, *out = NULL;
 	const char *shot = NULL, *lang = "eng", *script = NULL, *saves = NULL;
 	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT, EXPORT_WORLD,
-	    EXPORT_SOUNDS } cmd = PLAY;
+	    EXPORT_SOUNDS, EXPORT_TEXT } cmd = PLAY;
 	struct packs *packs;
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
@@ -163,6 +171,10 @@ main(int argc, char **argv)
 		} else if (strcmp(argv[a], "--export-world") == 0 &&
 		    a + 1 < argc) {
 			cmd = EXPORT_WORLD;
+			out = argv[++a];
+		} else if (strcmp(argv[a], "--export-text") == 0 &&
+		    a + 1 < argc) {
+			cmd = EXPORT_TEXT;
 			out = argv[++a];
 		} else if (strcmp(argv[a], "--export-sounds") == 0 &&
 		    a + 1 < argc) {
@@ -205,8 +217,9 @@ main(int argc, char **argv)
 		return (1);
 	}
 
-	if ((lang = game_lang(lang)) == NULL) {
-		fprintf(stderr, "unknown language: use eng, fre or ger\n");
+	if ((lang = game_lang(packs, lang)) == NULL) {
+		fprintf(stderr, "unknown language: use eng, fre or ger, or a "
+		    "language a pack gives text for\n");
 		packs_free(packs);
 		return (1);
 	}
@@ -229,6 +242,10 @@ main(int argc, char **argv)
 		break;
 	case EXPORT_WORLD:
 		if ((rc = world_export(packs, out, err, sizeof(err))) != 0)
+			fprintf(stderr, "%s\n", err);
+		break;
+	case EXPORT_TEXT:
+		if ((rc = text_export(packs, out, err, sizeof(err))) != 0)
 			fprintf(stderr, "%s\n", err);
 		break;
 	default:

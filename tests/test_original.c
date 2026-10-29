@@ -27,6 +27,7 @@
 #include "assets/scenario.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
+#include "assets/textfiles.h"
 #include "assets/tiles.h"
 #include "assets/tileset.h"
 #include "assets/towns.h"
@@ -851,6 +852,87 @@ test_world_export(struct packs *orig)
 	remove(dir);
 }
 
+static int
+same_strtab(const struct strtab *a, const struct strtab *b)
+{
+	size_t i;
+
+	if (a->count != b->count)
+		return (0);
+	for (i = 0; i < a->count; i++)
+		if (strcmp(a->str[i], b->str[i]) != 0)
+			return (0);
+	return (1);
+}
+
+/*
+ * The string tables of every language exported in the open text format
+ * and loaded back give the same text; a pack's language is accepted.
+ */
+static void
+test_text_export(struct packs *orig)
+{
+	static const char *const langs[] = { "eng", "fre", "ger" };
+	static const char *const tables[] = { "cstr", "cstn" };
+	const char *data = getenv("FLIBUSTIER_DATA");
+	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024], err[256];
+	char id[32];
+	struct packs *packs;
+	struct strtab tab, ref;
+	struct strgroups g, gref;
+	struct blob b, bref;
+	size_t i, k;
+
+	if (mkdtemp(dir) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	CHECK(text_export(orig, dir, err, sizeof(err)) == 0);
+	packs = packs_new();
+	CHECK(packs_add_original(packs, data) == 0);
+	CHECK(packs_add_dir(packs, dir) == 0);
+	for (i = 0; i < 3; i++) {
+		snprintf(id, sizeof(id), "text/%s/cstr", langs[i]);
+		CHECK(packs_load(packs, id, &b) == 0 &&
+		    strcmp(b.ext, "json") == 0);
+		CHECK(packs_load(orig, id, &bref) == 0);
+		CHECK(strtab_from_blob(&b, &tab, err, sizeof(err)) == 0);
+		CHECK(strtab_from_blob(&bref, &ref, err, sizeof(err)) == 0);
+		CHECK(tab.count >= 322 && same_strtab(&tab, &ref));
+		strtab_free(&tab);
+		strtab_free(&ref);
+		blob_free(&b);
+		blob_free(&bref);
+		snprintf(id, sizeof(id), "text/%s/cstn", langs[i]);
+		CHECK(packs_load(packs, id, &b) == 0);
+		CHECK(packs_load(orig, id, &bref) == 0);
+		CHECK(strgroups_from_blob(&b, &g, err, sizeof(err)) == 0);
+		CHECK(strgroups_from_blob(&bref, &gref, err,
+		    sizeof(err)) == 0);
+		CHECK(g.count == gref.count);
+		for (k = 0; k < g.count && k < gref.count; k++)
+			CHECK(same_strtab(&g.groups[k], &gref.groups[k]));
+		strgroups_free(&g);
+		strgroups_free(&gref);
+		blob_free(&b);
+		blob_free(&bref);
+	}
+	CHECK(text_has_lang(packs, "eng") && !text_has_lang(packs, "spa"));
+	packs_free(packs);
+	for (i = 0; i < 3; i++) {
+		for (k = 0; k < 2; k++) {
+			snprintf(path, sizeof(path), "%s/%s/%s.json", dir,
+			    langs[i], tables[k]);
+			remove(path);
+		}
+		snprintf(path, sizeof(path), "%s/%s", dir, langs[i]);
+		remove(path);
+	}
+	snprintf(path, sizeof(path), "%s/pack.ini", dir);
+	remove(path);
+	remove(dir);
+}
+
 /* PSOUND.PIR: the tunes' streams, and tune 9 sounding. */
 static void
 test_music(struct packs *packs)
@@ -939,6 +1021,7 @@ main(void)
 	test_terrain(packs);
 	test_sheet_terrain(packs);
 	test_world_export(packs);
+	test_text_export(packs);
 	test_digital(packs);
 	test_music(packs);
 	packs_free(packs);

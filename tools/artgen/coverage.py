@@ -12,16 +12,20 @@ whether the pack replaces it.
 The IDs come from "flibustier --list" over the original data, and for
 music and sound, which the game data plays through its sound drivers,
 from the IDs the engine's source asks for; the pack's from its pack.ini
-and pack.d/*.ini.  Prints a Markdown table, or
-writes it to FILE.
+and pack.d/*.ini.  For the text the pack gives, the entries it lacks
+are counted against the original's tables ("flibustier --export-text",
+into a temporary directory).  Prints a Markdown table, or writes it to
+FILE.
 """
 
 import argparse
 import glob
+import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -46,7 +50,7 @@ KINDS = {
     "driver": "sound drivers",
     "program": "game program",
 }
-NOT_ART = {"patch", "towns", "world", "text", "driver", "program"}
+NOT_ART = {"patch", "towns", "world", "driver", "program"}
 # The 16-colour copies the installer makes, which the engine never uses.
 UNUSED = {"ui/misc16", "ui/miscf16", "ui/miscg16", "tiles/16map16",
           "tiles/16map32", "tiles/tmap16", "img/cloud16"}
@@ -80,6 +84,35 @@ def pack_ids(pack):
                 k, v = (x.strip() for x in line.split("=", 1))
                 ids[k] = v
     return ids
+
+
+def text_gaps(exe, data, pack, have):
+    """Per text ID the pack gives: the entries the original has (not
+    empty) and the pack lacks, as "string N" and "group N" lines."""
+    gaps = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run([exe, "--data", data, "--export-text", tmp],
+                       capture_output=True, check=True)
+        for i, f in sorted(have.items()):
+            parts = i.split("/")
+            if parts[0] != "text" or len(parts) != 3:
+                continue
+            ref = os.path.join(tmp, parts[1], parts[2] + ".json")
+            if not os.path.exists(ref) or not f.endswith(".json"):
+                continue
+            key = "strings" if parts[2] == "cstr" else "groups"
+            orig = json.load(open(ref))[key]
+            mine = json.load(open(os.path.join(pack, f))).get(key, {})
+            missing = []
+            for n, v in orig.items():
+                m = mine.get(n)
+                if key == "strings" and v and not m:
+                    missing.append("string " + n)
+                elif key == "groups" and len(m or []) < len(v):
+                    missing.append("group %s (%d of %d words)" % (
+                        n, len(m or []), len(v)))
+            gaps[i] = missing
+    return gaps
 
 
 def main():
@@ -145,6 +178,15 @@ def main():
         out += ["", "The pack also holds %d assets the engine does not "
                 "ask for: %s." % (len(extra), ", ".join(
                     "`%s`" % k for k in extra))]
+    gaps = text_gaps(exe, args.data, args.pack, have)
+    if gaps:
+        out += ["", "## Text entries", "",
+                "Entries the original's tables have and the pack's lack "
+                "(shown empty in the game).", ""]
+        for i, missing in sorted(gaps.items()):
+            out.append("- `%s`: %s" % (i, "%d missing: %s" % (
+                len(missing), ", ".join(missing)) if missing else
+                "complete"))
     out += ["", "## Every asset", "", "| ID | State | Pack file |",
             "|---|---|---|"]
     for i, kind, state, f in rows:

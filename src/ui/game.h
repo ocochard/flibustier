@@ -80,7 +80,7 @@ struct career {
 
 struct game {
 	struct packs		*packs;
-	char			 lang[4];	/* eng, fre or ger */
+	char			 lang[4];	/* eng, fre, ger, or a pack's */
 	struct strtab		 cstr;
 	struct strgroups	 cstn;
 	struct font		 font[GAME_FONTS];	/* PIRATE1..4 */
