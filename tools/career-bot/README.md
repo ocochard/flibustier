@@ -49,6 +49,9 @@ the score retiring there would give. `BOT_RETIRE=N` retires at the first
 division N years into the career instead of playing all the years; on
 500 careers, 10 scored best (mean 13.7 against 12.8 for 12 years).
 
+A cruise to meet ships that runs out its 40 days gets a `cruise ... ended`
+line rather than an anomaly: it is open-ended by design.
+
 The bot is a mediocre captain: it runs onto reefs, takes some fights it
 should not, and its choices are not meant to be optimal. It is not part of
 `ctest`, since a career takes a few minutes.

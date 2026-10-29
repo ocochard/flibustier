@@ -519,8 +519,10 @@ class Bot:
     def bearing(dx, dy):
         return int(round(math.atan2(dx, -dy) * 128 / math.pi)) & 0xFF
 
-    def sail_to(self, tx, ty, town=None, max_days=120):
-        """Sail to cell (tx, ty). Returns the sail stop dict that ended it."""
+    def sail_to(self, tx, ty, town=None, max_days=120, cruise=False):
+        """Sail to cell (tx, ty). Returns the sail stop dict that ended it.
+        A cruise (open-ended, to meet ships) ending on max_days is noted,
+        not an anomaly."""
         f = self.refresh()["fleet"]
         start_day = self.st["day"]
         self.port = town
@@ -639,7 +641,10 @@ class Bot:
                 stuck = 0
             last_pos = (r["x"], r["y"])
             if r["day"] - start_day > max_days:
-                self.odd("voyage to %d,%d took over %d days" % (tx, ty, max_days))
+                if cruise:
+                    self.note("cruise to %d,%d ended after %d days" % (tx, ty, max_days))
+                else:
+                    self.odd("voyage to %d,%d took over %d days" % (tx, ty, max_days))
                 return {"stop": "slow"}
 
     # ------------------------------------------------------------- swords
@@ -1216,7 +1221,7 @@ class Bot:
                 self.no_repair_until = self.st["day"] + 60
 
     # ------------------------------------------------------------ voyages
-    def go(self, tx, ty, town=None, max_days=150):
+    def go(self, tx, ty, town=None, max_days=150, cruise=False):
         """Sail to (tx, ty), dealing with what happens on the way.
         Returns 'arrived', 'town' (entered ti in self.last_town) or a failure."""
         t0 = self.refresh()["day"]
@@ -1229,7 +1234,7 @@ class Bot:
             if town is None and self.wrecks - wrecks0 >= 3:
                 self.odd("voyage to %s wrecked three times" % dest)
                 return "slow"
-            r = self.sail_to(tx, ty, town=town, max_days=max_days)
+            r = self.sail_to(tx, ty, town=town, max_days=max_days, cruise=cruise)
             stop = r["stop"]
             if stop == "stuck" and self.ship_on_land():
                 continue
@@ -1839,7 +1844,7 @@ class Bot:
                            for r in range(n) for dy in range(-r, r + 1) for dx in range(-r, r + 1)
                            if max(abs(dx), abs(dy)) == r and self.open_sea(cx + dx, cy + dy)),
                           (t["sea_x"], t["sea_y"]))
-            res = self.go(gx, gy, max_days=40)
+            res = self.go(gx, gy, max_days=40, cruise=True)
             if res == "town" and not self.at_war(s["towns"][self.last_town]["nation"]):
                 self.visit(self.last_town)
         return self.report()
