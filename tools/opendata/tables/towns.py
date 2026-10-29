@@ -24,12 +24,23 @@ Curacao is Dutch from 1640 (taken 1634), Barbados English from 1620
 moved to a new site keeps its record (Nombre de Dios to Portobelo in
 1597, Puerto Caballos to Santo Tomas in 1604, La Yaguana abandoned in
 1605 and resettled by the French as Leogane, Jamaica's capital to Port
-Royal), so the same town keeps its "id" across eras.  Exceptions, for
-play: Fort Caroline (French Florida, 1564-1565) and San Agustin (1565)
-stand together in 1560, and Bermuda is in 1600 (the Sea Venture's
-castaways, 1609-1610; the colony 1612), the only non-Spanish port of
-that era.  1560 has no English or Dutch town, 1600 no French or Dutch:
-there were none.  Where islands lie closer than three map cells, one
+Royal), so the same town keeps its "id" across eras.
+
+Stretches, for play.  Every nation gets at least three home ports in
+every era, so each career has a governor to report to; where history
+has fewer, the era takes the real attempts and footholds of the time
+and, failing those, a colony a little earlier than it was.  Each is
+marked "STRETCH" in LINEAGE.  1560: Fort Caroline (1564-65) beside San
+Agustin (1565), Charlesfort (1562-63); for England Drake's hidden Port
+Pheasant (1572), the Isla de Pinos where the English rovers watered
+(the 1570s-90s) and Bermuda (1612); for France Tortuga (settled about
+1630) and for Holland Punta de Araya (the salt fleets, 1599), Curacao
+(1634) and St Eustatius (1636).  1600: Bermuda (the Sea Venture's
+castaways, 1609-10), the real English attempts on St Lucia (1605) and
+Grenada (1609), the Isla de Pinos again; Tortuga, Martinique and
+Guadeloupe French (1635); Punta de Araya (Dutch to 1605), Curacao and
+St Eustatius Dutch.  1620: Martinique and Guadeloupe French, St Maarten
+(1631) and Curacao Dutch.  Where islands lie closer than three map cells, one
 town stands for them (no French Basseterre beside English St
 Christopher, no Saba beside St Eustatius).  48 at most an era; the
 least important (Tolu, San German, Baracoa, Coro, Tampico, Santo
@@ -59,9 +70,10 @@ battle.c, prison.c, src/ui/screens.c):
   the town, and the mark of a villain hiding there); governor: a
   repeatable draw 0-15, as a new governor's (bit 0 a niece rather than
   a daughter; the bits 0x20-0x80 are the player's doings).
-- id: 0-60, the town's battle screens (screens/sea layer id, the land
+- id: the town's battle screens (screens/sea layer id, the land
   battle's screens/land layer id, both indexed by it), the same in every
-  era.  Inland towns use the ids the engine nudges toward the right
+  era: 0-60 for the towns that last, 61 and up (sea screens to 107, the
+  land battle on screen 0) for the early footholds only.  Inland towns use the ids the engine nudges toward the right
   coast when the player leaves their prison (src/sim/prison.c): Panama
   43 (20 cells north, to the Caribbean side of the isthmus), Granada 45
   (50 cells east, past Lake Nicaragua); the other inland towns avoid
@@ -76,8 +88,10 @@ battle.c, prison.c, src/ui/screens.c):
   be drawn to.
 - sea [x, y, heading]: the map cell where a ship leaving the town
   starts, on open sea (no shallows, which wreck large ships), outside
-  the town's arrival cells, heading 0-7 (x 32) to the open water; 0, 0
-  for inland towns.
+  the town's arrival cells, heading 0-7 (x 32) to the open water: of
+  the nearest such cells, the first with 16 cells of open sea straight
+  ahead (else the longest such run), so a ship sailing straight out
+  meets no shallows; 0, 0 for inland towns.
 - citymap [x, y]: the town's dot on the Map of the Caribbean, which
   shows the whole world at 0.75 from the screen's top-left: the cell
   times 0.75, rounded.
@@ -89,10 +103,14 @@ battle.c, prison.c, src/ui/screens.c):
 Placement.  Each town's real coordinates go through
 _geo.lonlat_to_world() and snap to the nearest fitting cell of the
 bare map (world_map.base_grid()'s tile terrain): a coastal town on a
-cell mostly land next to a cell with open sea of the main water (one
-4-connected body of sea pixels holding the open Caribbean, so a ship
-can sail in without crossing shallows); an inland town on land with no
-such sea within a cell.  The towns are placed most important first,
+cell with some land (an eighth, preferably half) within four cells of a
+cell with open sea of the main water (one 4-connected body of sea
+pixels holding the open Caribbean, so a ship can sail in without
+crossing shallows), the nearer the better; where shallows lie between,
+its arrival cells run out across them to that open sea.  An islet the
+map's tiles drew as shallows (Providence) keeps its town there, the
+house tile giving it land.  An inland town sits on land with no such
+sea within a cell.  The towns are placed most important first,
 each at least three cells (Chebyshev) from every town it shares an era
 with, so arrival cells never touch.
 
@@ -133,6 +151,8 @@ TRADE = {"F": 0x08, "G": 0x04, "S": 0x02, "W": 0x10, "-": 0}
 SPACING = 3             # Chebyshev cells between towns of one era
 CITY = 40               # citizens from which a town gets a second house
 ARRIVALS = 16
+REACH = 4               # cells from a coastal town to open sea, at most
+RUN_OK = 16             # open sea cells straight out of a harbour mouth
 COAST_TILES = tuple(range(68, 80))
 LAND_TILES = (123, 124, 125, 126, 127, 255)
 # A point of the open Caribbean, in the main water.
@@ -172,7 +192,8 @@ LINEAGE = {
                 "plain from the 1660s"),
     "tortuga": (9, -72.78, 20.03, False,
                 "Tortuga's harbour (Cayonne, Basse-Terre): boucaniers about "
-                "1630, French under Le Vasseur 1640, d'Ogeron 1665"),
+                "1630, French under Le Vasseur 1640, d'Ogeron 1665; "
+                "STRETCH: French from 1560 (the corsairs' coast)"),
     "goave": (10, -72.86, 18.43, False,
               "Petit-Goave, French buccaneer port from the 1660s, the "
               "flibustiers' base under de Graaf and Grammont"),
@@ -260,7 +281,7 @@ LINEAGE = {
                    "the Mosquito Shore's English and Miskito"),
     # The Bahamas and Bermuda
     "bermuda": (42, -64.68, 32.38, False,
-                "St George's, Bermuda (1612)"),
+                "St George's, Bermuda (1612); STRETCH: in 1560 and 1600"),
     "eleuthera": (44, -76.24, 25.20, False,
                   "The Eleutheran Adventurers (1648)"),
     "nassau": (46, -77.34, 25.08, False,
@@ -273,31 +294,52 @@ LINEAGE = {
     "antigua": (49, -61.85, 17.12, False, "Antigua, St John's (1632)"),
     "montserrat": (50, -62.21, 16.71, False, "Montserrat (1632)"),
     "eustatius": (51, -62.99, 17.48, False,
-                  "St Eustatius, Dutch from 1636, the great free port"),
+                  "St Eustatius, Dutch from 1636, the great free port; "
+                  "STRETCH: Dutch in 1560 and 1600"),
     "maarten": (52, -63.05, 18.02, False,
                 "Sint Maarten, Dutch from 1631, Spanish 1633-48, then "
-                "shared with France"),
+                "shared with France; STRETCH: in 1620"),
     "tortola": (53, -64.62, 18.42, False,
                 "Tortola, Dutch 1648-1672, English from 1672"),
     "guadeloupe": (30, -61.73, 15.99, False,
-                   "Guadeloupe, Basse-Terre (1635)"),
+                   "Guadeloupe, Basse-Terre (1635); STRETCH: in 1600 and "
+                   "1620"),
     # The Windward Islands and Barbados
     "martinique": (54, -61.18, 14.74, False,
-                   "Martinique, Saint-Pierre (1635)"),
+                   "Martinique, Saint-Pierre (1635); STRETCH: in 1600 "
+                   "and 1620"),
     "lucia": (55, -60.99, 14.01, False,
-              "Sainte-Lucie, French from 1650 (English 1664-67)"),
+              "Sainte-Lucie, French from 1650 (English 1664-67); the "
+              "Olive Branch's English colonists of 1605 in 1600"),
     "barbados": (56, -59.62, 13.10, False,
                  "Barbados (1627), Bridgetown; sugar from the 1640s"),
     "grenada": (57, -61.75, 12.05, False,
-                "Grenade, French from 1649 (Fort Royal)"),
+                "Grenade, French from 1649 (Fort Royal); the London "
+                "merchants' English attempt of 1609 in 1600"),
     "tobago": (58, -60.73, 11.18, False,
                "Tobago: the Dutch Nieuw Walcheren (1628-37), "
                "Lampsinsburg (1654-66, 1667-77)"),
     # The Dutch Leewards
     "curacao": (59, -68.93, 12.11, False,
-                "Curacao, Dutch from 1634, Willemstad and Fort Amsterdam"),
+                "Curacao, Dutch from 1634, Willemstad and Fort Amsterdam; "
+                "STRETCH: Dutch from 1560"),
     "bonaire": (60, -68.27, 12.15, False,
                 "Bonaire, Dutch from 1636: salt and goats"),
+    # The early footholds (ids past the land battle screens: their land
+    # battles use screen 0)
+    "chfort": (61, -80.68, 32.32, False,
+               "Charlesfort, Ribault's Huguenot post on Port Royal Sound, "
+               "1562-63"),
+    "pheasant": (62, -78.95, 9.55, False,
+                 "Port Pheasant, Drake's hidden harbour on the Darien "
+                 "coast east of Nombre de Dios (1572; its exact cove is "
+                 "not known); STRETCH: English in 1560"),
+    "pinos": (63, -82.80, 21.88, False,
+              "Isla de Pinos, where the English rovers watered and "
+              "careened; STRETCH: an English post, 1560 and 1600"),
+    "araya": (64, -64.24, 10.64, False,
+              "Punta de Araya, the salt pans the Dutch fleets worked "
+              "1599-1605; STRETCH: in 1560"),
 }
 
 # Per era: key, name, nation, forts, soldiers (tens of men), citizens
@@ -337,6 +379,14 @@ granada    Granada           spain    0  10  18   40 140 F
 agustin    San Agustin       spain    1  15   8   10  50 W
 jamaica    Villa de la Vega  spain    0   6  12   15  80 F
 caroline   Fort Caroline     france   1  15   8    5  40 W
+chfort     Charlesfort       france   1  10   6    5  40 -
+tortuga    Tortuga           france   0   8   6   10  40 F
+pheasant   Port Pheasant     england  0   8   6   15  40 -
+pinos      Isla de Pinos     england  0   6   6   10  40 F
+bermuda    Bermuda           england  0   3   6    5  40 F
+araya      Punta de Araya    holland  0   6   6   10  50 -
+curacao    Curacao           holland  1  10   8   15  60 G
+eustatius  St Eustatius      holland  0   5   6   10  50 G
 """
 ERAS[1600] = """
 havana     Havana            spain    4  45  40  110 200 G
@@ -374,6 +424,15 @@ granada    Granada           spain    0  10  20   45 150 F
 agustin    San Agustin       spain    1  15   9   10  50 W
 jamaica    Villa de la Vega  spain    0   6  12   15  80 F
 bermuda    Bermuda           england  0   3   6    5  40 F
+lucia      St Lucia          england  0   5   6    5  40 -
+grenada    Grenada           england  0   5   6    5  40 -
+pinos      Isla de Pinos     england  0   6   6   10  40 F
+tortuga    Tortuga           france   0   8   6   10  50 F
+martinique Martinique        france   0   5   6    8  40 -
+guadeloupe Guadeloupe        france   0   5   6    8  40 -
+araya      Punta de Araya    holland  0   8   6   15  60 -
+curacao    Curacao           holland  1  10   8   15  60 G
+eustatius  St Eustatius      holland  0   5   6   10  50 G
 """
 ERAS[1620] = """
 havana     Havana            spain    5  50  45  120 210 G
@@ -414,6 +473,10 @@ nevis      Nevis             england  0   4   6    8  50 -
 providence Providence        england  1   6   6    8  60 -
 tortuga    Tortuga           france   0   8   6   10  50 F
 tobago     Nieuw Walcheren   holland  0   5   6   10  50 -
+martinique Martinique        france   0   6   6    8  40 -
+guadeloupe Guadeloupe        france   0   6   6    8  40 -
+maarten    St Maarten        holland  0   5   6   10  50 -
+curacao    Curacao           holland  1  10   8   15  70 G
 """
 ERAS[1640] = """
 havana     Havana            spain    5  55  50  130 220 G
@@ -594,7 +657,7 @@ def check_tables():
     ids = {}
     for key, v in LINEAGE.items():
         tid, inland = v[0], v[3]
-        assert 0 <= tid <= 60, key
+        assert 0 <= tid < 108, key
         assert tid not in ids, (key, ids.get(tid))
         ids[tid] = key
         # A coastal town never leaves its prison by a nudge; an inland
@@ -730,9 +793,21 @@ def placement():
     for dy in (-1, 0, 1):
         for dx in (-1, 0, 1):
             wet3 = wet3 + np.roll(np.roll(water, dy, 0), dx, 1)
+    # How far the open sea is: 1 next to the cell, up to REACH across
+    # a band of shallows (the arrival cells then run out to it).
+    reach = np.where(near >= 64, 1, 0)
+    open_ = water >= 64
+    grow = open_.copy()
+    for r in range(2, REACH + 1):
+        g = grow.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                g |= np.roll(np.roll(grow, dy, 0), dx, 1)
+        grow = g
+        reach = np.where((reach == 0) & grow, r, reach)
     # Small islands are a few cells with some land each: any cell an
     # eighth land will do, one at least half land is preferred.
-    coastal = (land >= SIDE * SIDE // 8) & (near >= 64)
+    coastal = (land >= SIDE * SIDE // 8) & (reach > 0)
     small = land < SIDE * SIDE // 2
     inland = (land == SIDE * SIDE) & (wet3 == 0)
     for m in (coastal, inland):
@@ -747,13 +822,20 @@ def placement():
         px, py = _geo.lonlat_to_world(lon, lat)
         fx, fy = px / SIDE - 0.5, py / SIDE - 0.5
         ok = (inland if inl else coastal).copy()
+        if not inl:
+            # An islet the map's tiles drew as shallows keeps its town
+            # there: the house tile gives it land again.
+            cx, cy = int(fx + 0.5), int(fy + 0.5)
+            win = (slice(cy - 1, cy + 2), slice(cx - 1, cx + 2))
+            if not (land[win] >= SIDE * SIDE // 8).any():
+                ok[win] |= (water[win] < SIDE * SIDE) & (reach[win] > 0)
         for other, (ox, oy, _) in out.items():
             if (key, other) in co:
                 ok[max(oy - SPACING + 1, 0):oy + SPACING,
                    max(ox - SPACING + 1, 0):ox + SPACING] = False
         d = np.hypot(xs - fx, ys - fy)
         if not inl:
-            d = d + np.where(small, 1.0, 0.0)
+            d = d + np.where(small, 1.0, 0.0) + 0.5 * (reach - 1)
         d[~ok] = np.inf
         i = int(np.argmin(d))
         if not np.isfinite(d.flat[i]):
@@ -889,22 +971,14 @@ def _era(year):
         if LINEAGE[key][3]:
             continue
         cells = arrival[key]
-        x, y = cells[0]
-        rr = 2
-        while not any(water[cy, cx] >= 16 for cx, cy in cells):
-            for c in _ring(x, y, rr):
-                if len(cells) >= ARRIVALS:
-                    break
-                if c in owner or not (0 <= c[0] < W and 0 <= c[1] < H):
-                    continue
+        if not any(water[cy, cx] >= 64 for cx, cy in cells):
+            # Across the shallows: the shortest run of free cells to one
+            # with open sea joins the arrival cells.
+            for c in _path_to_sea(water, owner, key, cells,
+                                  ARRIVALS - len(cells)):
                 cells.append(c)
                 owner[c] = key
-                if water[c[1], c[0]] >= 16:
-                    break
-            rr += 1
-            if rr > 4 or len(cells) >= ARRIVALS:
-                break
-        if not any(water[cy, cx] >= 16 for cx, cy in cells):
+        if not any(water[cy, cx] >= 64 for cx, cy in cells):
             problems.append("%s: no open sea at its arrival cells" % key)
     records = []
     sea_cells = {}
@@ -915,7 +989,7 @@ def _era(year):
         if inl:
             sea, d = [0, 0, 0], _inland_dir(water, x, y)
         else:
-            sea, d = _sea_cell(water, owner, x, y)
+            sea, d = _sea_cell(water, owner, x, y, arrival[key])
             if sea is None:
                 problems.append("%s: no open sea to leave by" % key)
                 sea, d = [0, 0, 0], (0, 1)
@@ -944,6 +1018,32 @@ def _era(year):
     return out
 
 
+def _path_to_sea(water, owner, key, cells, most):
+    """The cells from "cells" to the nearest cell with open sea, by
+    8-way steps through cells no other town owns: at most "most"."""
+    from collections import deque
+    prev = dict.fromkeys(cells)
+    q = deque(cells)
+    while q:
+        c = q.popleft()
+        if water[c[1], c[0]] >= 64:
+            path = []
+            while c not in cells:
+                path.append(c)
+                c = prev[c]
+            path.reverse()
+            return path if len(path) <= most else []
+        for dx, dy in DIRS:
+            n = (c[0] + dx, c[1] + dy)
+            if n in prev or not (0 <= n[0] < W and 0 <= n[1] < H):
+                continue
+            if owner.get(n, key) != key:
+                continue
+            prev[n] = c
+            q.append(n)
+    return []
+
+
 def _governor(tid, year):
     h = (tid * 0x9E3779B1 + year * 0x85EBCA77) & 0xFFFFFFFF
     h ^= h >> 15
@@ -956,13 +1056,14 @@ def _full_sea(water, x, y):
     return 0 <= x < W and 0 <= y < H and water[y, x] == SIDE * SIDE
 
 
-def _sea_cell(water, owner, x, y):
+def _sea_cell(water, owner, x, y, mine):
     """The nearest cell of open sea outside every arrival cell, reached
-    from the town through cells with main water, and the 8-way heading
-    out from it that keeps longest to open sea, away from the town."""
+    from the town's arrival cells ("mine") through cells with main
+    water, and the 8-way heading out from it that keeps longest to open
+    sea, away from the town."""
     from collections import deque
-    seen = {(x, y): 0}
-    q = deque([(x, y)])
+    seen = dict.fromkeys(mine, 0)
+    q = deque(mine)
     found = []
     while q:
         c = q.popleft()
@@ -982,24 +1083,39 @@ def _sea_cell(water, owner, x, y):
                               n[1], n[0]))
     if not found:
         return None, None
-    _, _, sy, sx = min(found)
-    ax, ay = sx - x, sy - y
+    # Of the nearest few, the first with a clear run out to sea (a
+    # straight course of RUN_OK cells of open sea); else the longest.
     best = None
-    for k, (dx, dy) in enumerate(DIRS):
-        run = 0
-        while run < 6 and _full_sea(water, sx + dx * (run + 1),
-                                    sy + dy * (run + 1)):
-            run += 1
-        away = (dx * ax + dy * ay) / (math.hypot(dx, dy) *
-                                      max(math.hypot(ax, ay), 1e-9))
-        score = (min(run, 4), away)
-        if best is None or score > best[0]:
-            best = (score, k)
-    k = best[1]
+    for rank, (_, _, sy, sx) in enumerate(sorted(found)[:24]):
+        ax, ay = sx - x, sy - y
+        for k, (dx, dy) in enumerate(DIRS):
+            run = _run(water, sx, sy, dx, dy)
+            away = (dx * ax + dy * ay) / (math.hypot(dx, dy) *
+                                          max(math.hypot(ax, ay), 1e-9))
+            score = (min(run, RUN_OK), -rank, away)
+            if best is None or score > best[0]:
+                best = (score, sx, sy, k)
+    _, sx, sy, k = best
+    ax, ay = sx - x, sy - y
     d = (int(np.sign(ax)), int(np.sign(ay)))
     if d == (0, 0):
         d = DIRS[k]
     return [sx, sy, k], d
+
+
+def _run(water, x, y, dx, dy):
+    """Cells of open sea straight on from (x, y): a diagonal step also
+    needs the two cells beside it open."""
+    run = 0
+    while run < RUN_OK:
+        nx, ny = x + dx * (run + 1), y + dy * (run + 1)
+        if not _full_sea(water, nx, ny):
+            break
+        if dx and dy and not (_full_sea(water, nx - dx, ny) and
+                              _full_sea(water, nx, ny - dy)):
+            break
+        run += 1
+    return run
 
 
 def _inland_dir(water, x, y):
