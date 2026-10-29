@@ -173,6 +173,10 @@ class Bot:
                 check=True).stdout.splitlines():
             t, x, y = map(int, line.split())
             self.arrivals[t].append((x, y))
+        # cells by a town: a dig landing there would walk into it
+        self.town_cells = {c for cells in self.arrivals.values() for c in cells}
+        self.by_town = {(x + dx, y + dy) for x, y in self.town_cells
+                        for dy in (-1, 0, 1) for dx in (-1, 0, 1)}
         self.components()
         if REEF_GUARD or WIND:
             self.load_pixels(era)
@@ -1408,11 +1412,12 @@ class Bot:
         else:
             self.note("the party walked back aboard on its way to map %d" % mapi)
 
-    def land_path(self, a, b):
+    def land_path(self, a, b, avoid=()):
         """Cells to walk from a to b over land and shallows, 8-connected without
-        cutting corners; the ends may be anything.  None when shut in."""
+        cutting corners, never through "avoid"; the ends may be anything.
+        None when shut in."""
         ok = lambda c: c in (a, b) or (0 <= c[0] < self.W and 0 <= c[1] < self.H
-                                       and self.grid[c[1]][c[0]] in "#,")
+                                       and self.grid[c[1]][c[0]] in "#," and c not in avoid)
         prev = {a: None}
         q = collections.deque([a])
         while q:
@@ -1487,7 +1492,8 @@ class Bot:
                 for dy in range(-r, r + 1):
                     for dx in range(-r, r + 1):
                         c = (tx + dx, ty + dy)
-                        if max(abs(dx), abs(dy)) != r or not self.water(*c) or c in self.bad_landings:
+                        if max(abs(dx), abs(dy)) != r or not self.water(*c) or \
+                                c in self.bad_landings or c in self.by_town:
                             continue
                         if open_sea and (c not in self.deep or sea is not None and self.deep[c] != sea):
                             continue
@@ -1513,7 +1519,8 @@ class Bot:
         for r in range(0, 40):
             hits = [(tx + dx, ty + dy) for dy in range(-r, r + 1) for dx in range(-r, r + 1)
                     if max(abs(dx), abs(dy)) == r and 0 <= tx + dx < self.W
-                    and 0 <= ty + dy < self.H and self.grid[ty + dy][tx + dx] == "#"]
+                    and 0 <= ty + dy < self.H and self.grid[ty + dy][tx + dx] == "#"
+                    and (tx + dx, ty + dy) not in self.by_town]
             if hits:
                 lx, ly = min(hits, key=lambda c: (c[0] - tx) ** 2 + (c[1] - ty) ** 2)
                 break
@@ -1532,6 +1539,14 @@ class Bot:
                     return False
             r = self.sim("sail", turn=turn, ticks=4)
             if r["stop"] == "land":
+                g = self.refresh()["fleet"]
+                if (g["land_x"] // 16, g["land_y"] // 16) in self.town_cells:
+                    # aground on a town's arrival cell: the party would
+                    # walk into the town at its first step
+                    self.sim("shore", ashore=0)
+                    self.note("landing for map %d on a town: another one next time" % mapi)
+                    self.bad_landings.add(best)
+                    return False
                 self.sim("shore", ashore=1)
                 break
             if r["stop"] == "encounter":
@@ -1555,6 +1570,13 @@ class Bot:
                 return False
             dx = (tx > cx) - (tx < cx)
             dy = (ty > cy) - (ty < cy)
+            if {(cx + dx, cy + dy), (cx + dx, cy), (cx, cy + dy)} & self.town_cells:
+                # a town across the way (Belize, by a 1680 map spot), or
+                # on a corner a diagonal step clips: walk round it, or the
+                # party enters it, caught in an enemy's
+                way = self.land_path((cx, cy), (tx, ty), avoid=self.town_cells)
+                if way and len(way) > 1:
+                    dx, dy = way[1][0] - cx, way[1][1] - cy
             r = self.sim("march", dx=dx, dy=dy, ticks=8)
             if r["stop"] == "boarded":
                 self.reboarded(mapi)
