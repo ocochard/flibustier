@@ -186,8 +186,10 @@ with a message. Numbers are integers only.
     back, or `defeated` when the enemy takes the flagship.
   - Sword `input` moves: 0-2 guard middle, low, high; 3-5 the same
     while stepping back; 6-8 slash and 9-11 lunge, middle, low, high.
-    Guards and attacks are taken once; steps back repeat until another
-    input replaces them.
+    Which inputs are taken once and which repeat until another input
+    replaces them is the sword table's `once` (asset-packs.md,
+    `data/sword`): in the original's, guards and attacks are taken once
+    and steps back repeat.
   - Sword `events` bits: 1 the player hit, 2 the opponent hit, 4 a
     clash, 8 the opponent's crew lost men, 16 the player's did.
   - The fight's `result` is `won`, `repelled` or `lost`. `bar` is each
