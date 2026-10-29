@@ -2559,8 +2559,9 @@ the oval at (237, 66).
 
 ## New career: the sailing master (VA `0x13e3f`)
 
-After the story, on `smaster.pcx`, with the text at (340, 100) up to x
-620, two pages:
+After the story, unless a famous expedition (VA `0x13348`, VA `0x45e84`
+bit 0), which starts at sea in no town, on `smaster.pcx`, with the text
+at (340, 100) up to x 620, two pages:
 
 1. **CSTR 68:** "Here in <town>, you'll probably be wantin' to see the
    <nation> governor…".

@@ -1519,6 +1519,17 @@ story_script(const struct game *g, size_t *len)
 	return (p + start);
 }
 
+/*
+ * After the story, the sailing master, except for a famous expedition
+ * (VA 0x13348, flag at VA 0x45e84): it starts at sea, in no town.
+ */
+static void
+story_end(struct game *g)
+{
+	game_goto(g, g->career.expedition >= 0 ? &screen_sail :
+	    &screen_master);
+}
+
 /* Read on to the next stop: a page to wait on, a fight, or the end. */
 static void
 story_advance(struct game *g)
@@ -1528,7 +1539,7 @@ story_advance(struct game *g)
 	int c;
 
 	if ((p = story_script(g, &len)) == NULL) {
-		game_goto(g, &screen_master);
+		story_end(g);
 		return;
 	}
 	g->story_waiting = 0;
@@ -1549,7 +1560,7 @@ story_advance(struct game *g)
 			continue;
 		g->story_text = c < 0 ? -c : c;
 	}
-	game_goto(g, &screen_master);
+	story_end(g);
 }
 
 static void
@@ -1573,7 +1584,7 @@ story_event(struct game *g, const struct ui_event *ev)
 {
 	/* Escape skips the story: an engine convenience. */
 	if (ev->type == EV_KEY && ev->key == UI_KEY_ESCAPE) {
-		game_goto(g, &screen_master);
+		story_end(g);
 		return;
 	}
 	if (!g->story_waiting || !(ev->type == EV_CLICK ||

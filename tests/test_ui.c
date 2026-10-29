@@ -186,6 +186,9 @@ test_menus(void)
 		CHECK(g->started && g->career.expedition == 0);
 		CHECK(strcmp(g->career.title, "John Hawkins") == 0);
 		CHECK(g->sim.era_year == 1560);
+		/* After the story, no sailing master: it starts at sea. */
+		CHECK(game_script(g, "esc") == 0 &&
+		    g->screen == &screen_sail && g->sim.fleet.leaving < 0);
 		game_free(g);
 	}
 	/* No Dutch career in 1560: down from the French flag skips past
