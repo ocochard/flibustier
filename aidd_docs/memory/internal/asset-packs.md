@@ -312,6 +312,56 @@ original files and executable.
   and a `pack.ini`. Exported from the original data, it is for local
   checks and as a starting point only: never distribute it.
 
+## Open game data
+
+The tables the rules read, when a pack gives them; otherwise the
+original executable's. Plan: [open-game-data.md](../../plans/open-game-data.md).
+Implemented with one list of fields per ID (`src/assets/datafields.c`)
+that both the loader and the export use.
+
+| ID | Format | Content |
+|---|---|---|
+| `data/sword` | JSON (`struct sword_tables`, `world.h`) | the sword fight tables |
+
+- **Shape:** a JSON object whose keys are exactly the fields listed
+  below, each an integer or nested arrays of fixed sizes, outer index
+  first. A missing field, an unknown one, a wrong size or a value out of
+  range is an error naming the ID and the field; it never falls back to
+  the original.
+- **Values** are the open pack's own; they need not match the
+  original's (maintainer, 2026-10-29).
+- **Export:** `flibustier --export-world DIR` writes these IDs too, with
+  the world (see "Open world data"): for local checks only, never
+  distributed.
+
+### `data/sword`
+
+See "Sword fights" in game-rules.md for how each table is used. Moves
+are 0-15, levels 0-4 (the difficulty), weapons 0-2 (rapier, longsword,
+cutlass).
+
+| Field | Size | Content |
+|---|---|---|
+| `flag_y` | 6, i16 | the flags' height on screen, by bar position / 8 |
+| `frames` | 16, i16 | frames per move |
+| `reach_level` | 5, u8 | the player's reach, by level |
+| `reach_weapon` | 3, u8 | the player's reach, by weapon |
+| `foe_reach` | 3, u8 | the opponent's reach, by weapon |
+| `delay` | 4, i16 | the frame time, in timer units, by level `& 3` |
+| `player_edge`, `foe_edge` | i16 | the x at or past which the player is driven back, and at or below which the opponent is driven off |
+| `hit`, `foe_hit` | 5, u8 | hit thresholds by level, against `rand & 255` |
+| `far_move` | 12, u8 | the move an input becomes at a distance |
+| `once` | 16, u8 | non-zero: the move takes its input once |
+| `guard` | 16 x 6, u8 | per move and frame: the lines covered (bits: 1 low, 2 middle, 4 high) |
+| `strike` | 16 x 6, u8 | per move and frame: the line attacked, 0 none |
+| `step_in` | 16 x 6, u8 | per move and frame: the step toward the opponent |
+| `step_back` | 16 x 6, u8 | per move and frame: the step away |
+| `far_ai` | 8, u8 | the opponent's moves at a distance |
+| `caution` | 5, u8 | by level: up close, the opponent follows its script when `rand(16) > caution`, otherwise guards |
+| `area` | 16, u8 | the body area a strike hits |
+| `scripts` | 3 x 8 x 8, u8 | the opponent's move scripts up close: per bank (by level), 8 scripts of 8 moves; 0x80 and above is a counter to the player's move |
+| `line` | 16, u8 | the line of each move |
+
 ## Open text
 
 The game's text, when a pack gives it; otherwise the original `CSTR` and

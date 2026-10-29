@@ -801,7 +801,7 @@ test_world_export(struct packs *orig)
 	    "map-1660.tmj", "map-1680.tmj", "towns-1560.json",
 	    "towns-1600.json", "towns-1620.json", "towns-1640.json",
 	    "towns-1660.json", "towns-1680.json", "treasure.json",
-	    "battle-sets.json", "map-terrain.pgm", "battle-terrain.pgm",
+	    "battle-sets.json", "sword.json", "map-terrain.pgm", "battle-terrain.pgm",
 	    NULL };
 	static struct era_towns t, tref;
 	const char *data = getenv("FLIBUSTIER_DATA");
@@ -836,6 +836,8 @@ test_world_export(struct packs *orig)
 			    sizeof(w.treasure)) == 0);
 			CHECK(memcmp(w.battle_sets, ref.battle_sets,
 			    sizeof(w.battle_sets)) == 0);
+			CHECK(memcmp(&w.sword, &ref.sword,
+			    sizeof(w.sword)) == 0);
 			CHECK(towns_for_era(packs, layout, b.data, b.len, era,
 			    &t, err, sizeof(err)) == 0);
 			CHECK(towns_for_era(orig, layout, b.data, b.len, era,
@@ -849,6 +851,11 @@ test_world_export(struct packs *orig)
 	if (layout != NULL)
 		CHECK(world_load(&w, packs, layout, b.data, b.len, 4, err,
 		    sizeof(err)) == -1 && strstr(err, "map/1660") != NULL);
+	/* The same for the open game data. */
+	CHECK(write_file(dir, "sword.json", "{\"flag_y\": []}") == 0);
+	if (layout != NULL)
+		CHECK(world_load(&w, packs, layout, b.data, b.len, 0, err,
+		    sizeof(err)) == -1 && strstr(err, "data/sword") != NULL);
 	blob_free(&b);
 	packs_free(packs);
 	for (i = 0; files[i] != NULL; i++) {

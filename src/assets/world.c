@@ -5,6 +5,7 @@
  */
 
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,6 +240,35 @@ read_bytes(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	return (0);
 }
 
+#define SWORD_FIELD(name, type, d0, d1)					\
+	{ #name, offsetof(struct sword_tables, name), type, { d0, d1, 0 } }
+
+const struct data_field sword_fields[] = {
+	SWORD_FIELD(flag_y, DATA_I16, SWORD_FLAGS, 0),
+	SWORD_FIELD(frames, DATA_I16, SWORD_MOVES, 0),
+	SWORD_FIELD(reach_level, DATA_U8, BATTLE_LEVELS, 0),
+	SWORD_FIELD(reach_weapon, DATA_U8, SWORD_WEAPONS, 0),
+	SWORD_FIELD(foe_reach, DATA_U8, SWORD_WEAPONS, 0),
+	SWORD_FIELD(delay, DATA_I16, 4, 0),
+	SWORD_FIELD(player_edge, DATA_I16, 0, 0),
+	SWORD_FIELD(foe_edge, DATA_I16, 0, 0),
+	SWORD_FIELD(hit, DATA_U8, BATTLE_LEVELS, 0),
+	SWORD_FIELD(foe_hit, DATA_U8, BATTLE_LEVELS, 0),
+	SWORD_FIELD(far_move, DATA_U8, 12, 0),
+	SWORD_FIELD(once, DATA_U8, SWORD_MOVES, 0),
+	SWORD_FIELD(guard, DATA_U8, SWORD_MOVES, SWORD_FRAMES),
+	SWORD_FIELD(strike, DATA_U8, SWORD_MOVES, SWORD_FRAMES),
+	SWORD_FIELD(step_in, DATA_U8, SWORD_MOVES, SWORD_FRAMES),
+	SWORD_FIELD(step_back, DATA_U8, SWORD_MOVES, SWORD_FRAMES),
+	SWORD_FIELD(far_ai, DATA_U8, 8, 0),
+	SWORD_FIELD(caution, DATA_U8, BATTLE_LEVELS, 0),
+	SWORD_FIELD(area, DATA_U8, SWORD_MOVES, 0),
+	{ "scripts", offsetof(struct sword_tables, scripts), DATA_U8,
+	    { SWORD_BANKS, SWORD_SCRIPTS, SWORD_STEPS } },
+	SWORD_FIELD(line, DATA_U8, SWORD_MOVES, 0),
+};
+const size_t sword_nfields = sizeof(sword_fields) / sizeof(sword_fields[0]);
+
 /* The sword fight tables: offsets in the block at sword_va. */
 static int
 sword_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
@@ -328,6 +358,30 @@ int_list(const struct json *a, size_t n, int lo, int hi, int *out)
 		    a->items[i]->num > hi)
 			return (-1);
 		out[i] = (int)a->items[i]->num;
+	}
+	return (0);
+}
+
+/* data/sword when a pack gives it, otherwise the original's tables. */
+static int
+load_sword(struct world *w, struct packs *packs,
+    const struct exe_layout *layout, const uint8_t *exe, size_t len,
+    char *err, size_t errlen)
+{
+	struct json *j;
+	int rc;
+
+	if ((rc = load_json(packs, "data/sword", &j, err, errlen)) < 0)
+		return (-1);
+	if (rc == 0) {
+		rc = data_decode(j, sword_fields, sword_nfields, &w->sword,
+		    "data/sword", err, errlen);
+		json_free(j);
+		return (rc);
+	}
+	if (sword_load(layout, exe, len, &w->sword) != 0) {
+		snprintf(err, errlen, "no sword fight tables");
+		return (-1);
 	}
 	return (0);
 }
@@ -487,9 +541,10 @@ world_load(struct world *w, struct packs *packs,
 	    layout->shot_rise_va, w->shot_rise, SHOT_STEPS) != 0 ||
 	    read_words(layout, exe, len, layout->shot_frame_va, w->shot_frame,
 	    SHOT_STEPS) != 0 || read_words(layout, exe, len,
-	    layout->bow_mark_va, w->bow_mark, 16 * 2) != 0 ||
-	    sword_load(layout, exe, len, &w->sword) != 0)
+	    layout->bow_mark_va, w->bow_mark, 16 * 2) != 0)
 		goto bad;
+	if (load_sword(w, packs, layout, exe, len, err, errlen) != 0)
+		return (-1);
 	if (load_arrival(w, packs, layout, exe, len, era, err, errlen) != 0)
 		return (-1);
 	return (load_places(w, packs, err, errlen));

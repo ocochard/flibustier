@@ -173,6 +173,9 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	jb_raw(&b, "}\n");
 	if (flush(dir, "battle-sets.json", &b, err, errlen) != 0)
 		goto out;
+	data_encode(&b, sword_fields, sword_nfields, &w->sword);
+	if (flush(dir, "sword.json", &b, err, errlen) != 0)
+		goto out;
 	jb_raw(&b, "# Exported from the original Pirates! Gold data: for local\n"
 	    "# checks only, do not distribute.\n[pack]\n"
 	    "name = World exported from the original\n"
@@ -185,7 +188,8 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	jb_raw(&b, "screens/sea = sea-screens.tmj\n"
 	    "screens/land = land-screens.tmj\n"
 	    "data/treasure = treasure.json\n"
-	    "data/battle-sets = battle-sets.json\n");
+	    "data/battle-sets = battle-sets.json\n"
+	    "data/sword = sword.json\n");
 	for (era = 0; era < EXE_ERAS; era++) {
 		snprintf(name, sizeof(name), "data/towns/%d = towns-%d.json\n",
 		    town_era_years[era], town_era_years[era]);

@@ -91,15 +91,20 @@ Status (2026-10-29): done.
 
 ### G2: formats, loaders and export
 
+Status (2026-10-29): `data/sword` done (asset-packs.md, "Open game
+data"); `test_original` round-trips it and refuses a broken file, and
+the ten-year replay with the export over the original is identical.
+
 For each ID in the table above:
 
 - The format, documented in asset-packs.md ("Open game data", next to
   "Open world data").
 - The loader, filling the structures of G1.
-- `flibustier --export-data DIR`: writes the installed tables in these
-  formats with a `pack.ini` fragment, as `--export-world` and
-  `--export-text` do. Exported from the original data, it is for local
-  checks and as a starting point only: never distribute it.
+- The export: `flibustier --export-world DIR` writes the world tables
+  in these formats with the world, and their lines in its `pack.ini`
+  (one command instead of a separate `--export-data`). Exported from
+  the original data, it is for local checks and as a starting point
+  only: never distribute it.
 - Verification, as for T3: `test_original` exports the original's
   tables, loads them back, and compares the structures; the ten-year
   replay through `flibustier-sim --pack <export>` gives byte-identical

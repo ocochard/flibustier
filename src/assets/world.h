@@ -11,6 +11,7 @@
 
 #include "data/exe.h"
 #include "data/pack.h"
+#include "datafields.h"
 #include "towns.h"
 
 #define WORLD_CELLS_W	640
@@ -158,6 +159,9 @@ struct world {
  * Names of the sets, in battle_sets order.
  */
 extern const char *const battle_set_names[BATTLE_SETS];
+/* data/sword: the fields of struct sword_tables. */
+extern const struct data_field sword_fields[];
+extern const size_t sword_nfields;
 
 /* Returns 0, or -1 with a message in "err". */
 int	world_load(struct world *w, struct packs *packs,

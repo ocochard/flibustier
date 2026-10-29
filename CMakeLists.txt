@@ -49,6 +49,7 @@ add_library(flibustier_core STATIC
 	src/assets/tiles.c
 	src/assets/scenario.c
 	src/assets/uitables.c
+	src/assets/datafields.c
 	src/assets/sheet.c
 	src/assets/tiled.c
 	src/assets/worldfiles.c
