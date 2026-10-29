@@ -42,8 +42,8 @@ Variety.  Among equally good tiles (the 40 open sea and 51 plain land
 variants above all) a hash of the cell and the tile breaks the tie:
 varied, and the same on every run.
 
-The six eras share this base map; base_grid() returns it for a later
-step to put each era's towns on.
+The six eras share this base map (base_grid()); each era's map puts
+that era's towns on it, the building tiles tables/towns.py chooses.
 """
 import json
 import os
@@ -285,8 +285,13 @@ def notes():
 
 
 def era_grid(year):
-    """The era's map; for now the base map in every era."""
-    return base_grid()
+    """The era's map: the base map with the era's towns drawn on it
+    (tables/towns.py chooses their building tiles)."""
+    import towns
+    grid = base_grid()
+    for x, y, tile in towns.era_tiles(year):
+        grid[y, x] = tile
+    return grid
 
 
 def builder(year):
