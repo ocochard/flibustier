@@ -281,7 +281,11 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   town's arrival cells (see "Arriving"), the player is
   asked with the language's "Disembark (y/n)" plaque, `misc.crs` frame 8
   at (268, 218) (VA `0x315d`; frame 4 is "Quit (Y/N)", 5 "Game
-  Paused"), answered with the keys at VA `0x31610` ("YN"). No puts the
+  Paused"), answered with the keys at VA `0x31610` ("YN", the same in
+  every language, upper-cased: Y yes, N no, any other key waits). The
+  engine also takes the first letter of the language's "Yes" (CSTR
+  274: O in French, J in German) unless it is N, for this prompt and
+  "Quit (Y/N)" (an engine addition). No puts the
   ship back where it was and turns it half round. Yes leaves the ship
   where it stood and puts the party on that land.
 - **On foot:** the party walks with the input, eight directions (bits 1
@@ -2575,7 +2579,8 @@ quote. The career then begins in the start town.
 A career ends by retiring at the bank (dividing the plunder, then
 retiring), or in prison (a famous expedition, or health 3). The cabin's
 "Exit game" does not retire: it shows the "Quit (Y/N)" plaque
-(`misc.crs` frame 4 at (268, 218), VA `0x31df`) and leaves the game.
+(`misc.crs` frame 4 at (268, 218), VA `0x31df`), answered with the
+keys of "Disembark" (see "Landing parties"), and leaves the game.
 
 1. **Points (VA `0x5039`):** `fortune / 10 + land x 50 + (the four
    ranks added) x 500 + reputation x 200 + married x 1000 + relatives

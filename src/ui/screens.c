@@ -1365,6 +1365,24 @@ const struct screen screen_name = {
 #define S_YES			274
 #define S_NAY			275
 
+/*
+ * The Y/N prompts (quit, disembark) take Y and N in every language (the
+ * keys at VA 0x31610).  The engine also takes the first letter of the
+ * language's "Yes", O in French and J in German, unless it is N.
+ */
+static int
+yes_key(const struct game *g, const struct ui_event *ev)
+{
+	int c = (unsigned char)game_str(g, S_YES)[0];
+
+	if (ev->type != EV_CHAR)
+		return (0);
+	if (c >= 'a' && c <= 'z')
+		c -= 'a' - 'A';
+	return (ev->ch == 'y' || ev->ch == 'Y' || (c >= 'A' && c <= 'Z' &&
+	    c != 'N' && (ev->ch == c || ev->ch == c + ('a' - 'A'))));
+}
+
 static const struct { int x0, y0, x1, y1; } confirm_rect[2] = {
 	{ 200, 368, 240, 399 }, { 380, 368, 440, 399 },
 };
@@ -2352,8 +2370,8 @@ cabin_event(struct game *g, const struct ui_event *ev)
 	int i;
 
 	if (g->quit_prompt) {
-		/* Y quits to the welcome menu, N or Escape stays. */
-		if (ev->type == EV_CHAR && (ev->ch == 'y' || ev->ch == 'Y')) {
+		/* Yes quits to the welcome menu, N or Escape stays. */
+		if (yes_key(g, ev)) {
 			g->quit_prompt = 0;
 			g->started = 0;
 			game_goto(g, &screen_welcome);
@@ -2753,9 +2771,9 @@ sail_event(struct game *g, const struct ui_event *ev)
 	};
 	size_t i;
 
-	/* "Disembark" (VA 0x315d): Y or N; Enter and Escape as well. */
+	/* "Disembark" (VA 0x315d): yes or N; Enter and Escape as well. */
 	if (g->ashore_prompt) {
-		if ((ev->type == EV_CHAR && (ev->ch == 'y' || ev->ch == 'Y')) ||
+		if (yes_key(g, ev) ||
 		    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)) {
 			g->ashore_prompt = 0;
 			g->turn = 0;

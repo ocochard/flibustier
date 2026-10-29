@@ -378,7 +378,16 @@ test_hall_of_fame(void)
 	CHECK(game_script(g, "click:400,180") == 0 && g->quit_prompt);
 	CHECK(game_script(g, "type:n") == 0 && !g->quit_prompt &&
 	    g->screen == &screen_cabin);
-	CHECK(game_script(g, "click:400,180 type:y wait:40") == 0 &&
+	CHECK(game_script(g, "click:400,180 type:o") == 0 && g->quit_prompt);
+	CHECK(game_script(g, "type:y wait:40") == 0 &&
+	    !g->started && g->screen == &screen_welcome);
+	game_free(g);
+	/* In French, O (Oui) quits as well. */
+	g = play_in(saves_tmp, "fre", career);
+	if (g == NULL)
+		return;
+	CHECK(game_script(g, "click:400,180") == 0 && g->quit_prompt);
+	CHECK(game_script(g, "type:o wait:40") == 0 &&
 	    !g->started && g->screen == &screen_welcome);
 	game_free(g);
 	CHECK(hof_load(path, &h, err, sizeof(err)) != 0 || h.count == 0);
