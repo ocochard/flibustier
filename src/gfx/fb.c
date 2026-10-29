@@ -383,6 +383,13 @@ fb_frame_sub(struct fb *fb, const struct frame *f, int x, int y, int sub)
 }
 
 void
+fb_frame_sub_clip(struct fb *fb, const struct frame *f, int x, int y,
+    int sub, int x0, int y0, int x1, int y1)
+{
+	frame_clip(fb, f, x, y, sub, x0, y0, x1, y1);
+}
+
+void
 fb_frame_rgba_clip(struct fb *fb, const struct frame *f, int x, int y,
     int x0, int y0, int x1, int y1)
 {

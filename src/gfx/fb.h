@@ -96,6 +96,8 @@ void	fb_frame(struct fb *fb, const struct frame *f, int x, int y);
  */
 void	fb_frame_sub(struct fb *fb, const struct frame *f, int x, int y,
 	    int sub);
+void	fb_frame_sub_clip(struct fb *fb, const struct frame *f, int x, int y,
+	    int sub, int x0, int y0, int x1, int y1);
 
 /* The same, clipped to the rectangle (x0, y0)-(x1, y1), inclusive. */
 void	fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y,

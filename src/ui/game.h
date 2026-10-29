@@ -126,6 +126,7 @@ struct game {
 	struct sprite_bank	 btl_misc;	/* sbtlmisc.cur */
 	struct tileset		 btl_tiles;	/* 32 x 32 battle tiles */
 	int			 btl_fire, btl_sails;	/* pending inputs */
+	int			 btl_heading[2];	/* --smooth: as drawn */
 	int			 btl_stage;	/* 0 fight, 1 outcome, 2 prize */
 	int			 btl_final;	/* outcome after sim_battle_finish */
 	struct sprite_group	 sw_parts[2][6];	/* [you, foe] fighter layers */

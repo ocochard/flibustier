@@ -3444,6 +3444,8 @@ battle_enter(struct game *g)
 	game_portrait(g, NULL);
 	battle_sprites(g, 0, g->sim.battle.you.type);
 	battle_sprites(g, 1, g->sim.battle.foe.type);
+	g->btl_heading[0] = g->sim.battle.you.heading;
+	g->btl_heading[1] = g->sim.battle.foe.heading;
 	tileset_free(&g->btl_tiles);
 	tileset_load(g->packs, "tiles/battle", &g->btl_tiles);
 	sea_init(&g->sea, g->fb.pal);	/* its sea turns too (VA 0x939b) */
@@ -3727,6 +3729,23 @@ play_sound(struct game *g, int fm, int digital)
 		game_fm(g, fm);
 }
 
+/*
+ * --smooth: the heading drawn turns to the ship's over a few frames,
+ * an eighth of the way each, instead of at once; more than a quarter
+ * turn away, it is a jump.
+ */
+static void
+battle_heading_follow(int *shown, int heading)
+{
+	int d = ((heading - *shown + 128) & 255) - 128;
+
+	if (abs(d) > 64)
+		*shown = heading;
+	else
+		*shown = (*shown + (d + (d > 0 ? 7 : d < 0 ? -7 : 0)) / 8) &
+		    255;
+}
+
 static void
 battle_tick(struct game *g)
 {
@@ -3737,6 +3756,8 @@ battle_tick(struct game *g)
 	if (g->fading != 0 || g->btl_stage != 0)
 		return;
 	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
+	battle_heading_follow(&g->btl_heading[0], g->sim.battle.you.heading);
+	battle_heading_follow(&g->btl_heading[1], g->sim.battle.foe.heading);
 	play_sound(g, g->sim.battle.sound, g->sim.battle.sound ==
 	    FM_BROADSIDE ? SFX_BROADSIDE : -1);	/* VA 0x9551 */
 	g->btl_fire = 0;
@@ -3778,9 +3799,22 @@ battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 
 	if (n == 0 || g->btl_ship[side][1].count != (size_t)n)
 		return;
-	idx = ((b->heading * 2 * n + 128) >> 8) % (2 * n);
+	idx = (((g->smooth ? g->btl_heading[side] : b->heading) * 2 * n +
+	    128) >> 8) % (2 * n);
 	bank = &g->btl_ship[side][idx / n];
 	f = &bank->frames[idx % n];
+	/* A pack's frame: its true colours, with --smooth at its exact
+	 * place (1/256 pixels), clipped to the area. */
+	if (f->rgba != NULL) {
+		int x = g->smooth ? b->x - f->w * 128 : (b->x / 256 - f->w / 2) *
+		    256;
+		int y = g->smooth ? b->y - f->h * 128 : (b->y / 256 - f->h / 2) *
+		    256;
+
+		fb_frame_sub_clip(&g->fb, f, x, y, 256, 0, 0, AREA - 1,
+		    AREA - 1);
+		return;
+	}
 	/* Raw frames: skip the background colour 0, clip to the area. */
 	{
 		int x, y, sx = b->x / 256 - f->w / 2, sy = b->y / 256 - f->h / 2;

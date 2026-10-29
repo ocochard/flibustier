@@ -769,6 +769,17 @@ test_battle_screen(void)
 	if (g->sim.encounter.stage == ENC_COLOURS)
 		CHECK(game_script(g, "enter") == 0);	/* attack */
 	CHECK(g->screen == &screen_battle && g->sim.battle.active);
+	/* --smooth: the drawn heading turns to a new one over frames. */
+	{
+		int h = g->sim.battle.you.heading;
+
+		g->btl_heading[0] = (h - 16) & 255;
+		CHECK(game_script(g, "wait:1") == 0 &&
+		    g->sim.battle.you.heading == h &&
+		    g->btl_heading[0] == ((h - 14) & 255));
+		CHECK(game_script(g, "wait:20") == 0 &&
+		    g->btl_heading[0] == g->sim.battle.you.heading);
+	}
 	/* An escape: outrun.pcx and its text in the ink at (100, 300)
 	 * (CSTR 197, 198). */
 	{
