@@ -458,6 +458,7 @@ test_sailing(void)
 
 		CHECK(was != NULL);
 		g->sail_fast = 0;
+		g->smooth = 1;
 		game_tick(g);
 		while (g->sail_wait != 0)
 			game_tick(g);
@@ -472,6 +473,17 @@ test_sailing(void)
 		game_draw(g);
 		CHECK(g->sim.fleet.ticks == ticks);
 		CHECK(was != NULL && memcmp(was, g->fb.px, FB_W * FB_H) != 0);
+		/* Without --smooth, the original's steps. */
+		g->smooth = 0;
+		while (g->sail_wait != 0)
+			game_tick(g);
+		game_draw(g);
+		if (was != NULL)
+			memcpy(was, g->fb.px, FB_W * FB_H);
+		game_tick(g);
+		game_tick(g);
+		game_draw(g);
+		CHECK(was != NULL && memcmp(was, g->fb.px, FB_W * FB_H) == 0);
 		free(was);
 	}
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */

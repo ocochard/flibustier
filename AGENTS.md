@@ -19,7 +19,7 @@ FLIBUSTIER_DATA=... ./build/test_sim            # or run a test binary directly
 No linter; warnings are `-Wall -Wextra -Wpedantic` (C99, no extensions). Default build type is Debug.
 
 Binaries:
-- `flibustier --data DIR [--lang eng|fre|ger] [--crt] [--viewer] [--list] [--export ID out.png] [--pack DIR] [--saves DIR]`: game and asset viewer.
+- `flibustier --data DIR [--lang eng|fre|ger] [--crt] [--smooth] [--viewer] [--list] [--export ID out.png] [--pack DIR] [--saves DIR]`: game and asset viewer.
 - `flibustier --script "enter down enter ..." out.png`: plays the UI headless and saves the last screen (used by tests and bots).
 - `flibustier-sim --data DIR`: headless rules engine, JSON lines on stdin/stdout.
 - `flibustier-seamap`: sea map helper for the career bot.

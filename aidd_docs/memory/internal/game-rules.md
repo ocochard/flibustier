@@ -214,9 +214,9 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   advance by 5, or by 1 in the fast mode: 12.2 or 60.9 passes a second.
   The T key toggles the fast mode (VA `0x1b6ef`); the voyage's end (VA
   `0x284b6`) turns it off. The engine does so on reaching a town.
-- **Drawing between passes (engine choice):** the original draws the
-  fleet and the clouds where the last pass left them. The engine draws
-  them on their way from the pass before, one 60 Hz frame at a time
+- **Drawing between passes (engine choice, `--smooth`):** the original
+  draws the fleet and the clouds where the last pass left them. With
+  `--smooth`, the engine draws them on their way from the pass before, one 60 Hz frame at a time
   (the heading too), so they lag the rules by one pass. A move of more
   than 16 pixels in one pass (a cloud coming back at the edge, the
   party landing or boarding) is drawn as a jump. The rules are not

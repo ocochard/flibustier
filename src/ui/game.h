@@ -287,6 +287,9 @@ struct game {
 	/* The original's debug mode (its "RDM" argument; --debug): keys
 	 * while sailing, and a right click on the map moves the ship. */
 	int			 debug;
+	/* --smooth: the fleet and the clouds drawn moving between sailing
+	 * passes (an engine choice). */
+	int			 smooth;
 	int			 cm_move, cm_mx, cm_my;	/* the map's right click */
 	int			 prize_loot;	/* the board holds her cargo */
 	int			 jettison;	/* the board throws cargo away */

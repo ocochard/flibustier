@@ -401,7 +401,7 @@ jukebox_close(struct jukebox *j)
 
 int
 play_run(struct packs *packs, const char *lang, const char *saves,
-    const char *shot, int shot_frames, int crt_on, int debug)
+    const char *shot, int shot_frames, int crt_on, int debug, int smooth)
 {
 	static struct game g;
 	uint8_t *rgb;
@@ -423,6 +423,7 @@ play_run(struct packs *packs, const char *lang, const char *saves,
 		return (1);
 	}
 	g.debug = debug;
+	g.smooth = smooth;
 	tw = g.fb.out_w;	/* the frame, at the art's resolution */
 	th = g.fb.out_h;
 	if ((rgb = malloc((size_t)tw * th * 3)) == NULL) {

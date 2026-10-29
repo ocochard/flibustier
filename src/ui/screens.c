@@ -2685,9 +2685,9 @@ clouds_start(struct game *g)
 #define CLOUD_JUMP		16
 
 /*
- * Between two passes, the fleet and the clouds are drawn on their way
- * from the last pass to this one, a pass behind the rules (an engine
- * choice; the original moves them once a pass).  The pose at the last
+ * With --smooth, between two passes, the fleet and the clouds are drawn
+ * on their way from the last pass to this one, a pass behind the rules
+ * (an engine choice; the original moves them once a pass).  The pose at the last
  * pass: positions in 1/8 pixels for the fleet, pixels for the clouds.
  */
 static void
@@ -2709,7 +2709,7 @@ sail_pose(const struct sim *s, struct sail_pose *p)
 static int
 sail_lag(const struct game *g)
 {
-	return (g->sail_fast ? SAIL_FRAMES : (int)g->sail_wait);
+	return (g->sail_fast || !g->smooth ? SAIL_FRAMES : (int)g->sail_wait);
 }
 
 /* "from" to "to" "w" frames on, in 1/SAIL_FRAMES; farther than "jump" is
@@ -2997,6 +2997,10 @@ sail_draw(struct game *g)
 		w = SAIL_FRAMES;
 	x = sail_between(from->x8, now.x8, w, SAIL_JUMP);
 	y = sail_between(from->y8, now.y8, w, SAIL_JUMP);
+	if (!g->smooth) {		/* whole pixels, as the original */
+		x = f->x * SAIL_SUB;
+		y = f->y * SAIL_SUB;
+	}
 	h = (from->heading * SAIL_FRAMES + (((now.heading - from->heading +
 	    128) & 255) - 128) * w + 256 * SAIL_FRAMES) % (256 * SAIL_FRAMES);
 	/* As many headings as the bank has frames, frame 0 north. */

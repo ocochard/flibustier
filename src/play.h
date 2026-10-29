@@ -18,7 +18,7 @@
  * original's debug mode.  Returns an exit status.
  */
 int	play_run(struct packs *packs, const char *lang, const char *saves,
-	    const char *shot, int shot_frames, int crt, int debug);
+	    const char *shot, int shot_frames, int crt, int debug, int smooth);
 
 /*
  * Run the game without a window: play "script" (see src/ui/script.h),
