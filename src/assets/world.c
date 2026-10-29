@@ -137,6 +137,24 @@ ground(uint8_t c)
 	    GROUND_COVER : GROUND_SWAMP);
 }
 
+/* A tile set with no terrain and no original classes to derive it. */
+static int
+no_terrain(const char *id, char *err, size_t errlen)
+{
+	snprintf(err, errlen, "%s: no terrain (a sheet with terrain, or the "
+	    "original data)", id);
+	return (-1);
+}
+
+/* An ID no pack gives, with no original data to fall back on. */
+static int
+missing(const char *id, char *err, size_t errlen)
+{
+	snprintf(err, errlen, "no %s: give the original data or a pack that "
+	    "has it", id);
+	return (-1);
+}
+
 static int
 load_map(struct world *w, struct packs *packs, int era,
     const uint8_t *classes, char *err, size_t errlen)
@@ -185,22 +203,36 @@ tiles:
 	rc = tileset_load(packs, "tiles/map", &ts);
 	if (rc != 0 || ts.tile_w != WORLD_TILE || ts.count != 256) {
 		tileset_free(&ts);
+		if (!packs_has(packs, "tiles/map"))
+			return (missing("tiles/map", err, errlen));
 		snprintf(err, errlen, "bad tiles/map");
 		return (-1);
 	}
 	memcpy(w->tiles, ts.pixels, sizeof(w->tiles));
 	memcpy(w->palette, ts.palette, sizeof(w->palette));
-	/* A tile sheet may bring its own terrain. */
+	/* A tile sheet may bring its own terrain and shores. */
+	if (ts.terrain == NULL && classes == NULL) {
+		tileset_free(&ts);
+		return (no_terrain("tiles/map", err, errlen));
+	}
 	if (ts.terrain != NULL)
 		memcpy(w->map_terrain, ts.terrain, sizeof(w->map_terrain));
 	else
 		classify(classes, w->tiles, sizeof(w->tiles), w->map_terrain);
+	if (ts.coast != NULL)
+		memcpy(w->coast, ts.coast, sizeof(w->coast));
 	tileset_free(&ts);
 	rc = tileset_load(packs, "tiles/battle", &ts);
 	if (rc != 0 || ts.tile_w != BATTLE_TILE || ts.count != 256) {
 		tileset_free(&ts);
+		if (!packs_has(packs, "tiles/battle"))
+			return (missing("tiles/battle", err, errlen));
 		snprintf(err, errlen, "bad tiles/battle");
 		return (-1);
+	}
+	if (ts.terrain == NULL && classes == NULL) {
+		tileset_free(&ts);
+		return (no_terrain("tiles/battle", err, errlen));
 	}
 	if (ts.terrain != NULL)
 		memcpy(w->battle_terrain, ts.terrain,
@@ -483,7 +515,7 @@ load_arrival(struct world *w, struct packs *packs,
 {
 	struct era_towns *towns;
 
-	if ((towns = malloc(sizeof(*towns))) == NULL) {
+	if ((towns = calloc(1, sizeof(*towns))) == NULL) {
 		snprintf(err, errlen, "out of memory");
 		return (-1);
 	}
@@ -503,7 +535,7 @@ world_load(struct world *w, struct packs *packs,
     const struct exe_layout *layout, const uint8_t *exe, size_t len,
     int era, char *err, size_t errlen)
 {
-	const uint8_t *p;
+	const uint8_t *p, *classes = NULL;
 	char id[32];
 	int block, i, rc;
 
@@ -513,40 +545,37 @@ world_load(struct world *w, struct packs *packs,
 		return (-1);
 	}
 	w->era = era;
-	/* The original ground first: a tile sheet may replace it. */
-	if ((p = exe_at(layout, exe, len, layout->land_class_va, 256)) ==
-	    NULL) {
-		snprintf(err, errlen, "no land battle terrain");
-		return (-1);
+	/*
+	 * The original's ground, coast, battle sets and treasure spots
+	 * first, when it is installed: tile sheets and packs may replace
+	 * them.  Without it, the packs must give them all.
+	 */
+	if (layout != NULL) {
+		if ((p = exe_at(layout, exe, len, layout->land_class_va,
+		    256)) == NULL)
+			goto bad;
+		for (i = 0; i < 256; i++)
+			w->land_ground[i] = ground(p[i]);
+		if ((classes = exe_at(layout, exe, len,
+		    layout->colour_class_va, 256)) == NULL ||
+		    (p = exe_at(layout, exe, len, layout->battle_sets_va,
+		    2 * BATTLE_SETS * BATTLE_PIECES)) == NULL)
+			goto bad;
+		for (i = 0; i < BATTLE_SETS * BATTLE_PIECES; i++)
+			w->battle_sets[i / BATTLE_PIECES][i % BATTLE_PIECES] =
+			    (uint8_t)(p[2 * i] < BATTLE_SCREENS ? p[2 * i] : 0);
+		if (read_words(layout, exe, len, layout->treasure_va,
+		    &w->treasure[0][0], 2 * TREASURE_SPOTS) != 0 ||
+		    (p = exe_at(layout, exe, len, layout->coast_va, 256)) ==
+		    NULL)
+			goto bad;
+		memcpy(w->coast, p, 256);
 	}
-	for (i = 0; i < 256; i++)
-		w->land_ground[i] = ground(p[i]);
-	if ((p = exe_at(layout, exe, len, layout->colour_class_va, 256)) ==
-	    NULL)
-		goto bad;
-	if (load_map(w, packs, era, p, err, errlen) != 0)
+	if (load_map(w, packs, era, classes, err, errlen) != 0)
 		return (-1);
 	/* The game's era code is 0 for 1560 and 2..6 after, and its block
 	 * the code less one past 1 (VA 0x1361c): the era's index. */
 	block = era;
-	if ((p = exe_at(layout, exe, len, layout->battle_sets_va,
-	    2 * BATTLE_SETS * BATTLE_PIECES)) == NULL) {
-		snprintf(err, errlen, "no battle screen sets");
-		return (-1);
-	}
-	for (i = 0; i < BATTLE_SETS * BATTLE_PIECES; i++)
-		w->battle_sets[i / BATTLE_PIECES][i % BATTLE_PIECES] =
-		    (uint8_t)(p[2 * i] < BATTLE_SCREENS ? p[2 * i] : 0);
-	if (read_words(layout, exe, len, layout->treasure_va,
-	    &w->treasure[0][0], 2 * TREASURE_SPOTS) != 0) {
-		snprintf(err, errlen, "no treasure spots");
-		return (-1);
-	}
-	if ((p = exe_at(layout, exe, len, layout->coast_va, 256)) == NULL) {
-		snprintf(err, errlen, "no coast table");
-		return (-1);
-	}
-	memcpy(w->coast, p, 256);
 	/* The half-circle sine, 0 to 255 and back: the original's table
 	 * exactly (test_original checks it), so no pack needs to give it. */
 	for (i = 0; i < 128; i++)
@@ -555,18 +584,28 @@ world_load(struct world *w, struct packs *packs,
 	if ((rc = load_table(packs, id, era_fields, era_nfields, w, err,
 	    errlen)) < 0)
 		return (-1);
+	if (rc == 1 && layout == NULL)
+		return (missing(id, err, errlen));
 	if (rc == 1 && era_load(w, layout, exe, len, block) != 0)
 		goto bad;
 	if ((rc = load_table(packs, "data/sea-battle", sea_battle_fields,
 	    sea_battle_nfields, w, err, errlen)) < 0)
 		return (-1);
+	if (rc == 1 && layout == NULL)
+		return (missing("data/sea-battle", err, errlen));
 	if (rc == 1 && sea_battle_load(w, layout, exe, len) != 0)
 		goto bad;
 	if ((rc = load_table(packs, "data/sword", sword_fields, sword_nfields,
 	    &w->sword, err, errlen)) < 0)
 		return (-1);
+	if (rc == 1 && layout == NULL)
+		return (missing("data/sword", err, errlen));
 	if (rc == 1 && sword_load(layout, exe, len, &w->sword) != 0)
 		goto bad;
+	if (layout == NULL && !packs_has(packs, "data/treasure"))
+		return (missing("data/treasure", err, errlen));
+	if (layout == NULL && !packs_has(packs, "data/battle-sets"))
+		return (missing("data/battle-sets", err, errlen));
 	if (load_arrival(w, packs, layout, exe, len, era, err, errlen) != 0)
 		return (-1);
 	return (load_places(w, packs, err, errlen));

@@ -178,11 +178,9 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 		snprintf(g->err, sizeof(g->err), "cannot load the fonts");
 		return (-1);
 	}
-	if (packs_load(packs, "program/main", &b) != 0 ||
-	    (g->layout = exe_identify(b.data, b.len)) == NULL) {
-		blob_free(&b);
-		snprintf(g->err, sizeof(g->err),
-		    "missing or unknown PIRATESG.EXE");
+	/* The executable is optional: open game data can stand in. */
+	if (exe_open(packs, &b, &g->layout) != 0) {
+		snprintf(g->err, sizeof(g->err), "unknown PIRATESG.EXE build");
 		return (-1);
 	}
 	g->exe = b.data;	/* kept for the town and scenario tables */

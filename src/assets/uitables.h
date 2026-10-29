@@ -72,7 +72,13 @@ struct ui_tables {
 	/* A named captain's Jolly Roger (1-20), by the captain id's bits
 	 * 6-7, then 3-5. */
 	uint16_t	jolly[4][8];
-	uint8_t		shade[256];	/* a colour's shadow */
+	/* The original's shadow of each colour, for its cloud sprites;
+	 * a pack's clouds are sheets that bring their own. */
+	int		has_shade;
+	uint8_t		shade[256];
+	/* The credits picture's blocks: the original's only (a pack gives
+	 * its credits as text). */
+	int		has_credits;
 	/* The career stories, by scenario (data/stories). */
 	struct ui_story_step story[UI_STORIES][UI_STORY_STEPS];
 	uint8_t		nstory[UI_STORIES];

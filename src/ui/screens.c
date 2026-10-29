@@ -755,8 +755,10 @@ credits_enter(struct game *g)
 		g->cred_count = (int)g->cred_text.nblocks;
 		break;
 	case 0:
+		/* The picture's blocks are the original's: without them,
+		 * no credits. */
 		pic_load(g->packs, credits_picture(g), &g->credits);
-		g->cred_count = CRED_BLOCKS;
+		g->cred_count = g->ui.has_credits ? CRED_BLOCKS : 0;
 		break;
 	default:
 		g->cred_count = 0;	/* broken: skipped */
@@ -2951,8 +2953,9 @@ clouds_draw(struct game *g)
 		}
 		/* The original's: its shape shading the sea, then the
 		 * cloud, colour 0 clear. */
-		fb_shadow(&g->fb, f, sx - CLOUD_SHADOW * SAIL_FRAMES,
-		    sy + CLOUD_SHADOW * SAIL_FRAMES, SAIL_FRAMES, shade);
+		if (g->ui.has_shade)
+			fb_shadow(&g->fb, f, sx - CLOUD_SHADOW * SAIL_FRAMES,
+			    sy + CLOUD_SHADOW * SAIL_FRAMES, SAIL_FRAMES, shade);
 		fb_frame_sub(&g->fb, f, sx, sy, SAIL_FRAMES);
 	}
 }

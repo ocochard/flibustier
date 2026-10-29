@@ -21,4 +21,10 @@
 int	png_decode(const uint8_t *data, size_t len, int art_height,
 	    struct image *out);
 
+/*
+ * Write "w" x "h" RGB pixels as a PNG file at "path", uncompressed (for
+ * exports): 0, or -1 if it cannot be written.
+ */
+int	png_write_rgb(const char *path, const uint8_t *rgb, int w, int h);
+
 #endif

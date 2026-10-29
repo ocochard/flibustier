@@ -114,32 +114,31 @@ main(int argc, char **argv)
 			return (2);
 		}
 	}
-	if (data == NULL) {
-		fprintf(stderr, "no game data: use --data or set FLIBUSTIER_DATA\n");
+	if (data == NULL && npacks == 0) {
+		fprintf(stderr, "no game data: use --data, --pack or set "
+		    "FLIBUSTIER_DATA\n");
 		return (1);
 	}
 	if ((packs = packs_new()) == NULL ||
-	    packs_add_original(packs, data) != 0)
+	    (data != NULL && packs_add_original(packs, data) != 0))
 		goto bad;
 	for (i = 0; i < npacks; i++)
-		if (packs_add_dir(packs, pack[i]) != 0)
-			goto bad;
-	if (packs_load(packs, "program/main", &b) != 0) {
+		if (packs_add_dir(packs, pack[i]) != 0) {
 bad:
-		fprintf(stderr, "%s\n", packs != NULL ? packs_error(packs) :
-		    "out of memory");
+			fprintf(stderr, "%s\n", packs != NULL ?
+			    packs_error(packs) : "out of memory");
+			packs_free(packs);
+			return (1);
+		}
+	/* The executable is optional: open game data can stand in. */
+	if (exe_open(packs, &b, &gd.layout) != 0) {
+		fprintf(stderr, "unknown PIRATESG.EXE build\n");
 		packs_free(packs);
 		return (1);
 	}
 	gd.packs = packs;
 	gd.exe = b.data;
 	gd.len = b.len;
-	if ((gd.layout = exe_identify(gd.exe, gd.len)) == NULL) {
-		fprintf(stderr, "unknown PIRATESG.EXE build\n");
-		blob_free(&b);
-		packs_free(packs);
-		return (1);
-	}
 
 	memset(&ss, 0, sizeof(ss));
 	ss.load = load_era;

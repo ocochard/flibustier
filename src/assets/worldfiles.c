@@ -12,7 +12,9 @@
 #include "data/fsys.h"
 
 #include "scenario.h"
+#include "png.h"
 #include "tiled.h"
+#include "tiles.h"
 #include "uitables.h"
 #include "towns.h"
 #include "world.h"
@@ -102,6 +104,80 @@ export_table(void *arg, const char *id, const char *name, struct jbuf *b)
 	return (write_file(x->dir, name, b, x->err, x->errlen));
 }
 
+/*
+ * A tile set as a tile sheet (asset-packs.md, "Replacement tiles"):
+ * "name".png, 16 tiles a row, its terrain mask "name"-mask.png, and
+ * "name".tiles with the battle tiles' ground or the map tiles' coast.
+ */
+static int
+write_sheet(const char *dir, const char *name, const uint8_t *px,
+    const uint8_t *pal, const uint8_t *terrain, int side,
+    const uint8_t *ground, const uint8_t *coast, char *err, size_t errlen)
+{
+	static const uint8_t mask[4][3] = {
+	    { 0, 0, 0 }, { 0x00, 0xFF, 0xFF }, { 0x00, 0xFF, 0x00 },
+	    { 0x00, 0x00, 0xFF } };	/* by TERRAIN_* */
+	const int w = 16 * side;
+	struct jbuf b = { 0 };
+	char path[1024], line[64];
+	uint8_t *art, *msk;
+	size_t i, k;
+	int t, x, y, rc = -1;
+
+	if ((art = malloc((size_t)w * w * 3)) == NULL ||
+	    (msk = malloc((size_t)w * w * 3)) == NULL) {
+		free(art);
+		snprintf(err, errlen, "out of memory");
+		return (-1);
+	}
+	for (y = 0; y < w; y++)
+		for (x = 0; x < w; x++) {
+			t = y / side * 16 + x / side;
+			i = ((size_t)t * side + y % side) * side + x % side;
+			k = ((size_t)y * w + x) * 3;
+			memcpy(art + k, pal + 3 * px[i], 3);
+			memcpy(msk + k, mask[terrain[i] & 3], 3);
+		}
+	snprintf(path, sizeof(path), "%s/%s.png", dir, name);
+	if (png_write_rgb(path, art, w, w) != 0)
+		goto out;
+	snprintf(path, sizeof(path), "%s/%s-mask.png", dir, name);
+	if (png_write_rgb(path, msk, w, w) != 0)
+		goto out;
+	snprintf(line, sizeof(line), "[tiles]\nimage = %s.png\ntile = %d\n"
+	    "terrain = %s-mask.png\n", name, side, name);
+	jb_raw(&b, line);
+	for (t = 0; ground != NULL && t < 256; t++) {
+		if (t == 0)
+			jb_raw(&b, "\n[ground]\n");
+		if (ground[t] == GROUND_CLEAR)
+			continue;
+		snprintf(line, sizeof(line), "%d = %s\n", t,
+		    tile_ground_names[ground[t] & 3]);
+		jb_raw(&b, line);
+	}
+	for (t = 0; coast != NULL && t < 256; t++) {
+		if (t == 0)
+			jb_raw(&b, "\n[coast]\n");
+		for (k = 0; k < 3 && tile_coast_names[k].code != coast[t]; k++)
+			continue;
+		if (k == 3)
+			continue;
+		snprintf(line, sizeof(line), "%d = %s\n", t,
+		    tile_coast_names[k].name);
+		jb_raw(&b, line);
+	}
+	snprintf(line, sizeof(line), "%s.tiles", name);
+	rc = write_file(dir, line, &b, err, errlen);
+out:
+	if (rc != 0 && b.err == 0 && err[0] == '\0')
+		snprintf(err, errlen, "cannot write %s", path);
+	jb_free(&b);
+	free(art);
+	free(msk);
+	return (rc);
+}
+
 int
 world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 {
@@ -111,6 +187,7 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	struct jbuf b = { 0 }, ini = { 0 };
 	struct export_ctx ctx;
 	struct ui_tables *ui = NULL;
+	struct tileset bts;
 	struct blob exe;
 	char name[64];
 	int era, rc = -1, i, k;
@@ -119,10 +196,8 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 		snprintf(err, errlen, "cannot create %s", dir);
 		return (-1);
 	}
-	if (packs_load(packs, "program/main", &exe) != 0 ||
-	    (layout = exe_identify(exe.data, exe.len)) == NULL) {
-		blob_free(&exe);
-		snprintf(err, errlen, "missing or unknown PIRATESG.EXE");
+	if (exe_open(packs, &exe, &layout) != 0) {
+		snprintf(err, errlen, "unknown PIRATESG.EXE build");
 		return (-1);
 	}
 	if ((w = calloc(1, sizeof(*w))) == NULL) {
@@ -166,6 +241,24 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	    err, errlen) != 0 || write_terrain(dir, "battle-terrain.pgm",
 	    w->battle_terrain, BATTLE_TILE, err, errlen) != 0)
 		goto out;
+	/* The tile sets as sheets with their terrain, ground and coast, so
+	 * that the export runs without the original data. */
+	err[0] = '\0';
+	if (write_sheet(dir, "map", w->tiles, w->palette, w->map_terrain,
+	    WORLD_TILE, NULL, w->coast, err, errlen) != 0)
+		goto out;
+	if (tileset_load(packs, "tiles/battle", &bts) != 0 ||
+	    bts.tile_w != BATTLE_TILE || bts.count != 256) {
+		tileset_free(&bts);
+		snprintf(err, errlen, "bad tiles/battle");
+		goto out;
+	}
+	rc = write_sheet(dir, "battle", bts.pixels, bts.palette,
+	    w->battle_terrain, BATTLE_TILE, w->land_ground, NULL, err, errlen);
+	tileset_free(&bts);
+	if (rc != 0)
+		goto out;
+	rc = -1;
 	/* Towns per era, treasure spots, battle sets. */
 	for (era = 0; era < EXE_ERAS; era++) {
 		if (towns_for_era(packs, layout, exe.data, exe.len, era, &towns,
@@ -233,7 +326,9 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 		    town_era_years[era], town_era_years[era]);
 		jb_raw(&b, name);
 	}
-	jb_raw(&b, "screens/sea = sea-screens.tmj\n"
+	jb_raw(&b, "tiles/map = map.tiles\n"
+	    "tiles/battle = battle.tiles\n"
+	    "screens/sea = sea-screens.tmj\n"
 	    "screens/land = land-screens.tmj\n"
 	    "data/treasure = treasure.json\n"
 	    "data/battle-sets = battle-sets.json\n"

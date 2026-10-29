@@ -142,6 +142,11 @@ scenario_load(struct packs *packs, const struct exe_layout *layout,
 	    errlen)) < 0)
 		return (-1);
 	if (rc == 1) {
+		if (layout == NULL) {
+			snprintf(err, errlen, "no data/scenarios: give the "
+			    "original data or a pack that has it");
+			return (-1);
+		}
 		if (from_exe(layout, exe, len, index, out) != 0) {
 			snprintf(err, errlen, "no start scenario %d in the "
 			    "executable", index);

@@ -135,22 +135,36 @@ Size: medium to large; it can land one ID at a time, each with its test.
 
 ### G3: start without the executable
 
-- `world_load()`: read the pack's tables first and the executable's
-  only for what is missing, instead of always reading the executable
-  and overwriting.
-- `shade`: derive it from the palette (the nearest darker colour) for a
-  pack palette; the original keeps its table. To check: whether a rule
-  reproduces the original's table, which would remove the special case.
-- `program/main` becomes optional: game.c, sim_main.c, view.c and
-  worldfiles.c load it only when an ID it backs is missing from the
-  packs.
-- When neither a pack nor the executable gives a table, the error
-  names the missing IDs ("no data/sword: give the original DATA.DAT or a
-  pack that has it"), instead of "missing or unknown PIRATESG.EXE".
-- `flibustier-sim` and `flibustier` accept `--pack` with no `--data`.
-- Check: a test runs `flibustier-sim` on the G2 export with no original
-  data, and the replay matches.
-- Size: small.
+Status (2026-10-29): done.
+
+- `exe_open()` (`src/data/exe.c`) gives the executable when the packs
+  have one, and nothing otherwise; an unknown build is still refused.
+  The game, `flibustier-sim`, the viewer and the export all start
+  without it, and `flibustier-sim` takes `--pack` with no `--data`.
+- `world_load()`, `towns_for_era()`, `scenario_load()` and
+  `ui_tables_load()` take each table from the packs, or else the
+  executable; with neither, the error names the ID.
+- The coast moved to the map tile sheet (`[coast]`), with terrain and
+  ground already there.
+- `shade`: not derived. No simple rule reproduces the original's table
+  (the best, the nearest colour to 40 % brightness, matches 162 of
+  256), and only the original's indexed cloud sprites use it; without
+  the executable they draw no shadow. A pack's clouds are sheets.
+- The credits picture's blocks stay the original's; without them, a
+  pack gives text credits or the credits are skipped.
+- Check: `test_original` exports the world, loads every era, the towns,
+  scenarios and screen tables from the export alone with no executable,
+  and finds them equal to the original's (but for the tiles' palette
+  indices, reduced without the original tiles); a missing table is
+  named. The ten-year replay through `flibustier-sim --pack <export>`,
+  with no `--data`, is byte-identical to the original's. The game runs
+  headless from the open pack and the export alone.
+- Found: `data/towns` lists the arrival cells town by town, so a
+  converted era keeps the original's cells but not always their order
+  (34 of 223 in 1560 move). The nearest-town search keeps the first of
+  equally near cells, so a tie could pick another town than the
+  original. Fixing it needs a list-wide order in `data/towns`.
+- Not done: `tools/career-bot/seamap.c` still requires the executable.
 
 ### G4: the content (open pack repository)
 

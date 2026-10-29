@@ -47,6 +47,14 @@
  * Both return 0, or -1 if the tileset is missing or malformed.
  */
 int	tileset_load(struct packs *packs, const char *id, struct tileset *out);
+
+/* A sheet's names: [ground] by GROUND_*, [coast] with their codes. */
+extern const char *const tile_ground_names[4];
+struct tile_coast {
+	const char	*name;
+	uint8_t		 code;
+};
+extern const struct tile_coast tile_coast_names[3];
 int	tileset_from_blob(struct packs *packs, const char *id,
 	    const struct blob *b, struct tileset *out);
 

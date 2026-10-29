@@ -86,3 +86,21 @@ exe_at(const struct exe_layout *layout, const uint8_t *data, size_t datalen,
 		return (NULL);
 	return (data + off);
 }
+
+int
+exe_open(struct packs *packs, struct blob *out,
+    const struct exe_layout **layout)
+{
+	memset(out, 0, sizeof(*out));
+	*layout = NULL;
+	if (packs_load(packs, "program/main", out) != 0) {
+		memset(out, 0, sizeof(*out));
+		return (0);
+	}
+	if ((*layout = exe_identify(out->data, out->len)) == NULL) {
+		blob_free(out);
+		memset(out, 0, sizeof(*out));
+		return (-1);
+	}
+	return (0);
+}

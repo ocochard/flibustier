@@ -799,6 +799,13 @@ same_town(const struct town *a, const struct town *b)
  * spots and battle sets exported as Tiled maps and JSON, and loaded
  * back, give the same world and towns in every era.
  */
+static const char *
+path_of(char *buf, size_t len, const char *dir, const char *name)
+{
+	snprintf(buf, len, "%s/%s", dir, name);
+	return (buf);
+}
+
 static void
 test_world_export(struct packs *orig)
 {
@@ -816,17 +823,19 @@ test_world_export(struct packs *orig)
 	    "layout-town.json", "layout-weapons.json", "layout-board.json",
 	    "layout-cave.json", "layout-fleet-panel.json",
 	    "captain-flags.json", "stories.json",
-	    "map-terrain.pgm", "battle-terrain.pgm",
+	    "map.tiles", "map.png", "map-mask.png", "battle.tiles",
+	    "battle.png", "battle-mask.png", "map-terrain.pgm", "battle-terrain.pgm",
 	    NULL };
 	static struct era_towns t, tref;
 	static struct ui_tables ui, uref;
 	struct scenario scn, sref;
+	struct packs *alone;
 	const char *data = getenv("FLIBUSTIER_DATA");
 	const struct exe_layout *layout = NULL;
 	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024], err[256];
 	struct packs *packs;
 	struct blob b;
-	size_t i;
+	size_t i, k;
 	int era;
 
 	if (fsys_mkdtemp(dir) == NULL) {
@@ -900,6 +909,75 @@ test_world_export(struct packs *orig)
 		    sizeof(err)) == 0);
 		CHECK(memcmp(&ui, &uref, sizeof(ui)) == 0);
 	}
+	/*
+	 * The export alone, with no original data and no executable, gives
+	 * the same world (but for the tiles' palette indices, reduced
+	 * without the original, and the coast's 0x80, which reads as none),
+	 * towns, scenarios and screen tables.
+	 */
+	alone = packs_new();
+	CHECK(packs_add_dir(alone, dir) == 0);
+	if (layout != NULL)
+		for (era = 0; era < EXE_ERAS; era++) {
+			CHECK(world_load(&w, alone, NULL, NULL, 0, era, err,
+			    sizeof(err)) == 0);
+			CHECK(world_load(&ref, orig, layout, b.data, b.len, era,
+			    err, sizeof(err)) == 0);
+			memcpy(ref.tiles, w.tiles, sizeof(ref.tiles));
+			memcpy(ref.palette, w.palette, sizeof(ref.palette));
+			for (i = 0; i < 256; i++)
+				if (ref.coast[i] == 0x80)
+					ref.coast[i] = 0;
+			/* data/towns lists the arrival cells town by town: the
+			 * same cells, not always in the original's order. */
+			CHECK(w.narrival == ref.narrival);
+			for (i = 0; i < ref.narrival; i++) {
+				for (k = 0; k < w.narrival && memcmp(&w.arrival[k],
+				    &ref.arrival[i], sizeof(w.arrival[k])) != 0;
+				    k++)
+					continue;
+				CHECK(k < w.narrival);
+			}
+			memcpy(ref.arrival, w.arrival, sizeof(ref.arrival));
+			CHECK(memcmp(&w, &ref, sizeof(w)) == 0);
+			CHECK(towns_for_era(alone, NULL, NULL, 0, era, &t, err,
+			    sizeof(err)) == 0);
+			CHECK(towns_for_era(orig, layout, b.data, b.len, era,
+			    &tref, err, sizeof(err)) == 0);
+			CHECK(t.count == tref.count);
+			for (i = 0; i < t.count && i < tref.count; i++)
+				CHECK(same_town(&t.towns[i], &tref.towns[i]));
+		}
+	for (i = 0; i < SCENARIO_COUNT; i++) {
+		CHECK(scenario_load(alone, NULL, NULL, 0, (int)i, &scn, err,
+		    sizeof(err)) == 0);
+		if (layout != NULL)
+			CHECK(scenario_load(orig, layout, b.data, b.len, (int)i,
+			    &sref, err, sizeof(err)) == 0 &&
+			    memcmp(&scn, &sref, sizeof(scn)) == 0);
+	}
+	CHECK(ui_tables_load(&ui, alone, NULL, NULL, 0, err,
+	    sizeof(err)) == 0);
+	if (layout != NULL) {
+		CHECK(ui_tables_load(&uref, orig, layout, b.data, b.len, err,
+		    sizeof(err)) == 0);
+		/* The original's own: its shade, credits blocks, pointer. */
+		memcpy(uref.credit_rect, ui.credit_rect, sizeof(ui.credit_rect));
+		memcpy(uref.credit_ink, ui.credit_ink, sizeof(ui.credit_ink));
+		memcpy(uref.shade, ui.shade, sizeof(ui.shade));
+		uref.has_shade = uref.has_credits = 0;
+		uref.cursor_w = uref.cursor_h = 0;
+		memcpy(uref.cursor, ui.cursor, sizeof(ui.cursor));
+		CHECK(memcmp(&ui, &uref, sizeof(ui)) == 0);
+	}
+	packs_free(alone);
+	/* Without the original, a missing table is named. */
+	CHECK(remove(path_of(path, sizeof(path), dir, "sword.json")) == 0);
+	alone = packs_new();
+	CHECK(packs_add_dir(alone, dir) == 0);
+	CHECK(world_load(&w, alone, NULL, NULL, 0, 0, err, sizeof(err)) ==
+	    -1 && strstr(err, "no data/sword") != NULL);
+	packs_free(alone);
 	/* The pack took over: a broken map is an error, not a fallback. */
 	CHECK(write_file(dir, "map-1660.tmj", "{\"layers\":[]}") == 0);
 	if (layout != NULL)

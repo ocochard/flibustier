@@ -225,6 +225,18 @@ stories_encode(const struct ui_tables *t, struct jbuf *b)
 	jb_raw(b, "\n]}\n");
 }
 
+static int	exe_tables(struct ui_tables *, const struct exe_layout *,
+		    const uint8_t *, size_t);
+
+/* A table no pack gives, with no original data to fall back on. */
+static int
+missing(const char *id, char *err, size_t errlen)
+{
+	snprintf(err, errlen, "no %s: give the original data or a pack that "
+	    "has it", id);
+	return (-1);
+}
+
 /* The fleet panel's layout: words at these byte offsets (VA 0x32e68). */
 static int
 load_panel(struct ui_fleet_panel *f, const struct exe_layout *layout,
@@ -251,11 +263,52 @@ ui_tables_load(struct ui_tables *t, struct packs *packs,
     char *err, size_t errlen)
 {
 	struct json *j;
-	const uint8_t *p;
 	size_t n;
-	int i, k, rc;
+	int rc;
 
 	memset(t, 0, sizeof(*t));
+	if (layout != NULL && exe_tables(t, layout, exe, len) != 0) {
+		snprintf(err, errlen, "screen tables missing from the "
+		    "executable");
+		return (-1);
+	}
+	/* A pack's tables over the original's; without it, all of them. */
+	for (n = 0; n < NTABLES; n++) {
+		if ((rc = data_load_json(packs, tables[n].id, &j, err,
+		    errlen)) < 0)
+			return (-1);
+		if (rc == 1 && layout == NULL)
+			return (missing(tables[n].id, err, errlen));
+		if (rc == 1)
+			continue;
+		rc = data_decode(j, tables[n].f, tables[n].n, t, tables[n].id,
+		    err, errlen);
+		json_free(j);
+		if (rc != 0)
+			return (-1);
+	}
+	if ((rc = data_load_json(packs, "data/stories", &j, err,
+	    errlen)) < 0)
+		return (-1);
+	if (rc == 1 && layout == NULL)
+		return (missing("data/stories", err, errlen));
+	if (rc == 0) {
+		rc = stories_decode(t, j, err, errlen);
+		json_free(j);
+		if (rc != 0)
+			return (-1);
+	}
+	return (0);
+}
+
+/* Every table from the original executable. */
+static int
+exe_tables(struct ui_tables *t, const struct exe_layout *layout,
+    const uint8_t *exe, size_t len)
+{
+	const uint8_t *p;
+	int i, k;
+
 	if (read_records(layout, exe, len, layout->cabin_va, &t->cabin[0][0],
 	    UI_CABIN_SPOTS, 5, 10) != 0 ||
 	    read_records(layout, exe, len, layout->tavern_spots_va,
@@ -271,52 +324,29 @@ ui_tables_load(struct ui_tables *t, struct packs *packs,
 	    load_panel(&t->panel, layout, exe, len) != 0 ||
 	    read_records(layout, exe, len, layout->jolly_va,
 	    (int16_t *)&t->jolly[0][0], 4, 8, 32) != 0)
-		goto bad;
+		return (-1);
 	for (i = 0; i < UI_CAVE_PILES; i++) {
 		if ((p = exe_at(layout, exe, len, layout->cave_va +
 		    (uint32_t)i * 12, 12)) == NULL)
-			goto bad;
+			return (-1);
 		for (k = 0; k < 3; k++)
 			t->cave[i][k] = (int32_t)(p[4 * k] | p[4 * k + 1] << 8 |
 			    p[4 * k + 2] << 16 | (uint32_t)p[4 * k + 3] << 24);
 	}
 	if ((p = exe_at(layout, exe, len, layout->credits_va +
 	    UI_CREDIT_BLOCKS * 8, sizeof(t->credit_ink))) == NULL)
-		goto bad;
+		return (-1);
 	memcpy(t->credit_ink, p, sizeof(t->credit_ink));
 	if ((p = exe_at(layout, exe, len, layout->shade_va, 256)) == NULL)
-		goto bad;
+		return (-1);
 	memcpy(t->shade, p, 256);
 	if ((p = exe_at(layout, exe, len, layout->story_va,
 	    STORY_BYTES)) == NULL || stories_from_exe(t, p) != 0)
-		goto bad;
-	load_cursor(t, layout, exe, len);
-	/* A pack's tables over the original's. */
-	for (n = 0; n < NTABLES; n++) {
-		if ((rc = data_load_json(packs, tables[n].id, &j, err,
-		    errlen)) < 0)
-			return (-1);
-		if (rc == 1)
-			continue;
-		rc = data_decode(j, tables[n].f, tables[n].n, t, tables[n].id,
-		    err, errlen);
-		json_free(j);
-		if (rc != 0)
-			return (-1);
-	}
-	if ((rc = data_load_json(packs, "data/stories", &j, err,
-	    errlen)) < 0)
 		return (-1);
-	if (rc == 0) {
-		rc = stories_decode(t, j, err, errlen);
-		json_free(j);
-		if (rc != 0)
-			return (-1);
-	}
+	t->has_shade = 1;
+	t->has_credits = 1;
+	load_cursor(t, layout, exe, len);
 	return (0);
-bad:
-	snprintf(err, errlen, "screen tables missing from the executable");
-	return (-1);
 }
 
 int

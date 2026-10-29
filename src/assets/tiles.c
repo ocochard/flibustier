@@ -21,8 +21,9 @@ struct desc {
 	char	image[256];
 	char	terrain[256];
 	int	tile, count, frames, period;
-	int	has_ground;
+	int	has_ground, has_coast;
 	uint8_t	ground[MAX_TILES];
+	uint8_t	coast[MAX_TILES];
 };
 
 /* Terrain mask colours. */
@@ -35,9 +36,15 @@ static const struct {
 	{ { 0x00, 0xFF, 0x00 }, TERRAIN_LAND },
 };
 
-static const char *const ground_names[] = {
+const char *const tile_ground_names[4] = {
 	[GROUND_CLEAR] = "clear", [GROUND_COVER] = "cover",
 	[GROUND_SWAMP] = "swamp", [GROUND_WATER] = "water",
+};
+
+/* A map tile's shore: the side its sea is on, as the original's codes
+ * (game-rules.md, "Nearest shore"); 0 for none. */
+const struct tile_coast tile_coast_names[3] = {
+	{ "east", 0x11 }, { "south", 0x22 }, { "west", 0x33 },
 };
 
 static char *
@@ -69,7 +76,7 @@ static int
 parse(const uint8_t *data, size_t len, struct desc *d)
 {
 	char *text, *line, *next, *eq, *key, *val;
-	enum { NONE, TILES, GROUND } section = NONE;
+	enum { NONE, TILES, GROUND, COAST } section = NONE;
 	int rc = -1, tile, g;
 
 	memset(d, 0, sizeof(*d));	/* ground: all clear */
@@ -87,8 +94,10 @@ parse(const uint8_t *data, size_t len, struct desc *d)
 		if (*line == '\0' || *line == '#' || *line == ';')
 			continue;
 		if (strcmp(line, "[tiles]") == 0 ||
-		    strcmp(line, "[ground]") == 0) {
-			section = line[1] == 't' ? TILES : GROUND;
+		    strcmp(line, "[ground]") == 0 ||
+		    strcmp(line, "[coast]") == 0) {
+			section = line[1] == 't' ? TILES : line[1] == 'g' ?
+			    GROUND : COAST;
 			continue;
 		}
 		if ((eq = strchr(line, '=')) == NULL || section == NONE)
@@ -98,12 +107,22 @@ parse(const uint8_t *data, size_t len, struct desc *d)
 		val = trim(eq + 1);
 		if (section == GROUND) {
 			for (g = 0; g < 4; g++)
-				if (strcmp(val, ground_names[g]) == 0)
+				if (strcmp(val, tile_ground_names[g]) == 0)
 					break;
 			if (whole(key, 0, MAX_TILES - 1, &tile) != 0 || g == 4)
 				goto out;
 			d->ground[tile] = (uint8_t)g;
 			d->has_ground = 1;
+			continue;
+		}
+		if (section == COAST) {
+			for (g = 0; g < 3; g++)
+				if (strcmp(val, tile_coast_names[g].name) == 0)
+					break;
+			if (whole(key, 0, MAX_TILES - 1, &tile) != 0 || g == 3)
+				goto out;
+			d->coast[tile] = tile_coast_names[g].code;
+			d->has_coast = 1;
 			continue;
 		}
 		if (strcmp(key, "terrain") == 0)
@@ -124,8 +143,9 @@ parse(const uint8_t *data, size_t len, struct desc *d)
 	if (d->image[0] != '\0' && d->tile > 0)
 		rc = 0;
 	for (tile = 0; tile < MAX_TILES; tile++)
-		if (d->ground[tile] != GROUND_CLEAR && tile >= d->count)
-			rc = -1;	/* ground for a tile not there */
+		if ((d->ground[tile] != GROUND_CLEAR || d->coast[tile] != 0) &&
+		    tile >= d->count)
+			rc = -1;	/* ground or coast for a tile not there */
 out:
 	free(text);
 	return (rc);
@@ -284,6 +304,13 @@ tileset_from_blob(struct packs *packs, const char *id, const struct blob *b,
 			return (-1);
 		}
 		memcpy(out->ground, d.ground, out->count);
+	}
+	if (d.has_coast) {
+		if ((out->coast = malloc(out->count)) == NULL) {
+			tileset_free(out);
+			return (-1);
+		}
+		memcpy(out->coast, d.coast, out->count);
 	}
 	return (0);
 }

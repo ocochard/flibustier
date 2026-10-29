@@ -320,7 +320,7 @@ load_world(struct view *v, int year, char *err, size_t errlen)
 	struct blob b;
 	const struct exe_layout *layout;
 	const uint8_t *classes;
-	int era, rc;
+	int era, rc, i;
 
 	for (era = 0; era < EXE_ERAS; era++)
 		if (town_era_years[era] == year)
@@ -329,17 +329,12 @@ load_world(struct view *v, int year, char *err, size_t errlen)
 		snprintf(err, errlen, "no era %d", year);
 		return (-1);
 	}
-	if (packs_load(v->packs, "program/main", &b) != 0 ||
-	    (layout = exe_identify(b.data, b.len)) == NULL ||
+	if (exe_open(v->packs, &b, &layout) != 0 ||
 	    towns_for_era(v->packs, layout, b.data, b.len, era, &v->era, err,
-	    errlen) != 0 ||
-	    (classes = exe_at(layout, b.data, b.len, layout->tile_class_va,
-	    256)) == NULL) {
+	    errlen) != 0) {
 		blob_free(&b);
-		snprintf(err, errlen, "unknown or missing program/main");
 		return (-1);
 	}
-	memcpy(v->classes, classes, 256);
 	if ((v->world = malloc(sizeof(*v->world))) == NULL) {
 		blob_free(&b);
 		snprintf(err, errlen, "out of memory");
@@ -347,6 +342,16 @@ load_world(struct view *v, int year, char *err, size_t errlen)
 	}
 	rc = world_load(v->world, v->packs, layout, b.data, b.len, era, err,
 	    errlen);
+	/* The tiles' classes: the original's, or each tile's terrain at
+	 * its centre (TERRAIN_*, which picks the same colours). */
+	if (rc == 0 && layout != NULL && (classes = exe_at(layout, b.data,
+	    b.len, layout->tile_class_va, 256)) != NULL)
+		memcpy(v->classes, classes, 256);
+	else if (rc == 0)
+		for (i = 0; i < 256; i++)
+			v->classes[i] = v->world->map_terrain[(size_t)i *
+			    WORLD_TILE * WORLD_TILE + (WORLD_TILE / 2) *
+			    WORLD_TILE + WORLD_TILE / 2];
 	blob_free(&b);
 	if (rc != 0)
 		return (-1);

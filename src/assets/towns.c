@@ -464,6 +464,11 @@ towns_for_era(struct packs *packs, const struct exe_layout *layout,
 			snprintf(err, errlen, "%s: %s", id, why);
 		return (rc);
 	}
+	if (layout == NULL) {
+		snprintf(err, errlen, "no %s: give the original data or a pack "
+		    "that has it", id);
+		return (-1);
+	}
 	if (towns_load(layout, exe, len, era, out) != 0) {
 		snprintf(err, errlen, "bad town table for %d",
 		    town_era_years[era]);

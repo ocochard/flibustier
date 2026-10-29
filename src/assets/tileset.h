@@ -33,6 +33,9 @@ struct tileset {
 	 * ground (GROUND_*) of every tile, count; or NULL. */
 	uint8_t		*terrain;
 	uint8_t		*ground;
+	/* Map tiles' shores (tile sheets, [coast]): count codes 0x11,
+	 * 0x22, 0x33 or 0; or NULL. */
+	uint8_t		*coast;
 };
 
 /*

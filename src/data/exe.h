@@ -10,6 +10,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "pack.h"
+
 #define EXE_ERAS	6
 
 /*
@@ -65,6 +67,15 @@ struct exe_layout {
 
 /* Returns the layout of a known build, or NULL. */
 const struct exe_layout	*exe_identify(const uint8_t *data, size_t len);
+
+/*
+ * The original executable, when the packs have one: 0 with its bytes in
+ * "out" and its layout, or 0 with *layout NULL and "out" empty when
+ * there is none (the open game data then stands in for it); -1 for an
+ * unknown build.
+ */
+int			 exe_open(struct packs *packs, struct blob *out,
+			    const struct exe_layout **layout);
 
 /* Pointer to "len" bytes at virtual address "va", or NULL if outside. */
 const uint8_t		*exe_at(const struct exe_layout *layout,

@@ -28,6 +28,7 @@ tileset_free(struct tileset *ts)
 	free(ts->rgba);
 	free(ts->terrain);
 	free(ts->ground);
+	free(ts->coast);
 	memset(ts, 0, sizeof(*ts));
 }
 

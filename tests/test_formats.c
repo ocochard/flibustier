@@ -272,6 +272,51 @@ remove_files(const char *dir, const char *const *names)
 	rmdir(dir);
 }
 
+/* A written PNG reads back the same, across several stored blocks. */
+static void
+test_png_write(void)
+{
+	enum { W = 200, H = 150 };	/* 90150 filtered bytes: two blocks */
+	static uint8_t rgb[W * H * 3];
+	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024];
+	struct image img;
+	struct blob b;
+	FILE *fp;
+	size_t i, bad = 0;
+	long n;
+
+	for (i = 0; i < sizeof(rgb); i++)
+		rgb[i] = (uint8_t)(i * 7 + i / 600);
+	if (fsys_mkdtemp(dir) == NULL) {
+		CHECK(!"mkdtemp");
+		return;
+	}
+	snprintf(path, sizeof(path), "%s/t.png", dir);
+	CHECK(png_write_rgb(path, rgb, W, H) == 0);
+	memset(&b, 0, sizeof(b));
+	if ((fp = fopen(path, "rb")) != NULL) {
+		fseek(fp, 0, SEEK_END);
+		n = ftell(fp);
+		rewind(fp);
+		if (n > 0 && (b.data = malloc((size_t)n)) != NULL)
+			b.len = fread(b.data, 1, (size_t)n, fp);
+		fclose(fp);
+	}
+	CHECK(b.data != NULL &&
+	    png_decode(b.data, b.len, 480, &img) == 0);
+	if (b.data != NULL && img.rgba != NULL) {
+		CHECK(img.rgba_w == W && img.rgba_h == H);
+		for (i = 0; i < (size_t)W * H; i++)
+			bad += memcmp(&img.rgba[4 * i], &rgb[3 * i], 3) != 0 ||
+			    img.rgba[4 * i + 3] != 255;
+		CHECK(bad == 0);
+		image_free(&img);
+	}
+	free(b.data);
+	unlink(path);
+	rmdir(dir);
+}
+
 static void
 test_png(void)
 {
@@ -1798,6 +1843,7 @@ main(void)
 	test_towns();
 	test_packs();
 	test_png();
+	test_png_write();
 	test_pic();
 	test_fb();
 	test_sheets();

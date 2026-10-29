@@ -229,6 +229,12 @@ terrain = map-terrain.png
 # swamp or water; unlisted tiles are clear
 [ground]
 12 = cover
+
+# optional, map tiles: a shore tile's side toward the sea, east, south
+# or west, where the prison escape puts a new ship (game-rules.md,
+# "Nearest shore"); unlisted tiles are no shore
+[coast]
+40 = south
 ```
 
 - Tiles fill the image in rows, left to right, top to bottom; the image
@@ -240,7 +246,9 @@ terrain = map-terrain.png
   sheet gives it; without, it comes from the tiles' palette indices
   through the executable's colour classes, which only describe the
   original's indices. A sheet for an open pack therefore needs
-  `terrain`, and the battle tiles a `[ground]` section.
+  `terrain`, the battle tiles a `[ground]` section, and the map tiles a
+  `[coast]` section (without one, and without the original, the escape
+  finds no shore and leaves the ship where it was).
 - Palette indices and a palette still come with the tiles, for code that
   reads them: the original tileset's when it is installed with the same
   tiles, otherwise the first frame reduced to the fixed palette.
@@ -340,8 +348,18 @@ that both the loader and the export use.
 - **Values** are the open pack's own; they need not match the
   original's (maintainer, 2026-10-29).
 - **Export:** `flibustier --export-world DIR` writes these IDs too, with
-  the world (see "Open world data"): for local checks only, never
-  distributed.
+  the world (see "Open world data") and the tile sets as sheets
+  (`map.tiles`, `battle.tiles`, with their pictures, terrain masks,
+  ground and coast): for local checks only, never distributed. That
+  export runs the rules with no original data at all.
+- **Without the original:** the executable is optional. When the packs
+  give no `program/main`, every table above must come from a pack, and
+  a missing one is an error naming its ID ("no data/sword: give the
+  original data or a pack that has it"). Only the original's own extras
+  are then absent: the credits picture's blocks (a pack gives text
+  credits), the indexed cloud sprites' shade table (a pack's clouds are
+  sheets with their own shadow) and the original mouse pointer (a pack
+  gives `ui/pointer`).
 
 ### `data/era/<year>`
 
