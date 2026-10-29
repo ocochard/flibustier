@@ -51,4 +51,4 @@ Replay tests: `tests/replays/*.jsonl` are fed twice to `flibustier-sim` via `tes
 ## Conventions
 
 - Source files carry an SPDX BSD-2-Clause header with `Copyright (c) 2026, Olivier Cochard-Labbé`.
-- BSD/FreeBSD-style C (tabs, return type on its own line for definitions). Tools are Python 3 (`tools/artgen` renders the open art pack via ComfyUI; `tools/ghidra` writes analysis output outside the repo).
+- BSD/FreeBSD-style C (tabs, return type on its own line for definitions). Tools are Python 3 (`tools/artgen` renders the open art pack via ComfyUI, its servers set up as `tools/README.md` says; `tools/ghidra` writes analysis output outside the repo).
