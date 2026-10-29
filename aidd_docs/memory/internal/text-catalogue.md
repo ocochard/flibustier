@@ -119,9 +119,9 @@ original; keep it that way when you update it.
 | 84 | none | Not used by the engine: a special ending where a king grants the player a noble title. | none | none |
 | 85 | S_CHOOSE_WEAPON: weapon choice before a sword fight | Prompt asking the player to choose a sword. | none | one short line, fits 160 pixels |
 | 86 | S_SURE: screen_bank | Confirmation question built around an action phrase. | action phrase (95 or 96) | exactly two `~` options: first is yes, second is no |
-| 87 | log book, Party Status (via W_HIDES) | Name of the special cargo in the earliest period. | none | single word, no line break |
-| 88 | log book, Party Status (via W_HIDES + 1) | Name of the special cargo in the middle periods. | none | single word, no line break |
-| 89 | log book, Party Status (via W_HIDES + 2) | Name of the special cargo in the later periods. | none | single word, no line break |
+| 87 | log book, Party Status (`S_HIDES`) | Name of the special cargo in the earliest period. | none | single word, no line break |
+| 88 | log book, Party Status (`S_HIDES` + 1) | Name of the special cargo in the middle periods. | none | single word, no line break |
+| 89 | log book, Party Status (`S_HIDES` + 2) | Name of the special cargo in the later periods. | none | single word, no line break |
 | 90 | S_STANDING_LINE: log book, Personal Status | One line per nation with the player's rank or standing; four copies are concatenated. | nation adjective (CSTN 71), rank (CSTN 78) or standing word (CSTN 21) | should end with a line break |
 | 91 | S_MARRIED: log book, Personal Status | Marker shown when the player is married (the single marker is index 285). | none | short, no line break |
 | 92 | none | Not used by the engine: a heading for a list of ships in the original. | none | none |
@@ -497,7 +497,7 @@ order and the count matter.
 | 19 | NEWS_CAPTURE: a nation takes a town (also the public form of code 22) | country (81), town |
 | 20 | treasure fleet in a town; no engine code emits it | (town, via the default case) |
 | 21 | silver train in a town; no engine code emits it | (town, via the default case) |
-| 22 | NEWS_TAKEN: the player took a town for a nation | town; the second `%s` (the nation) is left empty by the engine |
+| 22 | NEWS_TAKEN: the player took a town for a nation | town, nation name (81) |
 | 23 | NEWS_NOT_TAKEN: the player failed to take a town | town |
 | 24 | NEWS_FLEET_TAKEN: treasure fleet captured | none |
 | 25 | NEWS_TRAIN_TAKEN: silver train captured | none |
@@ -509,7 +509,7 @@ order and the count matter.
 | 31 | NEWS_RESCUE: accepted a rescue mission | town |
 | 32 | NEWS_DELIVERED_LETTER: letter delivered | town |
 | 33 | NEWS_DELIVERED_PAPERS: papers delivered | town |
-| 34 | NEWS_PIRATE_TAKEN: the wanted pirate captured | captain name (a town is also passed; a second `%s` would get it) |
+| 34 | NEWS_PIRATE_TAKEN: the wanted pirate captured | captain name, then the town of the mission (the original's sentence uses only the name) |
 | 35 | NEWS_SON_FREED: a prisoner freed from a town | town |
 | 36 | NEWS_DISPLEASED: a governor displeased by a failed mission | none |
 
@@ -539,19 +539,16 @@ The phrase is put into CSTR 125 (the bartender's remark); codes above 26 are ski
 
 Groups: 96 referenced by the engine (66 and 67 only through 44 + rating, which never reaches them), 12 unused (0, 1, 17, 19, 24, 76, 85, 88, 91, 102, 103, 107; 107 empty).
 
-## Engine notes
+## Notes on the original
 
-Found while writing this catalogue; they concern the engine, not the
-text.
+Found while writing this catalogue. The engine follows the original in
+each case; they explain entries that are never shown.
 
 - Groups 66 and 67, and words 22-23 of group 43, are never shown: the
-  verdict reads group 44 + rating, and `hof_rating()` returns 0-21.
-- Group 20, word 22 (`NEWS_TAKEN`) has two `%s`, but `news_body()`
-  fills only the town; the gossip path (group 33) fills both.
-- Group 20, words 20 and 21 (a convoy arriving in a town) have no
-  `enum news_code` and are never produced.
-- Group 20, word 34: the engine passes a name and a town, the original
-  sentence takes one `%s`.
-- `W_HIDES` (87) is used with `game_str()`: it names strings 87-89, not
-  word group 87.
-- String 298 names a debt; `sim_merchant_pay_debt` charges 500 gold.
+  verdict reads group 44 + rating, and the rating is 0-21 (`hof_rating()`,
+  "Retirement and the Hall of Fame" in
+  game-rules.md).
+- Group 20, words 20 and 21 (a convoy arriving in a town) are never
+  logged (game-rules.md, "The treasure fleet and the silver train").
+- String 298 names a debt; the original, and `sim_merchant_pay_debt`,
+  take 500 gold. Write the amount the rules take.

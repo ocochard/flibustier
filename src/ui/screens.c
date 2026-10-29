@@ -1854,6 +1854,11 @@ news_body(const struct game *g, const struct sim_news *n, char *out,
 		fill(out, len, fmt, game_word(g, W_NATION_NAME,
 		    (size_t)n->a & 3), town_name(g, n->b));
 		break;
+	case NEWS_TAKEN:
+		/* The town, then the nation it was taken for (VA 0x1e407). */
+		fill(out, len, fmt, town_name(g, n->a), game_word(g,
+		    W_NATION_NAME, (size_t)n->b & 3));
+		break;
 	case NEWS_VILLAIN:
 		villain_name(g, n->a, name, sizeof(name));
 		fill(out, len, fmt, name, town_name(g, n->b));
@@ -1908,7 +1913,7 @@ date_text(const struct game *g, char *out, size_t len)
 #define W_REPUTATION		34
 #define W_DIFFICULTY		35
 #define W_HEALTH		36
-#define W_HIDES			87	/* Hides, Tobacco, Sugar */
+#define S_HIDES			87	/* the special cargo's name by era, 3 */
 #define LOG_LEAF		10
 enum { LOG_MENU, LOG_SHIPS, LOG_PARTY, LOG_PERSONAL, LOG_STATUS,
     LOG_HOSTAGES, LOG_EXIT };
@@ -2064,7 +2069,7 @@ logbook_draw(struct game *g)
 		/* By the era code (VA 0x1d8b2): hides in 1560 (code
 		 * 0), tobacco in 1600 and 1620 (2, 3), sugar after. */
 		k = g->world != NULL ? g->world->era : 0;
-		snprintf(a[7], sizeof(a[7]), "%s", game_str(g, W_HIDES +
+		snprintf(a[7], sizeof(a[7]), "%s", game_str(g, S_HIDES +
 		    (k < 1 ? 0 : k < 3 ? 1 : 2)));
 		snprintf(a[8], sizeof(a[8]), "%d", f->sugar);
 		for (k = 0; k < 9; k++)

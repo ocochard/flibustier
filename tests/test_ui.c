@@ -1731,6 +1731,22 @@ test_town_time(void)
 	CHECK(game_script(g, "wait:40 enter wait:1") == 0 &&
 	    g->log_page == 1);
 	CHECK(inked(g, 140, 100, 520, 140) <= 0);
+	/* A town taken for a nation names the town, then the nation
+	 * (VA 0x1e407). */
+	g->sim.nnews = 1;
+	g->sim.news[0].code = NEWS_TAKEN;
+	g->sim.news[0].date = g->sim.year * 360;
+	g->sim.news[0].a = g->sim.player_town;
+	g->sim.news[0].b = NATION_SPAIN;
+	game_goto(g, &screen_logbook);
+	CHECK(game_script(g, "wait:40 enter wait:1") == 0 &&
+	    g->log_page == 1);
+	a = inked(g, 140, 100, 520, 140);
+	g->sim.news[0].b = NATION_HOLLAND;
+	CHECK(game_script(g, "wait:1") == 0);
+	b = inked(g, 140, 100, 520, 140);
+	CHECK(a > 0 && b > 0 && a != b);
+	g->sim.nnews = 0;
 	game_goto(g, &screen_town);
 	CHECK(game_script(g, "wait:40") == 0);
 	day = g->sim.day;

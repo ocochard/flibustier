@@ -133,6 +133,9 @@ The initial relations come from the start scenario (below).
   the code (CSTN 20) and a value. A line reads "Jan 16:  …" (CSTN 20.0,
   "%s %s:  %s", with the month word of CSTN 6 and `date % 30 + 1`, VA
   `0x1e144`).
+- **Sentences (VA `0x1e144`, by code through the table at VA
+  `0x346d8`):** CSTN 20.<code>; a town taken for a nation (22) reads the
+  town, then the nation's name (CSTN 81) (VA `0x1e407`).
 - **The start (VA `0x132f8`, `0x13679`):** a career begins on day
   `rand(150) + 65` of the era's year (March to early August), and the
   log already holds six entries, one per pair of nations, spread from
