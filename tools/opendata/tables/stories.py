@@ -83,7 +83,7 @@ CAREERS = {
     1560: [
         career(36, 37, 44, FIGHT, 17),          # sea dog's son
         career(7, 8, 9, FIGHT, 10),             # silver tale, colony
-        [],                                     # no Dutch career
+        career(39, 44, FIGHT, 23),              # owner vs. monopoly
         career(1, 2, 35, FIGHT, 27),            # merchant at court
     ],
     1600: [
@@ -130,7 +130,7 @@ STORY_PAGES = {1, 2, 3, 7, 8, 9, 10, 13, 14, 15, 17, 18, 19, 20, 21, 22,
 def build():
     stories = [s for era in sorted(CAREERS) for s in CAREERS[era]]
     stories += [EXPEDITION] * 6
-    assert len(stories) == 30 and stories[2] == []
+    assert len(stories) == 30
     for s in stories:
         assert len(s) <= 64 and s.count("fight") <= 1
         assert all(st in ("page", "wait", "fight") or
@@ -151,8 +151,9 @@ def build():
              "entry fits (a failing colony in 1560 France, the company "
              "in 1620 Holland, the guarda costa in 1680 Spain). All 12 "
              "openings and all 7 fight lead-ins are used; no two careers "
-             "of an era share a story. The Dutch 1560 career, which "
-             "does not exist, is empty. The six famous expeditions show "
+             "of an era share a story. The Dutch 1560 career (an open "
+             "home port, the towns' early stretch) is the ship owner "
+             "shut out of the trade. The six famous expeditions show "
              "the command page (40) then the voyage out (3), no fight. "
              "No page used has a %s filler.")
     return {"stories": stories}, notes

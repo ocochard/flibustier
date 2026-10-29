@@ -201,6 +201,16 @@ original's (decision 1).
   sea makes coastal routes longer). The day's length became open data
   (`data/calendar`, maintainer 2026-10-29); the open pack sets it from
   the route targets.
+- **The open world, merged as one** (the map, the towns, the calendar,
+  the scenarios, the battle screens, the treasure spots and battle sets
+  and the open-shallows tiles must reach the pack together: each alone,
+  over the original's data, would not match the rest). Checklist for the
+  merge:
+  - merge the pack's `open-shallows` branch (tiles 40-55);
+  - regenerate the tile masks, then every `tools/opendata` table;
+  - the open text's expedition menu (CSTN, "1569: John Hawkins") says
+    1568 in the three languages, as the open scenario's date;
+  - ask the art session to redraw `pic/citymap` from the open map.
 - **Balance:** the career bot (`tools/career-bot`) plays full careers
   on the open data; its `ANOMALY` lines and journals guide tuning.
 - Size: large, and mostly design and play-testing, not code.

@@ -155,6 +155,20 @@ game_set_lang(struct game *g, const char *lang)
 	return (0);
 }
 
+/* The career slots that have a start scenario (a name). */
+static void
+load_careers(struct game *g)
+{
+	struct scenario scn;
+	char err[256];
+	int i;
+
+	for (i = 0; i < SCENARIO_CAREERS; i++)
+		g->careers[i] = scenario_load(g->packs, g->layout, g->exe,
+		    g->exe_len, i, &scn, err, sizeof(err)) == 0 &&
+		    scn.name[0] != '\0';
+}
+
 int
 game_init(struct game *g, struct packs *packs, const char *lang,
     const char *save_dir)
@@ -189,6 +203,7 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	    g->err, sizeof(g->err)) != 0)
 		return (-1);
 	load_cursor(g);
+	load_careers(g);
 	load_misc(g);
 	/* The effects are optional: without them the game is silent. */
 	if (packs_load(packs, "driver/digital", &b) == 0) {

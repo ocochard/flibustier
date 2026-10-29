@@ -2576,7 +2576,8 @@ the oval at (237, 66).
    - Four small flags (`lilflgs.spr`, frames in the order English,
      French, Dutch, Spanish) at (0, 0), (51, 155), (481, 1) and
      (441, 151) (table at VA `0x33488`). The flags available per era are
-     at VA `0x3357c`; no Dutch in 1560.
+     at VA `0x3357c`; no Dutch in 1560. The engine offers a flag when
+     its career's start scenario has a name, so a pack may add one.
    - Pointing at a flag names it on the scroll (CSTN 82, centred at
      (320, 368)); a click chooses it, and the keys step through them.
    - The chosen nation's big flag (`big?flg.spr`) then stays at (0, 0),

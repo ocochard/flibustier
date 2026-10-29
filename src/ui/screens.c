@@ -1191,8 +1191,12 @@ identity_draw_base(struct game *g, int flag, int skill)
 static int
 flag_open(const struct game *g, int slot)
 {
-	/* No Dutch careers in 1560: the scenario slot is empty. */
-	return (!(flag_nation[slot] == NATION_HOLLAND && g->career.era == 0));
+	/* A career whose scenario slot is empty (the original's Dutch in
+	 * 1560) cannot be chosen. */
+	int n = flag_nation[slot];
+
+	return (g->careers[scenario_career(g->career.era, n == NATION_SPAIN ?
+	    SCN_SPAIN : (enum scenario_nation)(n - 1))] != 0);
 }
 
 static int

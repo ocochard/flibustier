@@ -91,6 +91,9 @@ struct game {
 	size_t			 exe_len;
 	const struct exe_layout	*layout;
 	struct ui_tables	 ui;		/* the screens' tables */
+	/* Which career starts exist, by scenario_career() index: the
+	 * original has no Dutch career in 1560, a pack may. */
+	uint8_t			 careers[SCENARIO_CAREERS];
 
 	struct fb		 fb;
 	int			 brightness;	/* 0..256, for fades */

@@ -55,7 +55,8 @@ with a message. Numbers are integers only.
 | `set` | `field`: `encounters`, `value` (0 or 1) | none |
 | `quit` | none | none, then the program exits |
 
-- `new_game` fails for the Dutch in 1560, which has no career start.
+- `new_game` fails for a career whose start scenario has no name (the
+  original's Dutch in 1560; a pack may give one).
 - Commands other than `new_game`, `load` and `quit` need a game first.
 - `set` is the debug and test hook. A setting holds until the rules
   change it again.

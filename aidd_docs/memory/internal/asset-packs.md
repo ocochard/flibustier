@@ -432,7 +432,9 @@ most 6 map cells per 64 ticks).
 `{"scenarios": [...]}`, exactly 30 objects, in the original's order
 (game-rules.md, "Start scenarios"): the 24 careers by era (1560 ...
 1680) and, within an era, English, French, Dutch, Spanish; then the 6
-famous expeditions. The Dutch 1560 career is unused (empty name).
+famous expeditions. A career with an empty name does not exist: the
+game hides it and `new_game` refuses it (the original's Dutch 1560
+career); the open pack gives all 24.
 
 Nations in `nation`, `relations` and the first four of `standing` and
 `rank` are in the town nation order: 0 Spain, 1 England, 2 France, 3
