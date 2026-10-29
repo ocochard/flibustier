@@ -47,7 +47,7 @@
 #define W_TRAVEL		86	/* in-game menu */
 #define W_COMPASS		13	/* S, SSW... clockwise */
 #define W_SAILING		30	/* sailing phrases */
-#define SAILING_FROM		9	/* "from the %s" */
+#define SAILING_WINDS		8	/* "%s winds": the compass point */
 #define SAILING_KNOTS		12	/* "Knots: " */
 #define S_SAIL_HO		118	/* "Sail ho!" ... %s */
 #define S_WATERS		119	/* "We're in %s waters" */
@@ -2858,7 +2858,7 @@ sail_draw(struct game *g)
 	const struct sim_fleet *f = &g->sim.fleet;
 	const uint8_t *t;
 	const struct frame *fr;
-	char buf[128], from[64];
+	char buf[128], winds[64];
 	int cx, cy, x0 = g->sim.view_x / WORLD_TILE, y0 = g->sim.view_y / WORLD_TILE;
 	uint8_t cell;
 
@@ -2912,10 +2912,10 @@ sail_draw(struct game *g)
 			    218);
 	}
 	date_text(g, buf, sizeof(buf));
-	fill(from, sizeof(from), game_word(g, W_SAILING, SAILING_FROM),
+	fill(winds, sizeof(winds), game_word(g, W_SAILING, SAILING_WINDS),
 	    game_word(g, W_COMPASS, (size_t)(g->sim.wind >> 4)), NULL);
 	snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),
-	    "   Wind %s   %s%d", from, game_word(g, W_SAILING, SAILING_KNOTS),
+	    "   %s   %s%d", winds, game_word(g, W_SAILING, SAILING_KNOTS),
 	    f->speed);
 	draw(g, FONT_BODY, 10, 6, 620, buf, 0);
 }
