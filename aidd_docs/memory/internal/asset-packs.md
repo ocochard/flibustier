@@ -335,6 +335,7 @@ that both the loader and the export use.
 | `data/era/<year>` | JSON (`struct world`, `world.h`) | the era's ship speeds, ships met at sea, enemy decisions, diplomacy and shipwright values |
 | `data/sea-battle` | JSON (`struct world`) | sea battle hit boxes, shot arcs, the bow cross |
 | `data/sword` | JSON (`struct sword_tables`, `world.h`) | the sword fight tables |
+| `data/calendar` | JSON (`struct world`) | the length of a day at sea and on foot |
 | `data/scenarios` | JSON (`struct scenario`, `scenario.h`) | the 30 start scenarios |
 | `data/layout/<screen>` | JSON (`struct ui_tables`, `uitables.h`) | a screen's hot spots and piece positions |
 | `data/captain-flags` | JSON (`struct ui_tables`) | the named captains' Jolly Rogers |
@@ -415,6 +416,16 @@ cutlass).
 | `area` | 16, u8 | the body area a strike hits |
 | `scripts` | 3 x 8 x 8, u8 | the opponent's move scripts up close: per bank (by level), 8 scripts of 8 moves; 0x80 and above is a counter to the player's move |
 | `line` | 16, u8 | the line of each move |
+
+### `data/calendar`
+
+`{"ticks_per_day": n}`, 16 to 1024: the sailing and marching ticks a
+day takes. Each day the calendar moves on and the crew eats; wind,
+sightings and battles count ticks, not days. Not in the original's
+executable: without the ID the engine keeps the original's 64, with or
+without the original data. A pack whose map puts its ports many cells
+apart lengthens the day so that voyages take fewer days (a ship sails at
+most 6 map cells per 64 ticks).
 
 ### `data/scenarios`
 

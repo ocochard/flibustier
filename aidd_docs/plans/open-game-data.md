@@ -194,6 +194,13 @@ original's (decision 1).
      coast; the battle screens; towns per era from real places;
      treasure spots; battle sets.
   4. `data/scenarios`, last: their start cells need the map.
+- **The day:** a ship sails at most 6 map cells per 64 ticks, so on a
+  faithful map of the Caribbean voyages take two to three times their
+  historical length, whatever the map's projection (a fixed 640x480
+  frame cannot bring the far ends closer; a cartogram that empties the
+  sea makes coastal routes longer). The day's length became open data
+  (`data/calendar`, maintainer 2026-10-29); the open pack sets it from
+  the route targets.
 - **Balance:** the career bot (`tools/career-bot`) plays full careers
   on the open data; its `ANOMALY` lines and journals guide tuning.
 - Size: large, and mostly design and play-testing, not code.

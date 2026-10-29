@@ -978,6 +978,44 @@ test_world_export(struct packs *orig)
 	CHECK(world_load(&w, alone, NULL, NULL, 0, 0, err, sizeof(err)) ==
 	    -1 && strstr(err, "no data/sword") != NULL);
 	packs_free(alone);
+	/* The day: the original's unless data/calendar says, in range. */
+	if (layout != NULL)
+		CHECK(world_load(&w, orig, layout, b.data, b.len, 0, err,
+		    sizeof(err)) == 0 && w.ticks_per_day == WORLD_TICKS_PER_DAY);
+	CHECK(write_file(dir, "calendar.json", "{\"ticks_per_day\": 192}") ==
+	    0);
+	alone = packs_new();
+	CHECK(packs_add_dir(alone, dir) == 0);
+	{
+		static const char ini[] = "\n[assets]\ndata/calendar = "
+		    "calendar.json\n";
+		FILE *fp;
+
+		snprintf(path, sizeof(path), "%s/pack.d", dir);
+		fsys_mkdir(path);
+		snprintf(path, sizeof(path), "%s/pack.d/calendar.ini", dir);
+		if ((fp = fopen(path, "wb")) != NULL) {
+			fputs(ini, fp);
+			fclose(fp);
+		}
+	}
+	packs_free(alone);
+	alone = packs_new();
+	CHECK(packs_add_dir(alone, dir) == 0);
+	if (layout != NULL) {
+		CHECK(world_load(&w, alone, layout, b.data, b.len, 0, err,
+		    sizeof(err)) == 0 && w.ticks_per_day == 192);
+		CHECK(write_file(dir, "calendar.json",
+		    "{\"ticks_per_day\": 2}") == 0);
+		CHECK(world_load(&w, alone, layout, b.data, b.len, 0, err,
+		    sizeof(err)) == -1 && strstr(err, "data/calendar") != NULL);
+	}
+	packs_free(alone);
+	CHECK(remove(path_of(path, sizeof(path), dir,
+	    "pack.d/calendar.ini")) == 0 && remove(path_of(path, sizeof(path),
+	    dir, "calendar.json")) == 0);
+	snprintf(path, sizeof(path), "%s/pack.d", dir);
+	remove(path);
 	/* The pack took over: a broken map is an error, not a fallback. */
 	CHECK(write_file(dir, "map-1660.tmj", "{\"layers\":[]}") == 0);
 	if (layout != NULL)

@@ -20,7 +20,6 @@
 #define FLAG_KNOWN		0x80	/* the player has current information */
 #define FLAG_OBSOLETE		0x20	/* an event made it out of date */
 #define STANDING_FLOOR		(-3)	/* after an amnesty */
-#define TICKS_PER_DAY		64
 #define TOWN_DAYS		3	/* a pass through the town's menu */
 #define WIND_TICKS		128	/* the wind may shift this often */
 #define WIND_START		0xC0	/* blowing west: the trade winds */
@@ -776,6 +775,14 @@ arrive(struct sim *s, int t, int *town)
 	return (SAIL_TOWN);
 }
 
+/* Ticks a day (data/calendar), the original's when no world says. */
+static int
+day_ticks(const struct sim *s)
+{
+	return (s->world != NULL && s->world->ticks_per_day > 0 ?
+	    s->world->ticks_per_day : WORLD_TICKS_PER_DAY);
+}
+
 /*
  * The crew eats (VA 0x231b8), two passes before each day's: food x 256
  * + fraction loses a 256th a man, floored at 0; the days left are that
@@ -791,7 +798,7 @@ eat(struct sim *s)
 	int32_t v;
 	int days;
 
-	if ((f->ticks + 2) % TICKS_PER_DAY != 0 || f->crew <= 0 ||
+	if ((f->ticks + 2) % day_ticks(s) != 0 || f->crew <= 0 ||
 	    f->nships <= 0)
 		return (0);
 	v = (int32_t)f->food * 256 + f->food_frac - f->crew;
@@ -1047,7 +1054,7 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 			shift_wind(s);
 		if (eat(s))
 			return (SAIL_CREW);
-		if (f->ticks % TICKS_PER_DAY == 0) {
+		if (f->ticks % day_ticks(s) == 0) {
 			sim_advance(s, 1);
 			if (s->crew_event != CREW_NONE)
 				return (SAIL_CREW);
@@ -1176,7 +1183,7 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 			shift_wind(s);
 		if (eat(s))
 			return (SAIL_CREW);
-		if (f->ticks % TICKS_PER_DAY == 0)
+		if (f->ticks % day_ticks(s) == 0)
 			sim_advance(s, 1);
 		follow(s, 0);
 		clouds_move(s);		/* standing still too */

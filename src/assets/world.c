@@ -297,6 +297,12 @@ const struct data_field sea_battle_fields[] = {
 const size_t sea_battle_nfields = sizeof(sea_battle_fields) /
     sizeof(sea_battle_fields[0]);
 
+const struct data_field calendar_fields[] = {
+	WORLD_FIELD(ticks_per_day, DATA_INT, 0, 0, 0),
+};
+const size_t calendar_nfields = sizeof(calendar_fields) /
+    sizeof(calendar_fields[0]);
+
 #define SWORD_FIELD(name, type, d0, d1)					\
 	{ #name, offsetof(struct sword_tables, name), type, { d0, d1, 0 } }
 
@@ -602,6 +608,16 @@ world_load(struct world *w, struct packs *packs,
 		return (missing("data/sword", err, errlen));
 	if (rc == 1 && sword_load(layout, exe, len, &w->sword) != 0)
 		goto bad;
+	/* The day is the engine's, not the executable's: a pack may
+	 * lengthen it so that voyages on its map take fewer days. */
+	w->ticks_per_day = WORLD_TICKS_PER_DAY;
+	if (load_table(packs, "data/calendar", calendar_fields,
+	    calendar_nfields, w, err, errlen) < 0)
+		return (-1);
+	if (w->ticks_per_day < 16 || w->ticks_per_day > 1024) {
+		snprintf(err, errlen, "data/calendar: ticks_per_day 16 to 1024");
+		return (-1);
+	}
 	if (layout == NULL && !packs_has(packs, "data/treasure"))
 		return (missing("data/treasure", err, errlen));
 	if (layout == NULL && !packs_has(packs, "data/battle-sets"))

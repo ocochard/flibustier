@@ -146,6 +146,9 @@ struct world {
 	/* The bow cross's offset by heading / 16 (VA 0xf903), x and y. */
 	int16_t		bow_mark[16 * 2];
 	struct sword_tables sword;
+	/* Sailing and marching ticks a day: the calendar, the crew's
+	 * meals (data/calendar; the original's 64 otherwise). */
+	int		ticks_per_day;
 };
 
 /*
@@ -167,6 +170,10 @@ extern const struct data_field sea_battle_fields[];
 extern const size_t sea_battle_nfields;
 extern const struct data_field sword_fields[];
 extern const size_t sword_nfields;
+extern const struct data_field calendar_fields[];
+extern const size_t calendar_nfields;
+
+#define WORLD_TICKS_PER_DAY	64	/* the original's day */
 
 /* Returns 0, or -1 with a message in "err". */
 int	world_load(struct world *w, struct packs *packs,

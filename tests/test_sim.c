@@ -691,6 +691,18 @@ test_sailing(void)
 	s.wind = 0xC0;
 	CHECK(sim_sail(&s, 0, 10, &town) == SAIL_TICKS && s.fleet.speed == 4);
 
+	/* A day is the world's ticks_per_day (data/calendar): 64 by
+	 * default, longer when a pack says. */
+	sea_game(&s, 300, 300, 0x00);
+	s.encounters = 0;
+	CHECK(sim_sail(&s, 0, 192, &town) == SAIL_TICKS &&
+	    s.day_of_year == 3);
+	test_world.ticks_per_day = 192;
+	sea_game(&s, 300, 300, 0x00);
+	CHECK(sim_sail(&s, 0, 192, &town) == SAIL_TICKS &&
+	    s.day_of_year == 1);
+	test_world.ticks_per_day = 0;
+
 	/* Turning: 4 ticks of every 8 from the press, 8 of 16 held, at
 	 * any phase of the tick counter. */
 	sea_game(&s, 300, 300, 0x00);

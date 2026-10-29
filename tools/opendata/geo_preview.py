@@ -12,6 +12,8 @@ at pixel resolution.
 """
 import os
 import collections
+import heapq
+import math
 import struct
 import sys
 import zlib
@@ -39,6 +41,18 @@ PORTS = [
     ("St. Augustine", -81.313, 29.894),
     ("Maracaibo", -71.640, 10.654),
     ("Campeche", -90.524, 19.845),
+]
+
+# Sea routes and their targets in cells (a ship sails CELLS_A_DAY).
+CELLS_A_DAY = 6
+ROUTES = [
+    ("Port Royal", "Tortuga", 18, 30),
+    ("St. Augustine", "Havana", 24, 42),
+    ("Port Royal", "Cartagena", 24, 42),
+    ("Tortuga", "Curacao", 24, 42),
+    ("Havana", "Cartagena", 72, 120),
+    ("Portobelo", "Havana", 72, 120),
+    ("Barbados", "Veracruz", 126, 210),
 ]
 
 # Crops: name, (lon_w, lat_n, lon_e, lat_s).
@@ -122,6 +136,101 @@ def open_sea(full):
     return seen.reshape(h, w)
 
 
+def port_cells(cells):
+    """Each port's nearest water cell."""
+    water = cells != _geo.LAND
+    ys, xs = np.nonzero(water)
+    out = {}
+    for name, lon, lat in PORTS:
+        x, y = _geo.lonlat_to_world(lon, lat)
+        cx, cy = x / _geo.CELL - 0.5, y / _geo.CELL - 0.5
+        i = int(np.argmin((xs - cx) ** 2 + (ys - cy) ** 2))
+        out[name] = (int(ys[i]), int(xs[i]))
+    return out
+
+
+def sea_distances(cells, start, diagonal=1.0):
+    """Path length (cells) over water cells from start, 8-connected;
+    a diagonal step costs "diagonal" (1: steps, sqrt(2): octile)."""
+    h, w = cells.shape
+    water = (cells != _geo.LAND).ravel()
+    dist = np.full(h * w, np.inf)
+    s = start[0] * w + start[1]
+    dist[s] = 0
+    heap = [(0.0, s)]
+    steps = [(dy, dx, diagonal if dy and dx else 1.0)
+             for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx]
+    while heap:
+        d, i = heapq.heappop(heap)
+        if d > dist[i]:
+            continue
+        y, x = divmod(i, w)
+        for dy, dx, c in steps:
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w:
+                j = ny * w + nx
+                if water[j] and d + c < dist[j]:
+                    dist[j] = d + c
+                    heapq.heappush(heap, (d + c, j))
+    return dist.reshape(h, w)
+
+
+def routes(cells):
+    """[(a, b, steps, octile, lo, hi)] for ROUTES: 8-connected steps
+    (what the targets count) and octile length."""
+    pc = port_cells(cells)
+    memo = {}
+    out = []
+    for a, b, lo, hi in ROUTES:
+        if a not in memo:
+            memo[a] = (sea_distances(cells, pc[a]),
+                       sea_distances(cells, pc[a], math.sqrt(2)))
+        out.append((a, b, float(memo[a][0][pc[b]]),
+                    float(memo[a][1][pc[b]]), lo, hi))
+    return out
+
+
+def empty_sea(cells, far=(20, 40)):
+    """Shares of water cells farther than each of "far" cells from
+    land (Euclidean: no land in the disc of that radius)."""
+    land = cells == _geo.LAND
+    water = ~land
+    out = []
+    for f in far:
+        # A water cell is farther than f when no land is within f.
+        hit = np.zeros(cells.shape, dtype=bool)
+        for dy in range(-f, f + 1):
+            dx = int(math.isqrt(f * f - dy * dy))
+            row = np.zeros_like(land)
+            if dy >= 0:
+                row[dy:] = land[:land.shape[0] - dy]
+            else:
+                row[:dy] = land[-dy:]
+            # Horizontal run of +-dx.
+            c = np.cumsum(np.pad(row, ((0, 0), (dx + 1, dx)))
+                          .astype(np.int32), axis=1)
+            run = c[:, 2 * dx + 1:] - c[:, :-2 * dx - 1]
+            hit |= run > 0
+        out.append(float((water & ~hit).sum()) / water.sum())
+    return out
+
+
+def print_routes(cells):
+    ok = True
+    print("%-26s %5s %5s %7s  %s" % ("route", "steps", "days", "octile",
+                                     "target"))
+    for a, b, n, o, lo, hi in routes(cells):
+        good = lo <= n <= hi
+        ok &= good
+        print("%-26s %5.0f %5.1f %7.0f  %d-%d %s"
+              % (a + " - " + b, n, n / CELLS_A_DAY, o, lo, hi,
+                 "pass" if good else "FAIL"))
+    f20, f40 = empty_sea(cells)
+    print("water farther than 20 cells from land %.1f%%, than 40 %.1f%%"
+          % (100 * f20, 100 * f40))
+    return ok
+
+
 def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
@@ -135,6 +244,7 @@ def main():
                  100.0 * (cells == v).sum() / cells.size))
     print("extent lon %.2f..%.2f lat %.3f..%.3f"
           % (_geo.LON_W, _geo.LON_E, _geo.LAT_S, _geo.LAT_N))
+    print_routes(cells)
     world = COLOURS[cells]
     reach = open_sea(full)
     closed = []
