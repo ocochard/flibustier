@@ -105,3 +105,74 @@ foot:
 | F | Vulnerable again. |
 
 A right click on the cabin's map of the Caribbean moves the ship there.
+
+## Advice
+
+These tips come from the career bot (`tools/career-bot`), which plays
+whole careers through the rules engine. Where a tip gives figures, it
+was measured: unless noted, two versions of the bot over the same 500
+careers, the score being the one retiring would give. Tips without
+figures are what the bot does, or follow from the rules. The bot is a
+mediocre captain, so read them as tendencies, not guarantees.
+
+### Fighting
+
+- **Board, and do not shy from bigger ships.** Boarding decides most
+  fights. A bot that only took on ships at most one class above its own
+  stayed small; letting it fight up to three classes above raised the
+  mean score from 19.0 to 22.9 (from 12.2 to 17.5 starting in 1600,
+  often in a pinnace), with 42% more captures, even though it lost more
+  battles.
+- **Fire only when the broadside will hit.** Lead your target, beat to
+  windward when she lies upwind, and bring a fleeing ship abeam when
+  your guns are loaded: a hit slows her and turns her into the wind.
+- **Do not run at the first hit.** A bot that fled after its first
+  damage and never fired captured 446 ships in 48 careers; one that
+  aimed its shots and ran only when badly damaged captured 3115, lost
+  its own ship 19 times instead of 106, and doubled its points.
+- **Attack a fort only with hull to spare,** tack in under battle
+  sails, and do not go back to one that beat you.
+
+### At sea
+
+- **Mind the shallows.** Reefs hide in them. Most
+  wrecks came from sailing into a dead end between shallows on steps
+  that each looked safe: keep a way out. A lone ship lost on a reef
+  leaves you marooned.
+- **Land on open water joined to your sea** when you go ashore to dig,
+  not in a lagoon behind a reef.
+- **Feed your crew.** Check the food before a long voyage or a dig, and
+  turn back for port when the crew starts to go hungry.
+
+### Crew and money
+
+- **Divide the plunder in any town you enter openly,** not only your
+  own nation's, before the crew turns mutinous: over 144 careers the
+  mean score went from 14.0 to 15.5 and mutinies halved.
+- **Recruit only the men your gold keeps content.** The crew's mood
+  rises with the gold per man and falls with each month since the last
+  division, twice as fast with more than 32767 gold aboard.
+- A rich Spanish town refuses its merchant and shipwright to a low
+  Spanish rank, even to a Spaniard: buy food and repairs elsewhere
+  until your rank rises.
+
+### Treasure and villains
+
+- **Dig up every map you hold:** the lost relative's first, then the
+  lost treasure the relative tells of, then the pirate's map.
+- **Hunt the villains** named after each promotion: beating one gives
+  the next relative's map. Hunting them in towns at war with you too
+  scored 0.7 more, for a few more careers ending in prison.
+
+### Playing Spain
+
+At peace with Spain there are few ships worth taking near Spanish
+towns. Hunt the nations at war with Spain instead, off their towns, and
+take their small ones: Spain's mean score rose from 9.1 to 11.3.
+
+### Retiring
+
+The points grow in jumps, so timing your retirement on their recent
+pace retires too early. Retiring at the bank at the first division of
+the plunder after about ten years scored best: a mean of 13.7, against
+12.8 when playing on to twelve years.
