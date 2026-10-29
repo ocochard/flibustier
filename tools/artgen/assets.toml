@@ -3864,3 +3864,93 @@ quit = "Beenden? (J/N)"
 paused = "Pause"
 continue = "Klicken zum\nWeitermachen"
 disembark = "An Land gehen?\n(J/N)"
+
+# The battles' small sprites: the sea battle's shots, splashes, bursts,
+# aiming mark and wind compass; the land battle's party badges, the
+# nations' shields and horsemen, arrows and a musket's flash (btlmisc.py
+# places them where the original's are).
+[[asset]]
+id = "cur/sbtlmisc"
+file = "art/sbtlmisc.sheet"
+seed = 1660
+source = "the battles' pieces, painted, at the original's places"
+prompt = ""
+[asset.btlmisc]
+glow = ["splash", "burst", "flash"]
+[asset.btlmisc.paint]
+ball = """
+Photograph of a single round black iron cannonball, seen straight on,
+alone on a plain light grey background, studio light, sharp focus.
+"""
+splash = """
+Photograph of a single round burst of white sea spray and foam, droplets
+flying out in every direction, nothing else in it, no object, no post,
+alone on a plain pure black background, sharp focus.
+"""
+burst = """
+Photograph of a single round cloud of exploding orange fire and dark
+grey smoke, nothing else in it, no object, no wood, no ball, alone on a
+plain pure black background, sharp focus.
+"""
+compass = """
+Photograph seen straight from above of an old brass ship's compass dial,
+its card painted with a green field and a dark sixteen-pointed star
+round its edge, no needle, alone on a plain light grey background,
+studio light, sharp focus, realistic.
+"""
+party0 = """
+Photograph of a single round gilded brass medallion with a white skull
+over crossed bones in relief on a bright orange enamel field, seen
+straight on, alone on a plain light grey background, sharp focus.
+"""
+party1 = """
+Photograph of a single round dark iron medallion with a white skull over
+crossed bones in relief on a black enamel field, seen straight on,
+alone on a plain light grey background, sharp focus.
+"""
+shield0 = """
+Photograph of a single small painted heraldic shield of Spain, quartered
+red and white, golden castles and red lions in the quarters, seen
+straight on, alone on a plain light grey background, sharp focus.
+"""
+shield1 = """
+Photograph of a single small painted heraldic shield, white with a broad
+red cross, seen straight on, alone on a plain light grey background,
+sharp focus.
+"""
+shield2 = """
+Photograph of a single small painted heraldic shield, blue with three
+golden fleurs-de-lis, seen straight on, alone on a plain light grey
+background, sharp focus.
+"""
+shield3 = """
+Photograph of a single small painted heraldic shield, golden yellow with
+a red lion standing on its hind legs, seen straight on, alone on a
+plain light grey background, sharp focus.
+"""
+horse0 = """
+Photograph of a single carved wooden horse's head like a chess knight,
+painted red and white with a small golden castle on its neck, seen from
+the side facing left, alone on a plain light grey background, sharp
+focus.
+"""
+horse1 = """
+Photograph of a single carved wooden horse's head like a chess knight,
+painted white with a red cross on its neck, seen from the side facing
+left, alone on a plain light grey background, sharp focus.
+"""
+horse2 = """
+Photograph of a single carved wooden horse's head like a chess knight,
+painted royal blue with golden fleurs-de-lis, seen from the side facing
+left, alone on a plain light grey background, sharp focus.
+"""
+horse3 = """
+Photograph of a single carved wooden horse's head like a chess knight,
+painted golden yellow with a red lion on its neck, seen from the side
+facing left, alone on a plain light grey background, sharp focus.
+"""
+flash = """
+Photograph of a single bright starburst of a musket's muzzle flash, red
+and orange fire rays spreading out from a white-hot centre, alone on a
+plain black background, sharp focus.
+"""
