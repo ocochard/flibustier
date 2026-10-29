@@ -3831,3 +3831,36 @@ frame = [45, 28]
 before = [[2, 2], [7, 24], [15, 15], [15, 15], [175, 24], [177, 15]]
 flags = ["pic/fjolly04", "pic/f-span", "pic/f-engl", "pic/f-french",
          "pic/f-dutch", "pic/fjolly04"]
+
+# The interface's small pieces, one bank a language: the map's marks,
+# then the plaques shown over the screen (their words this pack's own).
+[[asset]]
+id = "ui/misc"
+file = "art/misc.sheet"
+seed = 1660
+source = "the interface's pieces, described"
+prompt = ""
+[asset.uimisc]
+font = "fonts/imfellenglish/IMFeENrm28P.ttf"
+banks = { eng = "misc", fre = "miscf", ger = "miscg" }
+[asset.uimisc.paint]
+plank = """
+Close-up photograph, straight on and flat, of a weathered plank of
+honey-coloured oak, its grain running across, a little worn, warm even
+light, no seam, filling the whole image.
+"""
+[asset.uimisc.words.eng]
+quit = "Quit? (Y/N)"
+paused = "Paused"
+continue = "Click to go on"
+disembark = "Go ashore?\n(Y/N)"
+[asset.uimisc.words.fre]
+quit = "Quitter ? (O/N)"
+paused = "En pause"
+continue = "Cliquez pour\npoursuivre"
+disembark = "Débarquer ?\n(O/N)"
+[asset.uimisc.words.ger]
+quit = "Beenden? (J/N)"
+paused = "Pause"
+continue = "Klicken zum\nWeitermachen"
+disembark = "An Land gehen?\n(J/N)"

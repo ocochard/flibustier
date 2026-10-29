@@ -3095,6 +3095,111 @@ def make_fightflags(args, spec, a, profile, seed):
     return {"flags": ff["flags"], "frame": [fw, fh]}
 
 
+def make_uimisc(args, spec, a, profile, seed):
+    """The interface's small pieces, one bank a language (ui/misc,
+    ui/miscf, ui/miscg): the map's marks (a town's dot, the chosen town's
+    and the player's), drawn; and the plaques shown over the screen
+    (Quit, Paused, a blank one, Click to continue, Disembark), a painted
+    plank with brass nails, their words set in the pack's font."""
+    import boards
+    k = spec["pack"]["art_height"] / SCREEN_H
+    um = a["uimisc"]
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    work = os.path.join(args.pack, "art", "uimisc.work")
+    os.makedirs(work, exist_ok=True)
+    src = {}
+    free(args.server)
+    try:
+        for n, (key, prompt) in enumerate(sorted(um["paint"].items())):
+            path = os.path.join(work, "src-%s.png" % key)
+            if not os.path.exists(path):
+                with open(path, "wb") as f:
+                    f.write(render(args.server, texture_workflow(
+                        spec, profile, seed + n, prompt, 768,
+                        prefix + "-" + key)))
+            src[key] = path
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    font = os.path.join(args.pack, um["font"])
+    px = boards.px
+
+    def mark(path, kind):
+        S = px(8, k)
+        c = S / 2
+        if kind == "dot":	# a town: a red wax dot with a gold rim
+            boards.magick("-size", "%dx%d" % (S, S), "xc:none", "-fill",
+                          "#d8a840", "-draw", "circle %g,%g %g,%g" % (
+                              c, c, c, c * 0.25), "-fill", "#a01808",
+                          "-draw", "circle %g,%g %g,%g" % (c, c, c, c * 0.45),
+                          "-fill", "#f0c060", "-draw", "circle %g,%g %g,%g" % (
+                              c * 0.8, c * 0.8, c * 0.8, c * 0.65), path)
+        elif kind == "chosen":	# the chosen town: a bigger, bright dot
+            boards.magick("-size", "%dx%d" % (S, S), "xc:none", "-fill",
+                          "#ffd860", "-draw", "circle %g,%g %g,%g" % (
+                              c, c, c, 0.2), "-fill", "#e02010", "-draw",
+                          "circle %g,%g %g,%g" % (c, c, c, c * 0.3), path)
+        else:			# the player: a dark ring
+            boards.magick("-size", "%dx%d" % (S, S), "xc:none", "-fill",
+                          "none", "-stroke", "#101010", "-strokewidth",
+                          str(max(1, round(k * 1.1))), "-draw",
+                          "circle %g,%g %g,%g" % (c, c, c, c * 0.25), path)
+
+    def plaque(path, words, w, h):
+        base = os.path.join(work, "plank.png")
+        boards.panel(base, src["plank"], w, h, k, rim=src["plank"])
+        # A pale golden plank, so dark words read on it.
+        boards.magick(base, "-modulate", "175,80", "-level", "8%,100%",
+                      base)
+        # Brass nails at the corners.
+        r = max(2, round(1.6 * k))
+        for x, y in ((3, 3), (w - 3, 3), (3, h - 3), (w - 3, h - 3)):
+            boards.magick(base, "-fill", "#c8a050", "-stroke", "#5a4010",
+                          "-strokewidth", "1", "-draw",
+                          "circle %d,%d %d,%d" % (px(x, k), px(y, k),
+                                                  px(x, k) + r, px(y, k)),
+                          base)
+        if words:
+            # The same letter size on every plaque: a line's height is
+            # at most 40% of the plaque's.
+            n = words.count("\n") + 1
+            boards.lettered(path, base, words, "#241206", w * 0.92,
+                            min(h * 0.9, h * 0.42 * n), font, k, lines=n,
+                            shadow=False)
+        else:
+            shutil.copy(base, path)
+
+    out = {}
+    for lang, words in um["words"].items():
+        frames = []
+        p = os.path.join(work, "%s-0.png" % lang)
+        boards.magick("-size", "%dx%d" % (px(2, k), px(2, k)), "xc:none", p)
+        frames.append(p)
+        for n, kind in enumerate(("dot", "chosen", "player")):
+            p = os.path.join(work, "%s-%d.png" % (lang, n + 1))
+            mark(p, kind)
+            frames.append(p)
+        for n, (key, (w, h)) in enumerate(zip(
+                ("quit", "paused", "", "continue", "disembark"),
+                ((103, 31), (103, 31), (97, 29), (103, 31), (103, 31)))):
+            p = os.path.join(work, "%s-%d.png" % (lang, n + 4))
+            plaque(p, words.get(key, "") if key else "", w, h)
+            frames.append(p)
+        name = um["banks"][lang]
+        atlas = boards.strip(frames, os.path.join(args.pack, "art", name))
+        sizes = []
+        for p in frames:
+            r = subprocess.run(["magick", "identify", "-format", "%w %h", p],
+                               capture_output=True, text=True, check=True)
+            sizes.append(tuple(int(v) for v in r.stdout.split()))
+        write_sheet(os.path.join(args.pack, "art", "%s.sheet" % name),
+                    os.path.basename(atlas), sizes,
+                    "Generated by tools/artgen/artgen.py (the interface's "
+                    "pieces).")
+        out["ui/" + name] = "art/%s.sheet" % name
+    return {"banks": out, "words": um["words"]}
+
+
 def write_manifest(pack, spec):
     """pack.ini: merged, not rewritten.  The entries already there stay
     in their order (another spec, another session, or a hand may have
@@ -3119,6 +3224,12 @@ def write_manifest(pack, spec):
                 sheet = "art/%s.sheet" % name
                 if os.path.exists(os.path.join(pack, sheet)):
                     mine.append("spr/%s = %s" % (name, sheet))
+            continue
+        if a.get("uimisc"):
+            for name in a["uimisc"]["banks"].values():
+                sheet = "art/%s.sheet" % name
+                if os.path.exists(os.path.join(pack, sheet)):
+                    mine.append("ui/%s = %s" % (name, sheet))
             continue
         if a.get("cave") or a.get("title"):
             for name in (a.get("cave") or a.get("title"))["banks"]:
@@ -3289,7 +3400,7 @@ def main():
                 a.get("cave") or a.get("title") or a.get("bigs") or \
                 a.get("tmap") or a.get("walker") or a.get("lettering") or \
                 a.get("layout") or a.get("citymap") or \
-                a.get("fightflags"):
+                a.get("fightflags") or a.get("uimisc"):
             t0 = time.time()
             record = (make_clouds if a.get("clouds") else make_board
                       if a.get("board") else make_cave if a.get("cave")
@@ -3301,6 +3412,7 @@ def main():
                       else make_layout if a.get("layout")
                       else make_citymap if a.get("citymap")
                       else make_fightflags if a.get("fightflags")
+                      else make_uimisc if a.get("uimisc")
                       else make_sprite)(args, spec, a, profile, seed)
             if record is None:
                 failed.append(a["id"])
