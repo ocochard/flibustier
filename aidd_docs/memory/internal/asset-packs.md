@@ -390,7 +390,8 @@ The game's text, when a pack gives it; otherwise the original `CSTR` and
   for which the pack stack gives both tables.
 - **Writing it.** The open pack's text must be written anew, never
   copied or paraphrased line by line from the original (see
-  "Licensing" in the roadmap). `flibustier --export-text DIR` writes the
+  "Licensing" in the roadmap); [text-catalogue.md](text-catalogue.md)
+  says what each entry is for. `flibustier --export-text DIR` writes the
   installed tables of every language in this format, as
   `<lang>/cstr.json` and `<lang>/cstn.json` with a `pack.ini`; line
   breaks are written `\n`. Exported from the original data, it is for
