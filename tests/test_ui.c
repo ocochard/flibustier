@@ -763,6 +763,17 @@ speed_box(struct game *g, int y, uint8_t *out)
 		memcpy(out + r * 60, &g->fb.px[(y - 5 + r) * FB_W + 580], 60);
 }
 
+/* The battle panel's status line at row y, drawn into "out" (140 x 14). */
+static void
+status_line(struct game *g, int y, uint8_t *out)
+{
+	int r;
+
+	game_draw(g);
+	for (r = 0; r < 14; r++)
+		memcpy(out + r * 140, &g->fb.px[(y + r) * FB_W + 492], 140);
+}
+
 static void
 test_battle_screen(void)
 {
@@ -821,6 +832,30 @@ test_battle_screen(void)
 		speed_box(g, 54, b);
 		CHECK(memcmp(a, b, sizeof(a)) == 0);
 		g->sim.battle = saved;
+	}
+	/* A new damage stage puts its word on the side's status line until
+	 * the next status event (VA 0xebd7, 0xef06); a fort has no line. */
+	{
+		struct sim_battle saved = g->sim.battle;
+		uint8_t a[140 * 14], b[140 * 14];
+
+		CHECK(g->btl_hurt[0] == -1 && g->btl_hurt[1] == -1);
+		status_line(g, 116, a);
+		g->sim.battle.foe.damage = 16;
+		g->sim.battle.you.damage = 32;
+		CHECK(game_script(g, "wait:1") == 0 &&
+		    g->btl_hurt[1] == 1 && g->btl_hurt[0] == 2);
+		status_line(g, 116, b);
+		CHECK(memcmp(a, b, sizeof(a)) != 0);
+		CHECK(game_script(g, g->sim.battle.you.full_sails ? "down" :
+		    "up") == 0 && game_script(g, "wait:1") == 0 &&
+		    g->btl_hurt[0] == -1 && g->btl_hurt[1] == 1);
+		g->sim.battle.fort = 1;
+		CHECK(game_script(g, "wait:1") == 0 && g->btl_hurt[1] == -1);
+		g->sim.battle = saved;
+		g->btl_hurt[0] = g->btl_hurt[1] = -1;
+		g->btl_hurt_seen[0] = saved.you.damage / 16;
+		g->btl_hurt_seen[1] = saved.foe.damage / 16;
 	}
 	/* An escape: outrun.pcx and its text in the ink at (100, 300)
 	 * (CSTR 197, 198). */

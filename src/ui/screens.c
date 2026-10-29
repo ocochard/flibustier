@@ -3606,6 +3606,7 @@ battle_sprites(struct game *g, int side, int type)
 }
 
 static void	prize_show(struct game *);
+static void	battle_hurt_seed(struct game *);
 static int	vnews_offer(struct game *, int, int, const struct screen *);
 
 
@@ -3629,6 +3630,7 @@ battle_enter(struct game *g)
 	tileset_load(g->packs, "tiles/battle", &g->btl_tiles);
 	sea_init(&g->sea, g->fb.pal);	/* its sea turns too (VA 0x939b) */
 	g->btl_fire = g->btl_sails = 0;
+	battle_hurt_seed(g);
 	g->btl_stage = g->sim.battle.outcome == BAT_NONE ? 0 : 1;
 	if (g->sim.battle.outcome == BAT_BOARDING &&
 	    g->sim.sword.result == SWORD_WON)
@@ -3919,12 +3921,66 @@ battle_heading_follow(int *shown, int heading)
 		    255;
 }
 
+/* A side's damage stage (VA 0xebd7): damage / 16, at most 4; a fort
+ * has none (-1). */
+static int
+battle_hurt_stage(const struct sim_battle *bt, int side)
+{
+	const struct battle_ship *b = side == 0 ? &bt->you : &bt->foe;
+
+	if (side == 1 && bt->fort)
+		return (-1);
+	return (b->damage / 16 > 4 ? 4 : b->damage / 16);
+}
+
+/* The stages the battle starts with show no word (VA 0x2a603). */
+static void
+battle_hurt_seed(struct game *g)
+{
+	int side;
+
+	for (side = 0; side < 2; side++) {
+		g->btl_hurt[side] = -1;
+		g->btl_hurt_seen[side] = battle_hurt_stage(&g->sim.battle,
+		    side);
+	}
+}
+
+/*
+ * A new damage stage writes its word on the side's status line (VA
+ * 0xebd7, event 7); the next status event writes over it: for the
+ * player firing, reloaded, or the sails starting or ending a change
+ * (VA 0xef06, events 1, 2, 10, 11), for the enemy its sails changing
+ * (event 12).
+ */
+static void
+battle_hurt_update(struct game *g, int ev, int sail_timer, int foe_sails)
+{
+	const struct sim_battle *bt = &g->sim.battle;
+	int side, lvl;
+
+	if ((ev & (BEV_FIRED | BEV_RELOADED | BEV_SAILS)) != 0 ||
+	    (sail_timer == 0 && bt->you.sail_timer > 0))
+		g->btl_hurt[0] = -1;
+	if (foe_sails != bt->foe.full_sails)
+		g->btl_hurt[1] = -1;
+	for (side = 0; side < 2; side++) {
+		lvl = battle_hurt_stage(bt, side);
+		if (lvl != g->btl_hurt_seen[side])
+			g->btl_hurt[side] = g->btl_hurt_seen[side] = lvl;
+	}
+}
+
 static void
 battle_tick(struct game *g)
 {
+	int ev, sail_timer = g->sim.battle.you.sail_timer,
+	    foe_sails = g->sim.battle.foe.full_sails;
+
 	if (g->fading != 0 || g->btl_stage != 0)
 		return;
-	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
+	ev = sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);
+	battle_hurt_update(g, ev, sail_timer, foe_sails);
 	battle_heading_follow(&g->btl_heading[0], g->sim.battle.you.heading);
 	battle_heading_follow(&g->btl_heading[1], g->sim.battle.foe.heading);
 	play_sound(g, g->sim.battle.sound, g->sim.battle.sound ==
@@ -4057,9 +4113,14 @@ battle_burst_draw(struct game *g, const struct battle_shot *sh,
 		    21, to->y / 256 - 6, 1);
 }
 
+/*
+ * A side's panel: its type, men and guns, and its status line: the
+ * damage word while "hurt" is a stage, else W_SAILING "status", or the
+ * sails when it is -1; a fort (status -2) has none (VA 0xea3e, 0xebd7).
+ */
 static void
 battle_side_text(struct game *g, int y, const struct battle_ship *b,
-    int status)
+    int status, int hurt)
 {
 	char buf[96];
 
@@ -4069,8 +4130,11 @@ battle_side_text(struct game *g, int y, const struct battle_ship *b,
 	    game_word(g, W_SAILING, SAILING_MEN), b->crew,
 	    game_word(g, W_SAILING, SAILING_GUNS), b->guns);
 	draw(g, FONT_SMALL, PANEL_X, y + 72, 140, buf, 0);
-	snprintf(buf, sizeof(buf), "%s", game_word(g, W_SAILING, (size_t)(
-	    status >= 0 ? status : b->full_sails ? SAILING_FULL_SAILS :
+	if (status < -1)
+		return;
+	snprintf(buf, sizeof(buf), "%s", hurt >= 0 ? game_word(g, W_DAMAGE,
+	    (size_t)hurt) : game_word(g, W_SAILING, (size_t)(status >= 0 ?
+	    status : b->full_sails ? SAILING_FULL_SAILS :
 	    SAILING_BATTLE_SAILS)));
 	draw(g, FONT_SMALL, PANEL_X, y + 102, 140, buf, 0);
 }
@@ -4124,12 +4188,13 @@ battle_draw(struct game *g)
 	battle_burst_draw(g, &bt->you.shot, &bt->foe);
 
 	/* The panel: the enemy above, the player below, the wind between. */
-	battle_side_text(g, 14, &bt->foe, -1);
+	battle_side_text(g, 14, &bt->foe, bt->fort ? -2 : -1,
+	    g->btl_hurt[1]);
 	/* While the sails change, "Raising sail" or "Lowering sail" (VA
 	 * 0xef06, event 10); reloading waits for them. */
 	battle_side_text(g, 358, &bt->you, bt->you.sail_timer > 0 ?
 	    (bt->you.full_sails ? SAILING_LOWERING : SAILING_RAISING) :
-	    bt->you.reload > 0 ? SAILING_RELOADING : -1);
+	    bt->you.reload > 0 ? SAILING_RELOADING : -1, g->btl_hurt[0]);
 	/* A fort's damage shows in four stages of 20 (VA 0xebd7). */
 	lvl = bt->fort ? (bt->fort_damage / 20 > 3 ? 3 : bt->fort_damage /
 	    20) : bt->foe.damage / 16 > 4 ? 4 : bt->foe.damage / 16;

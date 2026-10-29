@@ -1238,6 +1238,13 @@ fight computes its level the same way with fencing.
     or "Lowering sail" (CSTN 30.4, 30.5, VA `0xef06` event 10) and
     reloading waits. Then it shows "Full sails" or "Battle sails" (30.3,
     30.2), and full sails multiply the speed by 1.5.
+- **Damage word (VA `0xebd7`, event 7):** when a side's damage stage
+  (`damage / 16`, at most 4) changes, its status line shows the stage's
+  word (CSTN 14). The stages at the battle's start show none (VA
+  `0x2a603`). The word stays until the next status event writes over
+  it: for the player firing, reloaded, or a sail change starting or
+  ending (events 1, 2, 10, 11); for the enemy its sails changing
+  (event 12).
 - **Speed:**
   - Start from `(speed_table[class][sector] x 4 - damage / 4)`, with
     `sector = ((heading + 8 - wind) >> 4) & 15`.
@@ -1383,7 +1390,8 @@ the fort.
     in the damage formula and no bonus. The panel shows `fortbtl.cur`
     stage `damage / 20` (at most 3). The fort is never sunk.
   - The fort is drawn in its screen, not as a sprite. The panel calls
-    it "Fort" (CSTN 8.9).
+    it "Fort" (CSTN 8.9), with no speed and no status line (VA
+    `0xea3e`, `0xebd7`).
   - Leaving 10..430 (the player's corner) ends the battle: "An
     accurate salvo… drives you back" (CSTR 196). Sunset says CSTR 317.
   - Running onto land with the boxes touching (the fort's box not
