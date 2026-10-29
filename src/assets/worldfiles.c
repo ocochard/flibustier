@@ -115,6 +115,10 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 		snprintf(name, sizeof(name), "map-%d.tmj", town_era_years[era]);
 		if (flush(dir, name, &b, err, errlen) != 0)
 			goto out;
+		data_encode(&b, era_fields, era_nfields, w);
+		snprintf(name, sizeof(name), "era-%d.json", town_era_years[era]);
+		if (flush(dir, name, &b, err, errlen) != 0)
+			goto out;
 	}
 	/* The battle screens are the same in every era. */
 	tiled_write(&b, BATTLE_SCREEN, BATTLE_SCREEN, BATTLE_TILE, BATTLE_TILE,
@@ -173,6 +177,9 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	jb_raw(&b, "}\n");
 	if (flush(dir, "battle-sets.json", &b, err, errlen) != 0)
 		goto out;
+	data_encode(&b, sea_battle_fields, sea_battle_nfields, w);
+	if (flush(dir, "sea-battle.json", &b, err, errlen) != 0)
+		goto out;
 	data_encode(&b, sword_fields, sword_nfields, &w->sword);
 	if (flush(dir, "sword.json", &b, err, errlen) != 0)
 		goto out;
@@ -189,9 +196,13 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	    "screens/land = land-screens.tmj\n"
 	    "data/treasure = treasure.json\n"
 	    "data/battle-sets = battle-sets.json\n"
+	    "data/sea-battle = sea-battle.json\n"
 	    "data/sword = sword.json\n");
 	for (era = 0; era < EXE_ERAS; era++) {
 		snprintf(name, sizeof(name), "data/towns/%d = towns-%d.json\n",
+		    town_era_years[era], town_era_years[era]);
+		jb_raw(&b, name);
+		snprintf(name, sizeof(name), "data/era/%d = era-%d.json\n",
 		    town_era_years[era], town_era_years[era]);
 		jb_raw(&b, name);
 	}

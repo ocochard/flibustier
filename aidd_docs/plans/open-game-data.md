@@ -91,9 +91,12 @@ Status (2026-10-29): done.
 
 ### G2: formats, loaders and export
 
-Status (2026-10-29): `data/sword` done (asset-packs.md, "Open game
-data"); `test_original` round-trips it and refuses a broken file, and
-the ten-year replay with the export over the original is identical.
+Status (2026-10-29): `data/sword`, `data/era/<year>` and
+`data/sea-battle` done (asset-packs.md, "Open game data");
+`test_original` round-trips them and refuses a broken file, and the
+ten-year replay with the export over the original is identical. The
+encounter records are arrays of 7 in a documented order rather than
+named fields, so one field list serves every table.
 
 For each ID in the table above:
 
@@ -124,9 +127,6 @@ Format notes:
   pack that replaces a screen's picture with a different composition
   gives its layout too; otherwise the original's hot spots apply to the
   new picture.
-- **`data/era/<year>`:** speeds as 8 ship classes x 16 wind sectors;
-  encounters per nation as records with named fields (type, nation,
-  crew, guns, role, gold and goods factors).
 
 Size: medium to large; it can land one ID at a time, each with its test.
 

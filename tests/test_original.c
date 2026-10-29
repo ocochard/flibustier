@@ -801,7 +801,10 @@ test_world_export(struct packs *orig)
 	    "map-1660.tmj", "map-1680.tmj", "towns-1560.json",
 	    "towns-1600.json", "towns-1620.json", "towns-1640.json",
 	    "towns-1660.json", "towns-1680.json", "treasure.json",
-	    "battle-sets.json", "sword.json", "map-terrain.pgm", "battle-terrain.pgm",
+	    "battle-sets.json", "sword.json", "sea-battle.json",
+	    "era-1560.json", "era-1600.json", "era-1620.json",
+	    "era-1640.json", "era-1660.json", "era-1680.json",
+	    "map-terrain.pgm", "battle-terrain.pgm",
 	    NULL };
 	static struct era_towns t, tref;
 	const char *data = getenv("FLIBUSTIER_DATA");
@@ -838,6 +841,26 @@ test_world_export(struct packs *orig)
 			    sizeof(w.battle_sets)) == 0);
 			CHECK(memcmp(&w.sword, &ref.sword,
 			    sizeof(w.sword)) == 0);
+			/* The era block and the sea battle tables. */
+			CHECK(memcmp(w.speed, ref.speed, sizeof(w.speed)) == 0);
+			CHECK(memcmp(w.encounter, ref.encounter,
+			    sizeof(w.encounter)) == 0);
+			CHECK(memcmp(w.treasure_ship, ref.treasure_ship,
+			    sizeof(w.treasure_ship)) == 0);
+			CHECK(memcmp(w.battle_ai, ref.battle_ai,
+			    sizeof(w.battle_ai)) == 0);
+			CHECK(w.diplomacy_range == ref.diplomacy_range &&
+			    w.wright_tolerance == ref.wright_tolerance);
+			CHECK(memcmp(w.half_w, ref.half_w, sizeof(w.half_w)) ==
+			    0 && memcmp(w.half_h, ref.half_h,
+			    sizeof(w.half_h)) == 0);
+			CHECK(memcmp(w.hit_steps, ref.hit_steps,
+			    sizeof(w.hit_steps)) == 0);
+			CHECK(memcmp(w.shot_rise, ref.shot_rise,
+			    sizeof(w.shot_rise)) == 0 && memcmp(w.shot_frame,
+			    ref.shot_frame, sizeof(w.shot_frame)) == 0);
+			CHECK(memcmp(w.bow_mark, ref.bow_mark,
+			    sizeof(w.bow_mark)) == 0);
 			CHECK(towns_for_era(packs, layout, b.data, b.len, era,
 			    &t, err, sizeof(err)) == 0);
 			CHECK(towns_for_era(orig, layout, b.data, b.len, era,
@@ -856,6 +879,11 @@ test_world_export(struct packs *orig)
 	if (layout != NULL)
 		CHECK(world_load(&w, packs, layout, b.data, b.len, 0, err,
 		    sizeof(err)) == -1 && strstr(err, "data/sword") != NULL);
+	CHECK(write_file(dir, "era-1560.json", "{\"speeds\": 0}") == 0);
+	if (layout != NULL)
+		CHECK(world_load(&w, packs, layout, b.data, b.len, 0, err,
+		    sizeof(err)) == -1 && strstr(err, "data/era/1560") !=
+		    NULL);
 	blob_free(&b);
 	packs_free(packs);
 	for (i = 0; files[i] != NULL; i++) {

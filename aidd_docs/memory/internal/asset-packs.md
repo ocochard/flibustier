@@ -321,6 +321,8 @@ that both the loader and the export use.
 
 | ID | Format | Content |
 |---|---|---|
+| `data/era/<year>` | JSON (`struct world`, `world.h`) | the era's ship speeds, ships met at sea, enemy decisions, diplomacy and shipwright values |
+| `data/sea-battle` | JSON (`struct world`) | sea battle hit boxes, shot arcs, the bow cross |
 | `data/sword` | JSON (`struct sword_tables`, `world.h`) | the sword fight tables |
 
 - **Shape:** a JSON object whose keys are exactly the fields listed
@@ -333,6 +335,33 @@ that both the loader and the export use.
 - **Export:** `flibustier --export-world DIR` writes these IDs too, with
   the world (see "Open world data"): for local checks only, never
   distributed.
+
+### `data/era/<year>`
+
+One per era (1560 ... 1680). See "Speed table", "Encounters at sea" and
+"Enemy decisions" in game-rules.md.
+
+| Field | Size | Content |
+|---|---|---|
+| `speed` | 8 x 16, i8 | per ship class, the speed at each of 16 headings relative to the wind, from running before it |
+| `encounter` | 4 x 5 x 7, u8 | ships met at sea: per nation, 5 records of type, nation, crew, guns, role, the loot's gold factor and goods factor |
+| `treasure_ship` | 7, u8 | the treasure galleon's record, as an encounter's; its gold factor also sizes a convoy's sack |
+| `battle_ai` | 27, u8 | the enemy's decision per comparison total, read `% 3` |
+| `diplomacy_range` | u8 | a diplomatic event comes when `rand(range) < 28` |
+| `wright_tolerance` | u8 | a Spanish shipwright serves up to `rank x 25 + tolerance` in town wealth |
+
+### `data/sea-battle`
+
+See "Sea battles" in game-rules.md. Types are the 9 ship types, then
+the fort.
+
+| Field | Size | Content |
+|---|---|---|
+| `half_w`, `half_h` | 10, i16 | the hit box's half width and half height, per type |
+| `hit_steps` | 5, i16 | the hit box widening, by level |
+| `shot_rise` | 16, i16 | a shot's height above its shadow (0 or less), by step of its arc |
+| `shot_frame` | 16, i16 | the shot's spread frame 0-3, by step |
+| `bow_mark` | 32, i16 | the bow cross's offset around the ship: x, y pairs by heading / 16 |
 
 ### `data/sword`
 

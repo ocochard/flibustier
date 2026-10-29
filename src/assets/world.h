@@ -159,7 +159,12 @@ struct world {
  * Names of the sets, in battle_sets order.
  */
 extern const char *const battle_set_names[BATTLE_SETS];
-/* data/sword: the fields of struct sword_tables. */
+/* The open game data's fields: data/era/<year> and data/sea-battle in
+ * struct world, data/sword in struct sword_tables. */
+extern const struct data_field era_fields[];
+extern const size_t era_nfields;
+extern const struct data_field sea_battle_fields[];
+extern const size_t sea_battle_nfields;
 extern const struct data_field sword_fields[];
 extern const size_t sword_nfields;
 

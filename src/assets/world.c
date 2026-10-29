@@ -240,6 +240,31 @@ read_bytes(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	return (0);
 }
 
+#define WORLD_FIELD(name, type, d0, d1, d2)				\
+	{ #name, offsetof(struct world, name), type, { d0, d1, d2 } }
+
+const struct data_field era_fields[] = {
+	WORLD_FIELD(speed, DATA_I8, SHIP_CLASSES, WIND_SECTORS, 0),
+	WORLD_FIELD(encounter, DATA_U8, ENCOUNTER_NATIONS, ENCOUNTER_SHIPS,
+	    ENCOUNTER_LEN),
+	WORLD_FIELD(treasure_ship, DATA_U8, ENCOUNTER_LEN, 0, 0),
+	WORLD_FIELD(battle_ai, DATA_U8, BATTLE_AI_CASES, 0, 0),
+	WORLD_FIELD(diplomacy_range, DATA_U8, 0, 0, 0),
+	WORLD_FIELD(wright_tolerance, DATA_U8, 0, 0, 0),
+};
+const size_t era_nfields = sizeof(era_fields) / sizeof(era_fields[0]);
+
+const struct data_field sea_battle_fields[] = {
+	WORLD_FIELD(half_w, DATA_I16, BATTLE_TYPES, 0, 0),
+	WORLD_FIELD(half_h, DATA_I16, BATTLE_TYPES, 0, 0),
+	WORLD_FIELD(hit_steps, DATA_I16, BATTLE_LEVELS, 0, 0),
+	WORLD_FIELD(shot_rise, DATA_I16, SHOT_STEPS, 0, 0),
+	WORLD_FIELD(shot_frame, DATA_I16, SHOT_STEPS, 0, 0),
+	WORLD_FIELD(bow_mark, DATA_I16, 16 * 2, 0, 0),
+};
+const size_t sea_battle_nfields = sizeof(sea_battle_fields) /
+    sizeof(sea_battle_fields[0]);
+
 #define SWORD_FIELD(name, type, d0, d1)					\
 	{ #name, offsetof(struct sword_tables, name), type, { d0, d1, 0 } }
 
@@ -362,28 +387,66 @@ int_list(const struct json *a, size_t n, int lo, int hi, int *out)
 	return (0);
 }
 
-/* data/sword when a pack gives it, otherwise the original's tables. */
+/* Table "id" into "base" when a pack gives it: 1 if none, -1 if bad. */
 static int
-load_sword(struct world *w, struct packs *packs,
-    const struct exe_layout *layout, const uint8_t *exe, size_t len,
-    char *err, size_t errlen)
+load_table(struct packs *packs, const char *id, const struct data_field *f,
+    size_t n, void *base, char *err, size_t errlen)
 {
 	struct json *j;
 	int rc;
 
-	if ((rc = load_json(packs, "data/sword", &j, err, errlen)) < 0)
-		return (-1);
-	if (rc == 0) {
-		rc = data_decode(j, sword_fields, sword_nfields, &w->sword,
-		    "data/sword", err, errlen);
-		json_free(j);
+	if ((rc = load_json(packs, id, &j, err, errlen)) != 0)
 		return (rc);
-	}
-	if (sword_load(layout, exe, len, &w->sword) != 0) {
-		snprintf(err, errlen, "no sword fight tables");
+	rc = data_decode(j, f, n, base, id, err, errlen);
+	json_free(j);
+	return (rc);
+}
+
+/* The era block of the executable (game-rules.md, "Speed table"). */
+static int
+era_load(struct world *w, const struct exe_layout *layout,
+    const uint8_t *exe, size_t len, int block)
+{
+	const uint32_t va = layout->era_block_va + (uint32_t)block *
+	    ERA_BLOCK_LEN;
+	const uint8_t *p;
+
+	if ((p = exe_at(layout, exe, len, va, sizeof(w->speed))) == NULL)
 		return (-1);
-	}
+	memcpy(w->speed, p, sizeof(w->speed));
+	if ((p = exe_at(layout, exe, len, va + ENCOUNTER_OFF,
+	    sizeof(w->encounter))) == NULL)
+		return (-1);
+	memcpy(w->encounter, p, sizeof(w->encounter));
+	if ((p = exe_at(layout, exe, len, va + ENCOUNTER_OFF +
+	    sizeof(w->encounter), sizeof(w->treasure_ship))) == NULL)
+		return (-1);
+	memcpy(w->treasure_ship, p, sizeof(w->treasure_ship));
+	if ((p = exe_at(layout, exe, len, va + BATTLE_AI_OFF,
+	    sizeof(w->battle_ai))) == NULL)
+		return (-1);
+	memcpy(w->battle_ai, p, sizeof(w->battle_ai));
+	if ((p = exe_at(layout, exe, len, va + ERA_RANGES_OFF, 2)) == NULL)
+		return (-1);
+	w->diplomacy_range = p[0];
+	w->wright_tolerance = p[1];
 	return (0);
+}
+
+/* The sea battles' hit boxes and shots, from the executable. */
+static int
+sea_battle_load(struct world *w, const struct exe_layout *layout,
+    const uint8_t *exe, size_t len)
+{
+	return (read_words(layout, exe, len, layout->half_w_va, w->half_w,
+	    BATTLE_TYPES) != 0 || read_words(layout, exe, len,
+	    layout->half_h_va, w->half_h, BATTLE_TYPES) != 0 ||
+	    read_words(layout, exe, len, layout->hit_steps_va, w->hit_steps,
+	    BATTLE_LEVELS) != 0 || read_words(layout, exe, len,
+	    layout->shot_rise_va, w->shot_rise, SHOT_STEPS) != 0 ||
+	    read_words(layout, exe, len, layout->shot_frame_va, w->shot_frame,
+	    SHOT_STEPS) != 0 || read_words(layout, exe, len,
+	    layout->bow_mark_va, w->bow_mark, 16 * 2) != 0 ? -1 : 0);
 }
 
 /* data/treasure and data/battle-sets, when a pack gives them. */
@@ -463,7 +526,8 @@ world_load(struct world *w, struct packs *packs,
     int era, char *err, size_t errlen)
 {
 	const uint8_t *p;
-	int block, i;
+	char id[32];
+	int block, i, rc;
 
 	memset(w, 0, sizeof(*w));
 	if (era < 0 || era >= EXE_ERAS) {
@@ -509,42 +573,22 @@ world_load(struct world *w, struct packs *packs,
 	 * exactly (test_original checks it), so no pack needs to give it. */
 	for (i = 0; i < 128; i++)
 		w->sine[i] = (uint8_t)floor(255.0 * sin(PI * i / 128) + 0.5);
-	if ((p = exe_at(layout, exe, len, layout->era_block_va +
-	    (uint32_t)block * ERA_BLOCK_LEN, sizeof(w->speed))) == NULL)
-		goto bad;
-	memcpy(w->speed, p, sizeof(w->speed));
-	if ((p = exe_at(layout, exe, len, layout->era_block_va +
-	    (uint32_t)block * ERA_BLOCK_LEN + ENCOUNTER_OFF,
-	    sizeof(w->encounter))) == NULL)
-		goto bad;
-	memcpy(w->encounter, p, sizeof(w->encounter));
-	if ((p = exe_at(layout, exe, len, layout->era_block_va +
-	    (uint32_t)block * ERA_BLOCK_LEN + ENCOUNTER_OFF +
-	    sizeof(w->encounter), sizeof(w->treasure_ship))) == NULL)
-		goto bad;
-	memcpy(w->treasure_ship, p, sizeof(w->treasure_ship));
-	if ((p = exe_at(layout, exe, len, layout->era_block_va +
-	    (uint32_t)block * ERA_BLOCK_LEN + BATTLE_AI_OFF,
-	    sizeof(w->battle_ai))) == NULL)
-		goto bad;
-	memcpy(w->battle_ai, p, sizeof(w->battle_ai));
-	if ((p = exe_at(layout, exe, len, layout->era_block_va +
-	    (uint32_t)block * ERA_BLOCK_LEN + ERA_RANGES_OFF, 2)) == NULL)
-		goto bad;
-	w->diplomacy_range = p[0];
-	w->wright_tolerance = p[1];
-	if (read_words(layout, exe, len, layout->half_w_va, w->half_w,
-	    BATTLE_TYPES) != 0 || read_words(layout, exe, len,
-	    layout->half_h_va, w->half_h, BATTLE_TYPES) != 0 ||
-	    read_words(layout, exe, len, layout->hit_steps_va, w->hit_steps,
-	    BATTLE_LEVELS) != 0 || read_words(layout, exe, len,
-	    layout->shot_rise_va, w->shot_rise, SHOT_STEPS) != 0 ||
-	    read_words(layout, exe, len, layout->shot_frame_va, w->shot_frame,
-	    SHOT_STEPS) != 0 || read_words(layout, exe, len,
-	    layout->bow_mark_va, w->bow_mark, 16 * 2) != 0)
-		goto bad;
-	if (load_sword(w, packs, layout, exe, len, err, errlen) != 0)
+	snprintf(id, sizeof(id), "data/era/%d", town_era_years[era]);
+	if ((rc = load_table(packs, id, era_fields, era_nfields, w, err,
+	    errlen)) < 0)
 		return (-1);
+	if (rc == 1 && era_load(w, layout, exe, len, block) != 0)
+		goto bad;
+	if ((rc = load_table(packs, "data/sea-battle", sea_battle_fields,
+	    sea_battle_nfields, w, err, errlen)) < 0)
+		return (-1);
+	if (rc == 1 && sea_battle_load(w, layout, exe, len) != 0)
+		goto bad;
+	if ((rc = load_table(packs, "data/sword", sword_fields, sword_nfields,
+	    &w->sword, err, errlen)) < 0)
+		return (-1);
+	if (rc == 1 && sword_load(layout, exe, len, &w->sword) != 0)
+		goto bad;
 	if (load_arrival(w, packs, layout, exe, len, era, err, errlen) != 0)
 		return (-1);
 	return (load_places(w, packs, err, errlen));
