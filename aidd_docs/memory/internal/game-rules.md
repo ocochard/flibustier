@@ -1142,6 +1142,12 @@ Where the original's behaviour is not traced yet, the engine does this:
   group 12 entry `strength & 3` ("light", "medium", "strong"), left
   aligned at (524, 234), and the compass, frame `32 + wind / 16` with
   its corner at (584, 229), pointing where the wind blows.
+- **The speed (VA `0xf602`, the enemy's `0xf65c`):** each tick, after
+  a ship's speed is computed (see "Each tick"), `speed >> 2` is written
+  left aligned at (584, 398) for the player and (584, 54) for the enemy,
+  beside the arrow and ship that `sbat.pcx` draws on those rows; a fort
+  shows none (the call is skipped while the fort flag, VA `0x44a1c`,
+  is set).
 - **Palette (VA `0x939b`-`0x93ba`):** every 8 passes the battle turns
   the sailing sea's palette ranges once each (the rotations of VA
   `0x2ae26`, `0x2b009`, `0x2aed6`); the battle tiles use 208-215 and

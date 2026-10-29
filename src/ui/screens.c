@@ -4076,6 +4076,15 @@ battle_side_text(struct game *g, int y, const struct battle_ship *b,
 }
 
 static void
+battle_speed(struct game *g, int y, const struct battle_ship *b)
+{
+	char buf[16];
+
+	snprintf(buf, sizeof(buf), "%d", b->speed >> 2);
+	draw(g, FONT_SMALL, 584, y, 56, buf, 0);
+}
+
+static void
 battle_draw(struct game *g)
 {
 	const struct sim_battle *bt = &g->sim.battle;
@@ -4129,6 +4138,11 @@ battle_draw(struct game *g)
 	lvl = bt->you.damage / 16 > 4 ? 4 : bt->you.damage / 16;
 	if (g->btl_damage[0].count == 5)
 		fb_frame(&g->fb, &g->btl_damage[0].frames[lvl], 489, 258);
+	/* Each ship's speed / 4, by the speed arrow of the picture (VA
+	 * 0xf602, 0xf65c); a fort has none. */
+	battle_speed(g, 398, &bt->you);
+	if (!bt->fort)
+		battle_speed(g, 54, &bt->foe);
 	/* The wind (VA 0xee2b): its strength, and the compass pointing
 	 * where it blows. */
 	draw(g, FONT_SMALL, 524, 234, 60, game_word(g, W_WIND,
