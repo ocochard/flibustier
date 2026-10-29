@@ -2114,6 +2114,9 @@ static void
 test_crew(void)
 {
 	struct game *g;
+	struct ui_event ev;
+	uint8_t *shown;
+	size_t n;
 	int i, rep;
 
 	g = play("eng", "enter enter down down down down enter down enter "
@@ -2137,7 +2140,28 @@ test_crew(void)
 		CHECK(game_script(g, "wait:4") == 0);
 	CHECK(g->screen == &screen_crew &&
 	    g->sim.crew_event == CREW_RESTLESS);
-	CHECK(game_script(g, "enter wait:40") == 0 &&
+	/* The warning fades out as it was read, though Enter cleared the
+	 * event its text comes from. */
+	g->sim.crew_event = CREW_HUNGRY;
+	g->sim.food_days = 8;
+	CHECK(game_script(g, "wait:20") == 0);
+	n = (size_t)g->fb.out_w * g->fb.out_h;
+	if ((shown = malloc(n)) != NULL) {
+		memcpy(shown, g->fb.idx, n);
+		memset(&ev, 0, sizeof(ev));
+		ev.type = EV_KEY;
+		ev.key = UI_KEY_ENTER;
+		game_event(g, &ev);
+		for (i = 0; i < 4; i++) {
+			game_tick(g);
+			game_draw(g);
+		}
+		CHECK(g->screen == &screen_crew && g->fading == -1 &&
+		    g->sim.crew_event == CREW_NONE &&
+		    memcmp(shown, g->fb.idx, n) == 0);
+		free(shown);
+	}
+	CHECK(game_script(g, "wait:40") == 0 &&
 	    g->screen == &screen_sail && g->sim.crew_event == CREW_NONE);
 	/* Worse: mutiny, the duel on the deck, reputation -4. */
 	g->sim.months = 10;

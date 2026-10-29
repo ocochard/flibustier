@@ -94,6 +94,9 @@ struct game {
 	const struct screen	*screen;
 	const struct screen	*next;		/* during a fade out */
 	int			 fading;	/* -1 out, +1 in, 0 none */
+	int			 frozen;	/* fading out on the last frame drawn */
+	uint8_t			 shown_pal[256 * 3];	/* that frame's palette */
+	uint8_t			 next_pal[256 * 3];	/* set since, for the next */
 	int			 selected;	/* option under the cursor */
 	struct text_layout	 options;	/* menu options of the last draw */
 	unsigned		 ticks;		/* on the current screen */

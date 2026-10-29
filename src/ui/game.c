@@ -366,6 +366,10 @@ game_tick(struct game *g)
 			g->selected = 0;
 			memset(&g->options, 0, sizeof(g->options));
 			g->fading = 1;
+			if (g->frozen) {
+				memcpy(g->fb.pal, g->next_pal, sizeof(g->fb.pal));
+				g->frozen = 0;
+			}
 			if (g->screen == NULL) {
 				g->quit = 1;
 				return;
@@ -404,6 +408,20 @@ game_draw(struct game *g)
 {
 	if (g->screen == NULL)
 		return;
+	/*
+	 * A screen fades out on the last frame it drew: what left it
+	 * (an answer, a cleared event, a stage moved on) may already have
+	 * changed what it would draw now.  Its palette is kept apart for
+	 * the next screen.
+	 */
+	if (g->fading == -1) {
+		if (!g->frozen) {
+			memcpy(g->next_pal, g->fb.pal, sizeof(g->next_pal));
+			g->frozen = 1;
+		}
+		memcpy(g->fb.pal, g->shown_pal, sizeof(g->fb.pal));
+		return;
+	}
 	if (g->bg.pixels != NULL)
 		fb_image(&g->fb, &g->bg, 0, 0, 0);
 	else
@@ -412,6 +430,7 @@ game_draw(struct game *g)
 	/* The pointer, its tip at the top left, once the mouse is used. */
 	if (g->pointer_seen && g->cursor.pixels != NULL && !pointer_hidden(g))
 		fb_frame(&g->fb, &g->cursor, g->pointer_x, g->pointer_y);
+	memcpy(g->shown_pal, g->fb.pal, sizeof(g->shown_pal));
 }
 
 int
