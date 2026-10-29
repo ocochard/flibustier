@@ -116,8 +116,7 @@ FRAME = OVAL + [line((0, 330), (640, 330))]
 # The identity screen: the oval, and under it a long parchment scroll,
 # its flat band (x 51-582, y 315-391) where the choices are written.
 IDSELECT = OVAL + [rect(51, 315, 582, 391),
-                   line((20, 300), (51, 315)), line((20, 405), (51, 391)),
-                   line((620, 300), (582, 315)), line((620, 405), (582, 391))]
+                   ellipse(40, 330, 16, 22), ellipse(594, 330, 16, 22)]
 # The save screen: a slate in a carved cartouche, its flat face where the
 # slots are written (x 100-560, y 30-420).
 SAVEGAME = ["roundrectangle %d,%d %d,%d %d,%d" % (sx(60), sx(4), sx(600),

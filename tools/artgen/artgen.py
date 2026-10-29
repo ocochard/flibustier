@@ -3705,6 +3705,19 @@ def main():
                 continue
             with open(out, "wb") as f:
                 f.write(png)
+            if a.get("frame"):
+                # The cut-out grown to fill the frame's place, centred.
+                kk = height / SCREEN_H
+                fx, fy, fw, fh = (round(v * kk) for v in a["frame"])
+                subprocess.run(["magick", "-size", "%dx%d" % (ow, oh),
+                                "xc:none", "(", out, "-trim", "+repage",
+                                "-resize", "%dx%d" % (fw, fh), ")",
+                                "-gravity", "northwest", "-geometry",
+                                "+%d+%d" % (fx, fy), "-composite", out],
+                               check=True)
+                subprocess.run(["magick", out, "-gravity", "northwest",
+                                "(", "+clone", "-alpha", "extract", ")",
+                                "+delete", out], check=True)
             subprocess.run(["magick", out, "-background", a["matte_on"],
                             "-flatten", out], check=True)
         for w in a.get("words", []):

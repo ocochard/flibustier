@@ -390,12 +390,18 @@ seed = 1660
 source = "layout described from the original screen"
 frame = [12, 29, 363, 404]
 field = "#CD9462"
-trim = 0.0		# cut at the frame's own edge instead (frame_fit)
-frame_fit = true
+# The whole frame painted with a margin of wall round it, then cut out
+# along its own carved outline: a straight cut clips its ornaments.
+gilded = false
+matte_on = "#CD9462"
 prompt = """
-Photograph of the stern of a 17th-century galleon at sea, its carved and
-gilded transom with lanterns and rows of windows, sails above, blue sea,
-seen from slightly below.
+Photograph of an ornate antique gilded wooden picture frame, deeply
+carved with scrolls and shells, hanging on a plain flat warm tan wall,
+the whole frame visible and filling nearly all the picture, only a thin
+margin of plain wall round it; in
+the frame, a painting of the stern of a 17th-century galleon at sea,
+its carved and gilded transom with lanterns and rows of windows, sails
+above, blue sea, seen from slightly below.
 """
 
 [[asset]]
@@ -3620,11 +3626,14 @@ control_end = 0.6
 prompt = """
 Photograph, straight on and filling the whole picture, of an old deep
 navy-blue shipwright's drawing on paper, faint pale blue lines of a
-ship's hull and rigging all over it, and on it, in the
-upper middle, an ornate oval picture frame of dark carved bronze with
-gilt highlights, a crest of carved leaves on its top, its inside empty
-and black; across the lower part, a long unrolled cream parchment scroll
-with curled ends, its middle plain and empty. Sharp focus, realistic.
+ship's hull and rigging all over it, and on it, in the upper middle, an
+ornate oval picture frame of dark carved bronze with gilt highlights, a
+crest of carved leaves on its top, its inside empty and black. Below the
+frame, across the picture, a single long narrow cream parchment banner
+with its two ends curled up into scrolls, the banner only as tall as a
+sixth of the picture, flat and empty in its middle; under the banner
+nothing but the blue drawing down to the bottom of the picture, no
+second scroll, no roll. Sharp focus, realistic.
 """
 
 [[asset]]
