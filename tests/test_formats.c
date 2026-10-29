@@ -476,6 +476,30 @@ test_fb(void)
 	CHECK(p[0] == 255 && p[1] == 0 && p[2] == 0);
 	p = at(rgb, 1440, 2, 1);		/* entry 30, green */
 	CHECK(p[0] == 0 && p[1] == 255 && p[2] == 0);
+
+	/* An original frame half a pixel over (2x): the canvas shifts by
+	 * one canvas pixel, the 640x480 indices go to the nearest pixel. */
+	{
+		uint8_t dot = 7;
+		struct frame f = { 0 };
+
+		f.w = f.h = 1;
+		f.pixels = &dot;
+		CHECK(fb_init(&fb, 960) == 0);
+		fb_clear(&fb, 0);
+		fb_frame_sub(&fb, &f, 21, 20, 2);	/* (10.5, 10) */
+		CHECK(fb.px[10 * FB_W + 11] == 7 && fb.px[10 * FB_W + 10] == 0);
+		CHECK(fb.idx[20 * 1280 + 20] == 0 &&
+		    fb.idx[20 * 1280 + 21] == 7 &&
+		    fb.idx[21 * 1280 + 22] == 7 &&
+		    fb.idx[20 * 1280 + 23] == 0);
+		/* On a whole pixel, as fb_frame(). */
+		fb_clear(&fb, 0);
+		fb_frame_sub(&fb, &f, 20, 20, 2);
+		CHECK(fb.idx[20 * 1280 + 20] == 7 &&
+		    fb.idx[20 * 1280 + 21] == 7 &&
+		    fb.idx[20 * 1280 + 22] == 0);
+	}
 	image_free(&img);
 	fb_free(&fb);
 	free(rgb);

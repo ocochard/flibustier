@@ -323,14 +323,55 @@ frame_rgba(struct fb *fb, const struct frame *f, int x, int y, int sub,
 }
 
 /*
- * fb_frame_clip() at (xs, ys) in 1/"sub" pixels: the indices at the
- * nearest pixel, the true colours at the canvas pixel.
+ * The palette indices of frame "f" at (x, y), in 1/"sub" pixels, onto
+ * the canvas, inside the canvas rectangle [cx0, cx1) x [cy0, cy1): an
+ * original sprite between two 640x480 pixels.
+ */
+static void
+frame_idx(struct fb *fb, const struct frame *f, int x, int y, int sub,
+    int cx0, int cy0, int cx1, int cy1)
+{
+	int bx0 = canvas_at(x, fb->out_w, FB_W * sub);
+	int bx1 = canvas_at(x + f->w * sub, fb->out_w, FB_W * sub);
+	int by0 = canvas_at(y, fb->out_h, FB_H * sub);
+	int by1 = canvas_at(y + f->h * sub, fb->out_h, FB_H * sub);
+	int ox, oy, ax, ay;
+	size_t i, o;
+
+	if (bx1 <= bx0 || by1 <= by0)
+		return;
+	if (bx0 > cx0)
+		cx0 = bx0;
+	if (bx1 < cx1)
+		cx1 = bx1;
+	if (by0 > cy0)
+		cy0 = by0;
+	if (by1 < cy1)
+		cy1 = by1;
+	for (oy = cy0; oy < cy1; oy++) {
+		ay = (int)((long)(oy - by0) * f->h / (by1 - by0));
+		for (ox = cx0; ox < cx1; ox++) {
+			ax = (int)((long)(ox - bx0) * f->w / (bx1 - bx0));
+			i = (size_t)ay * f->w + ax;
+			if (f->mask != NULL && !f->mask[i])
+				continue;
+			o = (size_t)oy * fb->out_w + ox;
+			fb->idx[o] = f->pixels[i];
+			fb->tc[o] = 0;
+		}
+	}
+}
+
+/*
+ * fb_frame_clip() at (xs, ys) in 1/"sub" pixels: the 640x480 indices at
+ * the nearest pixel; on the canvas, the true colours, or an original
+ * frame's indices off a whole pixel, at the canvas pixel.
  */
 static void
 frame_clip(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
     int x0, int y0, int x1, int y1)
 {
-	int fx, fy, px, py, x, y;
+	int fx, fy, px, py, x, y, between;
 	size_t i;
 
 	xs += f->ox * sub;
@@ -347,6 +388,8 @@ frame_clip(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
 		y1 = FB_H - 1;
 	if (x1 < x0 || y1 < y0)
 		return;
+	between = f->rgba == NULL && fb->out_h != FB_H &&
+	    (xs % sub != 0 || ys % sub != 0);
 	for (fy = 0; fy < f->h; fy++) {
 		py = y + fy;
 		if (py < y0 || py > y1)
@@ -357,7 +400,7 @@ frame_clip(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
 			if (px < x0 || px > x1 ||
 			    (f->mask != NULL && !f->mask[i]))
 				continue;
-			if (f->rgba != NULL)
+			if (f->rgba != NULL || between)
 				fb->px[(size_t)py * FB_W + px] = f->pixels[i];
 			else
 				fb_put(fb, (size_t)py * FB_W + px,
@@ -366,6 +409,9 @@ frame_clip(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
 	}
 	if (f->rgba != NULL)
 		frame_rgba(fb, f, xs, ys, sub, fb->x0[x0], fb->y0[y0],
+		    fb->x0[x1 + 1], fb->y0[y1 + 1]);
+	else if (between)
+		frame_idx(fb, f, xs, ys, sub, fb->x0[x0], fb->y0[y0],
 		    fb->x0[x1 + 1], fb->y0[y1 + 1]);
 }
 

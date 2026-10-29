@@ -92,7 +92,8 @@ void	fb_frame(struct fb *fb, const struct frame *f, int x, int y);
 
 /*
  * The same at (x, y) in 1/"sub" pixels, for motion finer than the 640x480
- * screen: the indices go to the nearest pixel.
+ * screen: the 640x480 indices go to the nearest pixel, the canvas gets
+ * the frame at its place, true colours or indices.
  */
 void	fb_frame_sub(struct fb *fb, const struct frame *f, int x, int y,
 	    int sub);

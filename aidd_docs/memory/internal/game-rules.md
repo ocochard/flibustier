@@ -227,8 +227,10 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   one by an eighth of the way a frame, more than a quarter turn at
   once. Fencers slide to their new place over a fight tick (9 to 12
   frames) instead of at once, a move of more than 48 pixels drawn as a
-  jump; their poses change at the tick, as in the original. The rules
-  are not affected.
+  jump; their poses change at the tick, as in the original. On a canvas
+  larger than 640x480, original sprites between two pixels are drawn at
+  their place on the canvas, as true-colour art is. The rules are not
+  affected.
 - **Ticks:** a tick counter; 64 ticks make a day. When a voyage ends,
   the game adds `ticks / 64 + 1` days (VA `0x28789`).
 - **The cabin:** Space opens it (key table VA `0x33d90`, Space handler
