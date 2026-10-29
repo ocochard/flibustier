@@ -127,19 +127,27 @@ CAVE = [
     [427, 282, 60000],	# 7 a crowned chest, overflowing
 ]
 
-# The fleet panel (no open picture yet): 8 ships in two rows of four
-# columns 160 wide.  A battle picture is 326x194 art pixels, 145x86 on
-# screen; under each ship its type (title font, 25 high in the open
-# pack) then its damage (body font, 15 high), centred on the column.
-# The labels' y is their top, as the engine draws them.  The prompt
-# is drawn at y 400 in x 5-420 and the button's label centred on
-# x 510 at y 436, so the button spot sits right of the prompt.
-PANEL_COLUMN = 160
-PANEL_SHIP_W = 145
-PANEL_ROWS = (28, 212)		# each row's ship top
-PANEL_TYPE_DY = 90		# type label's top, below the ship's top
-PANEL_DAMAGE_DY = 116		# damage label's top
-PANEL_BUTTON = [430, 428, 590, 468, 1]
+# The fleet panel, on pic/shipsel: 8 framed windows in two rows of four,
+# each with two plaques below it.  Each window's picture area is exactly
+# a battle picture's frame (326x194 art pixels, 145x86 on screen), so a
+# ship is drawn at that area's top left.  The columns are not evenly
+# spaced on the art, so each is measured.  The type (title font, 25
+# high in the open pack) and the damage (body font, 15 high) are
+# centred on their plaques; their y is their top, as the engine draws
+# them.  The prompt is drawn at y 400 in x 5-420, on the wood between
+# the second row and the button plaque (y 430-474, x 440-578, with its
+# arrow to x 630), which the engine's button label at (510, 436) fits.
+PANEL_COLUMNS = [	# [ship x, spot x0, spot x1, plaques' centre x]
+    [12, 10, 158, 84],
+    [169, 167, 316, 241],
+    [325, 323, 472, 397],
+    [482, 480, 628, 554],
+]
+PANEL_ROWS = [		# [ship y, spot y0, spot y1, type top, damage top]
+    [33, 30, 192, 130, 171],
+    [224, 221, 384, 321, 362],
+]
+PANEL_BUTTON = [440, 430, 630, 474, 1]
 
 
 def cabin():
@@ -185,30 +193,28 @@ def cave():
 
 
 def fleet_panel():
-    xs = [c * PANEL_COLUMN + (PANEL_COLUMN - PANEL_SHIP_W) // 2
-          for c in range(4)]
     ship_x, ship_y, spots, type_x, type_y, dmg_x, dmg_y = ([] for _ in
                                                            range(7))
-    for top in PANEL_ROWS:
-        for c, x in enumerate(xs):
-            ship_x.append(x)
-            ship_y.append(top)
-            spots.append([c * PANEL_COLUMN + 4, top - 4,
-                          (c + 1) * PANEL_COLUMN - 4,
-                          top + PANEL_DAMAGE_DY + 18, 1])
-            type_x.append(c * PANEL_COLUMN + PANEL_COLUMN // 2)
-            type_y.append(top + PANEL_TYPE_DY)
-            dmg_x.append(c * PANEL_COLUMN + PANEL_COLUMN // 2)
-            dmg_y.append(top + PANEL_DAMAGE_DY)
+    for sy, y0, y1, ty, dy in PANEL_ROWS:
+        for sx, x0, x1, cx in PANEL_COLUMNS:
+            ship_x.append(sx)
+            ship_y.append(sy)
+            spots.append([x0, y0, x1, y1, 1])
+            type_x.append(cx)
+            type_y.append(ty)
+            dmg_x.append(cx)
+            dmg_y.append(dy)
     spots.append(PANEL_BUTTON)
     return ({"ship_x": ship_x, "ship_y": ship_y, "spots": spots,
              "type_x": type_x, "type_y": type_y,
              "damage_x": dmg_x, "damage_y": dmg_y},
-            "Designed: two rows of four columns 160 wide, each ship's "
-            "battle picture (145x86 on screen) centred in its column, "
-            "its type and damage labels below it, the ship's spot "
-            "around all three; the button's spot around its label at "
-            "(510, 436), right of the prompt.")
+            "Measured on the open pack's art/shipsel.png scaled to "
+            "640x480: each ship's battle picture (145x86 on screen) at "
+            "the top left of its window's picture area, which is its "
+            "size; the type and damage labels centred on the window's "
+            "two plaques; the ship's spot around the window and both "
+            "plaques; the button's spot around the button plaque and "
+            "its arrow, below the prompt.")
 
 
 TABLES = [
