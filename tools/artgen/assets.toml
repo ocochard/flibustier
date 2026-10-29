@@ -3383,3 +3383,434 @@ Close-up photograph, straight on and flat, of old polished gold leaf on
 carved wood, warm and slightly worn, soft highlights, filling the whole
 image, no pattern, no edge.
 """
+
+# The remaining framed pictures: a painting in its gilt frame at the
+# original's place, beside a field of the original's colour where the
+# game writes.
+[[asset]]
+id = "pic/daughter"
+file = "art/daughter.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [7, 7, 334, 459]
+field = "#4E0B31"
+prompt = """
+Portrait photograph of a governor's young daughter in a Caribbean colony
+of the 1660s, three-quarter length, seated: dark hair pinned up with a
+few curls, a low-necked dark green silk gown with full sleeves, a
+string of pearls, a calm proud gaze at the viewer; behind her, tropical
+palm leaves and a carved screen. Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/niece"
+file = "art/niece.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [319, 29, 309, 421]
+field = "#004A18"
+prompt = """
+Portrait photograph of a governor's niece in a Caribbean colony of the
+1660s, seated three-quarter length on a white-draped chair: auburn hair
+in ringlets, a pale yellow silk gown with short puffed sleeves and a
+lace neckline, a small red book in her hand, a gentle smile. Historical
+reenactment photography.
+"""
+
+[[asset]]
+id = "pic/merdaugh"
+file = "art/merdaugh.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [40, 1, 229, 479]
+field = "#082900"
+prompt = """
+Full-length portrait photograph of a merchant's daughter of the 1660s
+standing in a doorway, her arms folded: dark hair pinned back, a black
+bodice over a white blouse, a long white skirt and apron with a red
+underskirt, a frank, amused look. Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/wedding"
+file = "art/wedding.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [30, 5, 267, 466]
+field = "#B47B00"
+prompt = """
+Photograph of a wedding in a Caribbean colony of the 1660s: a young sea
+captain in a dark coat embraces his bride in a white lace gown, about
+to kiss her, in a garden at dusk, white doves rising above them among
+roses. Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/sunset1"
+file = "art/sunset1.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [291, 9, 304, 458]
+field = "#002039"
+prompt = """
+Photograph of a small battered sailing boat with a single torn sail,
+alone in a heavy grey-green sea under a pale hazy sun, spray breaking
+over its bow. Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/sunset2"
+file = "art/sunset2.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [291, 9, 304, 458]
+field = "#831010"
+prompt = """
+Photograph of a small 17th-century merchant ship with red-and-white
+sails sailing away across a calm blue sea under a soft cloudy sky,
+quiet and peaceful. Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/sunset3"
+file = "art/sunset3.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [290, 10, 304, 458]
+field = "#202552"
+prompt = """
+Photograph of a 17th-century three-masted ship under full sail on a dark
+blue sea, beneath a towering sunset sky of crimson and gold clouds.
+Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/sunset4"
+file = "art/sunset4.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [290, 10, 303, 457]
+field = "#1B3302"
+prompt = """
+Photograph of a great 17th-century galleon seen from astern, her carved
+and gilded stern lit, sailing into a blazing golden sunset over the sea,
+dark clouds above. Historical reenactment photography.
+"""
+
+[[asset]]
+id = "pic/silvertr"
+file = "art/silvertr.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [212, 7, 201, 259]
+field = "#000000"
+prompt = """
+Photograph of Spanish treasure seized in the 1660s from a mule caravan
+on a jungle track: a heap of silver bars and coins spilling from opened
+leather mule packs and wooden chests on the ground, a pack mule standing
+by, lit by a low sun. Historical reenactment photography, nothing
+modern, no rails, no machines.
+"""
+
+[[asset]]
+id = "pic/happy"
+file = "art/happy.png"
+seed = 1663	# 1660 drew the frame hung on a wall
+source = "layout described from the original screen"
+frame = [101, 37, 430, 186]
+field = "#7B1810"
+# A frame this wide comes out hung on a wall: the picture alone,
+# filling its place, with no frame of its own.
+gilded = false
+prompt = """
+Photograph of a pirate crew of the 1660s celebrating in a tavern: five
+rough sailors cheering, raising their fists and tankards, laughing with
+open mouths, one in a red headscarf, one bald with a beard. Historical
+reenactment photography.
+"""
+
+[[asset]]
+id = "pic/fleet"
+file = "art/fleet.png"
+seed = 1663	# 1660 drew the frame hung on a wall
+source = "layout described from the original screen"
+frame = [168, 42, 306, 153]
+field = "#000000"
+# A frame this wide comes out hung on a wall: the picture alone,
+# filling its place, with no frame of its own.
+gilded = false
+prompt = """
+Photograph of a Spanish treasure fleet of the 1660s, a line of galleons
+under sail far off on a turquoise sea under a bright sky with white
+clouds. Historical reenactment photography.
+"""
+
+# The layout screens: drawn over by the game, each part where the
+# engine puts what it draws (layouts/sketch.py).
+[[asset]]
+id = "pic/frame"
+file = "art/frame.png"
+seed = 1660
+source = "layout from the game's portrait place"
+matte_on = "#000000"	# the frame cut out, on black
+control = "layouts/frame.png"
+control_strength = 0.85
+control_end = 0.6
+prompt = """
+Photograph on a pure black background of a single ornate oval picture
+frame of dark carved bronze with warm gilt highlights, standing in the
+upper middle of the picture: a crest of carved acanthus leaves on its
+top, small scrolls at its sides and a carved knot at its foot, its
+inside empty and black. Below it, nothing but black. Studio light,
+sharp focus, realistic.
+"""
+
+[[asset]]
+id = "pic/idselect"
+file = "art/idselect.png"
+seed = 1660
+source = "layout from the game's identity screen places"
+control = "layouts/idselect.png"
+control_strength = 0.85
+control_end = 0.6
+prompt = """
+Photograph, straight on and filling the whole picture, of an old deep
+navy-blue shipwright's drawing on paper, faint pale blue lines of a
+ship's hull and rigging all over it, and on it, in the
+upper middle, an ornate oval picture frame of dark carved bronze with
+gilt highlights, a crest of carved leaves on its top, its inside empty
+and black; across the lower part, a long unrolled cream parchment scroll
+with curled ends, its middle plain and empty. Sharp focus, realistic.
+"""
+
+[[asset]]
+id = "pic/savegame"
+file = "art/savegame.png"
+seed = 1660
+source = "layout from the game's save list place"
+control = "layouts/savegame.png"
+control_strength = 0.6
+control_end = 0.4
+prompt = """
+Photograph, straight on and filling the whole picture, of a large old
+slate of dark grey-blue stone, its face plain and faintly chalk-smeared,
+in a heavy carved and gilded wooden frame with softly curved scrolled
+edges, the frame reaching nearly to the picture's edges, dark wood
+panelling just visible at the corners, warm light. Sharp focus,
+realistic.
+"""
+
+# The fleet panel (ship selection): wood, two rows of four cards, each a
+# sea-and-sky view where the engine draws the ship's battle picture
+# (145x86 at the card's top) and two plates below it for her type and
+# damage; the "Select" plate at the bottom right, its word drawn by the
+# engine.
+[[asset]]
+id = "pic/shipsel"
+file = "art/shipsel.png"
+seed = 1660
+source = "layout from the game's fleet panel places"
+prompt = ""
+[asset.layout]
+font = "fonts/imfellenglish/IMFeENrm28P.ttf"
+back = "wood"
+[[asset.layout.pieces]]
+rect = [12, 33, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [12, 125, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [12, 165, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [169, 33, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [169, 125, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [169, 165, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [325, 33, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [325, 125, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [325, 165, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [482, 33, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [482, 125, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [482, 165, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [12, 224, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [12, 316, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [12, 356, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [169, 224, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [169, 316, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [169, 356, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [325, 224, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [325, 316, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [325, 356, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [482, 224, 145, 86]
+picture = "view"
+gravity = "south"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [482, 316, 145, 36]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [482, 356, 145, 28]
+face = "parchment"
+rim = "brass"
+[[asset.layout.pieces]]
+rect = [440, 430, 140, 44]
+face = "brass"
+rim = "brass"
+[[asset.layout.pieces]]	# the button's pointer, inside its click area
+rect = [590, 432, 40, 40]
+arrow = "brass"
+[asset.layout.paint]
+wood = """
+Close-up photograph taken straight on, perfectly flat with no
+perspective, of an old table top of warm dark oak planks lying side by
+side, their grain running across, a few knots, even warm light, no
+shadow, filling the whole image.
+"""
+view = """
+Photograph of a wide bright blue sky full of soft white cumulus clouds,
+and only at the very bottom of the picture a thin strip of calm blue sea
+along a low horizon, nothing on it, no land, no ship.
+"""
+brass = """
+Close-up photograph, straight on and perfectly flat, of a plain sheet of
+old brushed brass, warm gold, fine straight brushing lines running
+across, slightly worn, even light, no reflection, no curve, no ridge,
+filling the whole image.
+"""
+parchment = """
+Close-up photograph, straight on and flat, of smooth old cream
+parchment, faintly mottled, no folds, no creases, no lines, even light,
+filling the whole image, no writing.
+"""
+
+[[asset]]
+id = "pic/fame"
+file = "art/fame.png"
+seed = 1660
+source = "layout from the game's hall of fame rows"
+control = "layouts/fame.png"
+control_strength = 0.8
+control_end = 0.55
+prompt = """
+Photograph, straight on, of a hall of honour in a Caribbean governor's
+palace of the 1660s: across the top a heavy carved and gilded wooden
+pediment with a plain cream silk ribbon banner hung across its middle,
+nothing written on it; two carved gilded pillars standing down the left
+and right; between them, filling the middle from under the pediment to
+the floor, a deep red velvet curtain hanging in soft folds, dark and
+plain; the walls beyond the pillars in deep shadow, nearly black. Warm
+candle light, sharp focus, realistic.
+"""
+# Painted on the cream cloth's middle, bowed as it hangs.
+[[asset.words]]
+rect = [234, 98, 172, 20]
+words = "Hall of Fame"
+font = "fonts/pirataone/PirataOne-Regular.ttf"
+ink = "#5a1c08"
+halo = ""
+sag = 9
+opacity = 0.88
+
+# The Map of the Caribbean: the world's own land at 0.75 (citymap.py),
+# with its panels and DONE plaque at the places the game draws on.
+[[asset]]
+id = "pic/citymap"
+file = "art/citymap.png"
+seed = 1660
+source = "the world's land, from the player's data at make time"
+prompt = ""
+[asset.citymap]
+font = "fonts/imfellenglish/IMFeENrm28P.ttf"
+cut = ["compass"]
+[asset.citymap.paint]
+sea = """
+Close-up photograph, straight on and flat, of a sheet of old paper
+evenly washed with deep teal-blue paint, smooth and faintly mottled, no
+waves, no pattern, no picture, even light, filling the whole image.
+"""
+land = """
+Close-up photograph, straight on and flat, of old warm tan parchment,
+faintly stained and mottled, even light, filling the whole image, no
+writing.
+"""
+wood = """
+Close-up photograph taken straight on, perfectly flat with no
+perspective, of an old table top of warm honey-coloured oak planks
+lying side by side, their grain running across, even warm light, no
+shadow, filling the whole image.
+"""
+brass = """
+Close-up photograph, straight on and flat, of old polished brass, warm
+and slightly worn, soft highlights, filling the whole image, no pattern.
+"""
+compass = """
+Photograph of a single round brass compass rose medallion engraved with
+a sun face and the four points, seen straight on, alone on a plain light
+grey background, studio light, sharp focus, realistic.
+"""

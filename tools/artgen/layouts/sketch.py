@@ -104,6 +104,36 @@ TAVERN = sign(212, 0, 436, 66) + [
     line((0, 478), (640, 478)),
 ]
 
+# The oval portrait frame (pic/frame, pic/idselect): the captain is
+# drawn in it at (236, 58), 158x207; the frame's rings round that, a
+# crest of leaves on top, scrolls at its foot.
+OVAL = [ellipse(316, 163, 81, 106), ellipse(316, 163, 92, 118),
+        ellipse(316, 163, 104, 130),
+        "polygon %d,%d %d,%d %d,%d" % (sx(270), sx(48), sx(316), sx(2),
+                                      sx(362), sx(48)),
+        ellipse(316, 290, 40, 14)]
+FRAME = OVAL + [line((0, 330), (640, 330))]
+# The identity screen: the oval, and under it a long parchment scroll,
+# its flat band (x 51-582, y 315-391) where the choices are written.
+IDSELECT = OVAL + [rect(51, 315, 582, 391),
+                   line((20, 300), (51, 315)), line((20, 405), (51, 391)),
+                   line((620, 300), (582, 315)), line((620, 405), (582, 391))]
+# The save screen: a slate in a carved cartouche, its flat face where the
+# slots are written (x 100-560, y 30-420).
+SAVEGAME = ["roundrectangle %d,%d %d,%d %d,%d" % (sx(60), sx(4), sx(600),
+            sx(452), sx(60), sx(60)),
+            "roundrectangle %d,%d %d,%d %d,%d" % (sx(92), sx(26), sx(568),
+            sx(426), sx(40), sx(40))]
+
+
+# The hall of fame: a carved gilt pediment across the top with a ribbon
+# banner (its title set after), gilt pillars down each side, and between
+# them red velvet cloth where the rows are written (x 120-560 from y 200).
+FAME = [rect(60, 10, 580, 90), rect(200, 30, 440, 75),
+        rect(80, 90, 120, 480), rect(520, 90, 560, 480),
+        rect(120, 90, 520, 480)]
+
+
 # The treasure cave's eight piles, in the order the game draws them (each
 # once the fortune passes its mark), at their frames' places (x, y, w,
 # h): a heap's mound or a chest's box inside each frame, painted in turn.
@@ -434,6 +464,10 @@ if __name__ == "__main__":
     draw("deck.png", DECK + [rect(*b) for b in DUEL_BOXES])
     draw("wpnsel.png", WPNSEL, WPNSEL_SIZE)
     draw("boarding.png", BOARDING)
+    draw("frame.png", FRAME)
+    draw("idselect.png", IDSELECT)
+    draw("savegame.png", SAVEGAME)
+    draw("fame.png", FAME)
     bevel("sbat-panel", SBAT_BOXES, [])
     bevel("lbat-panel", LBAT_BOXES, [])
     # A spyglass's round view, for the ship portraits: white inside,

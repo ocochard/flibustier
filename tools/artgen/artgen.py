@@ -2887,6 +2887,130 @@ def read_manifest(path):
     return out
 
 
+def make_layout(args, spec, a, profile, seed):
+    """A layout screen composed from paintings (the ship panel): each
+    material painted once, then laid out by boards.py's pieces at the
+    places the engine draws on."""
+    import boards
+    k = spec["pack"]["art_height"] / SCREEN_H
+    ly = a["layout"]
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    work = os.path.join(args.pack, "art", a["id"].replace("/", "-") +
+                        ".work")
+    os.makedirs(work, exist_ok=True)
+    src = {}
+    free(args.server)
+    try:
+        for n, (key, prompt) in enumerate(sorted(ly["paint"].items())):
+            path = os.path.join(work, "src-%s.png" % key)
+            if not os.path.exists(path):
+                g = texture_workflow(spec, profile, seed + n, prompt,
+                                     1024, prefix + "-" + key)
+                with open(path, "wb") as f:
+                    f.write(render(args.server, g))
+            src[key] = path
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    W, H = round(SCREEN_W * k), round(SCREEN_H * k)
+    out = os.path.join(args.pack, a["file"])
+    boards.magick(src[ly["back"]], "-resize", "%dx%d^" % (W, H), "-gravity",
+                  "center", "-extent", "%dx%d" % (W, H), out)
+    for piece in ly["pieces"]:
+        x, y, w, h = piece["rect"]
+        tmp = os.path.join(work, "piece.png")
+        if piece.get("picture"):
+            # A view (the sea and sky behind a ship), in a thin rim.
+            boards.magick(src[piece["picture"]], "-resize", "%dx%d^" % (
+                round(w * k), round(h * k)), "-gravity", piece.get(
+                    "gravity", "center"), "-extent", "%dx%d" % (
+                    round(w * k), round(h * k)), tmp)
+            if piece.get("rim"):
+                rim = os.path.join(work, "rim.png")
+                boards.panel(rim, src[piece["rim"]], w + 4, h + 4, k,
+                             rim=src[piece["rim"]], inset=True)
+                boards.magick(rim, tmp, "-geometry", "+%d+%d" % (
+                    round(2 * k), round(2 * k)), "-composite", tmp)
+                x, y = x - 2, y - 2
+        elif piece.get("arrow"):
+            # A brass arrow pointing right, with a soft shadow.
+            W2, H2 = round(w * k), round(h * k)
+            tri = "polygon 0,0 %d,%d 0,%d" % (W2 - 1, H2 // 2, H2 - 1)
+            face = os.path.join(work, "arrow-face.png")
+            mask = os.path.join(work, "arrow-mask.png")
+            boards.magick(src[piece["arrow"]], "-resize", "%dx%d^" % (
+                W2, H2), "-gravity", "center", "-extent", "%dx%d" % (
+                W2, H2), "-alpha", "off", face)
+            boards.magick("-size", "%dx%d" % (W2, H2), "xc:black", "-fill",
+                          "white", "-draw", tri, mask)
+            boards.magick(face, mask, "-alpha", "off", "-compose",
+                          "copy-opacity", "-composite", tmp)
+        else:
+            boards.panel(tmp, src[piece["face"]], w, h, k,
+                         rim=src.get(piece.get("rim")),
+                         inset=piece.get("inset", False))
+        boards.magick(out, tmp, "-geometry", "+%d+%d" % (round(x * k),
+                      round(y * k)), "-composite", out)
+    boards.magick(out, "-depth", 8, out)
+    return {"paint": {k_: " ".join(v.split())
+                      for k_, v in ly["paint"].items()}}
+
+
+def make_citymap(args, spec, a, profile, seed):
+    """The Map of the Caribbean: its land the world's own, read from the
+    player's game data by helpers/landmask.c (never stored), painted and
+    laid out with its panels by citymap.py."""
+    import citymap
+    k = spec["pack"]["art_height"] / SCREEN_H
+    cm = a["citymap"]
+    root = os.path.dirname(os.path.dirname(HERE))
+    work = os.path.join(args.pack, "art", "citymap.work")
+    os.makedirs(work, exist_ok=True)
+    if not args.data:
+        print("%s: needs --data" % a["id"], file=sys.stderr)
+        return None
+    helper = os.path.join(work, "landmask")
+    land = os.path.join(work, "land.pgm")
+    try:
+        subprocess.run(["cc", "-I", os.path.join(root, "src"), "-o", helper,
+                        os.path.join(HERE, "helpers", "landmask.c"),
+                        os.path.join(root, "build", "libflibustier_core.a"),
+                        "-L/usr/local/lib", "-lfreetype", "-lz", "-lm",
+                        "-lc++"], check=True)
+        subprocess.run([helper, os.path.expanduser(args.data), land,
+                        str(round(citymap.MAP_W * k)),
+                        str(round(citymap.MAP_H * k))], check=True)
+    except subprocess.CalledProcessError as e:
+        print("%s: land mask: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    src = {}
+    free(args.server)
+    try:
+        for n, (key, prompt) in enumerate(sorted(cm["paint"].items())):
+            path = os.path.join(work, "src-%s.png" % key)
+            if not os.path.exists(path):
+                with open(path, "wb") as f:
+                    f.write(render(args.server, texture_workflow(
+                        spec, profile, seed + n, prompt, 1024,
+                        prefix + "-" + key)))
+                if key in cm.get("cut", []):
+                    free(args.server)
+                    up = upload(args.server, path, "flibustier-cm.png")
+                    with open(path, "wb") as f:
+                        f.write(render(args.server, cutout_workflow(
+                            up, 1024, 1024, prefix + "-cut")))
+            src[key] = path
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    citymap.compose(land, src, os.path.join(args.pack, cm["font"]), k,
+                    os.path.join(work, "pieces"),
+                    os.path.join(args.pack, a["file"]))
+    return {"paint": {k_: " ".join(v.split())
+                      for k_, v in cm["paint"].items()}}
+
+
 def write_manifest(pack, spec):
     """pack.ini: merged, not rewritten.  The entries already there stay
     in their order (another spec, another session, or a hand may have
@@ -3079,7 +3203,8 @@ def main():
             continue
         if a.get("sprite") or a.get("clouds") or a.get("board") or \
                 a.get("cave") or a.get("title") or a.get("bigs") or \
-                a.get("tmap") or a.get("walker") or a.get("lettering"):
+                a.get("tmap") or a.get("walker") or a.get("lettering") or \
+                a.get("layout") or a.get("citymap"):
             t0 = time.time()
             record = (make_clouds if a.get("clouds") else make_board
                       if a.get("board") else make_cave if a.get("cave")
@@ -3088,6 +3213,8 @@ def main():
                       else make_bigs if a.get("bigs")
                       else make_tmap if a.get("tmap")
                       else make_walker if a.get("walker")
+                      else make_layout if a.get("layout")
+                      else make_citymap if a.get("citymap")
                       else make_sprite)(args, spec, a, profile, seed)
             if record is None:
                 failed.append(a["id"])
@@ -3302,6 +3429,48 @@ def main():
                 continue
             with open(out, "wb") as f:
                 f.write(png)
+        if a.get("matte_on"):
+            # Its object cut out by the matte and set on a plain colour:
+            # the model keeps a backdrop round it however it is asked.
+            free(args.server)
+            up = upload(args.server, out, "flibustier-matte-src.png")
+            try:
+                png = render(args.server, cutout_workflow(
+                    up, ow, oh, "flibustier/" + name.replace("/", "-") +
+                    "-matte"))
+            except RuntimeError as e:
+                print("%s: matte failed: %s" % (a["id"], e), file=sys.stderr)
+                failed.append(a["id"])
+                continue
+            with open(out, "wb") as f:
+                f.write(png)
+            subprocess.run(["magick", out, "-background", a["matte_on"],
+                            "-flatten", out], check=True)
+        for w in a.get("words", []):
+            # Words set on the picture in the pack's font (the model
+            # cannot write), with a dark edge so they read as carved.
+            import boards
+            kk = height / SCREEN_H
+            x, y, ww, hh = w["rect"]
+            t = out + ".words.png"
+            boards.text(t, w["words"], w.get("ink", "#f0d690"), ww, hh,
+                        os.path.join(args.pack, w["font"]), kk,
+                        halo=w.get("halo", "#2a1200c0") or None)
+            if w.get("sag"):
+                # Bowed down in the middle, as on a hanging cloth.
+                boards.magick(t, "-background", "none", "-virtual-pixel",
+                              "transparent", "-wave", "%gx%d" % (
+                                  -w["sag"] * kk, round(ww * kk * 2)),
+                              "-gravity", "north", "-crop", "%dx%d+0+%d" % (
+                                  round(ww * kk), round((hh + abs(
+                                      w["sag"])) * kk), 0), "+repage", t)
+            if w.get("opacity"):
+                # Painted on: a little of the cloth shows through.
+                boards.magick(t, "-channel", "A", "-evaluate", "multiply",
+                              str(w["opacity"]), "+channel", t)
+            boards.magick(out, t, "-geometry", "+%d+%d" % (
+                round(x * kk), round(y * kk)), "-composite", out)
+            os.remove(t)
         cast, ok = add_cast(args, spec, a.get("cast", []), out, out,
                             profile, seed + 100, name, plate)
         if plate:
