@@ -10,6 +10,8 @@
 #include <stdint.h>
 
 #include "data/exe.h"
+#include "data/pack.h"
+#include "sim/json.h"
 
 #define SCENARIO_COUNT		30
 #define SCENARIO_CAREERS	24	/* then the famous expeditions */
@@ -54,9 +56,18 @@ struct scenario {
 					 * sea; 0 for careers */
 };
 
-/* Returns 0, or -1 if out of range or the data is malformed. */
-int	scenario_load(const struct exe_layout *layout, const uint8_t *exe,
-	    size_t len, int index, struct scenario *out);
+/*
+ * Scenario "index", from a pack's data/scenarios or else the executable.
+ * Returns 0, or -1 with "err" set if out of range or malformed.
+ */
+int	scenario_load(struct packs *packs, const struct exe_layout *layout,
+	    const uint8_t *exe, size_t len, int index, struct scenario *out,
+	    char *err, size_t errlen);
+
+/* All the scenarios as data/scenarios. */
+int	scenarios_encode(struct packs *packs, const struct exe_layout *layout,
+	    const uint8_t *exe, size_t len, struct jbuf *b, char *err,
+	    size_t errlen);
 
 /* Index of the career start for era 0..5 and a scenario nation. */
 int	scenario_career(int era, enum scenario_nation nation);

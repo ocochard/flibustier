@@ -324,6 +324,7 @@ that both the loader and the export use.
 | `data/era/<year>` | JSON (`struct world`, `world.h`) | the era's ship speeds, ships met at sea, enemy decisions, diplomacy and shipwright values |
 | `data/sea-battle` | JSON (`struct world`) | sea battle hit boxes, shot arcs, the bow cross |
 | `data/sword` | JSON (`struct sword_tables`, `world.h`) | the sword fight tables |
+| `data/scenarios` | JSON (`struct scenario`, `scenario.h`) | the 30 start scenarios |
 
 - **Shape:** a JSON object whose keys are exactly the fields listed
   below, each an integer or nested arrays of fixed sizes, outer index
@@ -390,6 +391,38 @@ cutlass).
 | `area` | 16, u8 | the body area a strike hits |
 | `scripts` | 3 x 8 x 8, u8 | the opponent's move scripts up close: per bank (by level), 8 scripts of 8 moves; 0x80 and above is a counter to the player's move |
 | `line` | 16, u8 | the line of each move |
+
+### `data/scenarios`
+
+`{"scenarios": [...]}`, exactly 30 objects, in the original's order
+(game-rules.md, "Start scenarios"): the 24 careers by era (1560 ...
+1680) and, within an era, English, French, Dutch, Spanish; then the 6
+famous expeditions. The Dutch 1560 career is unused (empty name).
+
+Nations in `nation`, `relations` and the first four of `standing` and
+`rank` are in the town nation order: 0 Spain, 1 England, 2 France, 3
+Holland.
+
+| Field | Size | Content |
+|---|---|---|
+| `name` | text, up to 20 bytes | the career's or expedition's title |
+| `nation` | int, 0-3 | the player's nation |
+| `relations` | 4 x 4, i8, -1 to 1 | the nations' initial relations, `[a][b]` |
+| `standing` | 5, i8 | the player's standing per nation, then the pirates |
+| `rank` | 5, u8 | the player's rank (CSTN 78), in the order of `standing` |
+| `crew`, `guns` | int | the crew and the guns |
+| `gold` | int | gold pieces |
+| `food`, `goods`, `sugar` | int | cargo, in tons |
+| `food_frac` | int | the food already eaten into, in 256ths of a ton |
+| `capacity` | int | the hold, in tens of tons |
+| `nships` | int, 0-8 | the ships, then their types in `ships` |
+| `ships` | 8, u8 | ship types (CSTN 8 order, 0 pinnace); past `nships`, ignored |
+| `start` | 4 x 2, u16 | 4 start positions `[x, y]` in map cells, one drawn |
+| `date` | int | an expedition's start: years after the era's first x 360 + the day of the year; 0 for a career |
+| `months` | i8 | an expedition's months already at sea; 0 for a career |
+
+The expeditions' eras are the engine's (`expedition_era` in
+`src/ui/screens.c`), not part of this file.
 
 ## Open text
 

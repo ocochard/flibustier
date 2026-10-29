@@ -11,6 +11,7 @@
 
 #include "data/fsys.h"
 
+#include "scenario.h"
 #include "tiled.h"
 #include "towns.h"
 #include "world.h"
@@ -115,7 +116,8 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 		snprintf(name, sizeof(name), "map-%d.tmj", town_era_years[era]);
 		if (flush(dir, name, &b, err, errlen) != 0)
 			goto out;
-		data_encode(&b, era_fields, era_nfields, w);
+		data_encode(&b, era_fields, era_nfields, w, 0);
+		jb_raw(&b, "\n");
 		snprintf(name, sizeof(name), "era-%d.json", town_era_years[era]);
 		if (flush(dir, name, &b, err, errlen) != 0)
 			goto out;
@@ -177,11 +179,16 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	jb_raw(&b, "}\n");
 	if (flush(dir, "battle-sets.json", &b, err, errlen) != 0)
 		goto out;
-	data_encode(&b, sea_battle_fields, sea_battle_nfields, w);
+	data_encode(&b, sea_battle_fields, sea_battle_nfields, w, 0);
+	jb_raw(&b, "\n");
 	if (flush(dir, "sea-battle.json", &b, err, errlen) != 0)
 		goto out;
-	data_encode(&b, sword_fields, sword_nfields, &w->sword);
+	data_encode(&b, sword_fields, sword_nfields, &w->sword, 0);
+	jb_raw(&b, "\n");
 	if (flush(dir, "sword.json", &b, err, errlen) != 0)
+		goto out;
+	if (scenarios_encode(packs, layout, exe.data, exe.len, &b, err,
+	    errlen) != 0 || flush(dir, "scenarios.json", &b, err, errlen) != 0)
 		goto out;
 	jb_raw(&b, "# Exported from the original Pirates! Gold data: for local\n"
 	    "# checks only, do not distribute.\n[pack]\n"
@@ -197,7 +204,8 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	    "data/treasure = treasure.json\n"
 	    "data/battle-sets = battle-sets.json\n"
 	    "data/sea-battle = sea-battle.json\n"
-	    "data/sword = sword.json\n");
+	    "data/sword = sword.json\n"
+	    "data/scenarios = scenarios.json\n");
 	for (era = 0; era < EXE_ERAS; era++) {
 		snprintf(name, sizeof(name), "data/towns/%d = towns-%d.json\n",
 		    town_era_years[era], town_era_years[era]);

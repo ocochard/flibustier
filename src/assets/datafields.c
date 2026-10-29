@@ -6,9 +6,33 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "datafields.h"
+
+int
+data_load_json(struct packs *packs, const char *id, struct json **out,
+    char *err, size_t errlen)
+{
+	struct blob b;
+	char *text;
+
+	*out = NULL;
+	if (packs_load(packs, id, &b) != 0)
+		return (1);
+	if ((text = malloc(b.len + 1)) == NULL) {
+		blob_free(&b);
+		snprintf(err, errlen, "out of memory");
+		return (-1);
+	}
+	memcpy(text, b.data, b.len);
+	text[b.len] = '\0';
+	blob_free(&b);
+	*out = json_parse(text, err, errlen);
+	free(text);
+	return (*out != NULL ? 0 : -1);
+}
 
 static void
 range(enum data_type t, int64_t *lo, int64_t *hi)
@@ -40,7 +64,21 @@ range(enum data_type t, int64_t *lo, int64_t *hi)
 static size_t
 type_size(enum data_type t)
 {
-	return (t == DATA_U8 || t == DATA_I8 ? 1 : t == DATA_I32 ? 4 : 2);
+	switch (t) {
+	case DATA_U8:
+	case DATA_I8:
+	case DATA_STR:
+		return (1);
+	case DATA_U16:
+	case DATA_I16:
+		return (2);
+	case DATA_I32:
+		return (4);
+	case DATA_INT:
+		return (sizeof(int));
+	default:
+		return (sizeof(long));
+	}
 }
 
 static void
@@ -51,6 +89,8 @@ put(enum data_type t, uint8_t *p, int64_t v)
 	uint16_t u16 = (uint16_t)v;
 	int16_t i16 = (int16_t)v;
 	int32_t i32 = (int32_t)v;
+	int i = (int)v;
+	long l = (long)v;
 
 	switch (t) {
 	case DATA_U8:
@@ -64,6 +104,12 @@ put(enum data_type t, uint8_t *p, int64_t v)
 		break;
 	case DATA_I16:
 		memcpy(p, &i16, 2);
+		break;
+	case DATA_INT:
+		memcpy(p, &i, sizeof(i));
+		break;
+	case DATA_LONG:
+		memcpy(p, &l, sizeof(l));
 		break;
 	default:
 		memcpy(p, &i32, 4);
@@ -79,6 +125,8 @@ get(enum data_type t, const uint8_t *p)
 	uint16_t u16;
 	int16_t i16;
 	int32_t i32;
+	int i;
+	long l;
 
 	switch (t) {
 	case DATA_U8:
@@ -93,6 +141,12 @@ get(enum data_type t, const uint8_t *p)
 	case DATA_I16:
 		memcpy(&i16, p, 2);
 		return (i16);
+	case DATA_INT:
+		memcpy(&i, p, sizeof(i));
+		return (i);
+	case DATA_LONG:
+		memcpy(&l, p, sizeof(l));
+		return (l);
 	default:
 		memcpy(&i32, p, 4);
 		return (i32);
@@ -105,6 +159,8 @@ span(const struct data_field *f, int d)
 {
 	size_t n = 1;
 
+	if (f->type == DATA_STR)
+		return ((size_t)f->dims[0]);
 	for (; d < 3 && f->dims[d] > 0; d++)
 		n *= (size_t)f->dims[d];
 	return (n);
@@ -118,6 +174,13 @@ decode_at(const struct json *j, const struct data_field *f, int d,
 	size_t i, step;
 	int64_t lo, hi;
 
+	if (f->type == DATA_STR) {
+		if (j->type != JSON_STRING ||
+		    strlen(j->str) >= (size_t)f->dims[0])
+			return (-1);
+		memcpy(p, j->str, strlen(j->str) + 1);
+		return (0);
+	}
 	if (d == 3 || f->dims[d] == 0) {
 		range(f->type, &lo, &hi);
 		if (j->type != JSON_INT || j->num < lo || j->num > hi)
@@ -175,6 +238,10 @@ encode_at(struct jbuf *b, const struct data_field *f, int d,
 	size_t i, step;
 	int k, inner;
 
+	if (f->type == DATA_STR) {
+		jb_str(b, (const char *)p);
+		return;
+	}
 	if (d == 3 || f->dims[d] == 0) {
 		jb_int(b, get(f->type, p));
 		return;
@@ -203,16 +270,23 @@ encode_at(struct jbuf *b, const struct data_field *f, int d,
 
 void
 data_encode(struct jbuf *b, const struct data_field *f, size_t n,
-    const void *base)
+    const void *base, int indent)
 {
 	size_t i;
+	int k;
 
 	jb_raw(b, "{");
 	for (i = 0; i < n; i++) {
-		jb_raw(b, i > 0 ? ",\n  " : "\n  ");
+		jb_raw(b, i > 0 ? ",\n" : "\n");
+		for (k = 0; k < indent + 2; k++)
+			jb_raw(b, " ");
 		jb_str(b, f[i].name);
 		jb_raw(b, ": ");
-		encode_at(b, &f[i], 0, (const uint8_t *)base + f[i].off, 2);
+		encode_at(b, &f[i], 0, (const uint8_t *)base + f[i].off,
+		    indent + 2);
 	}
-	jb_raw(b, "\n}\n");
+	jb_raw(b, "\n");
+	for (k = 0; k < indent; k++)
+		jb_raw(b, " ");
+	jb_raw(b, "}");
 }

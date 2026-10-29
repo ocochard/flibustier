@@ -37,7 +37,12 @@ load_era(void *arg, int era, int scenario, struct era_towns *towns,
 		fprintf(stderr, "%s\n", err);
 		return (-1);
 	}
-	return (scenario_load(gd->layout, gd->exe, gd->len, scenario, scn));
+	if (scenario_load(gd->packs, gd->layout, gd->exe, gd->len, scenario,
+	    scn, err, sizeof(err)) != 0) {
+		fprintf(stderr, "%s\n", err);
+		return (-1);
+	}
+	return (0);
 }
 
 static int

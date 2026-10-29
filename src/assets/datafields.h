@@ -9,6 +9,7 @@
 
 #include <stddef.h>
 
+#include "data/pack.h"
 #include "sim/json.h"
 
 /*
@@ -22,7 +23,10 @@ enum data_type {
 	DATA_I8,
 	DATA_U16,
 	DATA_I16,
-	DATA_I32
+	DATA_I32,
+	DATA_INT,
+	DATA_LONG,	/* within the range of 32 bits */
+	DATA_STR	/* char[dims[0]], NUL included */
 };
 
 struct data_field {
@@ -32,6 +36,10 @@ struct data_field {
 	int		 dims[3];	/* array sizes, outer first; 0 ends */
 };
 
+/* Parse JSON "id" from the packs: 1 if none, -1 if malformed, 0. */
+int	data_load_json(struct packs *packs, const char *id, struct json **out,
+	    char *err, size_t errlen);
+
 /*
  * Fill "base" from "obj", which must give every field, in range, with
  * nothing else.  On error, "err" names "id" and the field.
@@ -39,8 +47,9 @@ struct data_field {
 int	data_decode(const struct json *obj, const struct data_field *f,
 	    size_t n, void *base, const char *id, char *err, size_t errlen);
 
-/* Write the fields of "base" as a JSON object, one field a line. */
+/* Write the fields of "base" as a JSON object, one field a line, its
+ * lines indented by "indent", with no newline after it. */
 void	data_encode(struct jbuf *b, const struct data_field *f, size_t n,
-	    const void *base);
+	    const void *base, int indent);
 
 #endif

@@ -346,30 +346,6 @@ sword_load(const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	return (0);
 }
 
-/* Parse JSON "id" from the packs: 1 if none, -1 if malformed, 0. */
-static int
-load_json(struct packs *packs, const char *id, struct json **out, char *err,
-    size_t errlen)
-{
-	struct blob b;
-	char *text;
-
-	*out = NULL;
-	if (packs_load(packs, id, &b) != 0)
-		return (1);
-	if ((text = malloc(b.len + 1)) == NULL) {
-		blob_free(&b);
-		snprintf(err, errlen, "out of memory");
-		return (-1);
-	}
-	memcpy(text, b.data, b.len);
-	text[b.len] = '\0';
-	blob_free(&b);
-	*out = json_parse(text, err, errlen);
-	free(text);
-	return (*out != NULL ? 0 : -1);
-}
-
 /* An array of "n" integers from lo to hi into "out". */
 static int
 int_list(const struct json *a, size_t n, int lo, int hi, int *out)
@@ -395,7 +371,7 @@ load_table(struct packs *packs, const char *id, const struct data_field *f,
 	struct json *j;
 	int rc;
 
-	if ((rc = load_json(packs, id, &j, err, errlen)) != 0)
+	if ((rc = data_load_json(packs, id, &j, err, errlen)) != 0)
 		return (rc);
 	rc = data_decode(j, f, n, base, id, err, errlen);
 	json_free(j);
@@ -457,7 +433,8 @@ load_places(struct world *w, struct packs *packs, char *err, size_t errlen)
 	struct json *j;
 	int rc, xy[2], set[BATTLE_PIECES], k, i;
 
-	if ((rc = load_json(packs, "data/treasure", &j, err, errlen)) < 0)
+	if ((rc = data_load_json(packs, "data/treasure", &j, err,
+	    errlen)) < 0)
 		return (-1);
 	if (rc == 0) {
 		spots = json_get(j, "spots");
@@ -478,7 +455,8 @@ load_places(struct world *w, struct packs *packs, char *err, size_t errlen)
 			return (-1);
 		}
 	}
-	if ((rc = load_json(packs, "data/battle-sets", &j, err, errlen)) < 0)
+	if ((rc = data_load_json(packs, "data/battle-sets", &j, err,
+	    errlen)) < 0)
 		return (-1);
 	if (rc == 1)
 		return (0);

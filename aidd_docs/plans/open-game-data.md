@@ -92,7 +92,7 @@ Status (2026-10-29): done.
 ### G2: formats, loaders and export
 
 Status (2026-10-29): `data/sword`, `data/era/<year>` and
-`data/sea-battle` done (asset-packs.md, "Open game data");
+`data/sea-battle`, `data/scenarios` done (asset-packs.md, "Open game data");
 `test_original` round-trips them and refuses a broken file, and the
 ten-year replay with the export over the original is identical. The
 encounter records are arrays of 7 in a documented order rather than
@@ -120,8 +120,10 @@ Format notes:
   `"end"`. The original's copy-protection question (`)` and `*`, and the
   fail branch) is not part of the format: the engine keeps only the
   pass branch (game-rules.md, "New career: the story").
-- **`data/scenarios`:** the fields of `struct scenario` by name, the
-  ships as type names, the start cells as `[x, y]`.
+- **`data/scenarios`:** done, with the ship types as numbers in the
+  CSTN 8 order, as the other tables' codes. Still from the engine: the
+  expeditions' eras (`expedition_era`, screens.c); a pack cannot move
+  an expedition to another era yet.
 - **`data/layout/<screen>`:** rectangles as `[x0, y0, x1, y1]`, with
   the flags the original keeps beside them (`on`) as named booleans. A
   pack that replaces a screen's picture with a different composition

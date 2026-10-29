@@ -1059,12 +1059,13 @@ static void
 expedition_choose(struct game *g, int i)
 {
 	struct scenario scn;
+	char err[256];
 
 	g->career.expedition = i;
 	g->career.era = expedition_era[i];
 	/* The expedition's own colours, for the flag. */
-	if (scenario_load(g->layout, g->exe, g->exe_len,
-	    SCENARIO_CAREERS + i, &scn) == 0)
+	if (scenario_load(g->packs, g->layout, g->exe, g->exe_len,
+	    SCENARIO_CAREERS + i, &scn, err, sizeof(err)) == 0)
 		g->career.nation = scn.nation;
 	game_goto(g, &screen_ability);
 }

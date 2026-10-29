@@ -528,7 +528,8 @@ game_start_career(struct game *g)
 	    SCENARIO_CAREERS + g->career.expedition :
 	    scenario_career(g->career.era, g->career.nation == NATION_SPAIN ?
 	    SCN_SPAIN : (enum scenario_nation)(g->career.nation - 1));
-	if (scenario_load(g->layout, g->exe, g->exe_len, index, &scn) != 0 ||
+	if (scenario_load(g->packs, g->layout, g->exe, g->exe_len, index,
+	    &scn, g->err, sizeof(g->err)) != 0 ||
 	    towns_for_era(g->packs, g->layout, g->exe, g->exe_len,
 	    g->career.era, &era, g->err, sizeof(g->err)) != 0)
 		return (-1);

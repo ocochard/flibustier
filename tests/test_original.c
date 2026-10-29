@@ -440,6 +440,7 @@ test_scenarios(struct packs *packs)
 	const struct exe_layout *layout;
 	struct scenario scn;
 	struct blob b;
+	char err[256];
 	int i, a, c, named = 0;
 
 	CHECK(packs_load(packs, "program/main", &b) == 0);
@@ -448,17 +449,20 @@ test_scenarios(struct packs *packs)
 		return;
 	}
 	for (i = 0; i < SCENARIO_COUNT; i++) {
-		CHECK(scenario_load(layout, b.data, b.len, i, &scn) == 0);
+		CHECK(scenario_load(packs, layout, b.data, b.len, i, &scn, err,
+	    sizeof(err)) == 0);
 		named += scn.name[0] != '\0';
 		for (a = 0; a < 4; a++)
 			for (c = 0; c < 4; c++)
 				CHECK(scn.relations[a][c] == scn.relations[c][a]);
 	}
 	CHECK(named == SCENARIO_COUNT - 1);	/* no Dutch career in 1560 */
-	CHECK(scenario_load(layout, b.data, b.len,
-	    scenario_career(0, SCN_HOLLAND), &scn) == 0 && scn.name[0] == '\0');
-	CHECK(scenario_load(layout, b.data, b.len,
-	    scenario_career(0, SCN_ENGLAND), &scn) == 0);
+	CHECK(scenario_load(packs, layout, b.data, b.len,
+	    scenario_career(0, SCN_HOLLAND), &scn, err,
+	    sizeof(err)) == 0 && scn.name[0] == '\0');
+	CHECK(scenario_load(packs, layout, b.data, b.len,
+	    scenario_career(0, SCN_ENGLAND), &scn, err,
+	    sizeof(err)) == 0);
 	CHECK(strcmp(scn.name, "English Seahawk") == 0);
 	CHECK(scn.relations[NATION_SPAIN][NATION_ENGLAND] == -1 &&
 	    scn.relations[NATION_SPAIN][NATION_FRANCE] == -1);
@@ -466,15 +470,18 @@ test_scenarios(struct packs *packs)
 	 * English captain (rank 2) of standing 10; no date. */
 	CHECK(scn.standing[NATION_ENGLAND] == 10 &&
 	    scn.rank[NATION_ENGLAND] == 2 && scn.date == 0);
-	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_CAREERS, &scn) == 0);
+	CHECK(scenario_load(packs, layout, b.data, b.len, SCENARIO_CAREERS, &scn, err,
+	    sizeof(err)) == 0);
 	CHECK(strcmp(scn.name, "John Hawkins") == 0);
 	/* The expeditions start on their dates: Hawkins 9 years and a day
 	 * into 1560, Morgan in 1670 (1660 + 10), day 234. */
 	CHECK(scn.date == 9 * 360 + 1 && scn.standing[NATION_SPAIN] == -6);
-	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_CAREERS + 4,
-	    &scn) == 0 && strcmp(scn.name, "Henry Morgan") == 0 &&
+	CHECK(scenario_load(packs, layout, b.data, b.len, SCENARIO_CAREERS + 4,
+	    &scn, err,
+	    sizeof(err)) == 0 && strcmp(scn.name, "Henry Morgan") == 0 &&
 	    scn.date == 10 * 360 + 234 && scn.rank[NATION_ENGLAND] == 5);
-	CHECK(scenario_load(layout, b.data, b.len, SCENARIO_COUNT, &scn) == -1);
+	CHECK(scenario_load(packs, layout, b.data, b.len, SCENARIO_COUNT, &scn, err,
+	    sizeof(err)) == -1);
 	blob_free(&b);
 }
 
@@ -804,9 +811,11 @@ test_world_export(struct packs *orig)
 	    "battle-sets.json", "sword.json", "sea-battle.json",
 	    "era-1560.json", "era-1600.json", "era-1620.json",
 	    "era-1640.json", "era-1660.json", "era-1680.json",
+	    "scenarios.json",
 	    "map-terrain.pgm", "battle-terrain.pgm",
 	    NULL };
 	static struct era_towns t, tref;
+	struct scenario scn, sref;
 	const char *data = getenv("FLIBUSTIER_DATA");
 	const struct exe_layout *layout = NULL;
 	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024], err[256];
@@ -869,6 +878,15 @@ test_world_export(struct packs *orig)
 			for (i = 0; i < t.count && i < tref.count; i++)
 				CHECK(same_town(&t.towns[i], &tref.towns[i]));
 		}
+	/* The start scenarios. */
+	if (layout != NULL)
+		for (i = 0; i < SCENARIO_COUNT; i++) {
+			CHECK(scenario_load(packs, layout, b.data, b.len,
+			    (int)i, &scn, err, sizeof(err)) == 0);
+			CHECK(scenario_load(orig, layout, b.data, b.len,
+			    (int)i, &sref, err, sizeof(err)) == 0);
+			CHECK(memcmp(&scn, &sref, sizeof(scn)) == 0);
+		}
 	/* The pack took over: a broken map is an error, not a fallback. */
 	CHECK(write_file(dir, "map-1660.tmj", "{\"layers\":[]}") == 0);
 	if (layout != NULL)
@@ -883,6 +901,11 @@ test_world_export(struct packs *orig)
 	if (layout != NULL)
 		CHECK(world_load(&w, packs, layout, b.data, b.len, 0, err,
 		    sizeof(err)) == -1 && strstr(err, "data/era/1560") !=
+		    NULL);
+	CHECK(write_file(dir, "scenarios.json", "{\"scenarios\": []}") == 0);
+	if (layout != NULL)
+		CHECK(scenario_load(packs, layout, b.data, b.len, 0, &scn, err,
+		    sizeof(err)) == -1 && strstr(err, "data/scenarios") !=
 		    NULL);
 	blob_free(&b);
 	packs_free(packs);
