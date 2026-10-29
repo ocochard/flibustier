@@ -939,8 +939,10 @@ class Bot:
             nation = enc["nation"]
             enemy = nation == 4 or (nation < 4 and s["relations"][s["player"]["nation"]][nation] < 0)
             f = s["fleet"]
-            # never pick a fight with a much bigger or better armed ship
-            outclassed = (enc["type"] > max(t & 7 for t in f["ships"]) + 1 or
+            # never pick a fight with a much bigger or better armed ship:
+            # up to three classes above the best of ours, as boarding
+            # decides most fights (one, on 200 careers, scored 4 less)
+            outclassed = (enc["type"] > max(t & 7 for t in f["ships"]) + 3 or
                           enc["guns"] * 2 > f["guns"] * 3)
             strong = f["crew"] > max(25, enc["crew"] * 3 // 2) and not outclassed
             act = "battle" if enemy and strong and enc["stage"] == "colours" else (
