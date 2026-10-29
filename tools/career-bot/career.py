@@ -473,6 +473,17 @@ class Bot:
         self.sim("load", state=before)
         return least
 
+    def escapes(self, t, before):
+        """After one chunk on turn t, can some turn go on for the horizon
+        without losing a ship?  The game state is put back afterwards."""
+        r = self.sim("sail", turn=t, ticks=4)
+        ok = False
+        if not self.wrecked(r) and r["stop"] != "land":
+            after = self.sim.state()
+            ok = r["stop"] != "ticks" or any(self.rollout(u, after, True) >= 0 for u in (0, -1, 1))
+        self.sim("load", state=before)
+        return ok
+
     def guarded_sail(self, turn, ticks, f, margin=REEF_MARGIN):
         """One sail step that keeps clear of shallows: the turn the bot
         wants is run ahead (a rollout), and when it comes within
@@ -486,13 +497,19 @@ class Bot:
         want = self.rollout(turn, before, narrow)
         if want >= margin:
             return None
-        best = (want, turn)
+        rooms = {turn: want}
         for t in (0, -1, 1):
-            if t == turn:
-                continue
-            room = self.rollout(t, before, narrow)
-            if room > best[0]:
-                best = (room, t)
+            if t != turn:
+                rooms[t] = self.rollout(t, before, narrow)
+        order = sorted(rooms, key=lambda t: -rooms[t])	# the wanted turn first on ties
+        best = (rooms[order[0]], order[0])
+        # the most room, among the turns after which some way on still
+        # takes no ship: a step that looks clear for the horizon can lead
+        # into a dead end, where every turn wrecks (all the guard's wrecks)
+        for t in order:
+            if self.escapes(t, before):
+                best = (rooms[t], t)
+                break
         self.stats["reef_avoided"] += best[1] != turn
         self.stats["reef_unsafe"] += best[0] < 0
         return self.sim("sail", turn=best[1], ticks=4)
