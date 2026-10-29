@@ -1518,6 +1518,14 @@ words and four bytes:
 | byte 10 | level `extra` (see the sea battle level) |
 | byte 11 | kind: 0 crew fight, 1 duel, -1 the career story's fight, -2 practice |
 
+The opponent's label (VA `0x16375`-`0x164c8`): the title (CSTN 74),
+led by the nation word (CSTN 71, then a space) when byte 9 is a nation
+other than 5. In French a captain (title 4) with a nation reads title,
+space, nation ("Capitaine espagnol", VA `0x16447`); in German the
+nation's space is left out (VA `0x1639a`), which the engine does not
+copy. A pack's text may give its own pattern (CSTN 74.6, see
+asset-packs.md).
+
 The routine returns 1 when the player wins, 0 when the player is driven
 back, -1 when the player loses (VA `0x16989`: `2 - result`). Both men
 counts come back reduced, for every kind (VA `0x16974`).

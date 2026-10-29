@@ -292,8 +292,6 @@ menu_event(struct game *g, const struct ui_event *ev, int count,
  */
 static void	load_bank(struct game *, const char *, int,
 		    struct sprite_bank *);
-static void	fill_args(char *, size_t, const char *, const char *const *,
-		    int);
 static void	sword_load(struct game *);
 static void	fill(char *, size_t, const char *, const char *, const char *);
 
@@ -1770,26 +1768,33 @@ const struct screen screen_summary = {
 
 /*
  * Replace each %s of a log sentence with the next argument, as the
- * game's printf-style strings expect.
+ * game's printf-style strings expect, and each %1$s to %9$s with that
+ * argument (an engine extension, so that a pack's text can reorder
+ * them).
  */
-static void
+void
 fill_args(char *out, size_t len, const char *fmt, const char *const *arg,
     int nargs)
 {
+	const char *v;
 	size_t n = 0;
-	int k = 0;
+	int k = 0, i;
 
 	while (*fmt != '\0' && n + 1 < len) {
 		if (fmt[0] == '%' && fmt[1] == 's') {
-			const char *v = k < nargs && arg[k] != NULL ? arg[k] :
-			    "";
-
-			k++;
-			while (*v != '\0' && n + 1 < len)
-				out[n++] = *v++;
+			i = k++;
 			fmt += 2;
-		} else
+		} else if (fmt[0] == '%' && fmt[1] >= '1' && fmt[1] <= '9' &&
+		    fmt[2] == '$' && fmt[3] == 's') {
+			i = fmt[1] - '1';
+			fmt += 4;
+		} else {
 			out[n++] = *fmt++;
+			continue;
+		}
+		v = i < nargs && arg[i] != NULL ? arg[i] : "";
+		while (*v != '\0' && n + 1 < len)
+			out[n++] = *v++;
 	}
 	out[n] = '\0';
 }
@@ -3844,6 +3849,8 @@ const struct screen screen_battle = {
 #define S_CHOOSE_WEAPON		85
 #define W_WEAPON		70	/* Rapier, Longsword, Cutlass */
 #define W_TITLE			74	/* Guard... Captain, First Mate */
+#define TITLE_CAPTAIN		4
+#define TITLE_FORMAT		6	/* a pack's "nation title" pattern */
 #define SW_Y			140	/* fighters' line on the screen */
 #define SW_FALL_DROP		24
 #define SW_MOUSE_LEFT		308	/* the pointer's half-planes (VA */
@@ -4284,6 +4291,25 @@ sword_flag(struct game *g, int side, int x, int frame, int bar)
 		fb_frame(&g->fb, &g->sw_misc.frames[frame], x, *y);
 }
 
+/*
+ * The pattern of a crew fighter's label, filled with the nation word
+ * and the title: a pack's own (CSTN 74.6, which may reorder them with
+ * %1$s and %2$s), else the original's: the nation first, but the French
+ * captain after it, "Capitaine espagnol" (VA 0x16447).  The German
+ * original drops the space; the engine keeps it.
+ */
+static const char *
+title_format(const struct game *g, int title)
+{
+	const char *fmt = game_word(g, W_TITLE, TITLE_FORMAT);
+
+	if (*fmt != '\0')
+		return (fmt);
+	if (title == TITLE_CAPTAIN && strcmp(g->lang, "fre") == 0)
+		return ("%2$s %1$s");
+	return ("%s %s");
+}
+
 static void
 sword_draw(struct game *g)
 {
@@ -4350,7 +4376,7 @@ sword_draw(struct game *g)
 	else if (sw->nation == -1)
 		captain_name(g, sw->title, label, sizeof(label));
 	else if (sw->kind == SWORD_CREW && sw->nation >= 0 && sw->nation != 5)
-		snprintf(label, sizeof(label), "%s %s",
+		fill(label, sizeof(label), title_format(g, sw->title),
 		    game_word(g, W_NATION, (size_t)sw->nation),
 		    game_word(g, W_TITLE, (size_t)sw->title));
 	else

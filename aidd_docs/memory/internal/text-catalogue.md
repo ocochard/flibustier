@@ -15,9 +15,9 @@ original; keep it that way when you update it.
   `text/<lang>/cstn.json` (`"groups"`).
 - **Where shown:** the screen, and the engine's name for the entry
   (`S_*`, `W_*` in `src/ui/screens.c`) when it has one.
-- **`%s` arguments:** what the engine fills in, in order. An entry must
-  keep this number and order of `%s`; an argument the text does not
-  want can't be dropped, so place it where it reads well.
+- **`%s` arguments:** what the engine fills in, in order. An entry
+  keeps this order; it may leave out trailing arguments, and `%1$s` to
+  `%9$s` take any argument by its number.
 - **Markup:** `\n` line break, `~` at a line start a menu option (the
   count and order are fixed where noted: the code gives each option its
   meaning), `` ` `` at a paragraph start a drop capital, `^` an
@@ -436,7 +436,7 @@ order and the count matter.
 | 71 | 6 | many: identity screen, waters, master's directions, city info, log book, sword fight, governor, land battle (W_NATION) | nation adjective, capitalised as used alone: Spain, England, France, Holland, then 4 pirate, 5 unknown; indexed by nation | none |
 | 72 | 4 | log book party page, bank shares (W_MOOD) | four crew moods, worst first; indexed by mood / 4 + 1 clamped 0-3, or plunder.mood | none |
 | 73 | 5 | prison: picked up / traded back (W_CAPTAIN) | the four difficulty levels as a noun with indefinite article, by difficulty; word 4 repeats word 0, unreached | none |
-| 74 | 6 | sword fight, the opponent's label (W_TITLE) | six fighter roles (guard, suitor, mutineer, enemy captain, captain, first mate), indexed by the fight's title; prefixed by a nation (71) in crew fights | none |
+| 74 | 6 (+1) | sword fight, the opponent's label (W_TITLE) | six fighter roles (guard, suitor, mutineer, enemy captain, captain, first mate), indexed by the fight's title; in crew fights joined with a nation (71); an optional seventh word, a pack's own, is the label's pattern | 6: nation (71), title (74), reorderable with `%1$s` `%2$s` |
 | 75 | 9 | ship's master's directions (CSTR 69, arg 3) (W_DIRECTION) | 0 north, 1 south, 2 east, 3 west, 4 north-west, 5 north-east, 6 south-west, 7 south-east, 8 same place (placeholder); computed from the town offset | none |
 | 76 | 12 | not used by the engine | the 12 month names in quotes, January first (original's date entry) | none |
 | 77 | 6 | prison text (W_THE_SHIP) | only word 4 is used: "the ship" as the place of captivity when there is no town; the others are the original's sword-fight header pieces | word 0: unused |

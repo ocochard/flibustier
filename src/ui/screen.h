@@ -86,5 +86,12 @@ int	game_portrait(struct game *g, const char *spr);
 int	game_start_career(struct game *g);
 /* Load the world of the simulation's era and attach it; 0 or -1. */
 int	game_attach_world(struct game *g);
+/*
+ * Fill the game's printf-style text "fmt" into "out": each %s takes the
+ * next of the "nargs" arguments, each %1$s to %9$s that one; a missing
+ * or NULL argument is empty.
+ */
+void	fill_args(char *out, size_t len, const char *fmt,
+	    const char *const *arg, int nargs);
 
 #endif

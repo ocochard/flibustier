@@ -355,6 +355,11 @@ The game's text, when a pack gives it; otherwise the original `CSTR` and
   engine's order, group 20 the log's sentences by news code, and group
   13 the compass points clockwise from south (`W_*` in
   `src/ui/screens.c`).
+- **Words of the engine's own.** A pack may add words the original
+  does not have, after a group's last one; without them the engine
+  behaves as with the original. So far: CSTN 74.6, the pattern of a
+  crew fighter's label, filled with the nation (CSTN 71) and the title
+  (CSTN 74), for example `%2$s %1$s` for "Mutin espagnol".
 - **Whole tables.** A pack that gives `text/<lang>/cstr` replaces the
   whole table. An index it leaves out is an empty string, never the
   original's entry; a group it leaves out has no words, and a short group
@@ -369,10 +374,11 @@ The game's text, when a pack gives it; otherwise the original `CSTR` and
   drawn as `?`, even with a replacement font.
 - **Markup**, as in the original (the text renderer, `src/gfx/text.c`):
   - `%s`: an argument the engine supplies (a name, a town, a sum). The
-    engine fills the `%s` in order, so an entry must keep the original
-    entry's number and order of `%s`. Reordering for a translation needs
-    numbered arguments, which the engine does not support yet. `%%` is
-    not a conversion: a literal `%` is written alone.
+    engine fills the `%s` in order, so an entry keeps the order of its
+    arguments; it may leave out trailing ones. `%1$s` to `%9$s` take
+    that argument instead, so a translation can reorder them (an
+    engine extension: the original has none). `%%` is not a
+    conversion: a literal `%` is written alone.
   - `\n` (or `\r`): a line break. The decoder turns each `\n` into
     `\r`, the original's, since some screens test for it.
   - `~` at the start of a line: a menu option the player can select.

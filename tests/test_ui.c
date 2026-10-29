@@ -2362,6 +2362,24 @@ test_town_assets(void)
 	remove(dir);
 }
 
+/* The game's printf-style fill, with the pack's numbered arguments. */
+static void
+test_fill_args(void)
+{
+	const char *arg[3] = { "espagnol", "Mutin", NULL };
+	char out[64];
+
+	fill_args(out, sizeof(out), "%s %s", arg, 2);
+	CHECK(strcmp(out, "espagnol Mutin") == 0);
+	fill_args(out, sizeof(out), "%2$s %1$s", arg, 2);
+	CHECK(strcmp(out, "Mutin espagnol") == 0);
+	/* Past the arguments, or NULL: empty; %% and %d stay as written. */
+	fill_args(out, sizeof(out), "[%3$s|%4$s|%s %s %s] 5%% %d", arg, 3);
+	CHECK(strcmp(out, "[||espagnol Mutin ] 5%% %d") == 0);
+	fill_args(out, 6, "%2$s %1$s", arg, 2);
+	CHECK(strcmp(out, "Mutin") == 0);
+}
+
 int
 main(void)
 {
@@ -2376,6 +2394,7 @@ main(void)
 		return (1);
 	if (mkdtemp(saves_tmp) == NULL)
 		return (1);
+	test_fill_args();
 	test_career();
 	test_menus();
 	test_languages();
