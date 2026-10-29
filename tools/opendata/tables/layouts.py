@@ -17,9 +17,9 @@ game.  A rectangle is [x0, y0, x1, y1], inclusive.
 # every other spot from this word (src/ui/screens.c, cabin_open).  The
 # engine has no party to divide or join, so those two stay off.
 CABIN = [
-    # 0 continue travels: the brass telescope on its tripod, by the
-    # porthole.
-    [248, 170, 318, 292, 1],
+    # 0 continue travels: the boots on the floor, to walk out of the
+    # cabin, as players expect of them.
+    [490, 362, 562, 470, 1],
     # 1 treasure maps: the chart spread on the table (the table sprite,
     # without the chart, is drawn over it while there are none).
     [332, 258, 492, 304, 1],
@@ -30,8 +30,9 @@ CABIN = [
     [44, 250, 150, 282, 1],
     # 4 map of the Caribbean: the globe on its stand, in front.
     [140, 318, 330, 479, 1],
-    # 5 search: the boots on the floor, for going ashore.
-    [490, 362, 562, 470, 1],
+    # 5 search: the brass telescope on its tripod, by the porthole, to
+    # scan the land.
+    [248, 170, 318, 292, 1],
     # 6 divide party: the gilt mirror on the right wall (never open).
     [528, 90, 610, 158, 0],
     # 7 join party: the book on the window sill (never open).
@@ -154,7 +155,7 @@ def cabin():
     return ({"spots": CABIN},
             "Measured on the open pack's art/cabin.png scaled to 640x480 "
             "over a 20-pixel grid: each spot covers the object that "
-            "stands for it (telescope, chart, chest, book, globe, boots, "
+            "stands for it (boots, chart, chest, book, globe, telescope, "
             "mirror, sill book, drawers, bed, crossed swords). Divide and "
             "join party, which the engine never offers, are off.")
 
