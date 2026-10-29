@@ -22,12 +22,13 @@ import glob
 import os
 
 LIB = os.environ.get("FLIBUSTIER_CC0", os.path.expanduser("~/flibustier-cc0"))
+RES = "2K"	# the materials' resolution: the fencers fill the screen
 
 # What each kind of part is made of: an ambientCG material, and how many
 # times its picture repeats in a metre.
 LIBRARY = {
-    "linen": ("Fabric061", 6.0),
-    "wool": ("Fabric066", 6.0),
+    "linen": ("Fabric061", 3.0),
+    "wool": ("Fabric066", 3.5),
     "leather": ("Leather026", 5.0),
     "planks": ("Planks023A", 1.2),
     "canvas": ("Fabric086", 2.0),
@@ -41,7 +42,9 @@ _means = {}
 
 
 def _file(asset, kind):
-    found = sorted(glob.glob(os.path.join(LIB, asset, "*_%s.jpg" % kind)))
+    found = sorted(glob.glob(os.path.join(LIB, asset + "_" + RES,
+                                          "*_%s.jpg" % kind))) or sorted(
+        glob.glob(os.path.join(LIB, asset, "*_%s.jpg" % kind)))
     return found[0] if found else None
 
 
@@ -115,11 +118,56 @@ def pbr(name, kind, colour=None, rough=0.7, metal=0.0, sss=0.0):
     n = _file(asset, "NormalGL")
     if n:
         nm = nt.nodes.new("ShaderNodeNormalMap")
+        nm.inputs["Strength"].default_value = 0.45	# cloth, not terry
         nt.links.new(tex(n, True).outputs["Color"], nm.inputs["Color"])
         nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
     if metal and _file(asset, "Metalness"):
         nt.links.new(tex(_file(asset, "Metalness"), True).outputs["Color"],
                      bsdf.inputs["Metallic"])
+    return m
+
+
+def skin(name, colour):
+    """Skin, procedural: its tone varying in soft blotches (redder,
+    paler), light scattered under it, a fine bump of pores and a sheen
+    that varies."""
+    import bpy
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    big = nt.nodes.new("ShaderNodeTexNoise")
+    big.inputs["Scale"].default_value = 18.0
+    big.inputs["Detail"].default_value = 4.0
+    nt.links.new(coord.outputs["Object"], big.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    r, g, b_ = colour
+    ramp.color_ramp.elements[0].position = 0.35
+    ramp.color_ramp.elements[0].color = (r * 0.9, g * 0.82, b_ * 0.8, 1)
+    ramp.color_ramp.elements[1].position = 0.7
+    ramp.color_ramp.elements[1].color = (min(1, r * 1.12), g * 1.02,
+                                         b_ * 0.98, 1)
+    nt.links.new(big.outputs["Fac"], ramp.inputs["Fac"])
+    nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    if "Subsurface Weight" in bsdf.inputs:
+        bsdf.inputs["Subsurface Weight"].default_value = 0.25
+        bsdf.inputs["Subsurface Radius"].default_value = (0.9, 0.35, 0.2)
+        bsdf.inputs["Subsurface Scale"].default_value = 0.006
+    pores = nt.nodes.new("ShaderNodeTexNoise")
+    pores.inputs["Scale"].default_value = 900.0
+    pores.inputs["Detail"].default_value = 2.0
+    nt.links.new(coord.outputs["Object"], pores.inputs["Vector"])
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = 0.12
+    bump.inputs["Distance"].default_value = 0.0005
+    nt.links.new(pores.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    rough = nt.nodes.new("ShaderNodeMapRange")
+    rough.inputs["To Min"].default_value = 0.38
+    rough.inputs["To Max"].default_value = 0.58
+    nt.links.new(big.outputs["Fac"], rough.inputs["Value"])
+    nt.links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
     return m
 
 
@@ -149,10 +197,11 @@ def fetch_command():
         os.path.expanduser("~"), "$HOME"), LIB.replace(
         os.path.expanduser("~"), "$HOME"))]
     for asset, _ in sorted(set(LIBRARY.values())):
+        d = asset + "_" + RES
         cmds.append('[ -d %s ] || { curl -sfL -o %s.zip '
-                    '"https://ambientcg.com/get?file=%s_1K-JPG.zip" && '
+                    '"https://ambientcg.com/get?file=%s_%s-JPG.zip" && '
                     'mkdir %s && (cd %s && unzip -q ../%s.zip) && '
-                    'rm %s.zip; }' % ((asset,) * 7))
+                    'rm %s.zip; }' % (d, d, asset, RES, d, d, d, d))
     # The human body: Blender's Human Base Meshes bundle (CC0).
     cmds.append('[ -d human ] || { mkdir human && (cd human && curl -sfL '
                 '-o hbm.zip "https://download.blender.org/demo/asset-bundles/'

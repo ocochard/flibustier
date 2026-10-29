@@ -1733,8 +1733,11 @@ def make_fencer(args, spec, a, profile, seed):
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "mkdir -p %s" % work], check=True,
                        stdin=subprocess.DEVNULL)
-        subprocess.run(["scp", "-q", script, "%s:%s/" % (host, work)],
-                       check=True)
+        fetch_library(host)
+        subprocess.run(["scp", "-q", script,
+                        os.path.join(HERE, "fencers", "human.py"),
+                        os.path.join(HERE, "materials.py"),
+                        "%s:%s/" % (host, work)], check=True)
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "cd %s && rm -rf out && blender -b -P fencer.py -- "
                         "--side %s --out out --frame %dx%d --blend "

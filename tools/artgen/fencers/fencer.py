@@ -283,6 +283,404 @@ class Fencer:
             0, -math.radians(p.get("blade", 0.0)), 0)
 
 
+def blood_material(name, centre, r):
+    """Wet blood soaked into cloth: dark red, glossy where fresh, its
+    edge ragged by noise, thinning away from the cut and down."""
+    m = bpy.data.materials.new("blood-" + name)
+    m.use_nodes = True
+    m.blend_method = "HASHED" if hasattr(m, "blend_method") else None
+    nt = m.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.18
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    # The distance from the cut, stretched downward as blood runs.
+    sub = nt.nodes.new("ShaderNodeVectorMath")
+    sub.operation = "SUBTRACT"
+    sub.inputs[1].default_value = tuple(centre)
+    nt.links.new(coord.outputs["Object"], sub.inputs[0])
+    sc = nt.nodes.new("ShaderNodeVectorMath")
+    sc.operation = "MULTIPLY"
+    sc.inputs[1].default_value = (1 / r, 1 / r, 1 / (r * 1.7))
+    nt.links.new(sub.outputs[0], sc.inputs[0])
+    ln = nt.nodes.new("ShaderNodeVectorMath")
+    ln.operation = "LENGTH"
+    nt.links.new(sc.outputs[0], ln.inputs[0])
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 3.0 / r
+    noise.inputs["Detail"].default_value = 10.0
+    noise.inputs["Roughness"].default_value = 0.65
+    nt.links.new(coord.outputs["Object"], noise.inputs["Vector"])
+    edge = nt.nodes.new("ShaderNodeMath")
+    edge.operation = "MULTIPLY_ADD"
+    edge.inputs[1].default_value = 0.8
+    edge.inputs[2].default_value = -0.4
+    nt.links.new(noise.outputs["Fac"], edge.inputs[0])
+    d = nt.nodes.new("ShaderNodeMath")
+    d.operation = "ADD"
+    nt.links.new(ln.outputs["Value"], d.inputs[0])
+    nt.links.new(edge.outputs[0], d.inputs[1])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.55
+    ramp.color_ramp.elements[0].color = (1, 1, 1, 1)
+    ramp.color_ramp.elements[1].position = 0.95
+    ramp.color_ramp.elements[1].color = (0, 0, 0, 1)
+    nt.links.new(d.outputs[0], ramp.inputs["Fac"])
+    nt.links.new(ramp.outputs["Color"], bsdf.inputs["Alpha"])
+    # Darker, nearly black where it is thickest, at the cut.
+    col = nt.nodes.new("ShaderNodeValToRGB")
+    col.color_ramp.elements[0].position = 0.0
+    col.color_ramp.elements[0].color = (0.06, 0.0, 0.0, 1)
+    col.color_ramp.elements[1].position = 0.8
+    col.color_ramp.elements[1].color = (0.32, 0.01, 0.01, 1)
+    nt.links.new(d.outputs[0], col.inputs["Fac"])
+    nt.links.new(col.outputs["Color"], bsdf.inputs["Base Color"])
+    return m
+
+
+def tube(name, pts, radius, mat, parent):
+    """A rod along "pts" (metres, in the parent's space), round, of
+    "radius", made a mesh."""
+    cu = bpy.data.curves.new(name, "CURVE")
+    cu.dimensions = "3D"
+    cu.bevel_depth = radius
+    cu.bevel_resolution = 4
+    cu.use_fill_caps = True
+    sp = cu.splines.new("NURBS")
+    sp.points.add(len(pts) - 1)
+    for p_, xyz in zip(sp.points, pts):
+        p_.co = (*xyz, 1)
+    sp.use_endpoint_u = True
+    sp.order_u = min(4, len(pts))
+    cu.materials.append(mat)
+    tmp = bpy.data.objects.new(name + "-curve", cu)
+    bpy.context.collection.objects.link(tmp)
+    # A mesh, as the layers' passes show and hide only meshes.
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(tmp.evaluated_get(dg))
+    bpy.data.objects.remove(tmp, do_unlink=True)
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(ob)
+    ob.parent = parent
+    for f in me.polygons:
+        f.use_smooth = True
+    return ob
+
+
+def blade(name, length, width, thick, mat, parent, curve=0.0, point=0.12,
+          edge_back=False, fuller=False):
+    """A blade down from the guard (-Z), its flat to the view (width along
+    X, thickness along Y): a lens section, tapering to its point over the
+    last "point" of its length; bowed forward by "curve" metres at its
+    tip; "edge_back" a cutlass's thick back, "fuller" a groove down a
+    longsword's middle (shown as a darker flat)."""
+    import bmesh
+    bm = bmesh.new()
+    n = 24
+    rings = []
+    for i in range(n + 1):
+        t = i / n
+        z = -0.01 - t * length
+        w = width * (1 - 0.35 * t)
+        if t > 1 - point:
+            w *= max(0.02, (1 - t) / point)
+        x0 = curve * t * t
+        th = thick * (1 - 0.5 * t)
+        sec = [(x0 + w / 2, 0, z), (x0, th / 2, z), (x0 - w / 2 *
+               (0.3 if edge_back else 1), th / 2 if edge_back else 0, z),
+               (x0, -th / 2, z)]
+        if edge_back:
+            sec = [(x0 + w / 2, 0, z), (x0, th / 2, z),
+                   (x0 - w / 2, th / 2, z), (x0 - w / 2, -th / 2, z),
+                   (x0, -th / 2, z)]
+        rings.append([bm.verts.new(v) for v in sec])
+    for a_, b_ in zip(rings, rings[1:]):
+        k = len(a_)
+        for j in range(k):
+            bm.faces.new((a_[j], a_[(j + 1) % k], b_[(j + 1) % k], b_[j]))
+    bm.faces.new(rings[0][::-1])
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(ob)
+    ob.data.materials.append(mat)
+    ob.parent = parent
+    for f in me.polygons:
+        f.use_smooth = True
+    return ob
+
+
+def steel_material(name, rough=0.22):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    b_ = m.node_tree.nodes["Principled BSDF"]
+    b_.inputs["Base Color"].default_value = (0.78, 0.78, 0.8, 1)
+    b_.inputs["Metallic"].default_value = 1.0
+    b_.inputs["Roughness"].default_value = rough
+    return m
+
+
+def swords(parent):
+    """The three blades of the fight, at the grip (their hilts above it,
+    their blades down from it), as (name, [objects]).  After period
+    pieces: a swept-hilt rapier (a long slender blade, quillons, a knuckle
+    bow and side rings, a wire grip, a pear pommel); a sea cutlass (a
+    short broad curved blade, a brass shell guard and knuckle bow, a
+    wooden grip); a straight double-edged sword (a fullered blade, a
+    straight crossguard, a leather grip, a wheel pommel)."""
+    steel = steel_material("blade-steel")
+    dark = steel_material("hilt-steel", 0.35)
+    brass = materials.pbr("hilt-brass", "gilt", (0.75, 0.55, 0.22), 0.3,
+                          1.0)
+    grip = materials.pbr("grip-leather", "leather", (0.12, 0.07, 0.04),
+                         0.6)
+    wood = materials.pbr("grip-wood", "planks", (0.3, 0.17, 0.08), 0.6)
+    out = {}
+
+    def ball(name, at, size, mat):
+        ob = blob(name, parent, at, size, mat)
+        for f in ob.data.polygons:
+            f.use_smooth = True
+        return ob
+
+    def handle(name, length, r, mat):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=r,
+                                            depth=length,
+                                            location=(0, 0, length / 2))
+        ob = bpy.context.object
+        ob.name = name
+        ob.data.materials.append(mat)
+        ob.parent = parent
+        for f in ob.data.polygons:
+            f.use_smooth = True
+        return ob
+
+    # The rapier.
+    out["rapier"] = [
+        blade("rapier-blade", 1.02, 0.022, 0.007, steel, parent,
+              point=0.1),
+        handle("rapier-grip", 0.1, 0.013, dark),
+        ball("rapier-pommel", (0, 0, 0.12), (0.022, 0.022, 0.028), dark),
+        tube("rapier-quillons", [(0, -0.12, -0.01), (0, -0.05, -0.02),
+                                 (0, 0.05, -0.02), (0, 0.12, 0.0)],
+             0.005, dark, parent),
+        tube("rapier-bow", [(0, 0.02, -0.02), (0.07, 0.03, 0.0),
+                            (0.07, 0.03, 0.08), (0.0, 0.0, 0.11)],
+             0.0045, dark, parent),
+        tube("rapier-ring", [(0.0, 0.0, -0.02), (0.05, -0.03, -0.05),
+                             (0.0, -0.05, -0.08), (-0.05, -0.03, -0.05),
+                             (0.0, 0.0, -0.02)], 0.004, dark, parent),
+    ]
+    # The cutlass.
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=32,
+                                         ring_count=16,
+                                         location=(0.0, 0.0, -0.02))
+    shell = bpy.context.object
+    shell.name = "cutlass-shell"
+    shell.scale = (0.075, 0.06, 0.03)
+    shell.data.materials.append(brass)
+    shell.parent = parent
+    for f in shell.data.polygons:
+        f.use_smooth = True
+    out["cutlass"] = [
+        blade("cutlass-blade", 0.7, 0.042, 0.008, steel, parent,
+              curve=0.06, point=0.18, edge_back=True),
+        handle("cutlass-grip", 0.11, 0.015, wood),
+        ball("cutlass-cap", (0, 0, 0.115), (0.02, 0.02, 0.015), brass),
+        shell,
+        tube("cutlass-bow", [(0.06, 0.0, -0.02), (0.07, 0.0, 0.05),
+                             (0.04, 0.0, 0.11), (0.0, 0.0, 0.12)],
+             0.005, brass, parent),
+    ]
+    # The straight sword.
+    out["sword"] = [
+        blade("sword-blade", 0.92, 0.042, 0.008, steel, parent,
+              point=0.14, fuller=True),
+        handle("sword-grip", 0.14, 0.015, grip),
+        ball("sword-pommel", (0, 0, 0.16), (0.03, 0.012, 0.03), dark),
+        tube("sword-cross", [(0.11, 0.0, -0.01), (0.04, 0.0, -0.012),
+                             (-0.04, 0.0, -0.012), (-0.11, 0.0, -0.01)],
+             0.007, dark, parent),
+    ]
+    return out
+
+
+GRIP_SHIFT = (-0.028, 0.0, 0.0)	# the grip from the hand bone, at rest
+
+
+class HumanFencer(Fencer):
+    """The same fencer on the pack's real body (human.py): one rig for
+    both, the player's mirrored to face left with his sword arm still
+    nearer the view.  Its layers are Fencer's: the body (the
+    opponent's headless), his heads one per scene (a beard, and a
+    kerchief, a hat or a morion), the three blades in the sword hand, and
+    the wounds."""
+
+    def __init__(self, side):
+        import human
+        self.side = side
+        look = LOOKS[side]
+        self.layers = {"body": [], "weapon": {}, "wounds": {}, "heads": {}}
+        rob, meshes = human.build(look, kerchief=None)
+        body = meshes[0]
+        self.rob = self.root = rob
+        self.j = {}
+        bpy.context.view_layer.update()
+        # The sword's grip, from the sword hand, turned by "blade".
+        bpy.context.view_layer.objects.active = rob
+        bpy.ops.object.mode_set(mode="EDIT")
+        # In the closed hand: at the palm, below the knuckles.
+        hand = rob.data.edit_bones["hand.R"]
+        g = rob.data.edit_bones.new("grip")
+        g.head = hand.head + (hand.tail - hand.head) * 0.7
+        g.tail = g.head + Vector((0, 0, -0.06))
+        g.parent = hand
+        g.use_deform = False
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.context.view_layer.update()
+        if side == "he":
+            self.split_heads(body, look)
+        self.layers["body"].append(body)
+        # The blades, built at the grip's rest place, then carried by it.
+        bpy.context.view_layer.update()
+        grip_at = rob.matrix_world @ rob.data.bones["grip"].head_local
+        # In the fist, not on its knuckles: a little towards the palm.
+        tmp = joint("grip-rest", None, tuple(grip_at + Vector(GRIP_SHIFT)))
+        self.j = {}
+        self.layers["weapon"] = swords(tmp)
+        bpy.context.view_layer.update()
+        for parts in self.layers["weapon"].values():
+            for ob in parts:
+                self.carry(ob, "grip")
+        bpy.data.objects.remove(tmp, do_unlink=True)
+        self.j.pop("grip", None)
+        self.wounds_on_body()
+
+    def carry(self, ob, bone):
+        """Parent "ob" to the rig's "bone", where it is now."""
+        bpy.context.view_layer.update()
+        mw = ob.matrix_world.copy()
+        ob.parent = self.rob
+        ob.parent_type = "BONE"
+        ob.parent_bone = bone
+        bpy.context.view_layer.update()
+        ob.matrix_world = mw
+
+    def split_heads(self, body, look):
+        """The opponent's heads, one per scene: each a copy of his whole
+        body, all but the head clear, a hair proud of it so it is drawn
+        over his body's own head; with its headwear.  Nothing is cut, so
+        there is no seam and the strands stay on."""
+        clear = bpy.data.materials.new("clear")
+        clear.use_nodes = True
+        nt = clear.node_tree
+        nt.nodes.remove(nt.nodes["Principled BSDF"])
+        t = nt.nodes.new("ShaderNodeBsdfTransparent")
+        nt.links.new(t.outputs[0], nt.nodes["Material Output"].inputs[0])
+        rest = body.data.attributes["rest"]
+        for name, wear in HEADS.items():
+            h = body.copy()
+            h.data = body.data.copy()
+            h.name = "%s-head" % name
+            bpy.context.collection.objects.link(h)
+            me = h.data
+            me.materials.append(clear)
+            ci = len(me.materials) - 1
+            for f in me.polygons:
+                z = sum(rest.data[v].vector.z for v in f.vertices) / \
+                    len(f.vertices)
+                if z < 1.45:
+                    f.material_index = ci
+            for v in me.vertices:
+                v.co += v.normal * 0.0015
+            parts = [h]
+            if wear == "kerchief":
+                # Under the kerchief, no hair standing through it.
+                for mod in list(h.modifiers):
+                    if mod.name == "hair-hair":
+                        h.modifiers.remove(mod)
+                m = materials.pbr(name + "-kerchief", "wool",
+                                  (0.55, 0.05, 0.04), 0.85)
+                me.materials.append(m)
+                k = len(me.materials) - 1
+                for f in me.polygons:
+                    c = [rest.data[v].vector for v in f.vertices]
+                    cz = sum(p.z for p in c) / len(c)
+                    cy = sum(p.y for p in c) / len(c)
+                    if cz > 1.6 or (cz > 1.53 and cy > 0.0):
+                        f.material_index = k
+            else:
+                tmp = joint(name + "-rest", None, (0, -0.02, 1.33))
+                for ob in Fencer.headwear(self, name, wear, tmp):
+                    for f in ob.data.polygons:
+                        f.use_smooth = True
+                    sub = ob.modifiers.new("smooth", "SUBSURF")
+                    sub.levels = sub.render_levels = 2
+                    if wear == "morion":
+                        ob.data.materials[0] = materials.pbr(
+                            name + "-steel", "iron", (0.55, 0.55, 0.58),
+                            0.35, 1.0)
+                    else:
+                        ob.data.materials[0] = materials.pbr(
+                            name + "-felt", "wool", (0.05, 0.04, 0.03), 0.9)
+                    bpy.context.view_layer.update()
+                    self.carry(ob, "head")
+                    parts.append(ob)
+                bpy.data.objects.remove(tmp, do_unlink=True)
+            self.layers["heads"][name] = parts
+        # His body's own head is always under one of these: its hair
+        # would stand out round a kerchief.
+        for mod in list(body.modifiers):
+            if mod.type == "PARTICLE_SYSTEM":
+                body.modifiers.remove(mod)
+
+    def wounds_on_body(self):
+        """Each wound a stain on the clothes: the body's own surface
+        round the cut, a hair off it, so it bends with the body; wet dark
+        blood, ragged at its rim and running down."""
+        import bmesh
+        body = self.layers["body"][0]
+        out = {}
+        for name, at, r in (("head", (0.05, -0.07, 1.62), 0.035),
+                            ("chest", (0.06, -0.14, 1.26), 0.075),
+                            ("legs", (0.09, -0.08, 0.66), 0.07)):
+            src = body if name != "head" else \
+                self.layers["heads"].get("head1", [body])[0]
+            ob = src.copy()
+            ob.data = src.data.copy()
+            ob.name = "cut-" + name
+            bpy.context.collection.objects.link(ob)
+            c = Vector(at)
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+            # Running down: the stain reaches lower than it does up.
+            drop = [f for f in bm.faces if not (
+                (f.calc_center_median() - c).length < r * 1.6 and
+                (f.calc_center_median() - c).z > -r * 1.6 and
+                (f.calc_center_median() - c).z < r * 0.9)]
+            bmesh.ops.delete(bm, geom=drop, context="FACES")
+            for v in bm.verts:
+                v.co += v.normal * 0.003
+            bm.to_mesh(ob.data)
+            bm.free()
+            ob.data.materials.clear()
+            ob.data.materials.append(blood_material(name, c, r))
+            for m in ob.modifiers:
+                if m.type == "SUBSURF":
+                    ob.modifiers.remove(m)
+            out[name] = [ob]
+        self.layers["wounds"] = out
+
+    def pose(self, p):
+        import human
+        human.pose(self.rob, p, 180 if self.side == "my" else 0)
+        g = self.rob.pose.bones["grip"]
+        axis = g.bone.matrix_local.to_3x3().inverted() @ Vector((1, 0, 0))
+        g.rotation_mode = "AXIS_ANGLE"
+        g.rotation_axis_angle = (-math.radians(p.get("blade", 0.0)), *axis)
+        human.ground(self.rob)
+
+
 # The key poses.  Angles: hips and knees of each leg, shoulders and
 # elbows of each arm, the spine and neck, and the blade in the hand.
 GUARD = {"hips": 0.86, "spine": 6, "neck": -6,
@@ -368,9 +766,11 @@ def move_pose(move, k):
         hit = at(g, spine=-22, neck=-15, **{"front-shoulder": 20,
                                             "front-elbow": 10,
                                             "blade": 40})
-        up = at(hit, spine=-6, neck=-10, hips=0.82, **{
-            "front-shoulder": 165, "front-elbow": 25, "back-shoulder": 160,
-            "back-elbow": 25, "blade": 80})
+        # Yielding: upright, both hands up by the head, elbows bent (a
+        # real shoulder lifted straight up crushes the neck on the body).
+        up = at(hit, spine=0, neck=0, hips=0.84, **{
+            "front-shoulder": 135, "front-elbow": 55, "back-shoulder": 130,
+            "back-elbow": 55, "blade": 60})
         return keyed([g, hit, hit, up, up, up, up, up, up, up], n, k)
     return bob(g, n, k)			# the last: back on guard
 
@@ -378,7 +778,21 @@ def move_pose(move, k):
 def scene(fw, fh):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
-    sc.cycles.samples = 32
+    # No grain on cloth or skin: denoised where this Blender has a
+    # denoiser (the render host's build has none), else enough light
+    # paths, adaptively, the bright stray ones clamped.
+    denoisers = [i.identifier for i in sc.cycles.bl_rna.properties[
+        "denoiser"].enum_items]
+    if denoisers:
+        sc.cycles.samples = 96
+        sc.cycles.use_denoising = True
+        sc.cycles.denoiser = denoisers[0]
+    else:
+        sc.cycles.use_denoising = False
+        sc.cycles.samples = 256
+        sc.cycles.use_adaptive_sampling = True
+        sc.cycles.adaptive_threshold = 0.02
+        sc.cycles.sample_clamp_indirect = 3.0
     sc.cycles.device = "CPU"
     sc.render.film_transparent = True
     sc.render.resolution_x = fw
@@ -441,13 +855,17 @@ def main():
                     help="pixels of a frame (141x90 at 1080 lines)")
     ap.add_argument("--moves", help="only these moves, e.g. 0,9")
     ap.add_argument("--blend")
+    ap.add_argument("--sample", action="store_true",
+                    help="only each move's middle frame, to look at")
+    ap.add_argument("--mannequin", action="store_true",
+                    help="the old jointed figure, not the real body")
     args = ap.parse_args(argv)
     fw, fh = (int(v) for v in args.frame.split("x"))
     global SIDE
     SIDE = args.side
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    f = Fencer(args.side)
+    f = (Fencer if args.mannequin else HumanFencer)(args.side)
     if args.side == "my":
         f.root.scale = (-1, 1, 1)	# facing his opponent, to the left
     scene(fw, fh)
@@ -472,7 +890,8 @@ def main():
     moves = range(len(BANKS)) if not args.moves else \
         [int(v) for v in args.moves.split(",")]
     for move in moves:
-        for k in range(BANKS[move]):
+        for k in ([BANKS[move] // 2] if args.sample else
+                  range(BANKS[move])):
             f.pose(move_pose(move, k))
             frame_size(move, k)
             for name, objects, holdouts in passes:

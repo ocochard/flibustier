@@ -86,7 +86,7 @@ def _region(c, n, kerchief=True):
     x, y, z = abs(c.x), c.y, c.z
     if kerchief and (z > 1.6 or (z > 1.53 and y > 0.0)):
         return "kerchief"			# the crown and the back
-    if z > 1.53 and y > 0.02:
+    if (z > 1.53 and y > 0.02) or (not kerchief and z > 1.62):
         return "hair"
     if z > 1.47:
         return "skin"				# the face and neck
@@ -115,10 +115,10 @@ def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
     fabric = {"kerchief": "wool"}
     from fencer import FABRIC
     for name in names:
-        me.materials.append(materials.pbr(
+        me.materials.append(materials.skin("human-skin", colour[name])
+                            if name == "skin" else materials.pbr(
             "human-" + name, fabric.get(name, FABRIC.get(name)),
-            colour[name], rough=0.55 if name == "skin" else 0.8,
-            sss=0.15 if name == "skin" else 0.0))
+            colour[name], rough=0.8))
     push = [0.0] * len(me.vertices)
     for f in me.polygons:
         r = _region(f.center, f.normal, kerchief is not None)
@@ -140,12 +140,177 @@ def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
     bm.to_mesh(me)
     bm.free()
     me.update()
+    # The cloth's thickness eased across each edge, so no step shows
+    # where one piece meets the next (the collar, the hems).
+    near = [[] for _ in me.vertices]
+    for e in me.edges:
+        a_, b_ = e.vertices
+        near[a_].append(b_)
+        near[b_].append(a_)
+    for _ in range(6):
+        push = [(p + sum(push[n] for n in near[i])) / (1 + len(near[i]))
+                for i, p in enumerate(push)]
     for v in me.vertices:
         v.co += v.normal * push[v.index]
     for f in me.polygons:
         f.use_smooth = True
+    # The rest position kept on every point, for the clothes' edges and
+    # the hair to follow it as the body moves.
+    rest = me.attributes.new("rest", "FLOAT_VECTOR", "POINT")
+    for v in me.vertices:
+        rest.data[v.index].vector = v.co
+    smooth_edges(me, names)
     sub = ob.modifiers.new("smooth", "SUBSURF")
     sub.levels = sub.render_levels = 1
+
+
+def _rest_z(nt):
+    """Nodes giving the rest position's x, y, z (rest attribute)."""
+    at = nt.nodes.new("ShaderNodeAttribute")
+    at.attribute_name = "rest"
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(at.outputs["Vector"], sep.inputs["Vector"])
+    return sep
+
+
+def smooth_edges(me, names):
+    """Each piece of clothing's edge drawn in its material, not along the
+    mesh's faces: a material shows the next one's fabric past its edge
+    (a straight hem, softened, a little ragged), so the faces' steps do
+    not show.  Done for the shirt's hem over the sash, the sash's over
+    the breeches, the boots' tops and the collar."""
+    def mixin(own, other, axis, edge, below):
+        """In material "own", "other" shows where rest[axis] is past
+        "edge" (below it when "below")."""
+        m = me.materials[names.index(own)]
+        o = me.materials[names.index(other)]
+        nt = m.node_tree
+        out = nt.nodes["Material Output"]
+        mine = out.inputs["Surface"].links[0].from_socket
+        # The other's shader, copied in.
+        theirs = o.node_tree.nodes["Principled BSDF"]
+        group = nt.nodes.new("ShaderNodeBsdfPrincipled")
+        for i in theirs.inputs:
+            if i.name in group.inputs and not i.is_linked and \
+                    hasattr(i, "default_value"):
+                try:
+                    group.inputs[i.name].default_value = i.default_value
+                except (TypeError, AttributeError):
+                    pass
+        # Its colour by its own picture: copy its colour chain's end.
+        base = theirs.inputs["Base Color"]
+        if base.is_linked:
+            # The other's colour, as a flat tint (its texture is close).
+            group.inputs["Base Color"].default_value = \
+                tuple(base.links[0].from_node.inputs["A"].default_value) \
+                if "A" in base.links[0].from_node.inputs else \
+                (0.5, 0.5, 0.5, 1)
+        sep = _rest_z(nt)
+        noise = nt.nodes.new("ShaderNodeTexNoise")
+        noise.inputs["Scale"].default_value = 40.0
+        at = nt.nodes.new("ShaderNodeAttribute")
+        at.attribute_name = "rest"
+        nt.links.new(at.outputs["Vector"], noise.inputs["Vector"])
+        wob = nt.nodes.new("ShaderNodeMath")
+        wob.operation = "MULTIPLY_ADD"
+        wob.inputs[1].default_value = 0.006
+        wob.inputs[2].default_value = edge - 0.003
+        nt.links.new(noise.outputs["Fac"], wob.inputs[0])
+        st = nt.nodes.new("ShaderNodeMapRange")
+        st.interpolation_type = "SMOOTHSTEP"
+        nt.links.new(sep.outputs["XYZ"[axis]], st.inputs["Value"])
+        lo = nt.nodes.new("ShaderNodeMath")
+        lo.operation = "SUBTRACT"
+        lo.inputs[1].default_value = 0.002
+        hi = nt.nodes.new("ShaderNodeMath")
+        hi.operation = "ADD"
+        hi.inputs[1].default_value = 0.002
+        nt.links.new(wob.outputs[0], lo.inputs[0])
+        nt.links.new(wob.outputs[0], hi.inputs[0])
+        nt.links.new(lo.outputs[0], st.inputs["From Min"])
+        nt.links.new(hi.outputs[0], st.inputs["From Max"])
+        if below:
+            st.inputs["To Min"].default_value = 1.0
+            st.inputs["To Max"].default_value = 0.0
+        # Only on the trunk and legs: the hands and sleeves, out at the
+        # A-pose's sides, keep their own.
+        ax = nt.nodes.new("ShaderNodeMath")
+        ax.operation = "ABSOLUTE"
+        nt.links.new(sep.outputs["X"], ax.inputs[0])
+        inner = nt.nodes.new("ShaderNodeMath")
+        inner.operation = "LESS_THAN"
+        inner.inputs[1].default_value = 0.23
+        nt.links.new(ax.outputs[0], inner.inputs[0])
+        both = nt.nodes.new("ShaderNodeMath")
+        both.operation = "MULTIPLY"
+        nt.links.new(st.outputs["Result"], both.inputs[0])
+        nt.links.new(inner.outputs[0], both.inputs[1])
+        mix = nt.nodes.new("ShaderNodeMixShader")
+        nt.links.new(both.outputs[0], mix.inputs["Fac"])
+        nt.links.new(mine, mix.inputs[1])
+        nt.links.new(group.outputs["BSDF"], mix.inputs[2])
+        nt.links.new(mix.outputs["Shader"], out.inputs["Surface"])
+
+    mixin("shirt", "sash", 2, 1.0, True)	# the shirt's hem
+    mixin("sash", "shirt", 2, 1.0, False)
+    mixin("sash", "breeches", 2, 0.92, True)
+    mixin("breeches", "sash", 2, 0.92, False)
+    mixin("breeches", "boots", 2, 0.42, True)
+    mixin("boots", "breeches", 2, 0.42, False)
+    mixin("shirt", "skin", 2, 1.47, False)	# the collar
+    mixin("skin", "shirt", 2, 1.47, True)
+
+
+def hair(ob, look, kerchief):
+    """Hair and, for a dark-haired man, a short beard: strands of the
+    body's own surface (Blender hair), its colour by melanin."""
+    me = ob.data
+    dark = sum(look["hair"]) < 0.2
+    rest = me.attributes["rest"]
+    for name, weight, length, count in (
+            ("hair", lambda x, y, z: z > 1.56 and y > -0.06 and
+             (not kerchief or z < 1.6 and y > 0.0), 0.022, 9000),
+            ("beard", lambda x, y, z: dark and 1.48 < z < 1.55 and
+             y < -0.04 and abs(x) < 0.065, 0.012, 3000)):
+        g = ob.vertex_groups.new(name="hair-" + name)
+        # By the rest place (the A-pose): the rig has moved the arms.
+        pick = [v.index for v in me.vertices
+                if weight(*rest.data[v.index].vector)]
+        if not pick:
+            ob.vertex_groups.remove(g)
+            continue
+        g.add(pick, 1.0, "REPLACE")
+        mod = ob.modifiers.new("hair-" + name, "PARTICLE_SYSTEM")
+        ps = mod.particle_system
+        ps.vertex_group_density = g.name
+        st = ps.settings
+        st.type = "HAIR"
+        st.count = count // 10
+        st.hair_length = length
+        st.use_advanced_hair = False
+        # Strands interpolated between the guides, lying close to the
+        # head as cut hair does, in metres.
+        st.child_type = "INTERPOLATED"
+        st.rendered_child_count = 10
+        st.rendered_child_count = 16
+        st.clump_factor = 0.15
+        st.roughness_1 = 0.0
+        st.roughness_2 = 0.0
+        st.roughness_endpoint = 0.0
+        st.radius_scale = 1.0
+        st.root_radius = 0.0007
+        st.tip_radius = 0.0002
+        m = bpy.data.materials.new("strands-" + name)
+        m.use_nodes = True
+        nt = m.node_tree
+        nt.nodes.remove(nt.nodes["Principled BSDF"])
+        h = nt.nodes.new("ShaderNodeBsdfHairPrincipled")
+        h.parametrization = "MELANIN"
+        h.inputs["Melanin"].default_value = 0.95 if dark else 0.55
+        h.inputs["Roughness"].default_value = 0.35
+        nt.links.new(h.outputs[0], nt.nodes["Material Output"].inputs[0])
+        me.materials.append(m)
+        st.material = len(me.materials)
 
 
 def rig(ob, parts):
@@ -178,6 +343,9 @@ def rig(ob, parts):
         bone("upper." + side, sh, el, "spine")
         bone("fore." + side, el, wr, "upper." + side)
         bone("hand." + side, wr, wr + d * HAND, "fore." + side)
+        # The fingers, from the knuckles, to close the hand.
+        bone("fingers." + side, wr + d * 0.09, wr + d * 0.2,
+             "hand." + side)
         bone("thigh." + side, _side(HIP, s), _side(KNEE, s), "pelvis")
         bone("shin." + side, _side(KNEE, s), _side(ANKLE, s),
              "thigh." + side)
@@ -195,7 +363,8 @@ def rig(ob, parts):
     # forward; then that pose made the mesh's and the rig's rest.
     bpy.ops.object.mode_set(mode="POSE")
     for name in ("upper.L", "upper.R", "fore.L", "fore.R", "hand.L",
-                 "hand.R", "thigh.L", "thigh.R", "shin.L", "shin.R"):
+                 "hand.R", "fingers.L", "fingers.R", "thigh.L", "thigh.R",
+                 "shin.L", "shin.R"):
         pb = rob.pose.bones[name]
         bpy.context.view_layer.update()
         cur = (pb.tail - pb.head).normalized()
@@ -232,6 +401,8 @@ def build(look, kerchief=(0.6, 0.05, 0.04)):
     dress(ob, look, kerchief)
     parts = []
     rob = rig(ob, parts)
+    # The hair last, on the rigged body, so it follows it.
+    hair(ob, look, kerchief is not None)
     # Facing +X, as fencer.py's figure.
     rob.rotation_euler = (0, 0, math.pi / 2)
     return rob, [ob] + parts
@@ -245,10 +416,21 @@ def pose(rob, p, heading=0.0):
     for key, name in BONES.items():
         pb = rob.pose.bones[name]
         a = math.radians(p.get(key, 0.0))
-        # Each bone's own X is the figure's side axis (roll 0, the
-        # limbs vertical); its front is -Y in the rig's space.
+        # About the figure's side axis (the rig's X), in the bone's own
+        # frame: a limb hanging down swings to the front (-Y) for a
+        # positive angle, one standing up leans to it.
         up = pb.bone.tail_local.z > pb.bone.head_local.z
-        pb.rotation_euler = (-a if up else a, 0, 0)
+        axis = pb.bone.matrix_local.to_3x3().inverted() @ Vector((1, 0, 0))
+        pb.rotation_mode = "AXIS_ANGLE"
+        pb.rotation_axis_angle = (a if up else -a, *axis)
+    # The hands closed: the sword hand round its grip, the other loosely;
+    # the fingers curl towards the body's middle (about the rig's Y).
+    for side, curl in (("R", 100), ("L", 45)):
+        pb = rob.pose.bones["fingers." + side]
+        axis = pb.bone.matrix_local.to_3x3().inverted() @ Vector((0, 1, 0))
+        pb.rotation_mode = "AXIS_ANGLE"
+        pb.rotation_axis_angle = (math.radians(curl if side == "L" else
+                                               -curl), *axis)
 
 
 def ground(rob, height=None):
