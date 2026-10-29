@@ -100,6 +100,13 @@ void	fb_frame_sub(struct fb *fb, const struct frame *f, int x, int y,
 void	fb_frame_sub_clip(struct fb *fb, const struct frame *f, int x, int y,
 	    int sub, int x0, int y0, int x1, int y1);
 
+/*
+ * Shade the screen under frame "f"'s opaque pixels at (x, y), in 1/"sub"
+ * pixels, through the table "shade" (palette index to index): a shadow.
+ */
+void	fb_shadow(struct fb *fb, const struct frame *f, int x, int y, int sub,
+	    const uint8_t *shade);
+
 /* The same, clipped to the rectangle (x0, y0)-(x1, y1), inclusive. */
 void	fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y,
 	    int x0, int y0, int x1, int y1);

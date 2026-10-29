@@ -2664,10 +2664,31 @@ const struct screen screen_hof = {
  */
 #define CLOUD_SHADOW		30
 
+/*
+ * Raw frames keep colour 0 clear: give those without a mask one, so
+ * that the sub-pixel drawing (--smooth) skips it too.
+ */
+static void
+key_masks(struct sprite_bank *b)
+{
+	struct frame *f;
+	size_t i, k;
+
+	for (i = 0; i < b->count; i++) {
+		f = &b->frames[i];
+		if (f->mask != NULL || f->rgba != NULL ||
+		    (f->mask = malloc((size_t)f->w * f->h)) == NULL)
+			continue;
+		for (k = 0; k < (size_t)f->w * f->h; k++)
+			f->mask[k] = f->pixels[k] != 0;
+	}
+}
+
 static void
 clouds_start(struct game *g)
 {
 	load_bank(g, "cur/cloud", 1, &g->cloud_spr);
+	key_masks(&g->cloud_spr);
 	load_bank(g, "spr/sailmisc", 0, &g->party_spr);
 	g->march_held = g->march_tap = 0;
 	sim_voyage_start(&g->sim);
@@ -2729,14 +2750,14 @@ clouds_draw(struct game *g)
 	    g->layout->shade_va, 256);
 	const struct frame *f;
 	const struct sim_cloud *c;
-	int i, n = sim_clouds(&g->sim), x, y, sx, sy, px, py, w = sail_lag(g);
+	int i, n = sim_clouds(&g->sim), sx, sy, w = sail_lag(g);
 
 	for (i = 0; i < n && i < 3; i++) {
 		c = &g->sim.clouds[i];
 		if (!c->shown || (size_t)c->frame >= g->cloud_spr.count)
 			continue;
 		f = &g->cloud_spr.frames[c->frame];
-		/* In 1/SAIL_FRAMES pixels, then the nearest pixel. */
+		/* In 1/SAIL_FRAMES pixels. */
 		sx = sail_between(g->sail_from.cloud_x[i], c->x, w,
 		    CLOUD_JUMP) - g->sim.view_x * SAIL_FRAMES;
 		sy = sail_between(g->sail_from.cloud_y[i], c->y, w,
@@ -2752,30 +2773,12 @@ clouds_draw(struct game *g)
 			fb_frame_sub(&g->fb, f, sx, sy, SAIL_FRAMES);
 			continue;
 		}
-		sx = (sx + SAIL_FRAMES / 2 + SAIL_FRAMES * FB_W) /
-		    SAIL_FRAMES - FB_W;
-		sy = (sy + SAIL_FRAMES / 2 + SAIL_FRAMES * FB_H) /
-		    SAIL_FRAMES - FB_H;
+		/* The original's: its shape shading the sea, then the
+		 * cloud, colour 0 clear. */
 		if (shade != NULL)
-			for (y = 0; y < f->h; y++)
-				for (x = 0; x < f->w; x++) {
-					px = sx - CLOUD_SHADOW + x;
-					py = sy + CLOUD_SHADOW + y;
-					if (f->pixels[y * f->w + x] != 0 &&
-					    px >= 0 && px < FB_W && py >= 0 &&
-					    py < FB_H)
-						fb_put(&g->fb, py * FB_W + px,
-						    shade[g->fb.px[py * FB_W + px]]);
-				}
-		for (y = 0; y < f->h; y++)
-			for (x = 0; x < f->w; x++) {
-				px = sx + x;
-				py = sy + y;
-				if (f->pixels[y * f->w + x] != 0 && px >= 0 &&
-				    px < FB_W && py >= 0 && py < FB_H)
-					fb_put(&g->fb, py * FB_W + px,
-					    f->pixels[y * f->w + x]);
-			}
+			fb_shadow(&g->fb, f, sx - CLOUD_SHADOW * SAIL_FRAMES,
+			    sy + CLOUD_SHADOW * SAIL_FRAMES, SAIL_FRAMES, shade);
+		fb_frame_sub(&g->fb, f, sx, sy, SAIL_FRAMES);
 	}
 }
 
@@ -3429,6 +3432,8 @@ battle_sprites(struct game *g, int side, int type)
 	load_bank(g, "cur/sbtlmisc", 1, &g->btl_misc);
 	load_bank(g, a[size], 1, &g->btl_ship[side][0]);
 	load_bank(g, b[size], 1, &g->btl_ship[side][1]);
+	key_masks(&g->btl_ship[side][0]);
+	key_masks(&g->btl_ship[side][1]);
 	load_bank(g, side == 1 && g->sim.battle.fort ? "cur/fortbtl" :
 	    damage_picture[type % 9], 1, &g->btl_damage[side]);
 }
@@ -3803,31 +3808,11 @@ battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 	    128) >> 8) % (2 * n);
 	bank = &g->btl_ship[side][idx / n];
 	f = &bank->frames[idx % n];
-	/* A pack's frame: its true colours, with --smooth at its exact
-	 * place (1/256 pixels), clipped to the area. */
-	if (f->rgba != NULL) {
-		int x = g->smooth ? b->x - f->w * 128 : (b->x / 256 - f->w / 2) *
-		    256;
-		int y = g->smooth ? b->y - f->h * 128 : (b->y / 256 - f->h / 2) *
-		    256;
-
-		fb_frame_sub_clip(&g->fb, f, x, y, 256, 0, 0, AREA - 1,
-		    AREA - 1);
-		return;
-	}
-	/* Raw frames: skip the background colour 0, clip to the area. */
-	{
-		int x, y, sx = b->x / 256 - f->w / 2, sy = b->y / 256 - f->h / 2;
-
-		for (y = 0; y < f->h; y++)
-			for (x = 0; x < f->w; x++) {
-				uint8_t c = f->pixels[y * f->w + x];
-
-				if (c != 0 && sx + x >= 0 && sx + x < AREA &&
-				    sy + y >= 0 && sy + y < AREA)
-					fb_put(&g->fb, (sy + y) * FB_W + sx + x, c);
-			}
-	}
+	/* Clipped to the area, colour 0 of raw frames clear; with
+	 * --smooth at its exact place (1/256 pixels). */
+	fb_frame_sub_clip(&g->fb, f, g->smooth ? b->x - f->w * 128 :
+	    (b->x / 256 - f->w / 2) * 256, g->smooth ? b->y - f->h * 128 :
+	    (b->y / 256 - f->h / 2) * 256, 256, 0, 0, AREA - 1, AREA - 1);
 }
 
 /*

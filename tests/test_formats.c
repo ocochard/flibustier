@@ -499,6 +499,23 @@ test_fb(void)
 		CHECK(fb.idx[20 * 1280 + 20] == 7 &&
 		    fb.idx[20 * 1280 + 21] == 7 &&
 		    fb.idx[20 * 1280 + 22] == 0);
+		/* Its shadow, half a pixel over: entry 3 shaded to 4. */
+		{
+			uint8_t shade[256];
+			int k;
+
+			for (k = 0; k < 256; k++)
+				shade[k] = (uint8_t)k;
+			shade[3] = 4;
+			fb_clear(&fb, 3);
+			fb_shadow(&fb, &f, 21, 20, 2, shade);
+			CHECK(fb.px[10 * FB_W + 11] == 4 &&
+			    fb.px[10 * FB_W + 10] == 3);
+			CHECK(fb.idx[20 * 1280 + 20] == 3 &&
+			    fb.idx[20 * 1280 + 21] == 4 &&
+			    fb.idx[21 * 1280 + 22] == 4 &&
+			    fb.idx[20 * 1280 + 23] == 3);
+		}
 	}
 	image_free(&img);
 	fb_free(&fb);

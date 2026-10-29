@@ -416,6 +416,67 @@ frame_clip(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
 }
 
 void
+fb_shadow(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
+    const uint8_t *shade)
+{
+	int fx, fy, px, py, x, y, ox, oy, bx0, bx1, by0, by1;
+	size_t i, o;
+
+	xs += f->ox * sub;
+	ys += f->oy * sub;
+	x = canvas_at(xs + sub / 2, 1, sub);
+	y = canvas_at(ys + sub / 2, 1, sub);
+	if (fb->out_h != FB_H && (xs % sub != 0 || ys % sub != 0)) {
+		/* Between two pixels: the canvas at its place, from what
+		 * it shows (true colours give way to the 640x480 index's
+		 * shade, as on a whole pixel), before the 640x480 indices
+		 * change. */
+		bx0 = canvas_at(xs, fb->out_w, FB_W * sub);
+		bx1 = canvas_at(xs + f->w * sub, fb->out_w, FB_W * sub);
+		by0 = canvas_at(ys, fb->out_h, FB_H * sub);
+		by1 = canvas_at(ys + f->h * sub, fb->out_h, FB_H * sub);
+		for (oy = by0 < 0 ? 0 : by0; oy < by1 && oy < fb->out_h;
+		    oy++) {
+			fy = (int)((long)(oy - by0) * f->h / (by1 - by0));
+			for (ox = bx0 < 0 ? 0 : bx0; ox < bx1 &&
+			    ox < fb->out_w; ox++) {
+				fx = (int)((long)(ox - bx0) * f->w /
+				    (bx1 - bx0));
+				i = (size_t)fy * f->w + fx;
+				if (f->mask != NULL && !f->mask[i])
+					continue;
+				o = (size_t)oy * fb->out_w + ox;
+				fb->idx[o] = shade[fb->tc[o] ?
+				    fb->px[fb->ly[oy] * FB_W + fb->lx[ox]] :
+				    fb->idx[o]];
+				fb->tc[o] = 0;
+			}
+		}
+		for (fy = 0; fy < f->h; fy++)
+			for (fx = 0; fx < f->w; fx++) {
+				px = x + fx;
+				py = y + fy;
+				i = (size_t)fy * f->w + fx;
+				if ((f->mask == NULL || f->mask[i]) && px >= 0 &&
+				    px < FB_W && py >= 0 && py < FB_H)
+					fb->px[py * FB_W + px] =
+					    shade[fb->px[py * FB_W + px]];
+			}
+		return;
+	}
+	for (fy = 0; fy < f->h; fy++)
+		for (fx = 0; fx < f->w; fx++) {
+			px = x + fx;
+			py = y + fy;
+			i = (size_t)fy * f->w + fx;
+			if ((f->mask == NULL || f->mask[i]) && px >= 0 &&
+			    px < FB_W && py >= 0 && py < FB_H)
+				fb_put(fb, (size_t)py * FB_W + px,
+				    shade[fb->px[py * FB_W + px]]);
+		}
+}
+
+void
 fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
     int y0, int x1, int y1)
 {

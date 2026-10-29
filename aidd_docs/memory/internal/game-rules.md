@@ -222,15 +222,15 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   party landing or boarding) is drawn as a jump. The land battle's
   units glide the same way between its passes (0.6 seconds), a move of
   more than 64 pixels drawn as a jump. Sea battles move every frame
-  already: there `--smooth` draws a pack's ships at their exact place
+  already: there `--smooth` draws the ships at their exact place
   (the rules keep 1/256 pixels) and turns the drawn heading to a new
   one by an eighth of the way a frame, more than a quarter turn at
   once. Fencers slide to their new place over a fight tick (9 to 12
   frames) instead of at once, a move of more than 48 pixels drawn as a
   jump; their poses change at the tick, as in the original. On a canvas
-  larger than 640x480, original sprites between two pixels are drawn at
-  their place on the canvas, as true-colour art is. The rules are not
-  affected.
+  larger than 640x480, original sprites between two pixels, and the
+  original clouds' shadows, are drawn at their place on the canvas, as
+  true-colour art is. The rules are not affected.
 - **Ticks:** a tick counter; 64 ticks make a day. When a voyage ends,
   the game adds `ticks / 64 + 1` days (VA `0x28789`).
 - **The cabin:** Space opens it (key table VA `0x33d90`, Space handler
