@@ -2673,6 +2673,55 @@ clouds_start(struct game *g)
 	sim_voyage_start(&g->sim);
 }
 
+/*
+ * The sailing loop's pace (VA 0x231b8): each pass waits for the sound
+ * driver's clock, 60.9 Hz (PIT divisor 0x4C90), to advance by 5, or by 1
+ * once T has been pressed: 12.2 or 60.9 passes a second.  At 60 frames a
+ * second, a pass every 5 frames or every frame.
+ */
+#define SAIL_FRAMES		5
+#define SAIL_SUB		(8 * SAIL_FRAMES)
+#define SAIL_JUMP		(16 * 8)	/* farther in a pass: a jump */
+#define CLOUD_JUMP		16
+
+/*
+ * Between two passes, the fleet and the clouds are drawn on their way
+ * from the last pass to this one, a pass behind the rules (an engine
+ * choice; the original moves them once a pass).  The pose at the last
+ * pass: positions in 1/8 pixels for the fleet, pixels for the clouds.
+ */
+static void
+sail_pose(const struct sim *s, struct sail_pose *p)
+{
+	int i;
+
+	p->x8 = s->fleet.x * 8 + s->fleet.fx;
+	p->y8 = s->fleet.y * 8 + s->fleet.fy;
+	p->heading = s->fleet.heading;
+	p->ashore = s->fleet.ashore;
+	for (i = 0; i < 3; i++) {
+		p->cloud_x[i] = s->clouds[i].x;
+		p->cloud_y[i] = s->clouds[i].y;
+	}
+}
+
+/* Frames since the last pass, SAIL_FRAMES when there is no catching up. */
+static int
+sail_lag(const struct game *g)
+{
+	return (g->sail_fast ? SAIL_FRAMES : (int)g->sail_wait);
+}
+
+/* "from" to "to" "w" frames on, in 1/SAIL_FRAMES; farther than "jump" is
+ * a jump, not a move. */
+static int
+sail_between(int from, int to, int w, int jump)
+{
+	if (abs(to - from) > jump)
+		w = SAIL_FRAMES;
+	return (from * (SAIL_FRAMES - w) + to * w);
+}
+
 static void
 clouds_draw(struct game *g)
 {
@@ -2680,24 +2729,33 @@ clouds_draw(struct game *g)
 	    g->layout->shade_va, 256);
 	const struct frame *f;
 	const struct sim_cloud *c;
-	int i, n = sim_clouds(&g->sim), x, y, sx, sy, px, py;
+	int i, n = sim_clouds(&g->sim), x, y, sx, sy, px, py, w = sail_lag(g);
 
 	for (i = 0; i < n && i < 3; i++) {
 		c = &g->sim.clouds[i];
 		if (!c->shown || (size_t)c->frame >= g->cloud_spr.count)
 			continue;
 		f = &g->cloud_spr.frames[c->frame];
-		sx = c->x - g->sim.view_x;
-		sy = c->y - g->sim.view_y;
+		/* In 1/SAIL_FRAMES pixels, then the nearest pixel. */
+		sx = sail_between(g->sail_from.cloud_x[i], c->x, w,
+		    CLOUD_JUMP) - g->sim.view_x * SAIL_FRAMES;
+		sy = sail_between(g->sail_from.cloud_y[i], c->y, w,
+		    CLOUD_JUMP) - g->sim.view_y * SAIL_FRAMES;
 		if (f->rgba != NULL) {
 			/* A pack's cloud: its shadow the frame 3 further on,
 			 * dark and see-through, then the cloud over it. */
 			if ((size_t)c->frame + 3 < g->cloud_spr.count)
-				fb_frame(&g->fb, &g->cloud_spr.frames[c->frame +
-				    3], sx - CLOUD_SHADOW, sy + CLOUD_SHADOW);
-			fb_frame(&g->fb, f, sx, sy);
+				fb_frame_sub(&g->fb, &g->cloud_spr.frames[
+				    c->frame + 3], sx - CLOUD_SHADOW *
+				    SAIL_FRAMES, sy + CLOUD_SHADOW *
+				    SAIL_FRAMES, SAIL_FRAMES);
+			fb_frame_sub(&g->fb, f, sx, sy, SAIL_FRAMES);
 			continue;
 		}
+		sx = (sx + SAIL_FRAMES / 2 + SAIL_FRAMES * FB_W) /
+		    SAIL_FRAMES - FB_W;
+		sy = (sy + SAIL_FRAMES / 2 + SAIL_FRAMES * FB_H) /
+		    SAIL_FRAMES - FB_H;
 		if (shade != NULL)
 			for (y = 0; y < f->h; y++)
 				for (x = 0; x < f->w; x++) {
@@ -2768,6 +2826,7 @@ sail_enter(struct game *g)
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 	clouds_start(g);
+	sail_pose(&g->sim, &g->sail_from);
 }
 
 static void
@@ -2847,14 +2906,6 @@ sail_event(struct game *g, const struct ui_event *ev)
 		g->sail_fast = !g->sail_fast;	/* VA 0x1b6ef */
 }
 
-/*
- * The sailing loop's pace (VA 0x231b8): each pass waits for the sound
- * driver's clock, 60.9 Hz (PIT divisor 0x4C90), to advance by 5, or by 1
- * once T has been pressed: 12.2 or 60.9 passes a second.  At 60 frames a
- * second, a pass every 5 frames or every frame.
- */
-#define SAIL_FRAMES		5
-
 static void
 sail_tick(struct game *g)
 {
@@ -2865,6 +2916,7 @@ sail_tick(struct game *g)
 	if (!g->sail_fast && ++g->sail_wait < SAIL_FRAMES)
 		return;
 	g->sail_wait = 0;
+	sail_pose(&g->sim, &g->sail_from);
 	if (g->ashore_prompt)
 		return;
 	g->sail_passes++;
@@ -2906,10 +2958,13 @@ static void
 sail_draw(struct game *g)
 {
 	const struct sim_fleet *f = &g->sim.fleet;
+	const struct sail_pose *from = &g->sail_from;
+	struct sail_pose now;
 	const uint8_t *t;
 	const struct frame *fr;
 	char buf[128], winds[64];
 	int cx, cy, x0 = g->sim.view_x / WORLD_TILE, y0 = g->sim.view_y / WORLD_TILE;
+	int w, x, y, h;
 	uint8_t cell;
 
 	sea_animate(&g->sea, g->sail_passes, g->fb.pal);
@@ -2933,11 +2988,28 @@ sail_draw(struct game *g)
 			fb_image(&g->fb, &tile, cx * WORLD_TILE, cy * WORLD_TILE,
 			    0);
 		}
-	if (g->ship.count == 16) {
-		fr = &g->ship.frames[f->heading >> 4];
-		fb_frame(&g->fb, fr, (f->ashore ? f->ship_x : f->x) -
-		    g->sim.view_x - fr->w / 2, (f->ashore ? f->ship_y : f->y) -
-		    g->sim.view_y - fr->h / 2);
+	/* The fleet between passes: "x", "y" in 1/SAIL_SUB pixels, "h" in
+	 * 1/SAIL_FRAMES heading steps. */
+	sail_pose(&g->sim, &now);
+	w = sail_lag(g);
+	if (from->ashore != now.ashore || abs(now.x8 - from->x8) > SAIL_JUMP ||
+	    abs(now.y8 - from->y8) > SAIL_JUMP)
+		w = SAIL_FRAMES;
+	x = sail_between(from->x8, now.x8, w, SAIL_JUMP);
+	y = sail_between(from->y8, now.y8, w, SAIL_JUMP);
+	h = (from->heading * SAIL_FRAMES + (((now.heading - from->heading +
+	    128) & 255) - 128) * w + 256 * SAIL_FRAMES) % (256 * SAIL_FRAMES);
+	/* As many headings as the bank has frames, frame 0 north. */
+	if (g->ship.count > 0) {
+		fr = &g->ship.frames[(long)h * (long)g->ship.count /
+		    (256 * SAIL_FRAMES)];
+		if (f->ashore)
+			fb_frame(&g->fb, fr, f->ship_x - g->sim.view_x -
+			    fr->w / 2, f->ship_y - g->sim.view_y - fr->h / 2);
+		else
+			fb_frame_sub(&g->fb, fr, x - (g->sim.view_x + fr->w /
+			    2) * SAIL_SUB, y - (g->sim.view_y + fr->h / 2) *
+			    SAIL_SUB, SAIL_SUB);
 	}
 	if (f->ashore) {
 		/* The party: sailmisc.spr, four frames a direction (VA
@@ -2949,8 +3021,9 @@ sail_draw(struct game *g)
 
 		if ((size_t)k < g->party_spr.count) {
 			fr = &g->party_spr.frames[k];
-			fb_frame(&g->fb, fr, f->x - g->sim.view_x - fr->w / 2,
-			    f->y - g->sim.view_y - fr->h / 2);
+			fb_frame_sub(&g->fb, fr, x - (g->sim.view_x + fr->w /
+			    2) * SAIL_SUB, y - (g->sim.view_y + fr->h / 2) *
+			    SAIL_SUB, SAIL_SUB);
 		}
 	}
 	clouds_draw(g);
@@ -3693,13 +3766,17 @@ battle_tick(struct game *g)
 static void
 battle_ship_draw(struct game *g, int side, const struct battle_ship *b)
 {
-	int idx = ((b->heading + 8) >> 4) & 15;
-	const struct sprite_bank *bank = &g->btl_ship[side][idx / 8];
+	/* The headings split between banks A and B, as many as they have
+	 * frames, frame 0 north (the original has 8 + 8). */
+	int n = (int)g->btl_ship[side][0].count, idx;
+	const struct sprite_bank *bank;
 	const struct frame *f;
 
-	if (bank->count != 8)
+	if (n == 0 || g->btl_ship[side][1].count != (size_t)n)
 		return;
-	f = &bank->frames[idx % 8];
+	idx = ((b->heading * 2 * n + 128) >> 8) % (2 * n);
+	bank = &g->btl_ship[side][idx / n];
+	f = &bank->frames[idx % n];
 	/* Raw frames: skip the background colour 0, clip to the area. */
 	{
 		int x, y, sx = b->x / 256 - f->w / 2, sy = b->y / 256 - f->h / 2;

@@ -450,6 +450,30 @@ test_sailing(void)
 	/* Southward headings (0x40..0xC0) sail down the map. */
 	CHECK(g->sim.fleet.heading > 0x40 && g->sim.fleet.heading < 0xC0 ?
 	    g->sim.fleet.y > y0 : g->sim.fleet.y < y0);
+	/* Between two passes the ship is drawn moving on, the rules
+	 * still. */
+	{
+		uint8_t *was = malloc(FB_W * FB_H);
+		uint32_t ticks;
+
+		CHECK(was != NULL);
+		g->sail_fast = 0;
+		game_tick(g);
+		while (g->sail_wait != 0)
+			game_tick(g);
+		ticks = g->sim.fleet.ticks;
+		game_draw(g);
+		if (was != NULL)
+			memcpy(was, g->fb.px, FB_W * FB_H);
+		game_tick(g);
+		game_tick(g);
+		game_tick(g);
+		game_tick(g);
+		game_draw(g);
+		CHECK(g->sim.fleet.ticks == ticks);
+		CHECK(was != NULL && memcmp(was, g->fb.px, FB_W * FB_H) != 0);
+		free(was);
+	}
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */
 	game_free(g);
 }

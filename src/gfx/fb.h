@@ -90,6 +90,13 @@ void	fb_image_part(struct fb *fb, const struct image *img, int sx, int sy,
  */
 void	fb_frame(struct fb *fb, const struct frame *f, int x, int y);
 
+/*
+ * The same at (x, y) in 1/"sub" pixels, for motion finer than the 640x480
+ * screen: the indices go to the nearest pixel.
+ */
+void	fb_frame_sub(struct fb *fb, const struct frame *f, int x, int y,
+	    int sub);
+
 /* The same, clipped to the rectangle (x0, y0)-(x1, y1), inclusive. */
 void	fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y,
 	    int x0, int y0, int x1, int y1);

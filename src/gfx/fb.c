@@ -273,17 +273,17 @@ fb_image_part(struct fb *fb, const struct image *img, int sx, int sy, int w,
 }
 
 /*
- * Blend the true colours of frame "f" at (x, y) over the canvas, inside
- * the canvas rectangle [cx0, cx1) x [cy0, cy1).
+ * Blend the true colours of frame "f" at (x, y), in 1/"sub" pixels, over
+ * the canvas, inside the canvas rectangle [cx0, cx1) x [cy0, cy1).
  */
 static void
-frame_rgba(struct fb *fb, const struct frame *f, int x, int y, int cx0,
-    int cy0, int cx1, int cy1)
+frame_rgba(struct fb *fb, const struct frame *f, int x, int y, int sub,
+    int cx0, int cy0, int cx1, int cy1)
 {
-	int bx0 = canvas_at(x, fb->out_w, FB_W);
-	int bx1 = canvas_at(x + f->w, fb->out_w, FB_W);
-	int by0 = canvas_at(y, fb->out_h, FB_H);
-	int by1 = canvas_at(y + f->h, fb->out_h, FB_H);
+	int bx0 = canvas_at(x, fb->out_w, FB_W * sub);
+	int bx1 = canvas_at(x + f->w * sub, fb->out_w, FB_W * sub);
+	int by0 = canvas_at(y, fb->out_h, FB_H * sub);
+	int by1 = canvas_at(y + f->h * sub, fb->out_h, FB_H * sub);
 	int ox, oy, ax, ay, k;
 	const uint8_t *a, *under;
 	uint8_t *d;
@@ -322,15 +322,21 @@ frame_rgba(struct fb *fb, const struct frame *f, int x, int y, int cx0,
 	}
 }
 
-void
-fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
-    int y0, int x1, int y1)
+/*
+ * fb_frame_clip() at (xs, ys) in 1/"sub" pixels: the indices at the
+ * nearest pixel, the true colours at the canvas pixel.
+ */
+static void
+frame_clip(struct fb *fb, const struct frame *f, int xs, int ys, int sub,
+    int x0, int y0, int x1, int y1)
 {
-	int fx, fy, px, py;
+	int fx, fy, px, py, x, y;
 	size_t i;
 
-	x += f->ox;
-	y += f->oy;
+	xs += f->ox * sub;
+	ys += f->oy * sub;
+	x = canvas_at(xs + sub / 2, 1, sub);
+	y = canvas_at(ys + sub / 2, 1, sub);
 	if (x0 < 0)
 		x0 = 0;
 	if (y0 < 0)
@@ -359,8 +365,21 @@ fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
 		}
 	}
 	if (f->rgba != NULL)
-		frame_rgba(fb, f, x, y, fb->x0[x0], fb->y0[y0], fb->x0[x1 + 1],
-		    fb->y0[y1 + 1]);
+		frame_rgba(fb, f, xs, ys, sub, fb->x0[x0], fb->y0[y0],
+		    fb->x0[x1 + 1], fb->y0[y1 + 1]);
+}
+
+void
+fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
+    int y0, int x1, int y1)
+{
+	frame_clip(fb, f, x, y, 1, x0, y0, x1, y1);
+}
+
+void
+fb_frame_sub(struct fb *fb, const struct frame *f, int x, int y, int sub)
+{
+	frame_clip(fb, f, x, y, sub, 0, 0, FB_W - 1, FB_H - 1);
 }
 
 void
@@ -379,7 +398,7 @@ fb_frame_rgba_clip(struct fb *fb, const struct frame *f, int x, int y,
 		y1 = FB_H - 1;
 	if (x1 < x0 || y1 < y0)
 		return;
-	frame_rgba(fb, f, x + f->ox, y + f->oy, fb->x0[x0], fb->y0[y0],
+	frame_rgba(fb, f, x + f->ox, y + f->oy, 1, fb->x0[x0], fb->y0[y0],
 	    fb->x0[x1 + 1], fb->y0[y1 + 1]);
 }
 

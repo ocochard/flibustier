@@ -192,6 +192,11 @@ image = tavern.png
   - otherwise the art reduced to the fixed palette, opaque where alpha is
     at least half, never index 0 when opaque (raw frames use 0 for
     transparency).
+- Ship banks may have more headings than the original, frame 0 north
+  and clockwise: `spr/ship0`..`spr/ship2` (16 frames in the original)
+  any number, and the battle pairs (`cur/ship*a` and `b`, 8 + 8) any
+  number, the same in both banks of a pair, the first half of the turn
+  in `a`. The bow mark of sea battles keeps the original's 16 places.
 - Limits: the title is composed on indices (intro), and so are sprites
   drawn into the treasure map, so those show at original resolution.
   `img/` has no replacement format yet.

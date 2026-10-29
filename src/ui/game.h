@@ -221,6 +221,11 @@ struct game {
 	struct sprite_bank	 cloud_spr;	/* cloud.cur */
 	unsigned		 sail_wait;	/* frames to the next pass */
 	unsigned		 sail_passes;	/* passes of the sailing loop */
+	struct sail_pose {		/* at the last pass, to draw the */
+		int32_t	 x8, y8;	/* moves between passes: the fleet */
+		int	 heading, ashore;	/* in 1/8 pixels, */
+		int	 cloud_x[3], cloud_y[3];	/* the clouds */
+	}			 sail_from;
 	struct plunder		 plunder;
 	struct sprite_bank	 cave[8];	/* the treasure piles */
 	struct sprite_bank	 gov_spr;	/* the proclamation */
