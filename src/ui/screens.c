@@ -3060,6 +3060,13 @@ sail_event(struct game *g, const struct ui_event *ev)
 		}
 	} else if (ev->type == EV_CHAR && (ev->ch == 't' || ev->ch == 'T'))
 		g->sail_fast = !g->sail_fast;	/* VA 0x1b6ef */
+	else if (ev->type == EV_CHAR && (ev->ch == 's' || ev->ch == 'S') &&
+	    g->sim.fleet.ashore) {
+		/* On foot S searches at once, as the cabin's Search (VA
+		 * 0x1b3df: exit code 7, the dig at VA 0xa801). */
+		g->dig_i = g->dig_page = 0;
+		game_goto(g, &screen_dig);
+	}
 }
 
 static void

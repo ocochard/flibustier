@@ -118,17 +118,9 @@ build-win` runs the tests through it. On Windows, saves go to
 ./build/flibustier --data ~/games/pirates_gold [--lang eng|fre|ger, or en|fr|de]
 ```
 
-The mouse works everywhere; the keys are the original's:
-
-- Sailing: Left/Right steer, T toggles the faster pace, Space (or
-  Escape) opens the captain's cabin (log book, map, save, search,
-  exit). On foot the arrows walk.
-- Sea battles: Left/Right steer, Enter fires, Up or Down switches
-  between full and battle sails; sailing into the enemy boards her.
-- Sword fights: Left attacks with a lunge, Shift+Left with a slash,
-  Up/Down pick the line, Right steps back; the numeric keypad works too,
-  its corners as diagonals.
-- Menus and boards: the arrows and Enter, or click.
+The mouse works everywhere; the keys are the original's, listed screen
+by screen in [MANUAL.md](MANUAL.md) (P pauses, Q quits, V steps the
+sound level).
 
 `--crt` (or F2 while playing) gives the window a CRT look, like
 dosbox-staging's default shader. `--smooth` draws the ship, the
@@ -138,9 +130,7 @@ seconds), instead of stepping, a move behind the rules; in sea battles,
 the ships move by less than a pixel and turn over a few frames; in
 fencing, the fighters slide to their new places. On a window larger than
 640x480, original sprites move by less than one of their pixels too. `--debug` turns on the original's debug
-mode (its `RDM` argument): while sailing, N stops sightings and E brings
-them back, R makes you near invulnerable and F ends it, and a right click
-on the cabin's map moves the ship there. Careers end by retiring at the bank
+mode (its `RDM` argument; its keys are in the manual). Careers end by retiring at the bank
 (after dividing the plunder) or in prison; the cabin's "Exit game" only
 quits. Saves (one JSON file per slot) and the Hall of Fame (a
 tab-separated text file) go to `~/.local/share/flibustier/saves`, or

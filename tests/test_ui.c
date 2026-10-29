@@ -1803,6 +1803,16 @@ test_landing(void)
 	}
 	CHECK(game_script(g, "enter wait:40") == 0 &&
 	    g->screen == &screen_sail && g->sim.fleet.ashore);
+	/* On foot, S searches without the cabin (VA 0x1b3df). */
+	{
+		int32_t day = g->sim.day;
+
+		CHECK(game_script(g, "type:s wait:40") == 0 &&
+		    g->screen == &screen_dig && g->dig_n == 0 &&
+		    g->sim.day != day);
+		CHECK(game_script(g, "enter wait:40") == 0 &&
+		    g->screen == &screen_sail && g->sim.fleet.ashore);
+	}
 	/* Nothing left: the maps' spot is closed again. */
 	CHECK(game_script(g, "esc wait:40") == 0 && g->screen == &screen_cabin);
 	CHECK(game_script(g, "click:400,280") == 0 &&

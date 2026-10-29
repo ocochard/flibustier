@@ -676,7 +676,9 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
     "Pirate treasure map", 31.1 "Map to lost %s" (the relative), 31.2
     "Map to lost treasure". Then CSTN 31.4 "Somewhere near %s" (the
     spot's town), centred at y 460 in font 1. A click or Enter ends it.
-- **Searching (cabin spot 6, VA `0xa801`):** 3 days pass (VA `0x1e018`).
+- **Searching (cabin spot 6, VA `0xa801`):** also S on foot, without
+  the cabin (key table VA `0x33c74`, handler VA `0x1b3df`: the walk
+  leaves with exit code 7, VA `0x2849c`). 3 days pass (VA `0x1e018`).
   Every map with pieces whose spot is within a cell of the party (`|dx|
   < 2` and `|dy| < 2`, in cells) is dug up, whole or not, and cleared;
   texts in ink entry 1:
