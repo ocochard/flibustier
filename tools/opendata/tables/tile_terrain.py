@@ -46,10 +46,14 @@ Battle ground ([ground]), for the land battles (src/sim/land.c):
   - clear: the rest, including the plain jungle that fills most land
     tiles: it is the sheet's base ground and reads the same on every
     tile, so it cannot mark cover in some places and not others.
+  - Woods and marsh: the tiles that tools/artgen/assets.toml places the
+    "woods" and "marsh" cut-outs on (tiles/battle, "place") are cover and
+    swamp, whatever their colours say: the art was painted to show them.
 """
 import os
 import struct
 import subprocess
+import tomllib
 import zlib
 
 import numpy as np
@@ -240,12 +244,28 @@ def ground_of(f):
     return None
 
 
+ART_SPEC = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "..", "artgen", "assets.toml")
+
+
+def painted_ground():
+    """The battle tiles the art paints as woods or marsh."""
+    with open(ART_SPEC, "rb") as f:
+        spec = tomllib.load(f)
+    place = next(a for a in spec["asset"]
+                 if a["id"] == "tiles/battle")["tiles"].get("place", {})
+    ground = {t: "cover" for t in place.get("woods", [])}
+    ground.update({t: "swamp" for t in place.get("marsh", [])})
+    return ground
+
+
 def battle_sections():
     tiles = tiles_of("battle.png", 32)
+    painted = painted_ground()
     lines = ["[ground]"]
     n = {"cover": 0, "swamp": 0, "water": 0}
     for t, (f, _) in enumerate(tiles):
-        gr = ground_of(f)
+        gr = painted.get(t) or ground_of(f)
         if gr:
             lines.append("%d = %s" % (t, gr))
             n[gr] += 1

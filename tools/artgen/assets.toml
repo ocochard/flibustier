@@ -1733,7 +1733,11 @@ file = "art/battle.tiles"
 atlas = "art/battle.png"
 seed = 1660
 source = "textures of this pack through the original tiles' coastlines"
-tiles = { tile = 32, frames = 8, period = 4, terrain = "battle-terrain.pgm", towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 124], place = { fort = [123], rock = [125] } }
+# Land battles' ground (asset-packs.md, "[ground]"): the woods and marsh
+# cut-outs stand on pure land tiles of the open pack's own choosing,
+# which tools/opendata/tables/tile_terrain.py reads back as cover and
+# swamp; the open land battle screens use them.
+tiles = { tile = 32, frames = 8, period = 4, terrain = "battle-terrain.pgm", towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 124], place = { fort = [123], rock = [125], woods = [96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111], marsh = [112, 113, 114, 115] } }
 prompt = ""
 [[asset.textures]]
 name = "sea"
@@ -1799,6 +1803,26 @@ prompt = """
 Photograph from above of a single jagged grey rock outcrop of a reef,
 wet dark stone, standing alone on a plain flat light grey ground,
 nothing else.
+"""
+[[asset.textures]]
+name = "woods"
+size = 256
+cutout = true
+prompt = """
+Photograph from above at an angle of a single dense clump of tall dark
+green tropical trees and palms with thick undergrowth, a small wood
+soldiers could hide in, standing alone on a plain flat light grey
+ground, nothing else.
+"""
+[[asset.textures]]
+name = "marsh"
+size = 256
+cutout = true
+prompt = """
+Photograph from above at an angle of a single small round clump of
+tall green reeds and low mangrove bushes around one small dark muddy
+pool, a lone patch of marsh like a tiny island, standing alone in the
+middle of a plain flat light grey ground, nothing else.
 """
 
 # The sea battle's screen: the battle area is the tiles (tiles/battle),
