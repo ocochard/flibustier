@@ -1111,14 +1111,15 @@ sim_turn_back(struct sim *s)
 	s->fleet.heading = (uint8_t)(s->fleet.heading + 0x80);
 }
 
-/* Land within a ship's length ahead (16 pixels, checked every 4). */
+/* Land within a ship's length ahead (16 pixels, each checked: a spit a
+ * few pixels thick would slip between coarser steps). */
 static int
 shore_ahead(const struct sim *s)
 {
 	const struct sim_fleet *f = &s->fleet;
 	int d;
 
-	for (d = 4; d <= 16; d += 4)
+	for (d = 1; d <= 16; d++)
 		if (world_terrain(s->world, f->x + sim_sine_mul(s->world,
 		    f->heading, d), f->y - sim_sine_mul(s->world,
 		    f->heading + 0x40, d)) == TERRAIN_LAND)

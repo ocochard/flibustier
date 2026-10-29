@@ -296,7 +296,7 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   shore from where the ship waited, and every step onto land asks to
   disembark again; the engine then turns the ship (an engine choice):
   away from the landing point, else 16 at a time either side, to the
-  first heading with no land within 16 pixels ahead.
+  first heading with no land on any of the 16 pixels ahead.
 - **Towns on foot:** reached as by sea, on the same arrival cells,
   including inland towns. Going ashore lets a party walk into the town
   the ship just left (after a failed attack, say; an engine choice). The
@@ -820,7 +820,8 @@ Run at each start of sailing (VA `0x28789`), after leaving a town (VA
   never matches.
 - **Engine:** the ship stays on the water when the step was onto the
   town's land, and, with land within a ship's length ahead, turns away
-  from the town to the first heading with open water ahead, so sailing
+  from the town to the first heading with no land on any of the 16
+  pixels ahead, so sailing
   on from the arrival menu, a failed attack or a sack does not run it
   aground at once. The town just visited counts again once the fleet
   stands on none of the arrival cells, at sea as on foot. Without
