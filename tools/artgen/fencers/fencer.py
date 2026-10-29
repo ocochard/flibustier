@@ -33,6 +33,17 @@ import sys
 import bpy
 from mathutils import Vector
 
+# The photographic materials (../materials.py, copied beside this file
+# on the render host).
+sys.path[:0] = [os.path.dirname(os.path.abspath(__file__)),
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+import materials			# noqa: E402
+
+# What each part of the clothes is made of (materials.LIBRARY), None a
+# plain material; the skin a little translucent.
+FABRIC = {"shirt": "linen", "sash": "wool", "breeches": "wool",
+          "boots": "leather", "hair": None, "skin": None}
+
 BANKS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 6, 6, 10, 6]
 # The fall's last frames (14.3 on), the arms raised in surrender, are
 # 141x114, 24 lines taller than the others (the game draws them 24
@@ -124,7 +135,10 @@ class Fencer:
 
     def __init__(self, side):
         look = LOOKS[side]
-        m = {k: material(side + "-" + k, v, 0.8) for k, v in look.items()}
+        m = {k: materials.pbr(side + "-" + k, FABRIC.get(k), v,
+                              rough=0.55 if k == "skin" else 0.8,
+                              sss=0.15 if k == "skin" else 0.0)
+             for k, v in look.items()}
         self.side = side
         self.layers = {"body": [], "weapon": {}, "wounds": {}, "heads": {}}
         body = self.layers["body"]
@@ -372,13 +386,7 @@ def scene(fw, fh):
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_mode = "RGBA"
     sc.view_settings.view_transform = "Standard"
-    world = bpy.data.worlds.new("sky")
-    world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Color"].default_value = \
-        (0.6, 0.6, 0.65, 1)
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = \
-        0.7
-    sc.world = world
+    materials.sky(sc, 0.8)
     sun = bpy.data.lights.new("sun", "SUN")
     sun.energy = 3.0
     sob = bpy.data.objects.new("sun", sun)
@@ -476,4 +484,5 @@ def main():
                 bpy.ops.render.render(write_still=True)
 
 
-main()
+if __name__ == "__main__":	# fencers/walker.py imports the figure
+    main()

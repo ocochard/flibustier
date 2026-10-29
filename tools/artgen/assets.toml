@@ -13,6 +13,10 @@
 name = "flibustier open pack (photographic, draft)"
 license = "undecided: draft art, not for release"
 art_height = 1080
+# The Blender renders (ships, their damage and portraits, the fencers,
+# the landing party) as they are: the image model's redraw blurs them
+# and changes what the model drew (artgen.py, redrawn()).
+redraw_renders = false
 # Appended to every prompt, so all pictures share one look.
 style = """
 Style: one consistent look for the whole series, photographed like a
@@ -3123,4 +3127,27 @@ prompt = """
 A small solid drawing of a single house with a pitched roof, a door and
 two windows, filled in dark brown ink, its windows and door left pale,
 on a plain light grey ground, like a town on an old map, nothing else.
+"""
+
+# The landing party ashore on the sailing map: one sailor walking, four
+# frames in each of eight directions (spr/sailmisc 0-31), the fencers'
+# figure rendered by fencers/walker.py, as rendered; the bank's other
+# frames (32-39), which the game does not draw, left clear.
+[[asset]]
+id = "spr/sailmisc"
+file = "art/sailmisc.sheet"
+atlas = "art/sailmisc.png"
+seed = 1660
+source = "the fencers' figure, walking, rendered"
+prompt = ""
+[asset.walker]
+render = [384, 624]
+frame = [16, 26]
+others = [[23, 13], [11, 11], [7, 3], [7, 3], [7, 3], [7, 3], [7, 3], [15, 15]]
+prompt = """
+Photograph from above at a slant of a 17th-century sailor walking: a
+loose white linen shirt, a red sash, dark brown breeches, black boots,
+a red kerchief tied over his hair, his face uncovered. Plain flat
+grey-blue background. Historical reenactment photography, sharp focus,
+realistic.
 """

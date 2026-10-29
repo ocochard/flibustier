@@ -1265,6 +1265,22 @@ def bow_words(k, heads=16):
                 where, where))
 
 
+def fetch_library(host):
+    """The models' photographic materials on the render host (CC0, from
+    ambientCG and Poly Haven; materials.py), fetched once."""
+    import materials
+    subprocess.run(["ssh", "-o", "BatchMode=yes", host, "bash -s"],
+                   input=materials.fetch_command().encode(), check=True)
+
+
+def redrawn(spec, a):
+    """Whether an asset's Blender renders are redrawn by the image model
+    (the pack's "redraw_renders", or the asset's own "redraw"): the
+    redraw blurs small sprites and changes what the model drew, so the
+    pack keeps the renders as they are."""
+    return a.get("redraw", spec["pack"].get("redraw_renders", True))
+
+
 def make_ship(args, spec, a, profile, seed):
     """A ship's headings: its model rendered by Blender on the render
     host, each heading made a photograph and cut out, laid in one atlas
@@ -1313,10 +1329,22 @@ def make_ship(args, spec, a, profile, seed):
         return None
     free(args.server)
     prefix = "flibustier/" + a["id"].replace("/", "-")
+    redraw = redrawn(spec, a)
     try:
+        if not redraw:
+            # The renders as they are, at the frame's size.
+            frames = []
+            for n in range(heads):
+                path = os.path.join(local, "frame-%d.png" % n)
+                subprocess.run(["magick", os.path.join(local, name(n)),
+                                "-filter", "Lanczos", "-resize",
+                                "%dx%d!" % (fw, fh), "-depth", "8", path],
+                               check=True)
+                frames.append(upload(args.server, path,
+                                     "flibustier-ship-frame-%d.png" % n))
         # Every heading redrawn first, the scene model loaded once; one
         # seed for all, so they look alike.
-        for n in range(heads):
+        for n in range(heads if redraw else 0):
             up = upload(args.server, os.path.join(local, name(n)),
                         "flibustier-ship-render.png")
             # A damaged ship redrawn more lightly: at full strength the
@@ -1330,9 +1358,10 @@ def make_ship(args, spec, a, profile, seed):
                 size))
             with open(os.path.join(local, "photo-%d.png" % n), "wb") as f:
                 f.write(png)
-        free(args.server)
-        frames = []
-        for n in range(heads):
+        if redraw:
+            free(args.server)
+            frames = []
+        for n in range(heads if redraw else 0):
             up = upload(args.server, os.path.join(local, "photo-%d.png" % n),
                         "flibustier-ship-photo.png")
             path = os.path.join(local, "frame-%d.png" % n)
@@ -1356,9 +1385,9 @@ def make_ship(args, spec, a, profile, seed):
     shutil.rmtree(local)
     return {"frames": heads, "frame": [fw, fh],
             "size": sh.get("size"), "class": sh.get("class"),
-            "prompts": prompts,
+            "prompts": prompts if redraw else None, "redrawn": redraw,
             "blend": "provenance/ships/%s.blend" % a["id"].replace("/", "-"),
-            "denoise": a.get("denoise", 0.75),
+            "denoise": a.get("denoise", 0.75) if redraw else None,
             "model_sha256": hashlib.sha256(
                 open(script, "rb").read()).hexdigest()}
 
@@ -1730,7 +1759,9 @@ def make_fencer(args, spec, a, profile, seed):
     frames = [(m, f) for m in (moves or range(len(FENCER_BANKS)))
               for f in range(FENCER_BANKS[m])]
     record = {}
-    fc = a["fencer"]
+    fc = dict(a["fencer"])
+    if not redrawn(spec, a):
+        fc["redraw"], fc["photo"] = {}, {}
     free(args.server)
     try:
         # The redraws: each reference render (a fencer, the opponent with
@@ -1981,14 +2012,17 @@ def make_portrait(args, spec, a, profile, seed):
     free(args.server)
     prefix = "flibustier/" + a["id"].replace("/", "-")
     try:
-        up = upload(args.server, os.path.join(local, "portrait.png"),
-                    "flibustier-portrait-render.png")
-        photo = render(args.server, ship_frame_workflow(
-            spec, profile, seed, up, a["prompt"], a.get("denoise", 0.75),
-            *PORTRAIT_RENDER, prefix, PORTRAIT_RENDER))
+        redraw = redrawn(spec, a)
         ppath = os.path.join(local, "photo.png")
-        with open(ppath, "wb") as f:
-            f.write(photo)
+        if redraw:
+            up = upload(args.server, os.path.join(local, "portrait.png"),
+                        "flibustier-portrait-render.png")
+            photo = render(args.server, ship_frame_workflow(
+                spec, profile, seed, up, a["prompt"],
+                a.get("denoise", 0.75), *PORTRAIT_RENDER, prefix,
+                PORTRAIT_RENDER))
+            with open(ppath, "wb") as f:
+                f.write(photo)
         # The sea and sky behind every portrait: one photograph, the same
         # seed for all, the ship cut out of her redraw and set on it.
         sea = render(args.server, texture_workflow(
@@ -1999,12 +2033,16 @@ def make_portrait(args, spec, a, profile, seed):
         with open(spath, "wb") as f:
             f.write(sea)
         free(args.server)
-        pup = upload(args.server, ppath, "flibustier-portrait-photo.png")
-        cut = render(args.server, cutout_workflow(
-            pup, PORTRAIT_RENDER[0], PORTRAIT_RENDER[1], prefix + "-cut"))
         cpath = os.path.join(local, "cut.png")
-        with open(cpath, "wb") as f:
-            f.write(cut)
+        if redraw:
+            pup = upload(args.server, ppath, "flibustier-portrait-photo.png")
+            cut = render(args.server, cutout_workflow(
+                pup, PORTRAIT_RENDER[0], PORTRAIT_RENDER[1],
+                prefix + "-cut"))
+            with open(cpath, "wb") as f:
+                f.write(cut)
+        else:		# the render, its water held out, is the cut-out
+            shutil.copy(os.path.join(local, "portrait.png"), cpath)
         cup = upload(args.server, cpath, "flibustier-portrait-cut.png")
         sup = upload(args.server, spath, "flibustier-portrait-sea.png")
         mask = upload(args.server, os.path.join(HERE, "layouts",
@@ -2018,8 +2056,9 @@ def make_portrait(args, spec, a, profile, seed):
     with open(os.path.join(args.pack, a["file"]), "wb") as f:
         f.write(sheet)
     shutil.rmtree(local)
-    return {"class": cls, "denoise": a.get("denoise", 0.75),
-            "prompt": a["prompt"].strip(),
+    return {"class": cls, "redrawn": redraw,
+            "denoise": a.get("denoise", 0.75) if redraw else None,
+            "prompt": a["prompt"].strip() if redraw else None,
             "model_sha256": hashlib.sha256(open(script, "rb").read())
             .hexdigest()}
 
@@ -2651,6 +2690,102 @@ def make_tmap(args, spec, a, profile, seed):
                       for k_, v in t["paint"].items()}}
 
 
+def make_walker(args, spec, a, profile, seed):
+    """The landing party on the sailing map (spr/sailmisc frames 0-31):
+    the fencers' figure walking in eight directions, rendered on the
+    render host (fencers/walker.py), each frame redrawn as a photograph
+    and cut to its render's outline; the bank's other frames, which the
+    game does not draw, left clear at their sizes."""
+    import boards
+    k = spec["pack"]["art_height"] / SCREEN_H
+    wk = a["walker"]
+    host = args.render_host
+    remote = "flibustier-walker"
+    local = os.path.join(args.pack, "art", "walker.work")
+    rw, rh = wk["render"]
+    fw, fh = (round(v * k) for v in wk["frame"])
+    here = os.path.join(HERE, "fencers")
+    try:
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "mkdir -p %s" % remote], check=True,
+                       stdin=subprocess.DEVNULL)
+        fetch_library(host)
+        subprocess.run(["scp", "-q", os.path.join(here, "fencer.py"),
+                        os.path.join(here, "walker.py"),
+                        os.path.join(here, "human.py"),
+                        os.path.join(HERE, "materials.py"),
+                        "%s:%s/" % (host, remote)], check=True)
+        subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                        "cd %s && rm -rf out && blender -b -P walker.py -- "
+                        "--out out --frame %dx%d --blend model.blend "
+                        "> blender.log 2>&1" % (remote, rw, rh)],
+                       check=True, stdin=subprocess.DEVNULL)
+        # The model itself, beside its provenance, to open in Blender.
+        mdir = os.path.join(args.pack, "provenance", "fencers")
+        os.makedirs(mdir, exist_ok=True)
+        subprocess.run(["scp", "-q", "%s:%s/model.blend" % (host, remote),
+                        os.path.join(mdir, "walker.blend")], check=True)
+        if os.path.exists(local):
+            shutil.rmtree(local)
+        os.makedirs(local)
+        subprocess.run(["scp", "-q", "-r", "%s:%s/out/." % (host, remote),
+                        local], check=True)
+    except subprocess.CalledProcessError as e:
+        print("%s: blender on %s failed: %s" % (a["id"], host, e),
+              file=sys.stderr)
+        return None
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    prompt = characters(wk.get("prompt", ""), spec)
+    frames = []
+    if not redrawn(spec, a):
+        # The renders as they are, brought to the frame's size.
+        for n in range(32):
+            path = os.path.join(local, "cut-%d.png" % n)
+            boards.magick(os.path.join(local, "%d.png" % n), "-filter",
+                          "Lanczos", "-resize", "%dx%d!" % (fw, fh),
+                          "-depth", 8, path)
+            frames.append((path, (fw, fh)))
+    free(args.server)
+    try:
+        for n in range(32 if redrawn(spec, a) else 0):
+            up = upload(args.server, os.path.join(local, "%d.png" % n),
+                        "flibustier-walker.png")
+            with open(os.path.join(local, "photo-%d.png" % n), "wb") as f:
+                f.write(render(args.server, ship_frame_workflow(
+                    spec, profile, seed, up, prompt, a.get("denoise", 0.5),
+                    rw, rh, prefix, (rw, rh))))
+        free(args.server)
+        for n in range(32 if redrawn(spec, a) else 0):
+            up = upload(args.server, os.path.join(local, "%d.png" % n),
+                        "flibustier-walker.png")
+            pup = upload(args.server, os.path.join(local, "photo-%d.png" % n),
+                         "flibustier-photo.png")
+            path = os.path.join(local, "cut-%d.png" % n)
+            with open(path, "wb") as f:
+                f.write(render(args.server, outline_workflow(
+                    pup, up, fw, fh, prefix + "-cut", -2)))
+            frames.append((path, (fw, fh)))
+    except RuntimeError as e:
+        print("%s: %s" % (a["id"], e), file=sys.stderr)
+        return None
+    for n, (w, h) in enumerate(wk.get("others", [])):
+        path = os.path.join(local, "clear-%d.png" % n)
+        W, H = max(1, round(w * k)), max(1, round(h * k))
+        boards.magick("-size", "%dx%d" % (W, H), "xc:none", path)
+        frames.append((path, (W, H)))
+    atlas = boards.strip([p for p, _ in frames],
+                         os.path.join(args.pack, a["atlas"][:-4]))
+    write_sheet(os.path.join(args.pack, a["file"]), os.path.basename(atlas),
+                [s for _, s in frames],
+                "Generated by tools/artgen/artgen.py (fencers/walker.py).")
+    return {"render": [rw, rh], "frame": [fw, fh],
+            "blend": "provenance/fencers/walker.blend",
+            "redrawn": bool(redrawn(spec, a)), "prompt":
+            " ".join(prompt.split()) or None,
+            "model_sha256": hashlib.sha256(open(os.path.join(
+                here, "walker.py"), "rb").read()).hexdigest()}
+
+
 def write_manifest(pack, spec):
     """pack.ini: every asset that has art in the pack."""
     lines = ["# Generated by tools/artgen/artgen.py; see provenance/.",
@@ -2823,13 +2958,14 @@ def main():
             continue
         if a.get("sprite") or a.get("clouds") or a.get("board") or \
                 a.get("cave") or a.get("title") or a.get("bigs") or \
-                a.get("tmap"):
+                a.get("tmap") or a.get("walker"):
             t0 = time.time()
             record = (make_clouds if a.get("clouds") else make_board
                       if a.get("board") else make_cave if a.get("cave")
                       else make_title if a.get("title")
                       else make_bigs if a.get("bigs")
                       else make_tmap if a.get("tmap")
+                      else make_walker if a.get("walker")
                       else make_sprite)(args, spec, a, profile, seed)
             if record is None:
                 failed.append(a["id"])
