@@ -16,6 +16,13 @@ original data.  A module defines
 where "build()" returns (data, notes): the JSON value of the ID (its
 format in aidd_docs/memory/internal/asset-packs.md, "Open game data")
 and a short text saying how it was designed, kept in its provenance.
+A module may instead, or also, define
+
+    FILES = [(path, build), ...]
+
+for files outside data/, at "path" in the pack (the tile sheets' terrain
+masks beside art/map.png, for tools/artgen to name): "build()" returns
+(content, notes), content bytes or text.
 
     opendata.py --pack DIR [--only MODULE]...
 """
@@ -78,7 +85,7 @@ def main():
     lines = {}
     for name in names:
         mod = importlib.import_module(name)
-        for tid, file, build in mod.TABLES:
+        for tid, file, build in getattr(mod, "TABLES", []):
             data, notes = build()
             path = os.path.join("data", file)
             with open(os.path.join(args.pack, path), "w",
@@ -93,6 +100,22 @@ def main():
                         + "\n")
             lines[tid] = path
             print("%s = %s" % (tid, path))
+        for path, build in getattr(mod, "FILES", []):
+            content, notes = build()
+            full = os.path.join(args.pack, path)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "wb") as f:
+                f.write(content.encode("utf-8") if isinstance(content, str)
+                        else content)
+            prov = {"file": path, "generator": rev,
+                    "module": "tools/opendata/tables/%s.py" % name,
+                    "date": date, "design": notes}
+            with open(os.path.join(args.pack, "provenance", "data",
+                                   os.path.basename(path) + ".json"), "w",
+                      encoding="utf-8") as f:
+                f.write(json.dumps(prov, indent=2, ensure_ascii=False)
+                        + "\n")
+            print(path)
     # The fragment lists every table present, from this run or before.
     ini = os.path.join(args.pack, "pack.d", "data.ini")
     if os.path.exists(ini):
