@@ -132,7 +132,10 @@ pic/town = art/town.png
 - **Fragments:** after `pack.ini`, every `pack.d/*.ini` is read in name
   order, with the same syntax, so that each tool keeps its own list (the
   art generator writes `pack.ini`, `tools/music_pack.py` writes
-  `pack.d/music.ini`). A fragment's `[pack]` keys are ignored: the
+  `pack.d/music.ini`). The art generator merges into `pack.ini` rather
+  than rewriting it: entries already there keep their place, its own
+  assets are set or added, and an entry goes only when its file is gone,
+  so runs with different specs do not drop each other's entries. A fragment's `[pack]` keys are ignored: the
   pack's name and licence are `pack.ini`'s. The first entry for an ID
   wins, `pack.ini`'s first.
 - Unknown `[pack]` keys are ignored, for forward compatibility.
