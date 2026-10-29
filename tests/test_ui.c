@@ -2362,6 +2362,40 @@ test_town_assets(void)
 	remove(dir);
 }
 
+/* Whether drawing the pointer at (300, 200) changes the screen. */
+static int
+pointer_drawn(struct game *g)
+{
+	static uint8_t without[FB_W * FB_H];
+
+	g->pointer_x = 300;
+	g->pointer_y = 200;
+	g->pointer_seen = 0;
+	game_draw(g);
+	memcpy(without, g->fb.px, sizeof(without));
+	g->pointer_seen = 1;
+	game_draw(g);
+	return (memcmp(without, g->fb.px, sizeof(without)) != 0);
+}
+
+/* The pointer is hidden while sailing (VA 0x22c76), shown elsewhere. */
+static void
+test_pointer_hidden(void)
+{
+	struct game *g;
+
+	g = play("eng", "enter enter down down down down enter down enter "
+	    "right enter enter type:Lo enter enter esc enter enter click:60,300 "
+	    "wait:40");
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_sail);
+	CHECK(!pointer_drawn(g));
+	game_goto(g, &screen_cabin);
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_cabin);
+	CHECK(pointer_drawn(g));
+}
+
 /* The game's printf-style fill, with the pack's numbered arguments. */
 static void
 test_fill_args(void)
@@ -2395,6 +2429,7 @@ main(void)
 	if (mkdtemp(saves_tmp) == NULL)
 		return (1);
 	test_fill_args();
+	test_pointer_hidden();
 	test_career();
 	test_menus();
 	test_languages();

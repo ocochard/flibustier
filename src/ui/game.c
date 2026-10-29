@@ -385,6 +385,20 @@ game_tick(struct game *g)
 	g->idle++;
 }
 
+/*
+ * The original hides the pointer for the whole of sailing (VA 0x22c76)
+ * and for the sea and land battles' fighting (VA 0xe57e-0xe62a,
+ * 0x5aa3-0x5c1d), which the keys steer; their results show it again.
+ * The engine also keeps it off the intro pictures.
+ */
+static int
+pointer_hidden(const struct game *g)
+{
+	return (g->screen == &screen_intro || g->screen == &screen_sail ||
+	    (g->screen == &screen_battle && g->btl_stage == 0) ||
+	    (g->screen == &screen_land && g->land_stage == 0));
+}
+
 void
 game_draw(struct game *g)
 {
@@ -395,10 +409,8 @@ game_draw(struct game *g)
 	else
 		fb_clear(&g->fb, 0);
 	g->screen->draw(g);
-	/* The pointer, its tip at the top left, once the mouse is used;
-	 * not over the intro pictures. */
-	if (g->pointer_seen && g->cursor.pixels != NULL &&
-	    g->screen != &screen_intro)
+	/* The pointer, its tip at the top left, once the mouse is used. */
+	if (g->pointer_seen && g->cursor.pixels != NULL && !pointer_hidden(g))
 		fb_frame(&g->fb, &g->cursor, g->pointer_x, g->pointer_y);
 }
 

@@ -2460,6 +2460,15 @@ about 0.1 ms each, and starts the dissolve at cell 0.
     (268, 449), then keeps waiting.
   - The engine draws the same plaque after 420 idle ticks wherever it
     waits for a key.
+- **The mouse pointer:** drawn by the game itself (VA `0x250cb`, from
+  the mouse handler at VA `0x248f1` unless the hide flag at VA
+  `0x49b5e` is set). Most screens hide it only while they redraw (VA
+  `0x18d8`, `0x18ec`). It stays hidden:
+  - for the whole of sailing, on foot too (VA `0x22c76`, which holds
+    the loop at VA `0x231b8`);
+  - during a sea battle's fighting (VA `0xe57e`-`0xe62a`) and a land
+    battle's (VA `0x5aa3`-`0x5c1d`); their results show it again.
+  - The sword fight shows it (VA `0x1692f`): the mouse steers there.
 
 ## New career: the time period (VA `0x15a3c`)
 
