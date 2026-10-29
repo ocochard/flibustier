@@ -224,9 +224,11 @@ BANK_HARD = [
 ]
 
 # The flags' height on screen by bar / 8 (0 weakest .. 5 strongest): the
-# stronger side's flag flies higher, from just above the rail of the
-# deck (y 184) up into the rigging (y 64).
-FLAG_Y = [184, 160, 136, 112, 88, 64]
+# stronger side's flag flies higher, up the narrow side columns of the
+# open pack's bottom panel, measured on its art: the columns' inside runs
+# from y 325 to 472 and a flag frame is 28 high, so the flag's top steps
+# evenly from the column's foot (y 443) to its head (y 328).
+FLAG_Y = [443, 420, 397, 374, 351, 328]
 
 # The edges: the player starts at x 320-340 and is driven back to the
 # right, the opponent starts at 220-240 and is driven off to the left.
