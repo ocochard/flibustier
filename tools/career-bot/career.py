@@ -154,6 +154,7 @@ class Bot:
         self.events = []
         self.anomalies = []
         self.verbose = verbose
+        self.port = None	# the town the voyage is for
         self.sim = Sim(self.note)
         r = self.sim("new_game", era=era, nation=nation, seed=seed)
         self.scenario = r["scenario"]
@@ -430,7 +431,13 @@ class Bot:
             # a wreck counts whatever the ship stands on afterwards: a lone
             # ship's loss puts the marooned player back on the shore
             if r["stop"] == "town":
-                break	# in port, though on a shore arrival cell
+                # in port, though on a shore arrival cell: in the port
+                # sailed for, the shallows brushed on the way in (beside
+                # Nassau's) took no ship
+                t = r["town"]
+                if (self.town_index(t) if isinstance(t, str) else t) == self.port:
+                    least = 99
+                break
             if r["stop"] == "land" or self.wrecked(r):
                 room = -1
             elif wrecks_only:
@@ -489,6 +496,7 @@ class Bot:
         """Sail to cell (tx, ty). Returns the sail stop dict that ended it."""
         f = self.refresh()["fleet"]
         start_day = self.st["day"]
+        self.port = town
         if (tx, ty) in self.dead_ends:
             return {"stop": "noroute"}
         route = self.path((f["x"] // 16, f["y"] // 16), (tx, ty))
