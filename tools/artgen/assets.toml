@@ -3814,3 +3814,20 @@ Photograph of a single round brass compass rose medallion engraved with
 a sun face and the four points, seen straight on, alone on a plain light
 grey background, studio light, sharp focus, realistic.
 """
+
+# The sword fight's flags (spr/miscswrd 6-53), rising and falling with
+# each side's morale: the player's Jolly Roger, then the foe's by
+# nation (Spain, England, France, Holland, a pirate), eight waving
+# frames each; its frames 0-5, the fight's small marks, left clear.
+[[asset]]
+id = "spr/miscswrd"
+file = "art/miscswrd.sheet"
+atlas = "art/miscswrd.png"
+seed = 1660
+source = "the encounter flags' designs, waved"
+prompt = ""
+[asset.fightflags]
+frame = [45, 28]
+before = [[2, 2], [7, 24], [15, 15], [15, 15], [175, 24], [177, 15]]
+flags = ["pic/fjolly04", "pic/f-span", "pic/f-engl", "pic/f-french",
+         "pic/f-dutch", "pic/fjolly04"]
