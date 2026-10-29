@@ -168,9 +168,34 @@ Status (2026-10-29): done.
 
 ### G4: the content (open pack repository)
 
-- Write the values anew for every ID, in the open pack, with a
-  provenance record each, as for the art.
-- Layouts follow the pack's own pictures.
+Write the values anew for every ID, in the open pack, with a provenance
+record each, as for the art. Values are free to differ from the
+original's (decision 1).
+
+- **Clean room.** The author of a table never reads the original's
+  values: not the executable, not an `--export-world` export, not the
+  numbers game-rules.md quotes. They work from a values-free brief per
+  table: what each field does, its units and range, and the design
+  intent. The brief is checked for numbers before it is handed over.
+- **Tooling:** `tools/opendata/` (Python), one generator per table from
+  a design file with its rationale, writing the pack's `data/` files,
+  their `pack.d/data.ini` fragment and a provenance record each. It
+  never reads the original data. The engine checks the output: the pack
+  must load with no `--data` (G3's errors name what is missing).
+- **Order**, cheapest and least coupled first:
+  1. `data/captain-flags`, `data/stories` (on the open text's
+     entries), `data/layout/<screen>` (measured on the pack's own
+     pictures).
+  2. `data/sword`, `data/sea-battle` (hit boxes from the pack's ship
+     sheets), `data/era/<year>` (speeds from a sail polar, encounters,
+     the enemy's decisions).
+  3. The world (open-terrain T4): the era maps from Natural Earth
+     coastlines on the pack's tile set, with terrain, ground and
+     coast; the battle screens; towns per era from real places;
+     treasure spots; battle sets.
+  4. `data/scenarios`, last: their start cells need the map.
+- **Balance:** the career bot (`tools/career-bot`) plays full careers
+  on the open data; its `ANOMALY` lines and journals guide tuning.
 - Size: large, and mostly design and play-testing, not code.
 
 ## Not in this plan, still blocking the no-original milestone
