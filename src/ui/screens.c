@@ -1619,14 +1619,30 @@ master_enter(struct game *g)
 	g->master_page = 0;
 }
 
-/* Replace a text's last character (a line break) with a quote. */
+/*
+ * Replace a text's last character (a line break) with the quote that
+ * closes the one the text opens with: a pack may quote in its
+ * language's style, the original only with '"'.
+ */
 static void
-close_quote(char *text)
+close_quote(char *text, size_t len)
 {
-	size_t n = strlen(text);
+	static const char *const pair[][2] = {
+		{ "\xC2\xAB", " \xC2\xBB" },		/* « » */
+		{ "\xC2\xBB", "\xC2\xAB" },		/* » « */
+		{ "\xE2\x80\x9C", "\xE2\x80\x9D" },	/* “ ” */
+		{ "\xE2\x80\x9E", "\xE2\x80\x9C" },	/* „ “ */
+	};
+	const char *close = "\"";
+	size_t i, n = strlen(text);
 
-	if (n > 0)
-		text[n - 1] = '"';
+	if (n == 0)
+		return;
+	for (i = 0; i < sizeof(pair) / sizeof(pair[0]); i++)
+		if (strncmp(text, pair[i][0], strlen(pair[i][0])) == 0)
+			close = pair[i][1];
+	text[n - 1] = '\0';
+	strncat(text, close, len - n);
 }
 
 static void
@@ -1645,7 +1661,7 @@ master_text(struct game *g, int page, char *out, size_t len)
 	if (page == 0) {
 		fill(out, len, game_str(g, S_MASTER), here_t->name,
 		    game_word(g, W_NATION, here_t->nation & 3));
-		close_quote(out);
+		close_quote(out, len);
 		return;
 	}
 	for (n = 0; n < 4; n++) {
@@ -1684,7 +1700,7 @@ master_text(struct game *g, int page, char *out, size_t len)
 		fill_args(line, sizeof(line), game_str(g, S_CLOSEST), arg, 4);
 		strncat(out, line, len - strlen(out) - 1);
 	}
-	close_quote(out);
+	close_quote(out, len);
 }
 
 static void
