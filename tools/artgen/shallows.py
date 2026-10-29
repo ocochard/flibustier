@@ -22,14 +22,28 @@ bank, the bank's pattern periodic on the tile, so shallows meet
 shallows seamlessly; the edge between them runs through the middle of
 each side, softly, the same in every tile.  The shallows stay in the
 turquoise of the sheet's coastal halo, which tools/opendata classifies
-from the art (green >= 0.62 x blue, green - red >= 45).
+from the art: water (blue > red + 15, blue >= green + 15), then shallows
+(green >= 0.62 x blue, green - red >= 45); classify_safe() keeps every
+shallows pixel inside both.
 """
 
 import math
 
 import tilemaker
 
-TURQUOISE = (52, 168, 172)
+TURQUOISE = (46, 128, 162)
+
+
+def classify_safe(c):
+    """A shallows colour moved, if need be, into tools/opendata's
+    shallows class, with margins: water (blue > red + 15, blue >= green
+    + 15), then shallows (green >= 0.62 x blue, green - red >= 45)."""
+    r, g, b = c
+    b = min(255.0, max(b, g + 20, r + 20))
+    g = min(g, b - 20)
+    g = max(g, 0.65 * b)
+    r = min(r, g - 50)
+    return (max(0.0, r), g, b)
 SAND = (200, 188, 140)
 
 
@@ -144,6 +158,7 @@ def paint(path, side, columns, frames, frame_rows, first, skip):
                         sh = [sh[i] + (SAND[i] - sh[i]) * 0.18 * b
                               for i in range(3)]
                         sh = [v * (0.92 + 0.16 * b) for v in sh]
+                        sh = classify_safe(sh)
                         c = [round(c[i] + (sh[i] - c[i]) * m)
                              for i in range(3)]
                     o = (tx + x) * 4
