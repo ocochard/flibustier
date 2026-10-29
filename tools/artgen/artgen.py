@@ -760,11 +760,13 @@ def crop_workflow(image, rect, k, prefix):
     }
 
 
-def match_workflow(image, edited, rect, k, prefix):
+def match_workflow(image, edited, rect, k, prefix, feather=0):
     """An edited crop of rect (640x480 pixels) of an uploaded picture,
-    its colours matched to that crop."""
+    its colours matched to that crop; with "feather" (640x480 pixels),
+    faded into the crop towards its edges, so a patch drawn over the
+    picture shows no seam."""
     x, y, w, h = (round(v * k) for v in rect)
-    return {
+    g = {
         "image": {"class_type": "LoadImage", "inputs": {"image": image}},
         "edited": {"class_type": "LoadImage", "inputs": {"image": edited}},
         "crop": {"class_type": "ImageCrop", "inputs": {
@@ -777,6 +779,21 @@ def match_workflow(image, edited, rect, k, prefix):
         "save": {"class_type": "SaveImage", "inputs": {
             "images": ["match", 0], "filename_prefix": prefix}},
     }
+    if feather:
+        f = round(feather * k)
+        g.update({
+            "solid": {"class_type": "SolidMask", "inputs": {
+                "value": 1.0, "width": w, "height": h}},
+            "fade": {"class_type": "FeatherMask", "inputs": {
+                "mask": ["solid", 0], "left": f, "top": f, "right": f,
+                "bottom": f}},
+            "blend": {"class_type": "ImageCompositeMasked", "inputs": {
+                "destination": ["crop", 0], "source": ["match", 0],
+                "x": 0, "y": 0, "resize_source": False,
+                "mask": ["fade", 0]}},
+        })
+        g["save"]["inputs"]["images"] = ["blend", 0]
+    return g
 
 
 def edit_paste_workflow(image, edited, mask, rect, k, prefix):
@@ -985,7 +1002,8 @@ def derive_sheet(args, spec, a, profile, seed):
                 os.remove(edited)
                 png = render(args.server, match_workflow(
                     up, eup, fr["rect"], k,
-                    "flibustier/" + a["id"].replace("/", "-")))
+                    "flibustier/" + a["id"].replace("/", "-"),
+                    fr.get("feather", 0)))
             except RuntimeError as e:
                 print("%s: edit failed: %s" % (a["id"], e), file=sys.stderr)
                 return None

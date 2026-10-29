@@ -1260,6 +1260,39 @@ dagger now lies flat on the bare wooden table, and the bare planks show
 where the map was.
 """
 
+# The promotion: the game draws a smiling face and hands holding out the
+# letter of commission over the governor (the original frames' places).
+# Each frame is a patch of the picture where its governor really is, so
+# the portrait keeps its neutral face the rest of the time.
+[[asset]]
+id = "spr/gov"
+file = "art/gov-sprites.sheet"
+atlas = "art/gov-sprites.png"
+from = "pic/governor"
+seed = 1660
+source = "derived from pic/governor"
+prompt = ""
+[[asset.frames]]
+rect = [164, 164, 72, 80]	# the face; on whole art pixels
+at = [140, 35]
+feather = 12		# fades into the picture: no seam
+scene = "a colonial governor's study, the governor's face"
+instruction = """
+The man now smiles warmly and kindly, a broad pleased smile with his
+mouth slightly open, his eyes friendly. His head, hair, wig and pose do
+not move.
+"""
+[[asset.frames]]
+rect = [108, 264, 176, 88]	# the hands over the desk
+at = [113, 262]
+feather = 10
+scene = "a colonial governor's study, the governor's hands over his desk"
+instruction = """
+The man has put down his quills and now holds out towards us, in both
+hands above the desk, a folded parchment letter sealed with a large red
+wax seal. His arms, coat sleeves and the desk do not move.
+"""
+
 # The ships, as the game draws them at sea and in battle: a model built
 # and rendered at the sixteen headings by ships/ship.py (the same ship at
 # every heading), each heading then made a photograph, its shape held by
