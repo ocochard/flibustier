@@ -2794,3 +2794,55 @@ take_all = "Alles\nnehmen"
 space = "Platz im\nFrachtraum"
 tons = "Tonnen"
 ok = "OK"
+
+# The treasure cave's piles (spr/tcave0-7), the captain's fortune: each
+# painted in turn into pic/trescave through its mask (layouts/tcave-N,
+# drawn by layouts/sketch.py at the frames' places), onto the cave as
+# the piles before it left it, and cut from that step by its mask.
+[[asset]]
+id = "spr/tcave0"
+file = "art/tcave0.sheet"
+seed = 1660
+source = "the game's treasure piles, described"
+prompt = ""
+[asset.cave]
+from = "pic/trescave"
+banks = ["tcave0", "tcave1", "tcave2", "tcave3", "tcave4", "tcave5",
+         "tcave6", "tcave7"]
+prompt = """
+Photograph inside a dark sea cave lit by daylight from its mouth: on the
+rocky cave floor, {pile}. The gold and silver catch the light and
+glitter. Historical reenactment photography, sharp focus, realistic.
+"""
+[[asset.cave.piles]]
+frame = [170, 381, 126, 99]
+mask = "layouts/tcave-0.png"
+prompt = "a small heap of gold coins, doubloons and pieces of eight"
+[[asset.cave.piles]]
+frame = [272, 431, 141, 49]
+mask = "layouts/tcave-1.png"
+prompt = "a low spill of gold and silver coins scattered across the rock"
+[[asset.cave.piles]]
+frame = [1, 358, 88, 121]
+mask = "layouts/tcave-2.png"
+prompt = "a tall heap of shiny silver bars stacked crosswise high up, a gold candlestick standing on top of the heap"
+[[asset.cave.piles]]
+frame = [37, 396, 194, 83]
+mask = "layouts/tcave-3.png"
+prompt = "a wide heap of gold coins with pearl necklaces and red and green jewels in it"
+[[asset.cave.piles]]
+frame = [100, 337, 126, 89]
+mask = "layouts/tcave-4.png"
+prompt = "a small open wooden casket full of pearls and jewels"
+[[asset.cave.piles]]
+frame = [220, 291, 230, 121]
+mask = "layouts/tcave-5.png"
+prompt = "a big open iron-banded sea chest overflowing with gold coins"
+[[asset.cave.piles]]
+frame = [414, 334, 213, 145]
+mask = "layouts/tcave-6.png"
+prompt = "a great heap of gold plates, goblets and coins, a jewelled sword lying across it"
+[[asset.cave.piles]]
+frame = [14, 212, 213, 198]
+mask = "layouts/tcave-7.png"
+prompt = "a large open treasure chest of dark wood with brass corners, heaped high with gold coins, a crown on top"

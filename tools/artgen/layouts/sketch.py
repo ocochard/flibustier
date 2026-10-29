@@ -104,6 +104,37 @@ TAVERN = sign(212, 0, 436, 66) + [
     line((0, 478), (640, 478)),
 ]
 
+# The treasure cave's eight piles, in the order the game draws them (each
+# once the fortune passes its mark), at their frames' places (x, y, w,
+# h): a heap's mound or a chest's box inside each frame, painted in turn.
+CAVE_PILES = [
+    ((170, 381, 126, 99), "mound"),
+    ((272, 431, 141, 49), "mound"),
+    ((1, 358, 88, 121), "box"),
+    ((37, 396, 194, 83), "mound"),
+    ((100, 337, 126, 89), "box"),
+    ((220, 291, 230, 121), "box"),
+    ((414, 334, 213, 145), "mound"),
+    ((14, 212, 213, 198), "box"),
+]
+
+
+def pile_shape(frame, kind):
+    """A heap rises from the frame's bottom to a rounded top; a chest
+    is a box with rounded corners, a little inside the frame."""
+    x, y, w, h = frame
+    if kind == "mound":
+        # The mound's lower half cut at the frame's bottom.
+        return [ellipse(x + w / 2, y + h * 0.72, w * 0.46, h * 0.62),
+                rect(x + w * 0.04, y + h * 0.72, x + w * 0.96,
+                     y + h * 0.97),
+                "fill black " + rect(x - 10, y + h * 0.97, x + w + 10,
+                                     y + h + 60)]
+    return ["roundrectangle %d,%d %d,%d %d,%d" % (
+        sx(x + w * 0.05), sx(y + h * 0.06), sx(x + w * 0.95),
+        sx(y + h * 0.97), sx(w * 0.08), sx(w * 0.08))]
+
+
 # Where the tavern's people go: filled shapes on their spots, repainted
 # into the empty room so each comes out at the size the game expects.
 TAVERN_PEOPLE = {
@@ -421,6 +452,8 @@ if __name__ == "__main__":
     bevel("duel-panel", DUEL_BOXES + cells, pad_arrows())
     # All of them for the repaint, and each alone for the cast pass to
     # know where that person is.
+    for n, (r, kind) in enumerate(CAVE_PILES):
+        mask("tcave-%d.png" % n, pile_shape(r, kind), blur=3)
     mask("tavern-people.png", sum(TAVERN_PEOPLE.values(), []))
     for who, ops in TAVERN_PEOPLE.items():
         mask("tavern-%s.png" % who.replace("_", "-"), ops)
