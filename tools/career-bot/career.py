@@ -1495,7 +1495,14 @@ class Bot:
         # the shallows, or in a lagoon behind a reef, wrecks the fleet on
         # its way in; a landing that wrecked it anyway is not tried again
         f = s["fleet"]
-        sea = self.deep.get((f["x"] // 16, f["y"] // 16))
+        fx, fy = f["x"] // 16, f["y"] // 16
+        # the fleet's own sea, from the open water nearest it when it lies
+        # on shallows (unknown, it let a lagoon in, as by Porto Bello)
+        sea = next((self.deep[(fx + dx, fy + dy)] for r in range(4)
+                    for dy in range(-r, r + 1) for dx in range(-r, r + 1)
+                    if (fx + dx, fy + dy) in self.deep), None)
+        if sea is None:
+            sea = collections.Counter(self.deep.values()).most_common(1)[0][0]
         best = None
         for open_sea in (True, False):
             for r in range(1, 40):
