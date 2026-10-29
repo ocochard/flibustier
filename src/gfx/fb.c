@@ -364,6 +364,26 @@ fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y, int x0,
 }
 
 void
+fb_frame_rgba_clip(struct fb *fb, const struct frame *f, int x, int y,
+    int x0, int y0, int x1, int y1)
+{
+	if (f->rgba == NULL)
+		return;
+	if (x0 < 0)
+		x0 = 0;
+	if (y0 < 0)
+		y0 = 0;
+	if (x1 > FB_W - 1)
+		x1 = FB_W - 1;
+	if (y1 > FB_H - 1)
+		y1 = FB_H - 1;
+	if (x1 < x0 || y1 < y0)
+		return;
+	frame_rgba(fb, f, x + f->ox, y + f->oy, fb->x0[x0], fb->y0[y0],
+	    fb->x0[x1 + 1], fb->y0[y1 + 1]);
+}
+
+void
 fb_frame(struct fb *fb, const struct frame *f, int x, int y)
 {
 	fb_frame_clip(fb, f, x, y, 0, 0, FB_W - 1, FB_H - 1);

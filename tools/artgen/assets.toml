@@ -2846,3 +2846,34 @@ prompt = "a great heap of gold plates, goblets and coins, a jewelled sword lying
 frame = [14, 212, 213, 198]
 mask = "layouts/tcave-7.png"
 prompt = "a large open treasure chest of dark wood with brass corners, heaped high with gold coins, a crown on top"
+
+# The title screen's logo (spr/title over spr/title1, revealed over the
+# moon picture): the pack's own name, not the original's, set in a
+# script, lacquered red with a gilt rim, over a painted gold coin.
+[[asset]]
+id = "spr/title"
+file = "art/title.sheet"
+seed = 1660
+source = "the pack's own title"
+prompt = ""
+[asset.title]
+banks = ["title", "title1"]
+word = "Flibustier"
+# URW's Z003 (a chancery script) as installed with ghostscript's fonts;
+# only its rendering goes into the pack.
+font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf"
+word_box = [8, 18, 352, 118]	# x, y, w, h over the two sprites
+coin = [196, 200, 118]		# centre x, y and diameter
+cut = ["coin"]
+[asset.title.paint]
+coin = """
+Photograph of a single old gold Spanish doubloon coin seen straight on,
+round and thick, a cross and shields struck on its face, its rim worn,
+glinting warm gold, alone on a plain light grey background, studio
+light, sharp focus, realistic.
+"""
+gilt = """
+Close-up photograph, straight on and flat, of old polished gold leaf on
+carved wood, warm and slightly worn, soft highlights, filling the whole
+image, no pattern, no edge.
+"""

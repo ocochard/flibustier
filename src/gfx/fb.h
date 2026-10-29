@@ -95,6 +95,14 @@ void	fb_frame_clip(struct fb *fb, const struct frame *f, int x, int y,
 	    int x0, int y0, int x1, int y1);
 
 /*
+ * Only the true colours of a frame, onto the canvas, clipped to (x0, y0)-
+ * (x1, y1) inclusive (640x480 pixels): the 640x480 screen is left as it
+ * is.  Cheap for a small rectangle of a large frame.
+ */
+void	fb_frame_rgba_clip(struct fb *fb, const struct frame *f, int x,
+	    int y, int x0, int y0, int x1, int y1);
+
+/*
  * Draw glyph "g" of "f" in palette colour "ink", the pen at x_sub /
  * FONT_SUB and the line top at y.  The 640x480 screen gets the 1-bit
  * glyph; a replacement font rasterised for this canvas is blended onto

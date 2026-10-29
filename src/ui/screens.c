@@ -554,6 +554,36 @@ intro_tick(struct game *g)
 	}
 }
 
+/*
+ * A replacement title in true colours, dissolving in by the same cells:
+ * each row of cells drawn as its runs of revealed ones.  It takes no
+ * part in the palette's cycling.
+ */
+static void
+intro_draw_hd(struct game *g)
+{
+	const struct frame *f;
+	int i, oy = 0, r, c, c0;
+
+	for (i = 0; i < 2; i++) {
+		if (g->intro_spr[i].count == 0)
+			continue;
+		f = &g->intro_spr[i].frames[0];
+		for (r = oy / 2; r < CELLS_H && 2 * r < oy + f->h; r++)
+			for (c = 0; c < CELLS_W; c++) {
+				if (!g->intro_shown[r * CELLS_W + c])
+					continue;
+				for (c0 = c; c + 1 < CELLS_W &&
+				    g->intro_shown[r * CELLS_W + c + 1]; c++)
+					;
+				fb_frame_rgba_clip(&g->fb, f, TITLE_X, oy,
+				    TITLE_X + 2 * c0, 2 * r, TITLE_X + 2 * c + 1,
+				    2 * r + 1);
+			}
+		oy += f->h;
+	}
+}
+
 static void
 intro_draw(struct game *g)
 {
@@ -566,6 +596,11 @@ intro_draw(struct game *g)
 	if (step != INTRO_STEPS - 1 || g->intro_title == NULL ||
 	    g->intro_shown == NULL)
 		return;
+	if (g->intro_spr[0].count > 0 &&
+	    g->intro_spr[0].frames[0].rgba != NULL) {
+		intro_draw_hd(g);
+		return;
+	}
 	for (y = 0; y < TITLE_H; y++)
 		for (x = 0; x < TITLE_W; x++)
 			if (g->intro_shown[(y / 2) * CELLS_W + x / 2] &&
