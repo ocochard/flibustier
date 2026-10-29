@@ -11,6 +11,7 @@ at pixel resolution.
     geo_preview.py OUTDIR
 """
 import os
+import collections
 import struct
 import sys
 import zlib
@@ -84,6 +85,43 @@ def nearest(t, x, y, want, reach=64):
     return float(np.sqrt(((xs + x0 - x) ** 2 + (ys + y0 - y) ** 2).min()))
 
 
+OPEN_STEP = 4         # pixels per block of the open sea check
+APPROACH_CELLS = 4    # open sea must be this close to each port
+
+
+def open_sea(full):
+    """Blocks of OPEN_STEP pixels that are all sea and joined (4-way)
+    to the sea at the world's edge: where a ship bigger than a sloop
+    sails without touching shallows."""
+    s = OPEN_STEP
+    h, w = full.shape[0] // s, full.shape[1] // s
+    sea = (full.reshape(h, s, w, s) == _geo.SEA).all(axis=(1, 3))
+    flat = sea.ravel()
+    seen = np.zeros(h * w, dtype=bool)
+    q = collections.deque()
+    for y in range(h):
+        for x in (0, w - 1):
+            q.append(y * w + x)
+    for x in range(w):
+        for y in (0, h - 1):
+            q.append(y * w + x)
+    while q:
+        i = q.popleft()
+        if seen[i] or not flat[i]:
+            continue
+        seen[i] = True
+        y, x = divmod(i, w)
+        if x > 0:
+            q.append(i - 1)
+        if x < w - 1:
+            q.append(i + 1)
+        if y > 0:
+            q.append(i - w)
+        if y < h - 1:
+            q.append(i + w)
+    return seen.reshape(h, w)
+
+
 def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
@@ -98,6 +136,8 @@ def main():
     print("extent lon %.2f..%.2f lat %.3f..%.3f"
           % (_geo.LON_W, _geo.LON_E, _geo.LAT_S, _geo.LAT_N))
     world = COLOURS[cells]
+    reach = open_sea(full)
+    closed = []
     for name, lon, lat in PORTS:
         x, y = _geo.lonlat_to_world(lon, lat)
         px, py = int(x), int(y)
@@ -110,6 +150,14 @@ def main():
               " to water %.0f px" % (name, px, py, px // 16, py // 16,
                                      here, "%.0f" % dl if dl is not None
                                      else "-", dw))
+        d = nearest(reach.astype(np.uint8), px // OPEN_STEP,
+                    py // OPEN_STEP, 1, reach=16 * APPROACH_CELLS)
+        cells_off = d * OPEN_STEP / 16 if d is not None else None
+        print("%-14s open sea %s cells off" % ("", "%.1f" % cells_off
+                                              if d is not None
+                                              else "> %d" % 16))
+        if cells_off is None or cells_off > APPROACH_CELLS:
+            closed.append(name)
         mark(world, px // 16, py // 16)
     png(os.path.join(out, "world.png"), world)
     for name, (lw, ln, le, ls) in CROPS:
@@ -121,6 +169,10 @@ def main():
             if x0 <= x < x1 and y0 <= y < y1:
                 mark(crop, int(x) - x0, int(y) - y0, 8)
         png(os.path.join(out, "crop-%s.png" % name), crop)
+    if closed:
+        print("CLOSED: no open sea within %d cells of %s"
+              % (APPROACH_CELLS, ", ".join(closed)))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

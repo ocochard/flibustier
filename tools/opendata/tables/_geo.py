@@ -24,8 +24,15 @@ land, 3 sea.  Land is Natural Earth's 1:10m land plus its minor
 islands, filled at pixel centres with an even-odd scanline rule; an
 island under MIN_ISLAND_PX pixels is stamped as a 2 x 2 block so the
 Keys, the Bahama cays and the Grenadines survive.  Shallows are the
-water outside the 1:10m 200 m bathymetry polygons, and every water
-pixel within FRINGE_PX of land, so each coast has a fringe.
+coastal shoals and reefs a big ship wrecks on (src/sim/sim.c, reef()),
+not the whole shelf: water shallower than 200 m (outside the 1:10m 200 m
+bathymetry polygons) within SHELF_PX of land, plus every water pixel
+within FRINGE_PX of land, so each coast has a fringe.  Distances are
+octagonal (alternating square and diamond steps), close to round.
+Where the shelf band would close a harbour's only approach, a CHANNELS
+line (the real navigable channel, in degrees) is cut through it:
+shallows within CHANNEL_PX of the line become sea, fringe included (the
+Maracaibo strait is narrower than two fringes).
 
     lonlat_to_world(lon, lat) -> (x, y)    world pixels, floats
     world_to_lonlat(x, y) -> (lon, lat)
@@ -53,7 +60,17 @@ LAT_S = 7.0
 
 MIN_ISLAND_PX = 4
 FRINGE_PX = 3
-RASTER_VERSION = 1
+SHELF_PX = 24
+CHANNEL_PX = 6
+# Navigable channels through the shelf band, as (lon, lat) polylines.
+CHANNELS = {
+    # Lake Maracaibo to the Gulf of Venezuela: the strait past
+    # Maracaibo, Tablazo Bay and the bar off San Carlos.
+    "maracaibo": [(-71.59, 10.24), (-71.57, 10.47), (-71.58, 10.65),
+                  (-71.57, 10.72), (-71.61, 10.82), (-71.60, 11.02),
+                  (-71.65, 11.11), (-71.69, 11.29)],
+}
+RASTER_VERSION = 2
 
 SHALLOWS, LAND, SEA = 1, 2, 3
 
@@ -242,23 +259,52 @@ def _fill(names, islands):
 
 
 def _dilate(mask, radius):
-    """Chebyshev (square) dilation."""
+    """Octagonal dilation: "radius" one-pixel steps, alternately the
+    8 neighbours and the 4 neighbours."""
     out = mask.copy()
-    for d in range(1, radius + 1):
-        out[:, d:] |= mask[:, :-d]
-        out[:, :-d] |= mask[:, d:]
-    tmp = out.copy()
-    for d in range(1, radius + 1):
-        out[d:, :] |= tmp[:-d, :]
-        out[:-d, :] |= tmp[d:, :]
+    for i in range(radius):
+        h = out.copy()
+        h[:, 1:] |= out[:, :-1]
+        h[:, :-1] |= out[:, 1:]
+        if i % 2 == 0:
+            src = h
+        else:
+            src = out
+        v = h.copy()
+        v[1:, :] |= src[:-1, :]
+        v[:-1, :] |= src[1:, :]
+        out = v
     return out
+
+
+def _channels(t):
+    """Cut CHANNELS through the shallows."""
+    r = CHANNEL_PX
+    for line in CHANNELS.values():
+        x, y = lonlat_to_world(np.array([p[0] for p in line]),
+                               np.array([p[1] for p in line]))
+        for ax, ay, bx, by in zip(x[:-1], y[:-1], x[1:], y[1:]):
+            x0 = max(int(min(ax, bx)) - r - 1, 0)
+            y0 = max(int(min(ay, by)) - r - 1, 0)
+            x1 = min(int(max(ax, bx)) + r + 2, WORLD_W)
+            y1 = min(int(max(ay, by)) + r + 2, WORLD_H)
+            py, px = np.mgrid[y0:y1, x0:x1] + 0.5
+            dx, dy = bx - ax, by - ay
+            u = np.clip(((px - ax) * dx + (py - ay) * dy) /
+                        (dx * dx + dy * dy), 0, 1)
+            d2 = (px - ax - u * dx) ** 2 + (py - ay - u * dy) ** 2
+            win = t[y0:y1, x0:x1]
+            cut = (d2 <= r * r) & (win == SHALLOWS)
+            win[cut] = SEA
 
 
 def _key():
     h = hashlib.sha256()
     h.update(json.dumps([sorted((k, v[1]) for k, v in SOURCES.items()),
                          WORLD_W, WORLD_H, LON_W, LON_E, LAT_S,
-                         MIN_ISLAND_PX, FRINGE_PX, RASTER_VERSION]
+                         MIN_ISLAND_PX, FRINGE_PX, SHELF_PX,
+                         CHANNEL_PX, sorted(CHANNELS.items()),
+                         RASTER_VERSION]
                         ).encode())
     return h.hexdigest()[:16]
 
@@ -267,9 +313,10 @@ def _build():
     land, reps = _fill(["land", "minor_islands"], True)
     deep, _ = _fill(["deep"], False)
     t = np.full((WORLD_H, WORLD_W), SEA, dtype=np.uint8)
-    t[~deep] = SHALLOWS
+    t[~deep & _dilate(land, SHELF_PX)] = SHALLOWS
     t[_dilate(land, FRINGE_PX)] = SHALLOWS
     t[land] = LAND
+    _channels(t)
     return t, reps
 
 
