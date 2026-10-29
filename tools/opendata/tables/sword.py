@@ -53,6 +53,13 @@ def guard_move(line):
     return [frame(guard=BIT[line])] * 2
 
 
+# The open pack's fencer frames plant their feet on the steps of the
+# back moves (3-5), the advance (12) and the retreat (13): tools/artgen
+# reads step_in and step_back from this table when it renders them.
+# Change those steps, and the fencers must be rendered again (artgen.py
+# fencer/my, fencer/he) or they slide.
+
+
 def back_move(line):
     # The same guard held while giving ground, 3 pixels a tick (12 in
     # all): a step back costs a little more time than a plain guard.
