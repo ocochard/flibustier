@@ -404,8 +404,9 @@ The game's text, when a pack gives it; otherwise the original `CSTR` and
   checking the format and the indices locally: never distribute it.
 - **Coverage.** `tools/artgen/coverage.py` counts the text IDs with the
   other assets, and lists per text ID the pack gives the strings the
-  original has (not empty) and the pack lacks, and the groups it gives
-  fewer words.
+  engine reads that the original has (not empty) and the pack lacks,
+  and the groups it gives fewer words than the engine reads. What the
+  engine reads comes from text-catalogue.md.
 
 ## Per-town assets
 

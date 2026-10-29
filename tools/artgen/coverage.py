@@ -14,8 +14,9 @@ music and sound, which the game data plays through its sound drivers,
 from the IDs the engine's source asks for; the pack's from its pack.ini
 and pack.d/*.ini.  For the text the pack gives, the entries it lacks
 are counted against the original's tables ("flibustier --export-text",
-into a temporary directory).  Prints a Markdown table, or writes it to
-FILE.
+into a temporary directory), but only those the engine reads, as the
+text catalogue (aidd_docs/memory/internal/text-catalogue.md) lists
+them.  Prints a Markdown table, or writes it to FILE.
 """
 
 import argparse
@@ -86,9 +87,33 @@ def pack_ids(pack):
     return ids
 
 
+def engine_text():
+    """The text entries the engine reads, from the text catalogue: the
+    strings and word groups not marked unused, and how many words of
+    each group it reads (some originals hold more)."""
+    cat = open(os.path.join(ROOT, "aidd_docs", "memory", "internal",
+                            "text-catalogue.md")).read()
+    unused = re.compile(r"not used by the engine|empty in the original",
+                        re.I)
+    strings, groups = set(), {}
+    for line in cat.split("## Strings: `cstr`")[1].split(
+            "## Word lists")[0].splitlines():
+        m = re.match(r"\| (\d+) \|", line)
+        if m and not unused.search(line):
+            strings.add(m.group(1))
+    for line in cat.split("## Word lists: `cstn`")[1].split(
+            "\n## ")[0].split("\n### ")[0].splitlines():
+        m = re.match(r"\| (\d+) \| (\d+)", line)
+        if m and not unused.search(line):
+            groups[m.group(1)] = int(m.group(2))
+    return strings, groups
+
+
 def text_gaps(exe, data, pack, have):
     """Per text ID the pack gives: the entries the original has (not
-    empty) and the pack lacks, as "string N" and "group N" lines."""
+    empty), the engine reads (the text catalogue) and the pack lacks, as
+    "string N" and "group N" lines."""
+    used_strings, used_groups = engine_text()
     gaps = {}
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run([exe, "--data", data, "--export-text", tmp],
@@ -106,11 +131,14 @@ def text_gaps(exe, data, pack, have):
             missing = []
             for n, v in orig.items():
                 m = mine.get(n)
-                if key == "strings" and v and not m:
+                if key == "strings" and n in used_strings and v and \
+                        not m:
                     missing.append("string " + n)
-                elif key == "groups" and len(m or []) < len(v):
-                    missing.append("group %s (%d of %d words)" % (
-                        n, len(m or []), len(v)))
+                elif key == "groups" and n in used_groups:
+                    want = min(len(v), used_groups[n])
+                    if len(m or []) < want:
+                        missing.append("group %s (%d of %d words)" % (
+                            n, len(m or []), want))
             gaps[i] = missing
     return gaps
 
@@ -181,8 +209,9 @@ def main():
     gaps = text_gaps(exe, args.data, args.pack, have)
     if gaps:
         out += ["", "## Text entries", "",
-                "Entries the original's tables have and the pack's lack "
-                "(shown empty in the game).", ""]
+                "Entries the engine reads (the text catalogue) that the "
+                "original's tables have and the pack's lack (shown empty "
+                "in the game).", ""]
         for i, missing in sorted(gaps.items()):
             out.append("- `%s`: %s" % (i, "%d missing: %s" % (
                 len(missing), ", ".join(missing)) if missing else

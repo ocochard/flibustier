@@ -25,6 +25,9 @@ original; keep it that way when you update it.
   runs off the screen.
 - **Not used by the engine:** nothing reads the entry. A pack may leave
   it out (it is then empty); the role is given for completeness.
+  `tools/artgen/coverage.py` reads these markers (and "empty in the
+  original") and the word counts, to report only what the engine reads:
+  keep them in step with the code.
 - Amounts written in the text (prices, debts) must match the rules: the
   notes give the constant to keep in step with.
 
