@@ -3169,3 +3169,86 @@ a red kerchief tied over his hair, his face uncovered. Plain flat
 grey-blue background. Historical reenactment photography, sharp focus,
 realistic.
 """
+
+# The intro's studio names (pic/micro, then spr/and, spr/mpslabs and
+# spr/present on black, each at the original's top left): the pack's
+# own studios, "Crew of One Interactive and Ghost Crew Labs present",
+# for a game remade by one person with an AI's help.  URW's fonts as
+# installed with ghostscript; only their rendering goes into the pack.
+[[asset]]
+id = "pic/micro"
+file = "art/micro.png"
+seed = 1660
+source = "the pack's own studio"
+prompt = ""
+[asset.lettering]
+size = [640, 480]
+lines = [
+  { text = "CREW OF ONE", font = "/usr/local/share/fonts/urw-base35-fonts/C059-Bold.otf", box = [70, 180, 500, 80], fill = "gilt" },
+  { text = "I N T E R A C T I V E", font = "/usr/local/share/fonts/urw-base35-fonts/P052-Roman.otf", box = [170, 274, 300, 22], fill = "gilt" },
+]
+[asset.lettering.paint]
+gilt = """
+Close-up photograph, straight on and flat, of old polished gold leaf on
+carved wood, warm and slightly worn, soft highlights, filling the whole
+image, no pattern, no edge.
+"""
+
+[[asset]]
+id = "spr/and"
+file = "art/and.sheet"
+seed = 1660
+source = "the pack's own studio"
+prompt = ""
+[asset.lettering]
+size = [181, 35]
+lines = [
+  { text = "and", font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf", box = [0, 0, 181, 35], fill = "gilt" },
+]
+[asset.lettering.paint]
+gilt = """
+Close-up photograph, straight on and flat, of old polished gold leaf on
+carved wood, warm and slightly worn, soft highlights, filling the whole
+image, no pattern, no edge.
+"""
+
+# The second studio: a ghost ship over its name, in a pale spectral
+# green, as the crew nobody sees.
+[[asset]]
+id = "spr/mpslabs"
+file = "art/mpslabs.sheet"
+seed = 1660
+source = "the pack's own studio"
+prompt = ""
+[asset.lettering]
+size = [249, 278]
+emblem = [124, 102, 200]
+lines = [
+  { text = "GHOST CREW", font = "/usr/local/share/fonts/urw-base35-fonts/C059-Bold.otf", box = [8, 206, 233, 36], fill = "gradient:#e8fcff-#6fb4c2" },
+  { text = "L A B S", font = "/usr/local/share/fonts/urw-base35-fonts/P052-Roman.otf", box = [62, 248, 125, 24], fill = "gradient:#e8fcff-#6fb4c2" },
+]
+[asset.lettering.paint]
+emblem = """
+Night photograph of a ghostly translucent 17th-century galleon seen from
+the side, glowing faintly pale sea-green, its sails tattered and
+see-through, drifting in thin mist, alone in the middle of the frame on
+a completely black background, nothing else in the picture.
+"""
+
+[[asset]]
+id = "spr/present"
+file = "art/present.sheet"
+seed = 1660
+source = "the pack's own studio"
+prompt = ""
+[asset.lettering]
+size = [371, 37]
+lines = [
+  { text = "present", font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf", box = [0, 0, 371, 37], fill = "gilt" },
+]
+[asset.lettering.paint]
+gilt = """
+Close-up photograph, straight on and flat, of old polished gold leaf on
+carved wood, warm and slightly worn, soft highlights, filling the whole
+image, no pattern, no edge.
+"""
