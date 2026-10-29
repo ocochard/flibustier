@@ -752,6 +752,17 @@ after_capture(struct game *g)
 			CHECK(game_script(g, "down enter wait:40") == 0);
 }
 
+/* The battle panel's speed box at row y, drawn into "out" (60 x 23). */
+static void
+speed_box(struct game *g, int y, uint8_t *out)
+{
+	int r;
+
+	game_draw(g);
+	for (r = 0; r < 23; r++)
+		memcpy(out + r * 60, &g->fb.px[(y - 5 + r) * FB_W + 580], 60);
+}
+
 static void
 test_battle_screen(void)
 {
@@ -779,6 +790,37 @@ test_battle_screen(void)
 		    g->btl_heading[0] == ((h - 14) & 255));
 		CHECK(game_script(g, "wait:20") == 0 &&
 		    g->btl_heading[0] == g->sim.battle.you.heading);
+	}
+	/* The speed / 4 beside the panel's arrows (VA 0xf602, 0xf65c),
+	 * over the picture; a fort shows none. */
+	{
+		struct sim_battle saved = g->sim.battle;
+		uint8_t a[60 * 23], b[60 * 23], bg[60 * 23];
+		int r;
+
+		for (r = 0; r < 23; r++)
+			memcpy(bg + r * 60, &g->bg.pixels[(393 + r) * g->bg.w +
+			    580], 60);
+		g->sim.battle.you.speed = 13;
+		speed_box(g, 398, a);
+		CHECK(memcmp(a, bg, sizeof(a)) != 0);
+		g->sim.battle.you.speed = 15;
+		speed_box(g, 398, b);
+		CHECK(memcmp(a, b, sizeof(a)) == 0);
+		g->sim.battle.you.speed = 16;
+		speed_box(g, 398, b);
+		CHECK(memcmp(a, b, sizeof(a)) != 0);
+		g->sim.battle.foe.speed = 13;
+		speed_box(g, 54, a);
+		g->sim.battle.foe.speed = 16;
+		speed_box(g, 54, b);
+		CHECK(memcmp(a, b, sizeof(a)) != 0);
+		g->sim.battle.fort = 1;
+		speed_box(g, 54, a);
+		g->sim.battle.foe.speed = 13;
+		speed_box(g, 54, b);
+		CHECK(memcmp(a, b, sizeof(a)) == 0);
+		g->sim.battle = saved;
 	}
 	/* An escape: outrun.pcx and its text in the ink at (100, 300)
 	 * (CSTR 197, 198). */
