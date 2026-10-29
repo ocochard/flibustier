@@ -137,6 +137,8 @@ struct game {
 	int			 sw_held;	/* arrow and shift keys held */
 	int			 sw_flag_y[2];	/* drawn flag heights */
 	int			 sw_wait;	/* game ticks to the next fight tick */
+	int			 sw_period;	/* game ticks of this fight tick */
+	int			 sw_from[2];	/* --smooth: x at the last one */
 	int			 intro_step;	/* 0 logo .. 4 title */
 	int			 intro_hold;	/* ticks shown at full brightness */
 	int			 intro_queued;	/* a key pressed during a fade */

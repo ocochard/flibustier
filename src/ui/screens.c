@@ -4129,6 +4129,9 @@ sword_load(struct game *g)
 			    sw_layers[side][i], &g->sw_parts[side][i]);
 	g->sw_flag_y[0] = g->sw_flag_y[1] = 0;
 	g->sw_wait = 1;
+	g->sw_period = 1;
+	g->sw_from[0] = g->sim.sword.you.x;
+	g->sw_from[1] = g->sim.sword.foe.x;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;	/* the fight's panel */
 }
 
@@ -4390,6 +4393,9 @@ sword_tick(struct game *g)
 	g->sw_wait = t->delay[g->sim.sword.level & 3];
 	if (g->sw_wait < 1)
 		g->sw_wait = 1;
+	g->sw_period = g->sw_wait;
+	g->sw_from[0] = g->sim.sword.you.x;
+	g->sw_from[1] = g->sim.sword.foe.x;
 	{
 		/* The blow's effect (VA 0x2747c). */
 		const struct sim_sword *sw = &g->sim.sword;
@@ -4402,6 +4408,8 @@ sword_tick(struct game *g)
 	}
 }
 
+#define SW_JUMP		48
+
 static void
 sword_fighter(struct game *g, int side, const struct sword_side *f)
 {
@@ -4411,8 +4419,18 @@ sword_fighter(struct game *g, int side, const struct sword_side *f)
 	};
 	const struct sword_tables *t = &g->world->sword;
 	int move = f->move < 0 ? 0 : f->move & (SWORD_MOVES - 1);
-	int frame = f->frame, y = SW_Y, i, layer;
+	int frame = f->frame, y = SW_Y, i, layer, n = 1, w, x = f->x;
 	const struct sprite_group *grp;
+
+	/* --smooth: the fighter slides from the last fight tick's place to
+	 * this one's over the tick, in 1/"n" pixels; the pose is this
+	 * tick's.  Farther than SW_JUMP is a jump. */
+	if (g->smooth && g->sw_stage == 2 && abs(f->x - g->sw_from[side]) <=
+	    SW_JUMP) {
+		n = g->sw_period;
+		w = n - g->sw_wait;
+		x = g->sw_from[side] * (n - w) + f->x * w;
+	}
 
 	if (frame >= t->frames[move])
 		frame = t->frames[move] - 1;
@@ -4429,8 +4447,8 @@ sword_fighter(struct game *g, int side, const struct sword_side *f)
 		grp = &g->sw_parts[side][layer];
 		if ((size_t)move < grp->count &&
 		    (size_t)frame < grp->banks[move].count)
-			fb_frame(&g->fb, &grp->banks[move].frames[frame], f->x,
-			    y);
+			fb_frame_sub(&g->fb, &grp->banks[move].frames[frame],
+			    x, y * n, n);
 	}
 }
 

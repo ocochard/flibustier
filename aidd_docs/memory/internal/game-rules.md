@@ -225,8 +225,10 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   already: there `--smooth` draws a pack's ships at their exact place
   (the rules keep 1/256 pixels) and turns the drawn heading to a new
   one by an eighth of the way a frame, more than a quarter turn at
-  once.
-  The rules are not affected.
+  once. Fencers slide to their new place over a fight tick (9 to 12
+  frames) instead of at once, a move of more than 48 pixels drawn as a
+  jump; their poses change at the tick, as in the original. The rules
+  are not affected.
 - **Ticks:** a tick counter; 64 ticks make a day. When a voyage ends,
   the game adds `ticks / 64 + 1` days (VA `0x28789`).
 - **The cabin:** Space opens it (key table VA `0x33d90`, Space handler

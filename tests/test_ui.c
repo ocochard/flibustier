@@ -1464,6 +1464,32 @@ test_story(void)
 	    g->sim.sword.kind == SWORD_STORY && g->sw_stage == 2);
 	CHECK(g->sim.sword.you.men == 200 && g->sim.sword.foe.men == 20);
 	CHECK(game_script(g, "left wait:30") == 0);
+	/* --smooth: a fencer who moved slides there over the fight tick;
+	 * without, he is already there. */
+	{
+		uint8_t *was = malloc(FB_W * FB_H);
+		uint32_t counter;
+		int smooth;
+
+		CHECK(was != NULL);
+		for (smooth = 1; smooth >= 0 && was != NULL; smooth--) {
+			g->smooth = smooth;
+			while (g->sw_wait != g->sw_period)
+				game_tick(g);
+			counter = g->sim.sword.counter;
+			g->sw_from[1] = g->sim.sword.foe.x - 20;
+			game_draw(g);
+			memcpy(was, g->fb.px, FB_W * FB_H);
+			game_tick(g);
+			game_tick(g);
+			game_tick(g);
+			game_draw(g);
+			CHECK(g->sim.sword.counter == counter);
+			CHECK((memcmp(was, g->fb.px, FB_W * FB_H) != 0) ==
+			    smooth);
+		}
+		free(was);
+	}
 	/* Win or lose, the story goes on. */
 	g->sim.sword.result = SWORD_LOST;
 	CHECK(game_script(g, "wait:40") == 0);
