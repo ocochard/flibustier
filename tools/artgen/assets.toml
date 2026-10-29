@@ -2923,9 +2923,11 @@ bank = "bigcha"
 kind = "object"
 size = [110, 195]
 prompt = """
-Photograph of a single deep red rose in full bloom on a long green stem
-with two leaves, standing upright, alone on a plain light grey
-background, studio light, sharp focus, realistic.
+Photograph of a single deep red rose in full bloom on a very long,
+straight green stem standing upright, tall and slender, with two small
+leaves held close against the stem, the whole flower much taller than
+wide, alone on a plain light grey background, studio light, sharp
+focus, realistic.
 """
 [[asset.bigs]]
 bank = "bignav"
