@@ -26,6 +26,7 @@ NATIONS = ["spain", "england", "france", "holland"]
 # limit makes no difference (2, 3 and 4 ships average 13.9, 14.0, 14.2).
 REEF_GUARD = int(os.environ.get("BOT_REEF_GUARD", 1))
 REEF_MARGIN = int(os.environ.get("BOT_REEF_MARGIN", 10))	# pixels kept clear of shallows
+STALL = 150	# sail steps without coming nearer before the margin is dropped
 REEF_HORIZON = int(os.environ.get("BOT_REEF_HORIZON", 6))	# chunks of 4 ticks looked ahead
 DIVIDE_MONTHS = int(os.environ.get("BOT_DIVIDE_MONTHS", 6))
 CREW_MAX = int(os.environ.get("BOT_CREW_MAX", 160))
@@ -536,9 +537,15 @@ class Bot:
         idx = 0
         bumps = 0
         last_pos, stuck = None, 0
+        nearest, stalled = None, 0	# steps since the ship last came nearer
         while True:
             x, y = f["x"], f["y"]
             cx, cy = x // 16, y // 16
+            d = max(abs(cx - tx), abs(cy - ty))
+            if nearest is None or d < nearest:
+                nearest, stalled = d, 0
+            else:
+                stalled += 1
             if town is None and (abs(cx - tx) <= 1 and abs(cy - ty) <= 1 or
                                  # the route ends short when the target lies
                                  # beyond the open sea (a lagoon)
@@ -584,12 +591,14 @@ class Bot:
             self.guard_mode = "outside"
             if REEF_GUARD and (cx, cy) in self.reef_zone:
                 # where the route itself crosses shallows ahead (the only
-                # way in, as into Lake Maracaibo) no turn keeps the margin:
-                # then only running onto them is refused; a ship already on
-                # the shallows keeps the margin, to get off them
-                narrow = self.grid[cy][cx] != "," and any(
+                # way in, as into Lake Maracaibo) no turn keeps the margin,
+                # nor where it threads between them (a channel by Eleuthera
+                # in 1600: the ship circles, coming no nearer): then only
+                # running onto them is refused; a ship already on the
+                # shallows keeps the margin, to get off them
+                narrow = self.grid[cy][cx] != "," and (stalled > STALL or any(
                     self.grid[py][px] == "," and 0 < max(abs(px - cx), abs(py - cy)) <= 3
-                    for px, py in route[max(0, idx - 4):idx + 4])
+                    for px, py in route[max(0, idx - 4):idx + 4]))
                 r = self.guarded_sail(turn, ticks, f, 0 if narrow else REEF_MARGIN)
                 self.guard_mode = ("narrow_" if narrow else "") + ("steered" if r else "safe")
             if r is None:
