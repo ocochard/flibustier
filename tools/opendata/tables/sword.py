@@ -120,15 +120,26 @@ def move_defs():
 
 
 # Reach, in pixels between the fighters' x.  Up close the fighters
-# stand some 6-20 apart (steps in stop under 10, the opponent's script
-# runs under 20).  The rules make the cutlass hit five times as hard as
-# the rapier, so reach is what pays for it: the rapier (30 at the
-# middle level) reaches from anywhere in the fight, the longsword (20)
-# from the opponent's script range, the cutlass (10) only when standing
-# close or lunging in.  The player's arm shortens with the level.
-REACH_LEVEL = [12, 11, 10, 9, 8]
-REACH_WEAPON = [20, 10, 0]             # rapier, longsword, cutlass
-FOE_REACH = [26, 22, 18]               # the opponent's, by its weapon
+# stand some 6-20 apart: steps in stop under 10, so they come nearer
+# only by a lunge's 10 pixel step or a blow's push.  The rules make the
+# longsword's blows move the bar three times as far as the rapier's and
+# the cutlass's five times, so reach pays for weight: the rapier (28
+# and more) strikes from anywhere in the fight, while a heavy blade
+# (3 and 2 at the easy and middle levels) lands only when the lunge has
+# carried it right in, where the opponent's rapier reaches it too.
+# The arm shortens by a pixel at levels 3 and 4: so close in, each pixel
+# is a large share of the heavy blades' chances.  Weighed by bot duels
+# against a rapier (the duel opponent's blade): the three weapons win
+# alike up to level 2, at level 3 the rapier about half, the longsword
+# three in four, the cutlass three in five (a pixel less makes the
+# longsword win one in four: the step is too coarse to do better), at
+# level 4 all lose most.
+REACH_LEVEL = [2, 2, 2, 1, 0]
+REACH_WEAPON = [28, 1, 0]              # rapier, longsword, cutlass
+# The opponent's, by its blade.  Its heavy blades keep a long reach: a
+# shorter one mirroring the player's made crew fights against them easy
+# with a rapier and lopsided by weapon.
+FOE_REACH = [26, 22, 18]
 
 # Hit thresholds against rand & 255 (lower hits more often).  From the
 # easiest level to the hardest the player lands 84% down to 44% of the
@@ -286,10 +297,13 @@ def build():
         "A slash is slow (6 ticks, the cut on tick 4, the body open "
         "while the blade is raised, time to read and parry it) and moves "
         "the bar twice as far as a lunge, which is quick (4 ticks, a 10 "
-        "pixel step in before the point lands). The rapier reaches "
-        "farthest and the cutlass least, since the rules make the "
-        "cutlass hit hardest. Harder levels shorten the player's "
-        "reach, raise his hit threshold, lower the opponent's and its caution. The "
+        "pixel step in before the point lands). Reach pays for the "
+        "weight the rules give heavy blades: the rapier strikes from 28 "
+        "pixels and more, the longsword and cutlass only from 3 and 2, "
+        "once a lunge has carried them right in, so the three win "
+        "duels about alike. Harder levels shorten the player's reach, "
+        "raise his hit threshold, lower the opponent's and its "
+        "caution. The "
         "opponent's scripts go from plain guard-and-cut patterns (level "
         "0) to parries of the player's line and attacks on the lines he "
         "leaves open (levels 2-4). Attack keys advance from afar and "
