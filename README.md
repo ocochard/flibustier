@@ -81,6 +81,37 @@ game data are skipped unless `FLIBUSTIER_DATA` points to the GOG `DATA.DAT`
 FLIBUSTIER_DATA=~/games/pirates_gold ctest --test-dir build
 ```
 
+### Windows
+
+The Windows build is cross-compiled with clang and MinGW-w64, using an
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases) release
+(the `ucrt-ubuntu` tarball) as the sysroot. The result is a set of
+self-contained `.exe` files with no DLL to ship.
+
+On Linux or macOS, llvm-mingw's own clang is used:
+
+```sh
+cmake -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake \
+    -DMINGW_ROOT=$HOME/opt/llvm-mingw
+cmake --build build-win
+```
+
+On FreeBSD, the host clang is used with llvm-mingw's headers and
+libraries, so pick an llvm-mingw release built on the same LLVM major
+version (libc++ refuses an older clang): with `pkg install llvm19`, that is
+llvm-mingw 20250114 (LLVM 19.1.7).
+
+```sh
+cmake -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake \
+    -DMINGW_ROOT=$HOME/opt/llvm-mingw-20250114-ucrt-ubuntu-20.04-x86_64 \
+    -DMINGW_CLANG_SUFFIX=19
+cmake --build build-win
+```
+
+With [Wine](https://www.winehq.org/) installed, `ctest --test-dir
+build-win` runs the tests through it. On Windows, saves go to
+`%APPDATA%\flibustier\saves`.
+
 ## Running
 
 ```sh

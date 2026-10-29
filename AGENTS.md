@@ -13,8 +13,11 @@ cmake -B build && cmake --build build          # raylib/FreeType fetched if not 
 ctest --test-dir build                          # tests needing game data are skipped without FLIBUSTIER_DATA
 FLIBUSTIER_DATA=~/games/pirates_gold ctest --test-dir build
 ctest --test-dir build -R test_sim              # one test (test_formats, test_original, test_sim, test_ui, replay_ten_years)
+cmake -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake -DMINGW_ROOT=$HOME/opt/llvm-mingw -DMINGW_CLANG_SUFFIX=19   # Windows .exe (README); ctest runs it via wine
 FLIBUSTIER_DATA=... ./build/test_sim            # or run a test binary directly
 ```
+
+Portability: POSIX calls Windows spells differently (`mkdir`, replacing `rename`, `mkdtemp`) go through `src/data/fsys.h`; open files in binary mode (`"rb"`/`"wb"`) so outputs match byte for byte across systems.
 
 No linter; warnings are `-Wall -Wextra -Wpedantic` (C99, no extensions). Default build type is Debug.
 

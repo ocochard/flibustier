@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "data/fsys.h"
 #include "hof.h"
 
 #define HOF_HEADER	"# flibustier hall of fame 1"
@@ -119,7 +120,7 @@ hof_save(const char *path, const struct hof *h, char *err, size_t errlen)
 	int ok;
 
 	if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= sizeof(tmp) ||
-	    (fp = fopen(tmp, "w")) == NULL) {
+	    (fp = fopen(tmp, "wb")) == NULL) {
 		snprintf(err, errlen, "%s: %s", path, strerror(errno));
 		return (-1);
 	}
@@ -129,7 +130,7 @@ hof_save(const char *path, const struct hof *h, char *err, size_t errlen)
 		    h->entry[i].rating, h->entry[i].name,
 		    h->entry[i].title) > 0 && ok;
 	ok = fclose(fp) == 0 && ok;
-	if (!ok || rename(tmp, path) != 0) {
+	if (!ok || fsys_replace(tmp, path) != 0) {
 		snprintf(err, errlen, "%s: %s", path, strerror(errno));
 		remove(tmp);
 		return (-1);

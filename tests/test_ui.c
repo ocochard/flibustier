@@ -18,6 +18,7 @@
 #include "assets/pic.h"
 #include "assets/towns.h"
 #include "assets/world.h"
+#include "data/fsys.h"
 #include "data/pack.h"
 #include "sim/hof.h"
 #include "sim/json.h"
@@ -2551,7 +2552,7 @@ test_credits_text(void)
 	struct game *g;
 	int i, last, seen, full = 0;
 
-	if (mkdtemp(dir) == NULL) {
+	if (fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"set up");
 		return;
 	}
@@ -2655,7 +2656,7 @@ test_town_assets(void)
 	g = play("eng", "enter enter down down down down enter down enter "
 	    "right enter enter type:Lo enter enter esc enter enter "
 	    "click:60,300 wait:30");
-	if (g == NULL || mkdtemp(dir) == NULL) {
+	if (g == NULL || fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"set up");
 		return;
 	}
@@ -2801,7 +2802,7 @@ main(void)
 	if ((packs = packs_new()) == NULL ||
 	    packs_add_original(packs, path) != 0)
 		return (1);
-	if (mkdtemp(saves_tmp) == NULL)
+	if (fsys_mkdtemp(saves_tmp) == NULL)
 		return (1);
 	test_fill_args();
 	test_pointer_hidden();

@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "data/exe.h"
+#include "data/fsys.h"
 #include "data/pack.h"
 #include "data/sha256.h"
 #include "assets/credits.h"
@@ -144,7 +145,7 @@ test_packs(void)
 	struct packs *packs;
 	struct blob b;
 
-	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+	if (fsys_mkdtemp(low) == NULL || fsys_mkdtemp(high) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
@@ -182,7 +183,7 @@ test_packs(void)
 	/* Fragments in pack.d/ add assets after pack.ini, which keeps its
 	 * name and its entries first. */
 	snprintf(path, sizeof(path), "%s/pack.d", low);
-	CHECK(mkdir(path, 0755) == 0);
+	CHECK(fsys_mkdir(path) == 0);
 	CHECK(write_text(path, "music.ini", "[pack]\nname = Ignored\n"
 	    "[assets]\nmusic/harbour = town.png\npic/town = title.ogg\n") == 0);
 	CHECK(write_text(path, "notes.txt", "[assets]\nbad line\n") == 0);
@@ -319,7 +320,7 @@ test_pic(void)
 	struct blob b;
 	size_t len;
 
-	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+	if (fsys_mkdtemp(low) == NULL || fsys_mkdtemp(high) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
@@ -1023,12 +1024,12 @@ test_sheets(void)
 	const struct frame *f;
 	const uint8_t *p;
 
-	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+	if (fsys_mkdtemp(low) == NULL || fsys_mkdtemp(high) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
 	snprintf(path, sizeof(path), "%s/sprites", high);
-	CHECK(mkdir(path, 0755) == 0);
+	CHECK(fsys_mkdir(path) == 0);
 	CHECK(write_text(low, "pack.ini", "[assets]\ncur/boat = boat.cur\n")
 	    == 0);
 	CHECK(write_bytes(low, "boat.cur", raw, make_raw_bank(raw)) == 0);
@@ -1237,7 +1238,7 @@ test_fonts(void)
 		    "(set FLIBUSTIER_TEST_FONT)\n");
 		return;
 	}
-	if (mkdtemp(dir) == NULL) {
+	if (fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
@@ -1373,7 +1374,7 @@ test_tiles(void)
 	uint8_t *rgb;
 	const uint8_t *p;
 
-	if (mkdtemp(low) == NULL || mkdtemp(high) == NULL) {
+	if (fsys_mkdtemp(low) == NULL || fsys_mkdtemp(high) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
@@ -1492,7 +1493,7 @@ test_tile_terrain(void)
 	struct packs *packs;
 	struct tileset ts;
 
-	if (mkdtemp(dir) == NULL) {
+	if (fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}

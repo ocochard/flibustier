@@ -30,8 +30,9 @@ int	save_read(const char *path, struct sim *s, char *desc, size_t desclen,
 void	save_slot_path(const char *dir, int slot, char *out, size_t len);
 
 /*
- * The save directory: $FLIBUSTIER_SAVES, else $XDG_DATA_HOME/flibustier/saves,
- * else $HOME/.local/share/flibustier/saves.  Created when missing.
+ * The save directory: $FLIBUSTIER_SAVES, else (Windows) %APPDATA%/flibustier/
+ * saves, else $XDG_DATA_HOME/flibustier/saves, else $HOME/.local/share/
+ * flibustier/saves.  Created when missing.
  */
 int	save_dir(char *out, size_t len, char *err, size_t errlen);
 

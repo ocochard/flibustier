@@ -4,12 +4,12 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#include <sys/stat.h>
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "data/fsys.h"
 
 #include "tiled.h"
 #include "towns.h"
@@ -24,7 +24,7 @@ write_file(const char *dir, const char *name, const struct jbuf *b,
 	FILE *fp;
 
 	snprintf(path, sizeof(path), "%s/%s", dir, name);
-	if (b->err || (fp = fopen(path, "w")) == NULL) {
+	if (b->err || (fp = fopen(path, "wb")) == NULL) {
 		snprintf(err, errlen, "cannot write %s", path);
 		return (-1);
 	}
@@ -91,7 +91,7 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	char name[64];
 	int era, rc = -1, i, k;
 
-	if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+	if (fsys_mkdir(dir) != 0 && errno != EEXIST) {
 		snprintf(err, errlen, "cannot create %s", dir);
 		return (-1);
 	}

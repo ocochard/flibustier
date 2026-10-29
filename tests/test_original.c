@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "data/exe.h"
+#include "data/fsys.h"
 #include "data/pack.h"
 #include "assets/digital.h"
 #include "assets/fmmusic.h"
@@ -698,7 +699,7 @@ test_sheet_terrain(struct packs *orig)
 	struct blob b;
 	size_t i, bad;
 
-	if (mkdtemp(dir) == NULL) {
+	if (fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
@@ -807,7 +808,7 @@ test_world_export(struct packs *orig)
 	size_t i;
 	int era;
 
-	if (mkdtemp(dir) == NULL) {
+	if (fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}
@@ -884,7 +885,7 @@ test_text_export(struct packs *orig)
 	struct blob b, bref;
 	size_t i, k;
 
-	if (mkdtemp(dir) == NULL) {
+	if (fsys_mkdtemp(dir) == NULL) {
 		CHECK(!"mkdtemp");
 		return;
 	}

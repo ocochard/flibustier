@@ -6,13 +6,12 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <sys/stat.h>
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "data/fsys.h"
 #include "proto.h"
 #include "save.h"
 
@@ -55,7 +54,7 @@ save_write(const char *path, const struct sim *s, const char *desc,
 	/* Write a temporary file, then rename: a crash never leaves a half
 	 * written save in the slot. */
 	if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= sizeof(tmp) ||
-	    (fp = fopen(tmp, "w")) == NULL) {
+	    (fp = fopen(tmp, "wb")) == NULL) {
 		snprintf(err, errlen, "%s: %s", path, strerror(errno));
 		jb_free(&b);
 		return (-1);
@@ -63,7 +62,7 @@ save_write(const char *path, const struct sim *s, const char *desc,
 	ok = fwrite(b.s, 1, b.len, fp) == b.len;
 	ok = fclose(fp) == 0 && ok;
 	jb_free(&b);
-	if (!ok || rename(tmp, path) != 0) {
+	if (!ok || fsys_replace(tmp, path) != 0) {
 		snprintf(err, errlen, "%s: %s", path, strerror(errno));
 		remove(tmp);
 		return (-1);
@@ -78,7 +77,7 @@ read_all(const char *path, char *err, size_t errlen)
 	char *s;
 	long n;
 
-	if ((fp = fopen(path, "r")) == NULL) {
+	if ((fp = fopen(path, "rb")) == NULL) {
 		snprintf(err, errlen, "%s: %s", path, strerror(errno));
 		return (NULL);
 	}
@@ -146,13 +145,13 @@ make_dirs(char *path)
 		if (*p != '/')
 			continue;
 		*p = '\0';
-		if (mkdir(path, 0755) != 0 && errno != EEXIST) {
+		if (fsys_mkdir(path) != 0 && errno != EEXIST) {
 			*p = '/';
 			return (-1);
 		}
 		*p = '/';
 	}
-	return (mkdir(path, 0755) != 0 && errno != EEXIST ? -1 : 0);
+	return (fsys_mkdir(path) != 0 && errno != EEXIST ? -1 : 0);
 }
 
 int
@@ -162,6 +161,10 @@ save_dir(char *out, size_t len, char *err, size_t errlen)
 
 	if ((v = getenv("FLIBUSTIER_SAVES")) != NULL && *v != '\0')
 		snprintf(out, len, "%s", v);
+#ifdef _WIN32
+	else if ((v = getenv("APPDATA")) != NULL && *v != '\0')
+		snprintf(out, len, "%s/flibustier/saves", v);
+#endif
 	else if ((v = getenv("XDG_DATA_HOME")) != NULL && *v != '\0')
 		snprintf(out, len, "%s/flibustier/saves", v);
 	else if ((v = getenv("HOME")) != NULL && *v != '\0')

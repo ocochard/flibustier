@@ -22,6 +22,7 @@ endif()
 # headless tools and tests can use it.
 add_library(flibustier_core STATIC
 	src/data/exe.c
+	src/data/fsys.c
 	src/data/iso9660.c
 	src/data/pack.c
 	src/data/sha256.c
@@ -179,7 +180,8 @@ if(BUILD_TESTING)
 	foreach(r ${replays})
 		get_filename_component(name ${r} NAME_WE)
 		add_test(NAME replay_${name} COMMAND ${CMAKE_COMMAND}
-		    -DSIM=$<TARGET_FILE:flibustier-sim> -DREPLAY=${r}
+		    "-DSIM=${CMAKE_CROSSCOMPILING_EMULATOR};$<TARGET_FILE:flibustier-sim>"
+		    -DREPLAY=${r}
 		    -P ${CMAKE_SOURCE_DIR}/tests/replay.cmake)
 		set_tests_properties(replay_${name} PROPERTIES
 		    SKIP_REGULAR_EXPRESSION "SKIP: ")

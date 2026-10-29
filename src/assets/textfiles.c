@@ -4,12 +4,12 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  */
 
-#include <sys/stat.h>
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "data/fsys.h"
 
 #include "text.h"
 #include "textfiles.h"
@@ -19,7 +19,7 @@ write_file(const char *path, const struct jbuf *b, char *err, size_t errlen)
 {
 	FILE *fp;
 
-	if (b->err || (fp = fopen(path, "w")) == NULL) {
+	if (b->err || (fp = fopen(path, "wb")) == NULL) {
 		snprintf(err, errlen, "cannot write %s", path);
 		return (-1);
 	}
@@ -34,7 +34,7 @@ write_file(const char *path, const struct jbuf *b, char *err, size_t errlen)
 static int
 make_dir(const char *path, char *err, size_t errlen)
 {
-	if (mkdir(path, 0755) != 0 && errno != EEXIST) {
+	if (fsys_mkdir(path) != 0 && errno != EEXIST) {
 		snprintf(err, errlen, "cannot create %s", path);
 		return (-1);
 	}
