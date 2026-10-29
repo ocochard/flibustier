@@ -2633,13 +2633,19 @@ prompt = ""
 [asset.board]
 font = "fonts/imfellenglish/IMFeENrm28P.ttf"
 cut = ["food", "goods", "sugar", "tobacco", "hides", "cannon", "gem",
-       "carving", "scroll"]
+       "carving", "scroll", "ship"]
 same = { gun = "cannon" }
+seeds = { ship = 100 }
 flat = { colours = ["#141210", "#e8e2d0"] }
 [asset.board.banks]
 eng = { buysell = "buysell", buyboard = "buyboard", buysell1 = "buysell1" }
 fre = { buysell = "buysellf", buyboard = "buybrdf", buysell1 = "buysll1f" }
 ger = { buysell = "buysellg", buyboard = "buybrdg", buysell1 = "buysll1g" }
+# The loot board's set (overboard, a capture, a sack): Discard and Take.
+[asset.board.take_banks]
+eng = { buysell = "take-dis", buyboard = "takboard", buysell1 = "takeds1" }
+fre = { buysell = "takedisf", buyboard = "takbrdf", buysell1 = "takeds1f" }
+ger = { buysell = "takedisg", buyboard = "takbrdg", buysell1 = "takeds1g" }
 [asset.board.paint]
 wood = """
 Close-up photograph, straight on and flat, of a panel of dark polished
@@ -2716,6 +2722,12 @@ plain smooth cream panel in the middle and curled scroll ends at the
 left and right, much wider than tall, alone on a plain light grey
 background, seen from the front, studio light, sharp focus, realistic.
 """
+ship = """
+Photograph of a single small model of a 17th-century three-masted
+sailing ship under full white sails, seen exactly from the side, her bow
+to the right, alone on a plain light grey background, studio light,
+sharp focus, realistic.
+"""
 colours = """
 A simple flat emblem in the style of a crude stencil, solid flat shapes
 with hard edges, no shading, no texture, filling the whole picture edge
@@ -2723,6 +2735,8 @@ to edge on a plain solid black background: a white skull above two
 crossed white bones.
 """
 [asset.board.words.eng]
+discard = "Discard"
+take = "Take"
 food = "Food"
 goods = "Goods"
 sugar = "Sugar"
@@ -2741,6 +2755,8 @@ space = "Space in hold"
 tons = "tons."
 ok = "O.K."
 [asset.board.words.fre]
+discard = "Jeter"
+take = "Prendre"
 food = "Vivres"
 goods = "Cargaison"
 sugar = "Sucre"
@@ -2759,6 +2775,8 @@ space = "Place dans\nla cale"
 tons = "tonnes"
 ok = "O.K."
 [asset.board.words.ger]
+discard = "Beseitigen"
+take = "Nehmen"
 food = "Proviant"
 goods = "Waren"
 sugar = "Zucker"

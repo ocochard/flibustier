@@ -2156,7 +2156,12 @@ sign, the texts at (40, 280) up to x 620.
     on the right.
   - Digits are glyphs of `buysell.spr`: big 0-19, small 20-52.
   - Pieces are per language (`buysell`, `buyboard`, `buysell1`, with
-    `f` and `g` variants).
+    `f` and `g` variants; VA `0x20138`, the names' table at VA
+    `0x3487c`). The loot board (VA `0x2264f`) loads the second set,
+    `take-dis`, `takboard`, `takeds1` (`takedisf`... `takedisg`...),
+    whose sign reads Discard and Take, and sets layout record 0, the
+    name tag, to frame 88 + mode: Throw overboard, Captured ship,
+    Plundered town, and frame 92 for dividing the squadron.
   - **Its areas (VA `0x20515`, table at VA `0x34b04`):**
     - The slider's arrows, (226, 62)-(248, 90) and (386, 62)-(410, 90),
       and the two name tags, (0, 0)-(83, 70) and (557, 0)-(639, 70):

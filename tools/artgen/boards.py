@@ -175,10 +175,13 @@ def board(path, src, words, font, k):
     os.replace(tmp, path)
 
 
-def compose(src, words, font, k, work, out):
+def compose(src, words, font, k, work, out, take=False):
     """The three banks of one language: their frames composed into
     "work", then laid side by side, each with its sizes.  Returns
-    {bank: (atlas path, [(w, h), ...])}."""
+    {bank: (atlas path, [(w, h), ...])}.  The loot board's set ("take")
+    has its sign read Discard and Take, a fourth name tag with a ship
+    (frame 92, dividing the squadron) and only the O.K. sign in its
+    third bank."""
     os.makedirs(work, exist_ok=True)
     frames = []
 
@@ -213,7 +216,8 @@ def compose(src, words, font, k, work, out):
     for n in range(78, 82):					# 78-81
         magick("-size", "%dx%d" % (px(21, k), px(27, k)), "xc:none",
                f("none-%d" % n))
-    for n, key in ((82, "sell"), (83, "buy")):			# the signs
+    signs = ("discard", "take") if take else ("sell", "buy")
+    for n, key in zip((82, 83), signs):				# the signs
         base = os.path.join(work, "sign-%s-base.png" % key)
         panel(base, src["darkwood"], *SIGN, k)
         lettered(f(key), base, words[key], INK["cream"], *SIGN, font, k)
@@ -228,7 +232,17 @@ def compose(src, words, font, k, work, out):
         lettered(f(key), base, words[key], INK["cream"], *PLAQUE, font,
                  k, lines=words[key].count("\n") + 1)
         os.remove(base)
-    magick("-size", "%dx%d" % (px(1, k), px(2, k)), "xc:none", f("dot"))
+    if take:		# 92: the squadron's tag, a ship on oak
+        base = os.path.join(work, "plaque-ship-base.png")
+        panel(base, src["oak"], *PLAQUE, k, rim=src["oak"])
+        ship = os.path.join(work, "plaque-ship.png")
+        fit(ship, src["ship"], PLAQUE[0] * 0.8, PLAQUE[1] * 0.8, k)
+        magick(base, ship, "-gravity", "center", "-composite", f("ship"))
+        os.remove(base)
+        os.remove(ship)
+    else:
+        magick("-size", "%dx%d" % (px(1, k), px(2, k)), "xc:none",
+               f("dot"))
 
     banks = {}
     sizes = [identify(p) for p in frames]
@@ -245,7 +259,7 @@ def compose(src, words, font, k, work, out):
     guns = [os.path.join(work, "gun-%d.png" % n) for n in (0, 1)]
     fit(guns[1], src["gun"], *GUN, k)
     magick(guns[1], "-flop", guns[0])		# left of the board, facing in
-    one = [okw] + guns
+    one = [okw] if take else [okw] + guns
     banks["buysell1"] = (strip(one, os.path.join(out, "buysell1")),
                          [identify(p) for p in one])
     return banks

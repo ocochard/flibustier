@@ -2297,10 +2297,16 @@ def make_board(args, spec, a, profile, seed):
     try:
         # Each painting kept under its prompt's hash, so a change paints
         # again only what changed.
+        # A painting's seed is the asset's plus its place among those
+        # without one of their own ("seeds"), so adding one keeps the
+        # others' seeds.
         fresh = []
-        for n, (key, prompt) in enumerate(sorted(bd["paint"].items())):
+        own = bd.get("seeds", {})
+        order = sorted(k_ for k_ in bd["paint"] if k_ not in own)
+        for key, prompt in sorted(bd["paint"].items()):
+            n = own[key] if key in own else order.index(key)
             tag = hashlib.sha256(("%s %d %s %s" % (
-                prompt, seed + bd.get("seeds", {}).get(key, n), profile,
+                prompt, seed + n, profile,
                 key in bd["cut"])).encode()).hexdigest()[:12]
             path = os.path.join(work, "src-%s-%s.png" % (key, tag))
             src[key] = path
@@ -2308,8 +2314,8 @@ def make_board(args, spec, a, profile, seed):
                 continue
             with open(path, "wb") as f:
                 f.write(render(args.server, texture_workflow(
-                    spec, profile, seed + bd.get("seeds", {}).get(key, n),
-                    prompt, 768, prefix + "-" + key)))
+                    spec, profile, seed + n, prompt, 768,
+                    prefix + "-" + key)))
             fresh.append(key)
         free(args.server)
         for key in bd["cut"]:
@@ -2329,12 +2335,14 @@ def make_board(args, spec, a, profile, seed):
         src[alias] = src[key]
     font = os.path.join(args.pack, bd["font"])
     out = {}
-    for lang, words in bd["words"].items():
+    for (lang, words), take in [(w, t) for t in (False, True)
+                                for w in bd["words"].items()]:
+        names = bd["take_banks" if take else "banks"][lang]
         banks = boards.compose(src, words, font, k,
                                os.path.join(work, lang),
-                               os.path.join(work, lang))
+                               os.path.join(work, lang), take=take)
         for bank, (atlas, sizes) in banks.items():
-            name = bd["banks"][lang][bank]
+            name = names[bank]
             png = os.path.join(args.pack, "art", "%s.png" % name)
             shutil.move(atlas, png)
             write_sheet(os.path.join(args.pack, "art", "%s.sheet" % name),
@@ -2358,7 +2366,8 @@ def write_manifest(pack, spec):
              "[assets]"]
     for a in spec["asset"]:
         if a.get("board"):
-            for banks in a["board"]["banks"].values():
+            for banks in list(a["board"]["banks"].values()) + list(
+                    a["board"].get("take_banks", {}).values()):
                 for name in banks.values():
                     sheet = "art/%s.sheet" % name
                     if os.path.exists(os.path.join(pack, sheet)):

@@ -4878,11 +4878,24 @@ const struct screen screen_shipwright = {
 #define GLYPH_BIG		0	/* 0-9, then highlighted 10-19 */
 #define GLYPH_SMALL		20	/* '/', 0-9; 31 and 42: other inks */
 
-static const char *board_files[3][3] = {
-	{ "spr/buysell", "spr/buyboard", "spr/buysell1" },
-	{ "spr/buysellf", "spr/buybrdf", "spr/buysll1f" },
-	{ "spr/buysellg", "spr/buybrdg", "spr/buysll1g" },
+/*
+ * The pieces by language, then the set (VA 0x20138, table at VA
+ * 0x3487c): the merchant's and the shipwright's, then the loot board's
+ * (VA 0x2264f), whose sign reads Discard and Take.
+ */
+static const char *board_files[3][2][3] = {
+	{ { "spr/buysell", "spr/buyboard", "spr/buysell1" },
+	  { "spr/take-dis", "spr/takboard", "spr/takeds1" } },
+	{ { "spr/buysellf", "spr/buybrdf", "spr/buysll1f" },
+	  { "spr/takedisf", "spr/takbrdf", "spr/takeds1f" } },
+	{ { "spr/buysellg", "spr/buybrdg", "spr/buysll1g" },
+	  { "spr/takedisg", "spr/takbrdg", "spr/takeds1g" } },
 };
+/* The loot board's mode (VA 0x2264f): 1 overboard, 2 a capture, 3 a
+ * sack; its name tag, layout record 0, is frame 88 + mode. */
+#define BOARD_TAG		88
+#define BOARD_MODE(g)		((g)->jettison ? 1 : (g)->prize_loot ? 2 : \
+				    (g)->looting ? 3 : 0)
 
 /* Layout record "i" (VA 0x348c4): frame, highlighted frame, x, y. */
 static int
@@ -4946,7 +4959,8 @@ merchant_enter(struct game *g)
 	g->ink[1] = 220;
 	g->ink[2] = 170;
 	for (i = 0; i < 3; i++)
-		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
+		load_bank(g, board_files[lang][BOARD_MODE(g) != 0][i], 0,
+		    &g->shop_spr[i]);
 	g->selected = 0;
 	g->shop_buying = 1;
 	game_music(g, g->looting && !g->jettison ? MUS_PLUNDER : g->jettison ?
@@ -5150,6 +5164,8 @@ merchant_draw(struct game *g)
 		if (board_piece(g, i, r) != 0)
 			continue;
 		row = i < 5 ? -1 : (i - 5) / 6;
+		if (i == 0)
+			r[0] = r[1] = BOARD_TAG + BOARD_MODE(g);
 		board_frame(g, 0, row == g->selected ? r[1] : r[0], r[2], r[3]);
 	}
 	board_frame(g, 0, BOARD_SIGN + g->shop_buying, 235, 101);
@@ -6404,7 +6420,7 @@ cannon_enter(struct game *g)
 	g->ink[1] = 220;
 	g->ink[2] = 170;
 	for (i = 0; i < 3; i++)
-		load_bank(g, board_files[lang][i], 0, &g->shop_spr[i]);
+		load_bank(g, board_files[lang][0][i], 0, &g->shop_spr[i]);
 	g->shop_buying = 0;
 	/* Each opening starts his side at none (VA 0x22e12): guns sold
 	 * before can no longer be bought back. */
