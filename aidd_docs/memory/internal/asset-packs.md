@@ -462,7 +462,7 @@ spots apply to the new picture.
 | `data/layout/cabin` | `spots` | 11 x 5 | the cabin's spots, in the order of game-rules.md ("The captain's cabin"): continue, treasure maps, cave, log book, map, search, divide, join, save, exit, practice |
 | `data/layout/town` | `spots` | 8 x 4 | the town's buildings: governor, merchant, bank, tavern, shipwright, city information, leave, then one more the engine does not use |
 | `data/layout/tavern` | `spots` | 10 x 4 | the tavern's people: map seller, information seller, seaman, bartender, barmaid, stranger, door, three more seamen |
-| `data/layout/weapons` | `spots` | 3 x 4 | the weapon choice's blades, left to right: rapier, cutlass, longsword |
+| `data/layout/weapons` | `spots` | 3 x 4 | the weapon choice's blades, by weapon: 0 rapier, 1 longsword, 2 cutlass |
 | `data/layout/board` | `pieces` | 29 x 4 | the trading board's pieces: frame, highlighted frame, x, y (frames of the board's sprite bank); record 0 is the name tag, whose frames the engine sets by mode |
 | `data/layout/cave` | `piles` | 8 x 3 | the treasure cave's piles (`spr/tcave0` ... 7): x, y, and the fortune past which it shows |
 | `data/layout/fleet-panel` | `ship_x`, `ship_y` | 8 each | each ship's picture, top left |
