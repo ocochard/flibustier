@@ -196,6 +196,10 @@ TABLE_END = [ellipse(116, 340, 106, 24)]
 MAPMAN = [ellipse(50, 286, 19, 23),
           "polygon 22,306 80,306 88,328 14,328",
           "polygon 18,364 84,364 94,443 8,443"]
+# The stranger: a cloaked figure standing in the doorway (348-428 x
+# 196-360), head and shoulders, his cloak to the floor.
+STRANGER = [ellipse(388, 236, 13, 16),
+            "polygon 372,252 404,252 418,358 358,358"]
 INFOMAN = [ellipse(178, 280, 15, 18),
            "polygon 158,297 200,297 206,328 152,328",
            "polygon 162,364 204,364 210,446 158,446"]
@@ -498,3 +502,7 @@ if __name__ == "__main__":
     mask("town-harbour.png", TOWN_HARBOUR)
     mask("town-gate.png", TOWN_GATE)
     mask("tavern-infoman.png", INFOMAN)
+    mask("tavern-stranger.png", STRANGER)
+    # The town's sky along the sketch's horizon line, which the model
+    # drew as a wire where there is sky (x 0-340).
+    mask("town-sky-line.png", [rect(0, 140, 350, 158)], blur=3)

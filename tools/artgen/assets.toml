@@ -776,6 +776,14 @@ reenactment photography, wide lens, sharp focus, realistic.
 # out of it; and the governor's gate, open, where the game draws it
 # closed.
 before_finish = "art/town-in-port.png"
+# The sketch's horizon line, drawn by the model as a wire across the sky.
+[[asset.touchup]]
+mask = "layouts/town-sky-line.png"
+rect = [0, 110, 360, 80]
+prompt = """
+Photograph of a clear Caribbean sky with soft white clouds above the sea,
+nothing in the sky, no wire, no line, no rope.
+"""
 [[asset.finish]]
 mask = "layouts/town-harbour.png"
 rect = [0, 140, 200, 140]
@@ -996,8 +1004,20 @@ Warm amber light, historical reenactment photography, sharp focus,
 realistic.
 """
 [[asset.frames]]
-rect = [348, 196, 80, 164]	# the doorway, nobody in it; on whole art pixels
+rect = [348, 196, 80, 164]	# the doorway, the stranger in it; on whole art pixels
 at = [349, 199]
+[[asset.frames.repaint]]
+mask = "layouts/tavern-stranger.png"
+rect = [320, 180, 140, 190]
+prompt = """
+Photograph inside a smoky Caribbean harbour tavern of the 1660s: in the
+open doorway at the back stands a mysterious stranger, a tall lean man
+in a long dark travelling cloak and a broad-brimmed black hat pulled
+low, his face half in shadow, a sword's hilt showing at his side, the
+daylight from the street behind him outlining his shape. Warm amber
+light inside, historical reenactment photography, sharp focus,
+realistic.
+"""
 
 # The duel in a town's street.  The game draws the fighters on the street
 # (from y 140 to about 320), and writes on the panel below: the names in

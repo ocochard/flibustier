@@ -3739,6 +3739,25 @@ def main():
         # Last touches the rest of the picture is kept around: repaint
         # each step's mask (the left table widened into a sprite frame).
         k_art = height / SCREEN_H
+        for m, step in enumerate(a.get("touchup", []) if ok else []):
+            # Early repaints, before the picture is kept for the sprite
+            # frames cut from it (the town's sky line).
+            up = upload(args.server, out, "flibustier-touchup.png")
+            mask = upload(args.server, os.path.join(HERE, step["mask"]),
+                          "flibustier-touchup-" + os.path.basename(
+                              step["mask"]))
+            try:
+                png = render(args.server, repaint_workflow(
+                    spec, profile, seed + 450 + m, up, mask, step["rect"],
+                    step["prompt"], "flibustier/" + name.replace("/", "-") +
+                    "-touchup"))
+            except RuntimeError as e:
+                print("%s: touch-up failed: %s" % (a["id"], e),
+                      file=sys.stderr)
+                ok = False
+                break
+            with open(out, "wb") as f:
+                f.write(png)
         if a.get("before_finish") and ok:
             # The picture as rendered, before its last touches take out
             # what a sprite frame brings back (the town's harbour).
