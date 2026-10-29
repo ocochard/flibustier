@@ -2387,6 +2387,102 @@ touch(const char *dir, const char *name, const char *text)
 	return (fclose(fp));
 }
 
+/* The ink's pixels on the 640x480 screen, right of the ship. */
+static int
+credit_pixels(const struct game *g)
+{
+	int x, y, n = 0;
+
+	for (y = 0; y < FB_H; y++)
+		for (x = 380; x < FB_W; x++)
+			n += g->fb.px[y * FB_W + x] == 0x20;
+	return (n);
+}
+
+/*
+ * A pack's credits as text: its blocks instead of the picture's, faded,
+ * English's for a language without its own; broken ones are skipped.
+ */
+static void
+test_credits_text(void)
+{
+	char dir[] = "/tmp/flibustier-test-XXXXXX", path[1024];
+	struct packs *own, *saved = packs;
+	struct game *g;
+	int i, last, seen, full = 0;
+
+	if (mkdtemp(dir) == NULL) {
+		CHECK(!"set up");
+		return;
+	}
+	CHECK(touch(dir, "pack.ini", "[assets]\n"
+	    "text/eng/credits = credits.json\n"
+	    "text/ger/credits = broken.json\n") == 0);
+	CHECK(touch(dir, "credits.json", "{\"ink\": \"#102030\", \"blocks\": ["
+	    "{\"heading\": \"Thanks\", \"lines\": [\"A\", \"B\"]},"
+	    "{\"lines\": [\"C\"]}]}") == 0);
+	CHECK(touch(dir, "broken.json", "{\"blocks\": []}") == 0);
+	own = packs_new();
+	CHECK(packs_add_original(own, getenv("FLIBUSTIER_DATA")) == 0);
+	CHECK(packs_add_dir(own, dir) == 0);
+	packs = own;
+
+	g = play("eng", "wait:200 enter wait:40");
+	if (g != NULL) {
+		CHECK(g->screen == &screen_credits && g->cred_count == 2 &&
+		    g->cred_text.nblocks == 2 && g->credits.pixels == NULL);
+		for (i = 0, last = 0, seen = 1; i < 1000 &&
+		    g->screen == &screen_credits; i++) {
+			if (g->cred_block != last && g->cred_block < 2) {
+				CHECK(g->cred_block == last + 1);
+				last = g->cred_block;
+				seen++;
+			}
+			/* Shown from half the steps on, in the ink. */
+			if (g->cred_step == 19 && g->cred_block == 0) {
+				full = credit_pixels(g);
+				CHECK(memcmp(&g->fb.pal[0x20 * 3],
+				    "\x10\x20\x30", 3) == 0);
+			} else if (g->cred_step < 10)
+				CHECK(credit_pixels(g) == 0);
+			CHECK(game_script(g, "wait:1") == 0);
+		}
+		CHECK(seen == 2 && full > 0 && i > 2 * 180 && i < 2 * 200);
+		CHECK(game_script(g, "wait:40") == 0);
+		CHECK(g->screen == &screen_welcome &&
+		    g->cred_text.nblocks == 0);
+		game_free(g);
+	}
+
+	/* French has none: English's.  The keys: to the last, then out. */
+	g = play("fre", "wait:200 enter wait:40");
+	if (g != NULL) {
+		CHECK(g->screen == &screen_credits && g->cred_count == 2);
+		CHECK(game_script(g, "wait:20 enter wait:5") == 0);
+		CHECK(g->cred_block == 1);
+		CHECK(game_script(g, "enter wait:40") == 0);
+		CHECK(g->screen == &screen_welcome);
+		game_free(g);
+	}
+
+	/* German's is broken: no credits, not the picture's. */
+	g = play("ger", "wait:200 enter wait:40");
+	if (g != NULL) {
+		CHECK(g->screen == &screen_welcome && g->credits.pixels == NULL);
+		game_free(g);
+	}
+
+	packs = saved;
+	packs_free(own);
+	snprintf(path, sizeof(path), "%s/pack.ini", dir);
+	remove(path);
+	snprintf(path, sizeof(path), "%s/credits.json", dir);
+	remove(path);
+	snprintf(path, sizeof(path), "%s/broken.json", dir);
+	remove(path);
+	rmdir(dir);
+}
+
 /*
  * Per-town assets: the town's own, else its nation's, else the shared
  * one; outside a town, the shared one.
@@ -2583,6 +2679,7 @@ main(void)
 	test_sword_screen();
 	test_pointer();
 	test_intro();
+	test_credits_text();
 	test_town();
 	test_town_assets();
 	test_shipwright();

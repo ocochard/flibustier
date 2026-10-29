@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "assets/credits.h"
 #include "assets/img.h"
 #include "assets/scenario.h"
 #include "assets/pic.h"
@@ -662,21 +663,121 @@ credit_ink(struct game *g, int step)
 		memcpy(&g->fb.pal[CRED_INK * 3], p, 3);
 }
 
+/*
+ * A pack's credits as text (asset-packs.md, "Open credits"): each block
+ * a heading in PIRATE4 and lines in PIRATE1, centred where the
+ * picture's blocks are, faded in and out by opacity on the same steps.
+ */
+#define CRED_HEAD_FONT		3	/* pirate4 */
+#define CRED_LINE_FONT		0	/* pirate1 */
+#define CRED_HEAD_GAP		10
+#define CRED_MAX_W		256
+#define CRED_MAX_H		440
+
+static int
+credit_text_height(const struct game *g, const struct credit_block *b)
+{
+	int h = (int)b->nlines * g->font[CRED_LINE_FONT].height;
+
+	if (b->heading[0] != '\0')
+		h += g->font[CRED_HEAD_FONT].height +
+		    (b->nlines > 0 ? CRED_HEAD_GAP : 0);
+	return (h);
+}
+
+static void
+credit_text_warn(const char *id, size_t i, const struct font *f,
+    const char *s)
+{
+	if (text_width(f, s) > CRED_MAX_W)
+		fprintf(stderr, "%s: block %zu: \"%s\" is wider than %d "
+		    "pixels\n", id, i, s, CRED_MAX_W);
+}
+
+/*
+ * Load the pack's credits text for the language, else English's: 1
+ * when loaded, 0 when no pack gives them, -1 when they are broken.
+ */
+static int
+credits_text_load(struct game *g)
+{
+	const char *lang[2] = { g->lang, "eng" };
+	const struct credit_block *b;
+	struct blob blob;
+	char id[32], why[128];
+	size_t i, k;
+	int n, rc;
+
+	for (n = 0; n < 2; n++) {
+		snprintf(id, sizeof(id), "text/%s/credits", lang[n]);
+		if (packs_load(g->packs, id, &blob) == 0)
+			break;
+	}
+	if (n == 2)
+		return (0);
+	rc = credits_decode(blob.data, blob.len, &g->cred_text, why,
+	    sizeof(why));
+	blob_free(&blob);
+	for (i = 0; rc == 0 && i < g->cred_text.nblocks; i++) {
+		b = &g->cred_text.blocks[i];
+		if (credit_text_height(g, b) > CRED_MAX_H) {
+			snprintf(why, sizeof(why), "block %zu is taller than "
+			    "%d pixels", i, CRED_MAX_H);
+			credits_free(&g->cred_text);
+			rc = -1;
+			break;
+		}
+		credit_text_warn(id, i, &g->font[CRED_HEAD_FONT], b->heading);
+		for (k = 0; k < b->nlines; k++)
+			credit_text_warn(id, i, &g->font[CRED_LINE_FONT],
+			    b->lines[k]);
+	}
+	if (rc != 0) {
+		fprintf(stderr, "%s: %s\n", id, why);
+		return (-1);
+	}
+	return (1);
+}
+
+/* Ink step 0 (none) .. 19 (full), as the picture's or the text's. */
+static void
+credit_step(struct game *g, int step)
+{
+	g->cred_step = step;
+	if (g->cred_text.nblocks > 0)
+		memcpy(&g->fb.pal[CRED_INK * 3], g->cred_text.ink, 3);
+	else
+		credit_ink(g, step);
+}
+
 static void
 credits_enter(struct game *g)
 {
 	game_background(g, "pic/credpic");
 	image_free(&g->credits);
-	pic_load(g->packs, credits_picture(g), &g->credits);
+	credits_free(&g->cred_text);
+	switch (credits_text_load(g)) {
+	case 1:
+		g->cred_count = (int)g->cred_text.nblocks;
+		break;
+	case 0:
+		pic_load(g->packs, credits_picture(g), &g->credits);
+		g->cred_count = CRED_BLOCKS;
+		break;
+	default:
+		g->cred_count = 0;	/* broken: skipped */
+		break;
+	}
 	g->cred_block = 0;
 	g->cred_ticks = 0;
-	credit_ink(g, 0);
+	credit_step(g, 0);
 }
 
 static void
 credits_done(struct game *g)
 {
 	image_free(&g->credits);
+	credits_free(&g->cred_text);
 	game_goto(g, &screen_welcome);
 }
 
@@ -685,10 +786,10 @@ credits_event(struct game *g, const struct ui_event *ev)
 {
 	if (!intro_skip_key(ev))
 		return;
-	if (g->cred_block < CRED_BLOCKS - 1) {
-		g->cred_block = CRED_BLOCKS - 1;
+	if (g->cred_block < g->cred_count - 1) {
+		g->cred_block = g->cred_count - 1;
 		g->cred_ticks = 0;
-		credit_ink(g, 0);
+		credit_step(g, 0);
 	} else
 		credits_done(g);
 }
@@ -700,21 +801,82 @@ credits_tick(struct game *g)
 
 	if (g->fading != 0)
 		return;
+	if (g->cred_count == 0) {
+		credits_done(g);
+		return;
+	}
 	t = ++g->cred_ticks * 1000 / 60;
 	if (t < fade)
-		credit_ink(g, t / CRED_STEP_MS);
+		credit_step(g, t / CRED_STEP_MS);
 	else if (t < fade + CRED_HOLD_MS)
-		credit_ink(g, CRED_STEPS - 1);
+		credit_step(g, CRED_STEPS - 1);
 	else if (t < 2 * fade + CRED_HOLD_MS)
-		credit_ink(g, CRED_STEPS - 1 - (t - fade - CRED_HOLD_MS) /
+		credit_step(g, CRED_STEPS - 1 - (t - fade - CRED_HOLD_MS) /
 		    CRED_STEP_MS);
 	else if (t < 2 * fade + CRED_HOLD_MS + CRED_GAP_MS)
-		credit_ink(g, 0);	/* the block gone, a pause */
-	else if (++g->cred_block < CRED_BLOCKS) {
+		credit_step(g, 0);	/* the block gone, a pause */
+	else if (++g->cred_block < g->cred_count) {
 		g->cred_ticks = 0;
-		credit_ink(g, 0);
+		credit_step(g, 0);
 	} else
 		credits_done(g);
+}
+
+/* The text target of a credits block: its glyphs at an opacity. */
+struct fade_target {
+	struct fb	*fb;
+	int		 opacity;	/* 0..255 */
+};
+
+static void
+plot_fade(void *arg, int x, int y, uint32_t ink)
+{
+	struct fade_target *ft = arg;
+
+	if (ft->opacity >= 128)
+		plot(ft->fb, x, y, ink);
+}
+
+static void
+glyph_fade(void *arg, const struct font *f, size_t g, int x_sub, int y,
+    uint32_t ink)
+{
+	struct fade_target *ft = arg;
+
+	fb_glyph_fade(ft->fb, f, g, x_sub, y, (uint8_t)ink, ft->opacity);
+}
+
+static void
+credit_text_line(struct game *g, struct fade_target *ft, int font,
+    const char *s, int y)
+{
+	struct text_target t = { plot_fade, ft, glyph_fade };
+	struct text_style st = { NULL, NULL, CRED_INK, CRED_INK, 0 };
+
+	st.font = &g->font[font];
+	text_draw(&t, &st, CRED_CX - text_width(st.font, s) / 2, y, FB_W, s,
+	    -1, NULL);
+}
+
+static void
+credits_text_draw(struct game *g)
+{
+	const struct credit_block *b = &g->cred_text.blocks[g->cred_block];
+	struct fade_target ft;
+	size_t k;
+	int y;
+
+	ft.fb = &g->fb;
+	ft.opacity = g->cred_step * 255 / (CRED_STEPS - 1);
+	y = CRED_CY - credit_text_height(g, b) / 2;
+	if (b->heading[0] != '\0') {
+		credit_text_line(g, &ft, CRED_HEAD_FONT, b->heading, y);
+		y += g->font[CRED_HEAD_FONT].height + CRED_HEAD_GAP;
+	}
+	for (k = 0; k < b->nlines; k++) {
+		credit_text_line(g, &ft, CRED_LINE_FONT, b->lines[k], y);
+		y += g->font[CRED_LINE_FONT].height;
+	}
 }
 
 static void
@@ -722,7 +884,13 @@ credits_draw(struct game *g)
 {
 	int r[4], w, h, x, y;
 
-	if (g->credits.pixels == NULL || g->cred_block >= CRED_BLOCKS ||
+	if (g->cred_block >= g->cred_count)
+		return;
+	if (g->cred_text.nblocks > 0) {
+		credits_text_draw(g);
+		return;
+	}
+	if (g->credits.pixels == NULL ||
 	    credit_rect(g, g->cred_block, r) != 0)
 		return;
 	w = r[2] - r[0] + 1;

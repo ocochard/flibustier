@@ -214,6 +214,7 @@ game_free(struct game *g)
 	free(g->intro_title);
 	free(g->intro_shown);
 	image_free(&g->credits);
+	credits_free(&g->cred_text);
 	bank_free(&g->town_spr);
 	bank_free(&g->shop_spr[0]);
 	bank_free(&g->shop_spr[1]);

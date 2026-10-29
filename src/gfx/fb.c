@@ -526,20 +526,28 @@ void
 fb_glyph(struct fb *fb, const struct font *f, size_t g, int x_sub, int y,
     uint8_t ink)
 {
+	fb_glyph_fade(fb, f, g, x_sub, y, ink, 255);
+}
+
+void
+fb_glyph_fade(struct fb *fb, const struct font *f, size_t g, int x_sub,
+    int y, uint8_t ink, int opacity)
+{
 	const struct hd_glyph *h;
 	const uint8_t *col = fb->pal + 3 * ink, *under;
 	int x, gx, gy, cx, cy, ox, oy, k, hd;
 	uint8_t a, *d;
 	size_t o;
 
-	if (g >= f->count)
+	if (g >= f->count || opacity <= 0)
 		return;
 	hd = f->hd != NULL && f->hd_height == fb->out_h;
 	/* The nearest pixel of the pen, as text layout rounds. */
 	x = canvas_at(x_sub + FONT_SUB / 2, 1, FONT_SUB) - f->origin_x;
 	for (gy = 0; gy < f->height; gy++)
 		for (gx = 0; gx < f->cell_w; gx++) {
-			if (!font_pixel(f, g, gx, gy) || x + gx < 0 ||
+			if (opacity < 128 || !font_pixel(f, g, gx, gy) ||
+			    x + gx < 0 ||
 			    x + gx >= FB_W || y + gy < 0 || y + gy >= FB_H)
 				continue;
 			o = (size_t)(y + gy) * FB_W + x + gx;
@@ -559,7 +567,8 @@ fb_glyph(struct fb *fb, const struct font *f, size_t g, int x_sub, int y,
 		for (gx = 0; gx < h->w; gx++) {
 			ox = cx + gx;
 			if (ox < 0 || ox >= fb->out_w ||
-			    (a = h->cov[(size_t)gy * h->w + gx]) == 0)
+			    (a = (uint8_t)((h->cov[(size_t)gy * h->w + gx] *
+			    opacity + 127) / 255)) == 0)
 				continue;
 			o = (size_t)oy * fb->out_w + ox;
 			d = fb->rgb + o * 3;

@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "assets/credits.h"
 #include "assets/digital.h"
 #include "assets/font.h"
 #include "assets/text.h"
@@ -153,8 +154,11 @@ struct game {
 	int			 intro_cycles;	/* steps of the 0xd3 cycle */
 	int			 intro_pause;
 	struct image		 credits;	/* the credits' text picture */
-	int			 cred_block;	/* 0..5 */
+	struct credits		 cred_text;	/* or a pack's credits text */
+	int			 cred_count;	/* blocks to show */
+	int			 cred_block;	/* 0 .. cred_count - 1 */
 	int			 cred_ticks;	/* ticks into the block */
+	int			 cred_step;	/* ink step, 0 .. 19 */
 	struct sprite_bank	 town_spr;	/* harbour and closed gate */
 	int			 town_spot;	/* building under the cursor, -1 */
 	int			 town_key;	/* keyboard selection, -1 */

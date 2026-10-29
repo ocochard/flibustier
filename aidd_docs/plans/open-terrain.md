@@ -111,7 +111,8 @@ The other tables read from the executable are not map data but still
 block the no-original-data milestone: sine, ship speeds, encounters,
 battle AI and hit boxes, sword fight tables, start scenarios and
 stories, UI hotspots and layouts (board, tavern, town, cabin, weapons,
-cave, fleet panel, credits), the shade table, the mouse pointer, and the
+cave, fleet panel, credits: the original's picture blocks only, open
+packs give their credits as text), the shade table, the mouse pointer, and the
 strings (`CSTR`/`CSTN`). They belong to the "open game data" format of
 roadmap decision 1, a separate plan.
 

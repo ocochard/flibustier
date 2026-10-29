@@ -18,6 +18,7 @@
 #include "data/exe.h"
 #include "data/pack.h"
 #include "data/sha256.h"
+#include "assets/credits.h"
 #include "assets/font.h"
 #include "assets/fonts.h"
 #include "assets/img.h"
@@ -750,6 +751,68 @@ test_text_json(void)
 	    &g, err, sizeof(err)) == -1);
 }
 
+/* The credits as text: blocks, their marks left out, the errors. */
+static void
+test_credits(void)
+{
+	static const char good[] = "{\"ink\": \"#10a0Ff\", \"blocks\": ["
+	    "{\"heading\": \"~Thanks\", \"lines\": [\"`A\", \"B ^C\"]},"
+	    "{\"lines\": [\"D\"]}, {\"heading\": \"E\"}]}";
+	static const char one[] = "{\"blocks\": [{\"heading\": \"x\"}]}";
+	static const char *const bad[] = {
+		"{\"blocks\": []}",
+		"{\"block\": [{\"heading\": \"x\"}]}",
+		"{\"blocks\": [{}]}",				/* empty */
+		"{\"blocks\": [{\"heading\": \"\", \"lines\": []}]}",
+		"{\"blocks\": [{\"heading\": 1}]}",
+		"{\"blocks\": [{\"lines\": [\"a\\nb\"]}]}",	/* a break */
+		"{\"blocks\": [{\"lines\": [2]}]}",
+		"{\"blocks\": [\"x\"]}",
+		"{\"blocks\": [{\"heading\": \"x\"}], \"ink\": \"#12345\"}",
+		"{\"blocks\": [{\"heading\": \"x\"}], \"ink\": \"#12345g\"}",
+		"{\"blocks\": [{\"lines\": [\"1\", \"2\", \"3\", \"4\", \"5\", "
+		    "\"6\", \"7\", \"8\", \"9\", \"10\", \"11\", \"12\", "
+		    "\"13\"]}]}",
+		"{\"blocks\": [",
+		NULL
+	};
+	struct credits c;
+	struct jbuf b = { 0 };
+	char err[128];
+	size_t i;
+
+	CHECK(credits_decode((const uint8_t *)good, strlen(good), &c, err,
+	    sizeof(err)) == 0);
+	CHECK(c.nblocks == 3 && c.ink[0] == 0x10 && c.ink[1] == 0xa0 &&
+	    c.ink[2] == 0xff);
+	CHECK(c.nblocks == 3 && strcmp(c.blocks[0].heading, "Thanks") == 0 &&
+	    c.blocks[0].nlines == 2 && strcmp(c.blocks[0].lines[0], "A") == 0 &&
+	    strcmp(c.blocks[0].lines[1], "B ^C") == 0 &&
+	    strcmp(c.blocks[1].heading, "") == 0 && c.blocks[1].nlines == 1 &&
+	    c.blocks[2].nlines == 0);
+	credits_free(&c);
+	CHECK(c.nblocks == 0 && c.blocks == NULL);
+	CHECK(credits_decode((const uint8_t *)one, strlen(one), &c, err,
+	    sizeof(err)) == 0 && c.ink[0] == 0 &&
+	    c.ink[1] == 0 && c.ink[2] == 0);
+	credits_free(&c);
+	/* 16 blocks at most. */
+	jb_raw(&b, "{\"blocks\": [");
+	for (i = 0; i < CREDITS_MAX_BLOCKS + 1; i++)
+		jb_raw(&b, i == 0 ? "{\"heading\": \"x\"}" :
+		    ", {\"heading\": \"x\"}");
+	jb_raw(&b, "]}");
+	CHECK(b.s != NULL && credits_decode((const uint8_t *)b.s, b.len, &c,
+	    err, sizeof(err)) == -1);
+	jb_free(&b);
+	for (i = 0; bad[i] != NULL; i++) {
+		err[0] = '\0';
+		CHECK(credits_decode((const uint8_t *)bad[i], strlen(bad[i]),
+		    &c, err, sizeof(err)) == -1 && err[0] != '\0' &&
+		    c.nblocks == 0);
+	}
+}
+
 static void
 test_text(void)
 {
@@ -785,6 +848,7 @@ test_text(void)
 	CHECK(cstr_decode((const uint8_t *)"\4\0\2\0", 4, &tab) == -1);
 
 	test_text_json();
+	test_credits();
 
 	u = macroman_to_utf8((const uint8_t *)"\xd1\xca", 2);
 	CHECK(u != NULL && strcmp(u, "\xe2\x80\x94\xc2\xa0") == 0);

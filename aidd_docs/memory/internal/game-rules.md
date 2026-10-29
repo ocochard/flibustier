@@ -2447,6 +2447,9 @@ Then the credits (VA `0x1fe91`):
 - **Keys:** the intro's (Enter, Escape, the left button). One during
   blocks 0-4 jumps to block 5; one during block 5 ends the credits.
   The ink steps read no keys.
+- **Open credits:** a pack's `text/<lang>/credits` replaces the blocks
+  with text drawn on the picture, with the same timing and keys (see
+  "Open credits" in asset-packs.md).
 
 The welcome menu (VA `0x1443e`) is full screen on `textback.pcx`
 (its last option, "Return to DOS?", reads as the cabin's "Exit game"

@@ -413,6 +413,78 @@ The game's text, when a pack gives it; otherwise the original `CSTR` and
   and the groups it gives fewer words than the engine reads. What the
   engine reads comes from text-catalogue.md.
 
+## Open credits
+
+The credits after the intro, as text, when a pack gives them; otherwise
+the blocks cut from the original's credits picture (see "the credits"
+in game-rules.md). Implemented in `src/assets/credits.c` (decoder) and
+the credits screen of `src/ui/screens.c`.
+
+| ID | Format | Content |
+|---|---|---|
+| `text/<lang>/credits` | JSON, `.json` | the credits' blocks, in order of appearance |
+
+```json
+{
+  "blocks": [
+    {
+      "heading": "Original game",
+      "lines": ["First Author", "Second Author"]
+    },
+    {
+      "heading": "Engine and assets",
+      "lines": ["A Name"]
+    }
+  ]
+}
+```
+
+- **Blocks:** 1 to 16, shown one at a time, as the original's six. Each
+  is a `heading` (a string, may be empty) and `lines` (0 to 12
+  strings). A block with neither is an error.
+- **Fonts:** the heading in `font/pirate4`, each line in
+  `font/pirate1`, so the pack's fonts apply. Lines are one line each:
+  `\n` is not allowed. The text markup of "Open text" otherwise
+  applies; the decoder drops a leading `~` and every `` ` ``.
+- **Layout,** in 640x480 pixels: every line centred at x 508 (the
+  original blocks' centre, right of the ship in `pic/credpic`), the
+  block centred at y 240. The heading sits on the first line, a gap of
+  10 pixels below it, then the lines at the font's line height. A line
+  should fit 256 pixels (x 380 to 636); a wider one is drawn centred
+  anyway, with a warning on stderr naming the block and line. A block
+  taller than 440 pixels is an error.
+- **Fade:** the original's timing (20 steps of 40 ms in, a 1.6 s hold,
+  20 steps out, 0.4 s with no block). The text is drawn in `ink` (an
+  optional top-level `"#RRGGBB"`, default black) at opacity step / 19
+  over the picture, so it fades on any background. The 640x480 index
+  screen gets the glyphs (1-bit, palette entry 0x20 set to `ink`) from
+  step 10 on, for code and tests that read it; so do the original
+  1-bit fonts, which have no coverage to fade.
+- **Keys:** as the original's: Enter, Escape or the left button during
+  any block but the last jumps to the last; during the last, ends the
+  credits.
+- **Precedence:** the engine looks for `text/<lang>/credits`, then
+  `text/eng/credits`; the first found replaces the picture's blocks
+  whatever pack the credits picture comes from. Without either, the
+  original's picture blocks show, as now. `pic/credpic` is the
+  background in both cases.
+- **Errors:** invalid JSON, a missing `blocks`, a value of the wrong
+  type or a count out of range is an error when the credits load, with
+  the file and the reason on stderr; the credits are then skipped (the
+  welcome menu follows), never replaced by the original's.
+- **Languages:** each language's file is whole. Names stay as written;
+  headings are translated.
+- **The open pack's credits,** in this order (one block each, the
+  wording the pack's):
+  1. the original game's authors, as the original's own credits name
+     them (names and roles are attribution, not text copied: the
+     sentences around them are written anew);
+  2. Olivier Cochard-Labbé, for the engine re-implementation and the
+     open assets;
+  3. Anthropic, for its Claude for Open Source programme;
+  4. the ComfyUI and Blender teams, whose tools make the art;
+  5. Pieces of 8-bit, for the remade music.
+
 ## Per-town assets
 
 Town screens look up their assets per town (`game_town_asset()`,

@@ -128,6 +128,13 @@ void	fb_frame_rgba_clip(struct fb *fb, const struct frame *f, int x,
 void	fb_glyph(struct fb *fb, const struct font *f, size_t g, int x_sub,
 	    int y, uint8_t ink);
 
+/*
+ * The same at "opacity" 0..255: the canvas blends the glyph by coverage
+ * times opacity; the 640x480 screen gets it from opacity 128 on.
+ */
+void	fb_glyph_fade(struct fb *fb, const struct font *f, size_t g,
+	    int x_sub, int y, uint8_t ink, int opacity);
+
 /* Palette index whose colour is closest to (r, g, b). */
 uint8_t	fb_nearest(const struct fb *fb, int r, int g, int b);
 
