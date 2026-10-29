@@ -3184,8 +3184,8 @@ prompt = ""
 [asset.lettering]
 size = [640, 480]
 lines = [
-  { text = "CREW OF ONE", font = "/usr/local/share/fonts/urw-base35-fonts/C059-Bold.otf", box = [70, 180, 500, 80], fill = "gilt" },
-  { text = "I N T E R A C T I V E", font = "/usr/local/share/fonts/urw-base35-fonts/P052-Roman.otf", box = [170, 274, 300, 22], fill = "gilt" },
+  { text = "CREW OF ONE", font = "/usr/local/share/fonts/urw-base35-fonts/C059-Bold.otf", box = [70, 180, 500, 80], fill = "gilt", ramp = ["#3a2205", "#c8901e", "#ffe9a0"] },
+  { text = "I N T E R A C T I V E", font = "/usr/local/share/fonts/urw-base35-fonts/P052-Roman.otf", box = [170, 274, 300, 22], fill = "gilt", ramp = ["#3a2205", "#c8901e", "#ffe9a0"] },
 ]
 [asset.lettering.paint]
 gilt = """
@@ -3203,7 +3203,7 @@ prompt = ""
 [asset.lettering]
 size = [181, 35]
 lines = [
-  { text = "and", font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf", box = [0, 0, 181, 35], fill = "gilt" },
+  { text = "and", font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf", box = [0, 0, 181, 35], fill = "gilt", ramp = ["#3a2205", "#c8901e", "#ffe9a0"] },
 ]
 [asset.lettering.paint]
 gilt = """
@@ -3244,7 +3244,7 @@ prompt = ""
 [asset.lettering]
 size = [371, 37]
 lines = [
-  { text = "present", font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf", box = [0, 0, 371, 37], fill = "gilt" },
+  { text = "present", font = "/usr/local/share/fonts/urw-base35-fonts/Z003-MediumItalic.otf", box = [0, 0, 371, 37], fill = "gilt", ramp = ["#3a2205", "#c8901e", "#ffe9a0"] },
 ]
 [asset.lettering.paint]
 gilt = """

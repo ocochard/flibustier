@@ -20,14 +20,22 @@ import os
 from boards import magick, px
 
 
-def fill_image(src, fill, w, h, out):
+def fill_image(src, fill, w, h, out, ramp=None):
     """A w x h image of "fill": a painted texture by its key in "src",
-    or an ImageMagick image such as "gradient:#fff-#888"."""
-    if fill in src:
-        magick(src[fill], "-resize", "%dx%d^" % (w, h), "-gravity",
-               "center", "-extent", "%dx%d" % (w, h), out)
-    else:
+    or an ImageMagick image such as "gradient:#fff-#888".  With "ramp"
+    (dark, middle and light colours), the texture's brightness is mapped
+    onto it, so a painting's pale patches cannot wash a word out."""
+    if fill not in src:
         magick("-size", "%dx%d" % (w, h), fill, out)
+        return
+    args = [src[fill], "-resize", "%dx%d^" % (w, h), "-gravity", "center",
+            "-extent", "%dx%d" % (w, h)]
+    if ramp:
+        dark, mid, light = ramp
+        args += ["-colorspace", "gray", "-auto-level", "(", "-size",
+                 "1x128", "gradient:%s-%s" % (dark, mid), "-size", "1x128",
+                 "gradient:%s-%s" % (mid, light), "-append", ")", "-clut"]
+    magick(*args, out)
 
 
 def line(src, ln, k, work, n):
@@ -42,10 +50,13 @@ def line(src, ln, k, work, n):
            "%dx%d" % (W, H), "-gravity", "center", "-background", "black",
            "-extent", "%dx%d" % (W, H), "-alpha", "off", mask)
     fill = os.path.join(work, "fill-%d.png" % n)
-    fill_image(src, ln["fill"], W, H, fill)
+    fill_image(src, ln["fill"], W, H, fill, ln.get("ramp"))
     out = os.path.join(work, "line-%d.png" % n)
+    # Lit at 30 degrees, a flat face shades to mid grey; doubled, it
+    # multiplies the fill by one, and only the edges lighten or darken.
     magick(fill, "(", mask, "-blur", "0x%g" % (k * 0.8), "-shade",
-           "120x45", "-auto-level", ")", "-compose", "softlight",
+           "120x30", "-evaluate", "multiply", "2", ")", "-compose",
+           "multiply",
            "-composite", "(", mask, ")", "-alpha", "off", "-compose",
            "copy-opacity", "-composite", out)
     return out
