@@ -796,7 +796,8 @@ test_world_export(struct packs *orig)
 	    "map-1660.tmj", "map-1680.tmj", "towns-1560.json",
 	    "towns-1600.json", "towns-1620.json", "towns-1640.json",
 	    "towns-1660.json", "towns-1680.json", "treasure.json",
-	    "battle-sets.json", NULL };
+	    "battle-sets.json", "map-terrain.pgm", "battle-terrain.pgm",
+	    NULL };
 	static struct era_towns t, tref;
 	const char *data = getenv("FLIBUSTIER_DATA");
 	const struct exe_layout *layout = NULL;
