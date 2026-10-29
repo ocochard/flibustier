@@ -21,11 +21,13 @@ weapon passing behind its fencer is cut as the game's is.
 
     blender -b -P fencer.py -- --side my --out DIR [--frame 317x203]
                             [--blend MODEL.blend] [--moves 0,1,...]
+                            [--margin PX] [--steps JSON] [--frames JSON]
 
 writes DIR/LAYER/MOVE.FRAME.png for every layer of that side.
 """
 
 import argparse
+import json
 import math
 import os
 import sys
@@ -727,17 +729,86 @@ def keyed(keys, n, k):
     return mix(keys[i], keys[i + 1], t - i)
 
 
+# How far the game moves a stepping fencer on each frame of a move,
+# forward, in the frame's pixels (--steps), and how many frames of each
+# bank it shows (--frames), both from the pack's data/sword table.  The
+# frames carry the body between those moves and plant the feet, so he
+# walks rather than slides; a bank's frames past the shown ones repeat
+# the last.
+STEPS = {}
+FRAMES = []
+
+
+def legs():
+    """The human's thigh and shin, in metres (human.py)."""
+    import human
+    return (math.dist(human.HIP, human.KNEE),
+            math.dist(human.KNEE, human.ANKLE))
+
+
+def ankle(hip, knee):
+    """Where a leg at these angles puts its ankle: (ahead of the hip,
+    below it)."""
+    l1, l2 = legs()
+    a, b = math.radians(hip), math.radians(hip + knee)
+    return (l1 * math.sin(a) + l2 * math.sin(b),
+            l1 * math.cos(a) + l2 * math.cos(b))
+
+
+def reach(dx, dz):
+    """The hip and knee angles putting the ankle "dx" ahead of the hip
+    and "dz" below it, the knee bent forward."""
+    l1, l2 = legs()
+    d = min(math.hypot(dx, dz), 0.99 * (l1 + l2))
+    toward = math.atan2(dx, dz)
+    hip = toward + math.acos((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))
+    shin = toward - math.acos((l2 * l2 + d * d - l1 * l1) / (2 * l2 * d))
+    return math.degrees(hip), math.degrees(shin - hip)
+
+
+def stride(g, move, n, k):
+    """Frame k of move "move" stepping from guard "g" as far as STEPS
+    moves it: the trailing foot closes up, then the other steps out, each
+    planted while the other moves, so the stance is never wider than
+    the guard's; the hips sink where it is too wide for the legs."""
+    steps = [v * FRAME_M / 141 for v in STEPS.get(move, [0] * n)]
+    whole = sum(steps)
+    if whole == 0:
+        return g
+    s = (k + 1) / n			# the body's way through the step
+    origin = sum(steps[:k + 1])		# where the game has moved the frame
+    body = s * whole
+    lead, follow = ("back", "front") if whole > 0 else ("front", "back")
+    start = {leg: ankle(g[leg + "-hip"], g[leg + "-knee"])
+             for leg in ("front", "back")}
+    ground = max(dz for _, dz in start.values())  # the hips above it
+    most = max(math.hypot(*v) for v in start.values())
+    p = dict(g)
+    feet, hips = {}, ground
+    for leg, t in ((lead, min(1, 2 * s)), (follow, max(0, 2 * s - 1))):
+        dx, dz = start[leg]
+        x = dx + (3 - 2 * t) * t * t * whole - body
+        z = ground - dz + 0.06 * math.sin(math.pi * t)	# above the ground
+        feet[leg] = (x, z)
+        if math.hypot(x, hips - z) > most:
+            hips = z + math.sqrt(max(0, most * most - x * x))
+    for leg, (x, z) in feet.items():
+        p[leg + "-hip"], p[leg + "-knee"] = reach(x, hips - z)
+    p["hips"] = g["hips"] - (ground - hips)
+    p["x"] = body - origin
+    return p
+
+
 def move_pose(move, k):
     """Move "move" (SWM_*), frame k."""
-    n = BANKS[move]
+    n = FRAMES[move] if FRAMES else BANKS[move]
+    k = min(k, n - 1)
     level = move % 3
     g = line(GUARD, level if move < 12 else 0)
     if move < 3:				# guard
         return bob(g, n, k)
     if move < 6:				# step back
-        lift = at(g, **{"back-hip": -40, "back-knee": -50, "hips": 0.84})
-        down = at(g, x=-0.12, **{"front-hip": 10, "front-knee": -10})
-        return keyed([g, lift, down, at(down, x=-0.18), g], n, k)
+        return stride(g, move, n, k)
     if move < 9:				# slash
         high = (150, 125, 165)[level]
         low = (55, 25, 85)[level]
@@ -755,13 +826,9 @@ def move_pose(move, k):
             "back-shoulder": -70, "back-elbow": 10})
         return keyed([g, out, out, g], n, k)
     if move == 12:				# advance
-        step = at(g, x=0.1, **{"front-hip": 45, "front-knee": -40,
-                               "hips": 0.84})
-        return keyed([g, step, at(g, x=0.16), g], n, k)
+        return stride(g, move, n, k)
     if move == 13:				# retreat
-        step = at(g, x=-0.1, **{"back-hip": -45, "back-knee": -45,
-                                "hips": 0.84})
-        return keyed([g, step, at(g, x=-0.16), g], n, k)
+        return stride(g, move, n, k)
     if move == 14:				# the fall: struck, then yielding
         hit = at(g, spine=-22, neck=-15, **{"front-shoulder": 20,
                                             "front-elbow": 10,
@@ -775,7 +842,7 @@ def move_pose(move, k):
     return bob(g, n, k)			# the last: back on guard
 
 
-def scene(fw, fh):
+def scene(fw, fh, margin=0):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     # No grain on cloth or skin: denoised where this Blender has a
@@ -809,11 +876,13 @@ def scene(fw, fh):
     bpy.context.collection.objects.link(sob)
     cam = bpy.data.cameras.new("cam")
     cam.type = "ORTHO"
-    cam.ortho_scale = FRAME_M
+    # The game's frame and "margin" of its pixels each side, for the
+    # feet a wide stance puts out of it.
+    cam.ortho_scale = FRAME_M * (141 + 2 * margin) / 141
     cob = bpy.data.objects.new("cam", cam)
     # From the front of the fight's line (-Y), level; the ground near
     # the frame's bottom, the fencer a little right of its middle.
-    high = FRAME_M * fh / fw
+    high = cam.ortho_scale * fh / fw
     cob.location = (CAMERA_X[SIDE], -20, high / 2 - 0.04)
     cob["fw"], cob["fh"] = fw, fh
     cob.rotation_euler = (math.pi / 2, 0, 0)
@@ -832,8 +901,9 @@ def frame_size(move, k):
     else:
         th = fh
     sc.render.resolution_y = th
-    high = FRAME_M * fh / fw
-    cob.location.z = high / 2 - 0.04 + FRAME_M * (th - fh) / fw / 2
+    wide = cob.data.ortho_scale
+    high = wide * fh / fw
+    cob.location.z = high / 2 - 0.04 + wide * (th - fh) / fw / 2
 
 
 def show(objects, holdouts):
@@ -853,6 +923,13 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--frame", default="317x203",
                     help="pixels of a frame (141x90 at 1080 lines)")
+    ap.add_argument("--margin", type=int, default=0,
+                    help="game pixels rendered beyond each side of the "
+                    "frame (the frame then wider)")
+    ap.add_argument("--steps", help="JSON: each stepping move's forward "
+                    "move on each frame, in the frame's pixels")
+    ap.add_argument("--frames", help="JSON: the frames the game shows of "
+                    "each move")
     ap.add_argument("--moves", help="only these moves, e.g. 0,9")
     ap.add_argument("--blend")
     ap.add_argument("--sample", action="store_true",
@@ -863,12 +940,16 @@ def main():
     fw, fh = (int(v) for v in args.frame.split("x"))
     global SIDE
     SIDE = args.side
+    if args.steps:
+        STEPS.update({int(m): v for m, v in json.loads(args.steps).items()})
+    if args.frames:
+        FRAMES.extend(json.loads(args.frames))
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     f = (Fencer if args.mannequin else HumanFencer)(args.side)
     if args.side == "my":
         f.root.scale = (-1, 1, 1)	# facing his opponent, to the left
-    scene(fw, fh)
+    scene(fw, fh, args.margin)
     f.pose(GUARD)
     if args.blend:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.blend),

@@ -1740,6 +1740,10 @@ def shrink_workflow(image, out_w, out_h, prefix):
 FENCER_DROP = 60
 FENCER_BANKS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 6, 6, 10, 6]
 FENCER_RENDER = (951, 609)	# a fight frame as rendered (3 x 317x203)
+# The game's pixels drawn beyond each side of its 141-pixel frame (the
+# sheet's frames start this far left): a stance's rear foot reaches out
+# of the frame, the player's to the right, the opponent's to the left.
+FENCER_MARGIN = 24
 # The surrender's frames (14.3 on) are 114 lines high, not 90.
 FENCER_TALL = (14, 3, 114)
 
@@ -1747,10 +1751,34 @@ FENCER_TALL = (14, 3, 114)
 def fencer_size(m, f, k, render=False):
     """A fight frame's size, in the pack's pixels or as rendered."""
     tall = m == FENCER_TALL[0] and f >= FENCER_TALL[1]
+    wide = (141 + 2 * FENCER_MARGIN) / 141
     if render:
-        return FENCER_RENDER[0], round(FENCER_RENDER[1] *
-                                       (FENCER_TALL[2] / 90 if tall else 1))
-    return round(141 * k), round((FENCER_TALL[2] if tall else 90) * k)
+        return (round(FENCER_RENDER[0] * wide),
+                round(FENCER_RENDER[1] * (FENCER_TALL[2] / 90 if tall else
+                                          1)))
+    return (round((141 + 2 * FENCER_MARGIN) * k),
+            round((FENCER_TALL[2] if tall else 90) * k))
+
+
+def fencer_steps(pack):
+    """How many frames of each move the pack's sword fight shows, and how
+    far it moves a fencer forward on each of them in the moves that step
+    (its data/sword table), so the frames walk with it: (frames, steps),
+    None without the table."""
+    path = os.path.join(pack, "data", "sword.json")
+    try:
+        with open(path) as fp:
+            t = json.load(fp)
+    except OSError as e:
+        print("fencers: %s" % e, file=sys.stderr)
+        return None
+    frames = [min(n, b) for n, b in zip(t["frames"], FENCER_BANKS)]
+    steps = {}
+    for m, (fwd, back) in enumerate(zip(t["step_in"], t["step_back"])):
+        net = [i - b for i, b in zip(fwd, back)][:frames[m]]
+        if any(net):
+            steps[m] = net
+    return frames, steps
 
 
 def make_fencer(args, spec, a, profile, seed):
@@ -1767,6 +1795,10 @@ def make_fencer(args, spec, a, profile, seed):
     script = os.path.join(HERE, "fencers", "fencer.py")
     moves = a["fencer"].get("moves")
     mdir = os.path.join(args.pack, "provenance", "fencers")
+    table = fencer_steps(args.pack)
+    if table is None:
+        return None
+    shown, steps = table
     try:
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "mkdir -p %s" % work], check=True,
@@ -1778,9 +1810,13 @@ def make_fencer(args, spec, a, profile, seed):
                         "%s:%s/" % (host, work)], check=True)
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "cd %s && rm -rf out && blender -b -P fencer.py -- "
-                        "--side %s --out out --frame %dx%d --blend "
-                        "model.blend %s > blender.log 2>&1" % (
-                            work, side, FENCER_RENDER[0], FENCER_RENDER[1],
+                        "--side %s --out out --frame %dx%d --margin %d "
+                        "--steps '%s' --frames '%s' --blend model.blend %s "
+                        "> blender.log 2>&1" % (
+                            work, side, *fencer_size(0, 0, k, render=True),
+                            FENCER_MARGIN, json.dumps(steps, separators=(
+                                ",", ":")), json.dumps(shown, separators=(
+                                    ",", ":")),
                             "--moves " + ",".join(map(str, moves))
                             if moves else "")],
                        check=True, stdin=subprocess.DEVNULL)
@@ -1883,9 +1919,9 @@ def make_fencer(args, spec, a, profile, seed):
                      "image = " + os.path.basename(atlas), "", "[frames]"]
             for m in range(len(FENCER_BANKS)):
                 for f in range(FENCER_BANKS[m]):
-                    lines.append("%d.%d = %d %d %d %d 0 %d" % (
+                    lines.append("%d.%d = %d %d %d %d %d %d" % (
                         (m, f, f * fw, top[m]) + fencer_size(m, f, k) +
-                        (round(FENCER_DROP * k),)))
+                        (-round(FENCER_MARGIN * k), round(FENCER_DROP * k))))
             with open(os.path.join(args.pack, gfile), "w") as fp:
                 fp.write("\n".join(lines) + "\n")
             record[gid] = {"layer": layer, "photo": ref}
@@ -1898,10 +1934,11 @@ def make_fencer(args, spec, a, profile, seed):
     return {"groups": record, "frame": list(fencer_size(0, 0, k)),
             "redraw": {r: " ".join(characters(t, spec).split())
                        for r, t in fc["redraw"].items()},
-            "render": list(FENCER_RENDER), "denoise": a.get("denoise", 0.6),
+            "render": list(fencer_size(0, 0, k, render=True)),
+            "denoise": a.get("denoise", 0.6),
             "blend": "provenance/fencers/%s.blend" % side,
             "model_sha256": hashlib.sha256(open(script, "rb").read())
-            .hexdigest()}
+            .hexdigest(), "frames": shown, "steps": steps}
 
 
 def frame_bounds(path, asset, height):

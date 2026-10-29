@@ -410,8 +410,10 @@ def build(look, kerchief=(0.6, 0.05, 0.04)):
 
 def pose(rob, p, heading=0.0):
     """Set fencer.py's pose "p" (degrees, positive towards the front,
-    the hips at p["hips"] metres), the figure turned to "heading"."""
-    rob.location = (p.get("x", 0.0), 0, p.get("hips", 0.9) - 0.9)
+    the hips at p["hips"] metres, p["x"] ahead), the figure turned to
+    "heading"."""
+    rob.location = (p.get("x", 0.0) * math.cos(math.radians(heading)), 0,
+                    p.get("hips", 0.9) - 0.9)
     rob.rotation_euler = (0, 0, math.pi / 2 + math.radians(heading))
     for key, name in BONES.items():
         pb = rob.pose.bones[name]
