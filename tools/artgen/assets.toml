@@ -2619,3 +2619,160 @@ nothing else.""",
 white cumulus cloud alone on a pure black background, soft fluffy edges,
 nothing else.""",
 ]
+
+# The trade boards (the merchant's, the plunder's and the shipwright's
+# cannon): every language's spr/buysell, spr/buyboard and spr/buysell1.
+# The image model paints only materials and objects; boards.py sets the
+# words in the pack's font, each frame at its size in the game.
+[[asset]]
+id = "spr/buysell"
+file = "art/buysell.sheet"
+seed = 1660
+source = "the game's trade boards, their pieces described"
+prompt = ""
+[asset.board]
+font = "fonts/imfellenglish/IMFeENrm28P.ttf"
+cut = ["food", "goods", "sugar", "tobacco", "hides", "cannon", "gem",
+       "carving", "scroll"]
+same = { gun = "cannon" }
+flat = { colours = ["#141210", "#e8e2d0"] }
+[asset.board.banks]
+eng = { buysell = "buysell", buyboard = "buyboard", buysell1 = "buysell1" }
+fre = { buysell = "buysellf", buyboard = "buybrdf", buysell1 = "buysll1f" }
+ger = { buysell = "buysellg", buyboard = "buybrdg", buysell1 = "buysll1g" }
+[asset.board.paint]
+wood = """
+Close-up photograph, straight on and flat, of a panel of dark polished
+mahogany, its fine grain running across, warm even light, filling the
+whole image, no seam, no edge.
+"""
+darkwood = """
+Close-up photograph, straight on and flat, of very dark, almost black,
+oiled ebony wood with a faint fine grain, even light, filling the whole
+image, no seam, no edge.
+"""
+gilt = """
+Close-up photograph, straight on and flat, of old polished gold leaf on
+carved wood, warm and slightly worn, soft highlights, filling the whole
+image, no pattern, no edge.
+"""
+oak = """
+Close-up photograph, straight on and flat, of a weathered honey-coloured
+oak plank, its grain running across, warm even light, filling the whole
+image, no seam, no edge.
+"""
+parchment = """
+Close-up photograph, straight on and flat, of old cream parchment, a
+little stained, even light, filling the whole image, no writing, no
+edge.
+"""
+food = """
+Photograph of a single small black iron cooking pot with a handle,
+hanging over a few small flames, alone on a plain light grey background,
+seen from the side, studio light, sharp focus, realistic.
+"""
+goods = """
+Photograph of a single small wooden barrel with iron hoops standing
+upright, alone on a plain light grey background, seen from the side,
+studio light, sharp focus, realistic.
+"""
+sugar = """
+Photograph of a single small brown earthenware jar of sugar, round with
+a narrow neck, alone on a plain light grey background, seen from the
+side, studio light, sharp focus, realistic.
+"""
+tobacco = """
+Photograph of a single large dried green tobacco leaf standing upright,
+alone on a plain light grey background, studio light, sharp focus,
+realistic.
+"""
+hides = """
+Photograph of a single flat tanned cowhide, brown and hairy, spread out
+like a rug in the shape of an animal skin with four short flaps for the
+legs, no head, no animal, hung upright, alone on a plain light grey
+background, studio light, sharp focus, realistic.
+"""
+cannon = """
+Photograph of a single 17th-century black iron ship's cannon on a small
+wooden carriage with wooden wheels, seen exactly from the side, its
+muzzle pointing to the right, alone on a plain light grey background,
+studio light, sharp focus, realistic.
+"""
+gem = """
+Photograph of a single round green glass jewel set in a small brass
+mount, seen from the front, alone on a plain light grey background,
+studio light, sharp focus, realistic.
+"""
+carving = """
+Photograph of a long, low, symmetrical baroque pediment ornament of
+carved gilded wood, five times wider than tall: big acanthus leaves and
+curling scrolls sweeping out to the far left and far right ends from a
+central fan of leaves, alone on a plain light grey background, seen
+from the front, studio light, sharp focus, realistic.
+"""
+scroll = """
+Photograph of a single long horizontal cartouche of polished brass, a
+plain smooth cream panel in the middle and curled scroll ends at the
+left and right, much wider than tall, alone on a plain light grey
+background, seen from the front, studio light, sharp focus, realistic.
+"""
+colours = """
+A simple flat emblem in the style of a crude stencil, solid flat shapes
+with hard edges, no shading, no texture, filling the whole picture edge
+to edge on a plain solid black background: a white skull above two
+crossed white bones.
+"""
+[asset.board.words.eng]
+food = "Food"
+goods = "Goods"
+sugar = "Sugar"
+tobacco = "Tobacco"
+hides = "Hides"
+cannon = "Cannon"
+sell = "Sell"
+buy = "Buy"
+pcs = "pcs"
+merchant = "Merchant"
+overboard = "Throw\noverboard"
+captured = "Captured\nship"
+plundered = "Plundered\ntown"
+take_all = "Take all"
+space = "Space in hold"
+tons = "tons."
+ok = "O.K."
+[asset.board.words.fre]
+food = "Vivres"
+goods = "Cargaison"
+sugar = "Sucre"
+tobacco = "Tabac"
+hides = "Peaux"
+cannon = "Canons"
+sell = "Vendre"
+buy = "Acheter"
+pcs = "pcs"
+merchant = "Marchand"
+overboard = "Jeter\npar-dessus\nbord"
+captured = "Navire\ncapturé"
+plundered = "Ville\npillée"
+take_all = "Tout prendre"
+space = "Place dans\nla cale"
+tons = "tonnes"
+ok = "O.K."
+[asset.board.words.ger]
+food = "Proviant"
+goods = "Waren"
+sugar = "Zucker"
+tobacco = "Tabak"
+hides = "Felle"
+cannon = "Kanonen"
+sell = "Verkaufen"
+buy = "Kaufen"
+pcs = "St."
+merchant = "Kaufmann"
+overboard = "Über Bord\nwerfen"
+captured = "Gekapertes\nSchiff"
+plundered = "Geplünderte\nStadt"
+take_all = "Alles\nnehmen"
+space = "Platz im\nFrachtraum"
+tons = "Tonnen"
+ok = "OK"
