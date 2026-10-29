@@ -230,6 +230,7 @@ struct jukebox {
 	int		 tune_on;
 	float		 tune_volume;
 	int		 tune_fading;
+	int		 paused;	/* held for the game's pause */
 };
 
 static void
@@ -336,6 +337,21 @@ jukebox_feed(struct game *g, struct jukebox *j)
 	const char *alt = g->music_alt;
 
 	if (!j->ready)
+		return;
+	/* The pause holds the music where it is (driver calls 6 and 7,
+	 * VA 0x2e91). */
+	if (g->paused != j->paused) {
+		j->paused = g->paused;
+		if (j->m != NULL && j->paused)
+			PauseAudioStream(j->stream);
+		else if (j->m != NULL)
+			ResumeAudioStream(j->stream);
+		if (j->tune_on && j->paused)
+			PauseMusicStream(j->tune);
+		else if (j->tune_on)
+			ResumeMusicStream(j->tune);
+	}
+	if (j->paused)
 		return;
 	g->music_request = -1;
 	g->music_alt = NULL;

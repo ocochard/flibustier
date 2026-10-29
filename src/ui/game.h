@@ -268,6 +268,7 @@ struct game {
 	struct career_end	 end;
 	int			 end_page, end_forced, end_phrase;
 	int			 quit_prompt;	/* the cabin's "Quit (Y/N)" */
+	int			 paused;	/* "Game Paused", until P again */
 	int			 panel_abandon;	/* the panel picks a ship to leave */
 	int			 panel_replace;	/* ... to make room for a prize */
 	/* After a sea battle, the steps still to show. */

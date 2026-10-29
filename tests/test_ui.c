@@ -243,6 +243,13 @@ test_menus(void)
 		CHECK(strcmp(g->career.name, "A") == 0);
 		game_free(g);
 	}
+	/* P is a letter of the name, not the pause. */
+	g = play("eng", "enter enter enter left enter right enter enter "
+	    "type:Pip");
+	if (g != NULL) {
+		CHECK(strcmp(g->career.name, "Pip") == 0 && !g->paused);
+		game_free(g);
+	}
 	/* The name starts as "Incognito": Enter keeps it, Backspace does
 	 * nothing until a letter replaces it; 11 letters at most. */
 	g = play("eng", "enter enter enter left enter right enter enter bs");
@@ -484,6 +491,28 @@ test_sailing(void)
 		game_tick(g);
 		game_draw(g);
 		CHECK(was != NULL && memcmp(was, g->fb.px, FB_W * FB_H) == 0);
+		free(was);
+	}
+	/* P pauses (VA 0x2e91): the rules stand still under the "Game
+	 * Paused" plaque, other keys are dropped, and P goes on. */
+	{
+		uint8_t *was = malloc(FB_W * FB_H);
+		uint32_t ticks = g->sim.fleet.ticks;
+		int h = g->sim.fleet.heading;
+
+		CHECK(was != NULL);
+		CHECK(game_script(g, "type:p wait:64 hold:right:16 esc") == 0 &&
+		    g->paused && g->screen == &screen_sail);
+		CHECK(g->sim.fleet.ticks == ticks &&
+		    g->sim.fleet.heading == h && g->turn == 0);
+		game_draw(g);
+		if (was != NULL)
+			memcpy(was, g->fb.px, FB_W * FB_H);
+		CHECK(game_script(g, "type:P") == 0 && !g->paused);
+		game_draw(g);
+		CHECK(was != NULL && memcmp(was, g->fb.px, FB_W * FB_H) != 0);
+		CHECK(game_script(g, "wait:64") == 0 &&
+		    g->sim.fleet.ticks > ticks);
 		free(was);
 	}
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */

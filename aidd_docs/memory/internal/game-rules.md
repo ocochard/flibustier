@@ -2498,6 +2498,28 @@ about 0.1 ms each, and starts the dissolve at cell 0.
     (268, 449), then keeps waiting.
   - The engine draws the same plaque after 420 idle ticks wherever it
     waits for a key.
+- **Hot keys (table VA `0x321e8`, VA `0x2d60`):** every wait for input
+  (20 call sites: menus, the identity screens, sailing, on foot, the
+  map...) first checks for Q, P and V, either case; the keyboard poll
+  (VA `0x275a2`) hands Q and P to the same handlers. Q and P do nothing
+  while the screen is faded out (word VA `0x4c858`, set by the fade out
+  at VA `0x1d3a5`, cleared by the fade in at VA `0x1d476`).
+  - **P, pause (VA `0x2e91`):** the music driver pauses (call 6), the
+    pointer hides, and the plaque of `misc.crs` frame 5 ("Game
+    Paused") is drawn at (268, 218), where "Quit (Y/N)" goes. The game
+    then waits for P or p only; other keys are dropped. The plaque's
+    background is put back, the pointer shown, the music resumed (call
+    7), and the game goes on where it was.
+  - **Q (VA `0x2db9`):** "Quit (Y/N)" (frame 4) from anywhere; Y leaves
+    for DOS. Not reproduced: the engine quits from the cabin.
+  - **V (VA `0x2f38`):** cycles a word at VA `0x4c0ec` through 0, 1, 2.
+    Not traced further.
+  - A string "Game Paused. (Press space key to resume.)" (VA `0x33c26`)
+    has a pointer at VA `0x33c50` that no code reads: the plaque
+    replaced it.
+  - The engine pauses on P anywhere but while a screen fades or a name
+    is typed (where P is a letter). Key releases still reach the
+    screen, so a key let go during the pause does not stay held.
 - **The mouse pointer:** drawn by the game itself (VA `0x250cb`, from
   the mouse handler at VA `0x248f1` unless the hide flag at VA
   `0x49b5e` is set). Most screens hide it only while they redraw (VA

@@ -18,6 +18,7 @@
 #include "screen.h"
 
 #define FADE_STEP	32	/* brightness per tick: 8 ticks per fade */
+#define PAUSE_FRAME	5	/* misc.crs: "Game Paused" */
 
 const char *
 game_str(const struct game *g, size_t i)
@@ -351,12 +352,24 @@ game_event(struct game *g, const struct ui_event *ev)
 	}
 	if (g->fading == -1 || g->quit)
 		return;		/* input is ignored while leaving a screen */
+	/* P pauses and P resumes (VA 0x2e91), but not during a fade or
+	 * while a name is typed. */
+	if (ev->type == EV_CHAR && (ev->ch == 'p' || ev->ch == 'P') &&
+	    g->fading == 0 && g->screen != &screen_name) {
+		g->paused = !g->paused;
+		return;
+	}
+	/* Releases go through, so no key stays held after the pause. */
+	if (g->paused && ev->type != EV_KEYUP)
+		return;
 	g->screen->event(g, ev);
 }
 
 void
 game_tick(struct game *g)
 {
+	if (g->paused)
+		return;
 	if (g->fading < 0) {
 		g->brightness -= FADE_STEP;
 		if (g->brightness <= 0) {
@@ -399,7 +412,8 @@ game_tick(struct game *g)
 static int
 pointer_hidden(const struct game *g)
 {
-	return (g->screen == &screen_intro || g->screen == &screen_sail ||
+	return (g->paused || g->screen == &screen_intro ||
+	    g->screen == &screen_sail ||
 	    (g->screen == &screen_battle && g->btl_stage == 0) ||
 	    (g->screen == &screen_land && g->land_stage == 0));
 }
@@ -428,6 +442,8 @@ game_draw(struct game *g)
 	else
 		fb_clear(&g->fb, 0);
 	g->screen->draw(g);
+	if (g->paused && g->misc.count > PAUSE_FRAME)
+		fb_frame(&g->fb, &g->misc.frames[PAUSE_FRAME], 268, 218);
 	/* The pointer, its tip at the top left, once the mouse is used. */
 	if (g->pointer_seen && g->cursor.pixels != NULL && !pointer_hidden(g))
 		fb_frame(&g->fb, &g->cursor, g->pointer_x, g->pointer_y);
