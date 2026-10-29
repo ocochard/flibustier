@@ -268,7 +268,8 @@ struct game {
 	struct career_end	 end;
 	int			 end_page, end_forced, end_phrase;
 	int			 quit_prompt;	/* the cabin's "Quit (Y/N)" */
-	int			 paused;	/* "Game Paused", until P again */
+	/* Held by a hot key: 'P' "Game Paused", 'Q' "Quit (Y/N)", 0 not. */
+	int			 paused;
 	int			 panel_abandon;	/* the panel picks a ship to leave */
 	int			 panel_replace;	/* ... to make room for a prize */
 	/* After a sea battle, the steps still to show. */
@@ -354,6 +355,8 @@ void	game_draw(struct game *g);	/* into g->fb */
 /* Strings, "" when missing. */
 const char	*game_str(const struct game *g, size_t i);
 const char	*game_word(const struct game *g, size_t group, size_t i);
+/* A Y/N prompt's yes, in the language. */
+int	game_yes(const struct game *g, const struct ui_event *ev);
 
 /* The digitised effects by where the original plays them (VA 0x7d82). */
 enum {

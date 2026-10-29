@@ -340,8 +340,8 @@ jukebox_feed(struct game *g, struct jukebox *j)
 		return;
 	/* The pause holds the music where it is (driver calls 6 and 7,
 	 * VA 0x2e91). */
-	if (g->paused != j->paused) {
-		j->paused = g->paused;
+	if ((g->paused != 0) != j->paused) {
+		j->paused = g->paused != 0;
 		if (j->m != NULL && j->paused)
 			PauseAudioStream(j->stream);
 		else if (j->m != NULL)

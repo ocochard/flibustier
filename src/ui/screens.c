@@ -1537,8 +1537,8 @@ const struct screen screen_name = {
  * keys at VA 0x31610).  The engine also takes the first letter of the
  * language's "Yes", O in French and J in German, unless it is N.
  */
-static int
-yes_key(const struct game *g, const struct ui_event *ev)
+int
+game_yes(const struct game *g, const struct ui_event *ev)
 {
 	int c = (unsigned char)game_str(g, S_YES)[0];
 
@@ -2549,7 +2549,7 @@ cabin_event(struct game *g, const struct ui_event *ev)
 
 	if (g->quit_prompt) {
 		/* Yes quits to the welcome menu, N or Escape stays. */
-		if (yes_key(g, ev)) {
+		if (game_yes(g, ev)) {
 			g->quit_prompt = 0;
 			g->started = 0;
 			game_goto(g, &screen_welcome);
@@ -3013,7 +3013,7 @@ sail_event(struct game *g, const struct ui_event *ev)
 
 	/* "Disembark" (VA 0x315d): yes or N; Enter and Escape as well. */
 	if (g->ashore_prompt) {
-		if (yes_key(g, ev) ||
+		if (game_yes(g, ev) ||
 		    (ev->type == EV_KEY && ev->key == UI_KEY_ENTER)) {
 			g->ashore_prompt = 0;
 			g->turn = 0;

@@ -2510,16 +2510,19 @@ about 0.1 ms each, and starts the dissolve at cell 0.
     then waits for P or p only; other keys are dropped. The plaque's
     background is put back, the pointer shown, the music resumed (call
     7), and the game goes on where it was.
-  - **Q (VA `0x2db9`):** "Quit (Y/N)" (frame 4) from anywhere; Y leaves
-    for DOS. Not reproduced: the engine quits from the cabin.
+  - **Q (VA `0x2db9`):** the same, with the plaque of frame 4 ("Quit
+    (Y/N)") and the keys at VA `0x31610`: Y blacks the screen and
+    leaves the program (VA `0x737`); N goes on; other keys are dropped.
   - **V (VA `0x2f38`):** cycles a word at VA `0x4c0ec` through 0, 1, 2.
     Not traced further.
   - A string "Game Paused. (Press space key to resume.)" (VA `0x33c26`)
     has a pointer at VA `0x33c50` that no code reads: the plaque
     replaced it.
-  - The engine pauses on P anywhere but while a screen fades or a name
-    is typed (where P is a letter). Key releases still reach the
-    screen, so a key let go during the pause does not stay held.
+  - The engine takes P and Q anywhere but while a screen fades or a
+    name is typed (where they are letters). Key releases still reach
+    the screen, so a key let go during the pause does not stay held.
+    Q's prompt takes the language's yes like the other prompts, and
+    Escape as N; yes fades out and closes the program.
 - **The mouse pointer:** drawn by the game itself (VA `0x250cb`, from
   the mouse handler at VA `0x248f1` unless the hide flag at VA
   `0x49b5e` is set). Most screens hide it only while they redraw (VA

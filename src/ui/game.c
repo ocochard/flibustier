@@ -18,6 +18,7 @@
 #include "screen.h"
 
 #define FADE_STEP	32	/* brightness per tick: 8 ticks per fade */
+#define QUIT_FRAME	4	/* misc.crs: "Quit (Y/N)" */
 #define PAUSE_FRAME	5	/* misc.crs: "Game Paused" */
 
 const char *
@@ -352,11 +353,37 @@ game_event(struct game *g, const struct ui_event *ev)
 	}
 	if (g->fading == -1 || g->quit)
 		return;		/* input is ignored while leaving a screen */
-	/* P pauses and P resumes (VA 0x2e91), but not during a fade or
-	 * while a name is typed. */
-	if (ev->type == EV_CHAR && (ev->ch == 'p' || ev->ch == 'P') &&
-	    g->fading == 0 && g->screen != &screen_name) {
-		g->paused = !g->paused;
+	/*
+	 * The hot keys (VA 0x2d60), but not during a fade or while a name
+	 * is typed: P pauses until P again (VA 0x2e91); Q asks "Quit
+	 * (Y/N)" and yes leaves the program (VA 0x2db9).  Each waits for
+	 * its own answer only.
+	 */
+	if (ev->type == EV_CHAR && g->fading == 0 &&
+	    g->screen != &screen_name) {
+		if (g->paused == 'Q' && game_yes(g, ev)) {
+			g->paused = 0;
+			game_music(g, MUS_SILENCE);
+			game_goto(g, NULL);
+			return;
+		}
+		if (g->paused == 'Q' && (ev->ch == 'n' || ev->ch == 'N')) {
+			g->paused = 0;
+			return;
+		}
+		if ((ev->ch == 'p' || ev->ch == 'P') && g->paused != 'Q') {
+			g->paused = g->paused ? 0 : 'P';
+			return;
+		}
+		if ((ev->ch == 'q' || ev->ch == 'Q') && !g->paused) {
+			g->paused = 'Q';
+			return;
+		}
+	}
+	/* Escape stays, as at the cabin's prompt. */
+	if (g->paused == 'Q' && ev->type == EV_KEY &&
+	    ev->key == UI_KEY_ESCAPE) {
+		g->paused = 0;
 		return;
 	}
 	/* Releases go through, so no key stays held after the pause. */
@@ -443,7 +470,8 @@ game_draw(struct game *g)
 		fb_clear(&g->fb, 0);
 	g->screen->draw(g);
 	if (g->paused && g->misc.count > PAUSE_FRAME)
-		fb_frame(&g->fb, &g->misc.frames[PAUSE_FRAME], 268, 218);
+		fb_frame(&g->fb, &g->misc.frames[g->paused == 'Q' ?
+		    QUIT_FRAME : PAUSE_FRAME], 268, 218);
 	/* The pointer, its tip at the top left, once the mouse is used. */
 	if (g->pointer_seen && g->cursor.pixels != NULL && !pointer_hidden(g))
 		fb_frame(&g->fb, &g->cursor, g->pointer_x, g->pointer_y);

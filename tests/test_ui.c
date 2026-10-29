@@ -243,11 +243,15 @@ test_menus(void)
 		CHECK(strcmp(g->career.name, "A") == 0);
 		game_free(g);
 	}
-	/* P is a letter of the name, not the pause. */
+	/* P and Q are letters of the name, not hot keys. */
 	g = play("eng", "enter enter enter left enter right enter enter "
-	    "type:Pip");
+	    "type:PipQ");
 	if (g != NULL) {
-		CHECK(strcmp(g->career.name, "Pip") == 0 && !g->paused);
+		CHECK(strcmp(g->career.name, "PipQ") == 0 && !g->paused);
+		/* Elsewhere Q's yes leaves the program. */
+		CHECK(game_script(g, "enter type:Q") == 0 &&
+		    g->paused == 'Q');
+		CHECK(game_script(g, "type:y wait:40") == 0 && g->quit);
 		game_free(g);
 	}
 	/* The name starts as "Incognito": Enter keeps it, Backspace does
@@ -514,6 +518,17 @@ test_sailing(void)
 		CHECK(game_script(g, "wait:64") == 0 &&
 		    g->sim.fleet.ticks > ticks);
 		free(was);
+	}
+	/* Q asks "Quit (Y/N)" (VA 0x2db9), holding the game like P; P is
+	 * dropped there, and N or Escape go on (not to the cabin). */
+	{
+		uint32_t ticks = g->sim.fleet.ticks;
+
+		CHECK(game_script(g, "type:q wait:64 type:p") == 0 &&
+		    g->paused == 'Q' && g->sim.fleet.ticks == ticks);
+		CHECK(game_script(g, "type:n") == 0 && !g->paused);
+		CHECK(game_script(g, "type:Q esc") == 0 && !g->paused &&
+		    g->screen != &screen_cabin);
 	}
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */
 	game_free(g);
