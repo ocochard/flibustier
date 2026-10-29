@@ -1496,6 +1496,31 @@ test_land_battle(void)
 	CHECK(g->sim.land.u[1].men == 60 && g->sim.land.u[2].men == 60);
 	/* A pass every 36 frames. */
 	CHECK(game_script(g, "wait:36") == 0 && g->sim.land.pass >= 1);
+	/* --smooth: a unit that moved glides between passes; without, it
+	 * stays put. */
+	{
+		uint8_t *was = malloc(FB_W * FB_H);
+		uint32_t pass;
+		int smooth, i;
+
+		CHECK(was != NULL);
+		for (smooth = 1; smooth >= 0 && was != NULL; smooth--) {
+			g->smooth = smooth;
+			while (g->land_wait != 0)
+				game_tick(g);
+			pass = g->sim.land.pass;
+			g->land_from[1][0] = g->sim.land.u[1].x - 20;
+			game_draw(g);
+			memcpy(was, g->fb.px, FB_W * FB_H);
+			for (i = 0; i < 18; i++)	/* half a pass */
+				game_tick(g);
+			game_draw(g);
+			CHECK(g->sim.land.pass == pass);
+			CHECK((memcmp(was, g->fb.px, FB_W * FB_H) != 0) ==
+			    smooth);
+		}
+		free(was);
+	}
 	/* Won: on to the assault. */
 	g->sim.land.result = 2;
 	CHECK(game_script(g, "wait:80") == 0 && g->screen == &screen_assault);

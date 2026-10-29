@@ -38,7 +38,7 @@ usage(void)
 	    "commands:\n"
 	    "  (none)        play [--crt] [--smooth] [--screenshot OUT.png\n"
 	    "                [--frames N]] (--crt, or F2 while playing: a CRT\n"
-	    "                look; --smooth: the ship and clouds glide\n"
+	    "                look; --smooth: ships, men and clouds glide\n"
 	    "                between moves)\n"
 	    "  --debug       the original's debug mode: while sailing N stops\n"
 	    "                sightings, E brings them back, R makes you near\n"

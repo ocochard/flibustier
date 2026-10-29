@@ -209,6 +209,8 @@ struct game {
 						 * hsclbtl, fortbtl */
 	int			 land_button;	/* Space, Enter or a click */
 	int			 land_wait;
+	int			 land_from[LAND_UNITS][2];	/* --smooth: the
+						 * units at the last pass */
 	int			 land_stage;	/* 0 fighting, 1 the failure */
 	int			 panel_cursor;	/* the fleet panel: 0-7 a ship, 8 done */
 	unsigned		 panel_marked;	/* ships selected, bit by bit */

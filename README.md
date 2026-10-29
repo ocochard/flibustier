@@ -100,9 +100,10 @@ The mouse works everywhere; the keys are the original's:
 - Menus and boards: the arrows and Enter, or click.
 
 `--crt` (or F2 while playing) gives the window a CRT look, like
-dosbox-staging's default shader. `--smooth` draws the ship and the
-clouds gliding between the sailing loop's moves (twelve a second)
-instead of stepping, a pass behind the rules. `--debug` turns on the original's debug
+dosbox-staging's default shader. `--smooth` draws the ship, the
+landing party and the clouds gliding between the sailing loop's moves
+(twelve a second), and the land battle's units between theirs (every 0.6
+seconds), instead of stepping, a move behind the rules. `--debug` turns on the original's debug
 mode (its `RDM` argument): while sailing, N stops sightings and E brings
 them back, R makes you near invulnerable and F ends it, and a right click
 on the cabin's map moves the ship there. Careers end by retiring at the bank

@@ -7658,6 +7658,7 @@ const struct screen screen_fleet_panel = {
  * and muskets, and the terrain (CSTN 32) with its picture.
  */
 #define LAND_FRAMES		36
+#define LAND_JUMP		64	/* farther in a pass: a jump */
 #define W_LAND			32	/* clear... "Terrain:", "Morale:" */
 #define W_MORALE		69
 #define W_POSSESSIVE		92	/* 0: "'s " */
@@ -7667,6 +7668,18 @@ static const char *land_banks[5] = {
 	"cur/lbtlmisc", "cur/urlbtl", "cur/hsilbtl", "cur/hsclbtl",
 	"cur/fortbtl",
 };
+
+/* The units where this pass leaves them, to glide from (--smooth). */
+static void
+land_pose(struct game *g)
+{
+	int i;
+
+	for (i = 0; i < LAND_UNITS; i++) {
+		g->land_from[i][0] = g->sim.land.u[i].x;
+		g->land_from[i][1] = g->sim.land.u[i].y;
+	}
+}
 
 static void
 land_enter(struct game *g)
@@ -7683,6 +7696,7 @@ land_enter(struct game *g)
 	g->land_button = 0;
 	g->land_wait = 0;
 	g->land_stage = 0;
+	land_pose(g);
 }
 
 static void
@@ -7750,6 +7764,7 @@ land_tick(struct game *g)
 	if (++g->land_wait < LAND_FRAMES)
 		return;
 	g->land_wait = 0;
+	land_pose(g);
 	/* A tap released between two passes still moves on the next. */
 	walk = g->march_held | g->march_tap;
 	g->march_tap = 0;
@@ -7797,7 +7812,7 @@ land_draw(struct game *g)
 	const struct sim_land *l = &g->sim.land;
 	const struct land_unit *u;
 	char name[96];
-	int cx, cy, i, k, w, nation;
+	int cx, cy, i, k, w, nation, x, y;
 
 	if (g->btl_tiles.tile_w == 32)
 		for (cy = 0; cy < BATTLE_SCREEN; cy++)
@@ -7818,8 +7833,17 @@ land_draw(struct game *g)
 		 * nation + 6 (VA 0x6034). */
 		k = i < 4 ? (i == l->selected ? 0 : 1) :
 		    (u->flags & 4) ? nation + 6 : nation + 2;
-		if ((size_t)k < g->land_spr[0].count)
-			fb_frame(&g->fb, &g->land_spr[0].frames[k], u->x, u->y);
+		if ((size_t)k >= g->land_spr[0].count)
+			continue;
+		/* With --smooth, on the way from the last pass, a pass
+		 * behind the rules, in 1/LAND_FRAMES pixels. */
+		w = g->smooth && g->land_stage == 0 && abs(u->x - g->land_from[i][0]) <= LAND_JUMP &&
+		    abs(u->y - g->land_from[i][1]) <= LAND_JUMP ? g->land_wait :
+		    LAND_FRAMES;
+		x = g->land_from[i][0] * (LAND_FRAMES - w) + u->x * w;
+		y = g->land_from[i][1] * (LAND_FRAMES - w) + u->y * w;
+		fb_frame_sub(&g->fb, &g->land_spr[0].frames[k], x, y,
+		    LAND_FRAMES);
 	}
 	g->ink[0] = g->ink[1] = g->ink[2] = 0;
 	snprintf(name, sizeof(name), "%s%s", g->sim.player.name,

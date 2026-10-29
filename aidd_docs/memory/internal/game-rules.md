@@ -219,8 +219,9 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
   `--smooth`, the engine draws them on their way from the pass before, one 60 Hz frame at a time
   (the heading too), so they lag the rules by one pass. A move of more
   than 16 pixels in one pass (a cloud coming back at the edge, the
-  party landing or boarding) is drawn as a jump. The rules are not
-  affected.
+  party landing or boarding) is drawn as a jump. The land battle's
+  units glide the same way between its passes (0.6 seconds), a move of
+  more than 64 pixels drawn as a jump. The rules are not affected.
 - **Ticks:** a tick counter; 64 ticks make a day. When a voyage ends,
   the game adds `ticks / 64 + 1` days (VA `0x28789`).
 - **The cabin:** Space opens it (key table VA `0x33d90`, Space handler
