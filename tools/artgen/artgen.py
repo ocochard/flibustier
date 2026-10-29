@@ -2476,6 +2476,113 @@ def make_title(args, spec, a, profile, seed):
                       for k_, v in t["paint"].items()}}
 
 
+def make_bigs(args, spec, a, profile, seed):
+    """The identity screen's big pictures, each its own bank: objects
+    painted and cut out (the abilities' symbols), a plate painted whole,
+    the captain's portraits in their oval, and the nations' flags waved
+    by flags/flag.py from their encounter designs, without a staff."""
+    import boards
+    k = spec["pack"]["art_height"] / SCREEN_H
+    work = os.path.join(args.pack, "art", "big.work")
+    os.makedirs(work, exist_ok=True)
+    prefix = "flibustier/" + a["id"].replace("/", "-")
+    host = args.render_host
+    script = os.path.join(HERE, "flags", "flag.py")
+    out = {}
+    for n, it in enumerate(a["bigs"]):
+        name, kind = it["bank"], it["kind"]
+        w, h = it["size"]
+        W, H = round(w * k), round(h * k)
+        # Each painting kept under its description's hash (and the flag
+        # model's), so a change paints again only what changed.
+        tag = hashlib.sha256(json.dumps([it, seed + n, profile, hashlib.sha256(
+            open(script, "rb").read()).hexdigest() if kind == "flag"
+            else "", it.get("crop", 0.1) if kind == "flag" else 0],
+            sort_keys=True).encode()).hexdigest()[:12]
+        src = os.path.join(work, "%s-%s.png" % (name, tag))
+        png = os.path.join(args.pack, "art", "%s.png" % name)
+        try:
+            if os.path.exists(src):
+                pass
+            elif kind == "flag":
+                free(args.server)
+                design = [r for r in spec["asset"]
+                          if r["id"] == it["design_of"]][0]["flag"]["design"]
+                dpath = os.path.join(work, "%s-design.png" % name)
+                with open(dpath, "wb") as f:
+                    f.write(render(args.server, design_workflow(
+                        spec, profile, seed, design, 1200, 800,
+                        prefix + "-design")))
+                # The cloth only: the photograph's edges keep its
+                # backdrop and a pole's sleeve.
+                c = it.get("crop", 0.1)
+                boards.magick(dpath, "-gravity", "center", "-crop",
+                              "%dx%d+0+0" % (round(1200 * (1 - 2 * c)),
+                                             round(800 * (1 - 2 * c))),
+                              "+repage", dpath)
+                remote = "flibustier-flags/big-%s" % name
+                subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                                "mkdir -p %s" % remote], check=True,
+                               stdin=subprocess.DEVNULL)
+                subprocess.run(["scp", "-q", script, dpath,
+                                "%s:%s/" % (host, remote)], check=True)
+                subprocess.run(["ssh", "-o", "BatchMode=yes", host,
+                                "cd %s && rm -rf out && blender -b -P "
+                                "flag.py -- --design %s --out out --frame "
+                                "900 --frames 1 --no-staff --tilt %g "
+                                "> blender.log 2>&1" % (
+                                    remote, os.path.basename(dpath),
+                                    it.get("tilt", -35))],
+                               check=True, stdin=subprocess.DEVNULL)
+                subprocess.run(["scp", "-q", "%s:%s/out/0.png" % (
+                    host, remote), src], check=True)
+            else:
+                free(args.server)
+                with open(src, "wb") as f:
+                    f.write(render(args.server, texture_workflow(
+                        spec, profile, seed + n, it["prompt"], 1024,
+                        prefix + "-" + name)))
+                if kind == "object":
+                    free(args.server)
+                    up = upload(args.server, src, "flibustier-big-src.png")
+                    with open(src, "wb") as f:
+                        f.write(render(args.server, cutout_workflow(
+                            up, 1024, 1024, prefix + "-cut")))
+        except (RuntimeError, subprocess.CalledProcessError) as e:
+            print("%s: %s: %s" % (a["id"], name, e), file=sys.stderr)
+            return None
+        if kind in ("object", "flag"):
+            boards.fit(png, src, w, h, k)
+        elif kind == "plate":
+            # The whole painting, its edges burnt away softly.
+            boards.magick(src, "-resize", "%dx%d^" % (W, H), "-gravity",
+                          "center", "-extent", "%dx%d" % (W, H), "(",
+                          "-size", "%dx%d" % (W, H), "xc:black", "-fill",
+                          "white", "-draw", "rectangle %d,%d %d,%d" % (
+                              round(W * .05), round(H * .05),
+                              round(W * .95), round(H * .95)),
+                          "-blur", "0x%g" % (k * 3), ")", "-alpha", "off",
+                          "-compose", "copy-opacity", "-composite", png)
+        else:		# portrait: in the oval, its rim soft
+            boards.magick(src, "-resize", "%dx%d^" % (W, H), "-gravity",
+                          "north", "-extent", "%dx%d" % (W, H), "(",
+                          "-size", "%dx%d" % (W, H), "xc:black", "-fill",
+                          "white", "-draw", "ellipse %d,%d %d,%d 0,360" % (
+                              W // 2, H // 2, W // 2 - round(k),
+                              H // 2 - round(k)),
+                          "-blur", "0x%g" % k, ")", "-alpha", "off",
+                          "-compose", "copy-opacity", "-composite", png)
+        boards.magick(png, "-depth", 8, png)
+        write_sheet(os.path.join(args.pack, "art", "%s.sheet" % name),
+                    os.path.basename(png), [(W, H)],
+                    "Generated by tools/artgen/artgen.py (%s)." % kind)
+        out["spr/" + name] = "art/%s.sheet" % name
+        print("%s: %s done" % (a["id"], name))
+    return {"banks": out, "items": {
+        it["bank"]: " ".join(it.get("prompt", it.get("design_of", "")).split())
+        for it in a["bigs"]}}
+
+
 def write_manifest(pack, spec):
     """pack.ini: every asset that has art in the pack."""
     lines = ["# Generated by tools/artgen/artgen.py; see provenance/.",
@@ -2484,6 +2591,12 @@ def write_manifest(pack, spec):
              "art_height = %d" % spec["pack"]["art_height"], "",
              "[assets]"]
     for a in spec["asset"]:
+        if a.get("bigs"):
+            for it in a["bigs"]:
+                sheet = "art/%s.sheet" % it["bank"]
+                if os.path.exists(os.path.join(pack, sheet)):
+                    lines.append("spr/%s = %s" % (it["bank"], sheet))
+            continue
         if a.get("cave") or a.get("title"):
             for name in (a.get("cave") or a.get("title"))["banks"]:
                 sheet = "art/%s.sheet" % name
@@ -2631,11 +2744,12 @@ def main():
                                             time.time() - t0))
             continue
         if a.get("sprite") or a.get("clouds") or a.get("board") or \
-                a.get("cave") or a.get("title"):
+                a.get("cave") or a.get("title") or a.get("bigs"):
             t0 = time.time()
             record = (make_clouds if a.get("clouds") else make_board
                       if a.get("board") else make_cave if a.get("cave")
                       else make_title if a.get("title")
+                      else make_bigs if a.get("bigs")
                       else make_sprite)(args, spec, a, profile, seed)
             if record is None:
                 failed.append(a["id"])

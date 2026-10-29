@@ -13,7 +13,7 @@ by waves running out from the staff; after 8 frames the waves are back
 where they began, so the frames loop.  A Jolly Roger's fly is torn.
 
     blender -b -P flag.py -- --design DESIGN.png --out DIR [--frame 450]
-                          [--torn] [--frames 8]
+                          [--torn] [--frames 8] [--no-staff] [--tilt 22]
 
 writes DIR/0.png to DIR/7.png, transparent around the flag and staff.
 """
@@ -126,6 +126,10 @@ def main():
     ap.add_argument("--frame", type=int, default=450)
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--torn", action="store_true")
+    ap.add_argument("--no-staff", action="store_true",
+                    help="the cloth alone, as the identity screen's flags")
+    ap.add_argument("--tilt", type=float, default=22,
+                    help="the cloth's lean, in degrees")
     args = ap.parse_args(argv)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -159,15 +163,24 @@ def main():
     flag = flag_mesh(width, height, cloth(args.design, args.torn))
     flag.parent = rig
     # The staff, rising from the lower left, the flag at its head.
-    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.025,
-                                        depth=2.4,
-                                        location=(-0.03, 0, -0.1))
-    staff = bpy.context.object
-    staff.data.materials.append(material("staff", (0.12, 0.07, 0.03)))
-    staff.parent = rig
+    if not args.no_staff:
+        bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.025,
+                                            depth=2.4,
+                                            location=(-0.03, 0, -0.1))
+        staff = bpy.context.object
+        staff.data.materials.append(material("staff", (0.12, 0.07, 0.03)))
+        staff.parent = rig
     # As the original's: the staff leaning to the right, the flag flying
     # up to the right of it.
-    rig.rotation_euler = (0, math.radians(22), 0)
+    rig.rotation_euler = (0, math.radians(args.tilt), 0)
+    if args.no_staff:
+        # A soft light from the front too: the cloth alone shows its back
+        # where it curls, which the sun leaves dark.
+        fill = bpy.data.lights.new("fill", "SUN")
+        fill.energy = 1.6
+        fob = bpy.data.objects.new("fill", fill)
+        fob.rotation_euler = (math.radians(90), 0, 0)
+        bpy.context.collection.objects.link(fob)
 
     cam = bpy.data.cameras.new("cam")
     cam.type = "ORTHO"

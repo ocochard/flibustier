@@ -2877,3 +2877,125 @@ Close-up photograph, straight on and flat, of old polished gold leaf on
 carved wood, warm and slightly worn, soft highlights, filling the whole
 image, no pattern, no edge.
 """
+
+# The identity screen's big pictures (pic/idselect): the captain in the
+# oval at each difficulty, the chosen nation's flag on the left, the
+# chosen ability's symbol on the right.  Each is its own bank; its size
+# is the game's frame.
+[[asset]]
+id = "spr/bigfen"
+file = "art/bigfen.sheet"
+seed = 1660
+source = "the identity screen's pictures, described"
+prompt = ""
+[[asset.bigs]]
+bank = "bigfen"
+kind = "object"
+size = [110, 283]
+prompt = """
+Photograph of a single 17th-century rapier standing upright, its point
+down, a swept steel hilt with curling guards and a dark wire-bound grip
+at the top, its long slender blade bright, alone on a plain light grey
+background, seen from the front, studio light, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bigcha"
+kind = "object"
+size = [110, 195]
+prompt = """
+Photograph of a single deep red rose in full bloom on a long green stem
+with two leaves, standing upright, alone on a plain light grey
+background, studio light, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bignav"
+kind = "plate"
+size = [200, 211]
+prompt = """
+Photograph from straight above of an old brass mariner's astrolabe
+lying on a dark blue star chart drawn on old paper, the chart's stars
+and lines faint, the astrolabe's ring and pointer worn and glinting,
+filling the picture, warm candle light, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "biggun"
+kind = "object"
+size = [194, 211]
+prompt = """
+Photograph of a single 17th-century black iron ship's cannon on its
+wooden carriage with four small wooden wheels, seen from the front left
+at an angle, its muzzle pointing to the upper right, alone on a plain
+light grey background, studio light, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bigmed"
+kind = "object"
+size = [132, 211]
+prompt = """
+Photograph of a single old bronze caduceus standing upright: a short
+staff with two snakes coiled around it and a pair of spread wings at its
+top, alone on a plain light grey background, seen from the front,
+studio light, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bigsflg"
+kind = "flag"
+size = [199, 261]
+design_of = "pic/f-span"
+[[asset.bigs]]
+bank = "bigeflg"
+kind = "flag"
+size = [226, 261]
+design_of = "pic/f-engl"
+[[asset.bigs]]
+bank = "bigfflg"
+kind = "flag"
+size = [213, 261]
+design_of = "pic/f-french"
+[[asset.bigs]]
+bank = "bigdflg"
+kind = "flag"
+size = [213, 218]
+design_of = "pic/f-dutch"
+[[asset.bigs]]
+bank = "bigman0"
+kind = "portrait"
+size = [158, 207]
+prompt = """
+Head and shoulders portrait photograph of a young buccaneer of twenty
+five, lean, clean-shaven, long brown hair under a red kerchief, a gold
+ring in one ear, an open white linen shirt, against a pale blue sky,
+historical reenactment photography, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bigman1"
+kind = "portrait"
+size = [158, 207]
+prompt = """
+Head and shoulders portrait photograph of a buccaneer of thirty with
+long brown hair and a thin moustache, a brown leather coat over an open
+white shirt, against a cloudy evening sky, historical reenactment
+photography, sharp focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bigman2"
+kind = "portrait"
+size = [158, 207]
+prompt = """
+Head and shoulders portrait photograph of a sea captain of thirty five
+with long brown hair, a moustache and a small beard, a black tricorn
+hat, a dark blue coat with brass buttons and a leather baldric, against
+a blue sky with white clouds, historical reenactment photography, sharp
+focus, realistic.
+"""
+[[asset.bigs]]
+bank = "bigman3"
+kind = "portrait"
+size = [158, 207]
+prompt = """
+Head and shoulders portrait photograph of a famous pirate captain of
+forty with long dark curled hair, a moustache and a pointed beard, a
+broad black hat with a red plume, a rich red velvet coat with gold braid
+and a lace collar, against a stormy red sunset sky, historical
+reenactment photography, sharp focus, realistic.
+"""
