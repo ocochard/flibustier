@@ -358,6 +358,7 @@ Sword fights done (2026-10-26):
   asset list: art, fonts, music, sound effects and game data.
 - Tooling: a pack validator that lists IDs that are missing or unused.
 - Terrain and world data: [open-terrain.md](open-terrain.md).
+- Executable tables (game data, layouts, stories): [open-game-data.md](open-game-data.md).
 - Milestone: the game runs with no original data installed.
 
 ### Phase 10: polish

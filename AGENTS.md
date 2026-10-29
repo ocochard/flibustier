@@ -46,7 +46,7 @@ Replay tests: `tests/replays/*.jsonl` are fed twice to `flibustier-sim` via `tes
 
 ## Specs (read before touching rules or formats)
 
-`aidd_docs/memory/internal/`: `game-rules.md` (rules with VA references into the original EXE, and what could not be traced), `asset-formats.md`, `asset-packs.md` (ID scheme, pack stack), `sim-protocol.md` (JSON commands), `text-catalogue.md` (the role of each text entry, for open pack writers). Plans in `aidd_docs/plans/` (`roadmap.md`, `open-terrain.md`). Update the matching spec when behaviour changes.
+`aidd_docs/memory/internal/`: `game-rules.md` (rules with VA references into the original EXE, and what could not be traced), `asset-formats.md`, `asset-packs.md` (ID scheme, pack stack), `sim-protocol.md` (JSON commands), `text-catalogue.md` (the role of each text entry, for open pack writers). Plans in `aidd_docs/plans/` (`roadmap.md`, `open-terrain.md`, `open-game-data.md`). Update the matching spec when behaviour changes.
 
 ## Conventions
 

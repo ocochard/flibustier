@@ -114,7 +114,7 @@ stories, UI hotspots and layouts (board, tavern, town, cabin, weapons,
 cave, fleet panel, credits: the original's picture blocks only, open
 packs give their credits as text), the shade table, the mouse pointer, and the
 strings (`CSTR`/`CSTN`). They belong to the "open game data" format of
-roadmap decision 1, a separate plan.
+roadmap decision 1: [open-game-data.md](open-game-data.md).
 
 ## Decisions for the maintainer
 
