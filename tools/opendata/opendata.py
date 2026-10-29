@@ -80,6 +80,9 @@ def main():
     names = args.only or modules()
     for d in ("data", "pack.d", os.path.join("provenance", "data")):
         os.makedirs(os.path.join(args.pack, d), exist_ok=True)
+    # Modules that read the pack's own art (the tiles' terrain) find it
+    # here.
+    os.environ["OPENDATA_PACK"] = os.path.abspath(args.pack)
     rev = git_rev()
     date = datetime.date.today().isoformat()
     lines = {}
