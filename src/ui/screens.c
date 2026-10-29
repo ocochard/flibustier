@@ -1637,44 +1637,22 @@ const struct screen screen_confirm = {
 
 /*
  * The career's story (VA 0x139e2): on the frame picture with the
- * captain's portrait, pages of text from a byte script in the
- * executable, one script per career (era x 4 + flag slot):
- *   a CSTR number shows that text (with the treasure, a town, the year
- *   and the player's name); -2 waits for a key and turns the page;
- *   ')' waits for a key; 'a' is a sword fight; 0 ends the story.
- * '*' and ')' are the original's copy-protection question, which this
- * build always passes; codes '2'-'7' show nothing.
+ * captain's portrait, pages of text from the career's steps (struct
+ * ui_story_step, from data/stories or the executable): a text, a page
+ * turned or a key waited for, the sword fight.
  */
 #define STORY_TEXT_Y		340
 #define STORY_INK		2
-#define STORY_END		0
-#define STORY_PAGE		(-2)
-#define STORY_WAIT		')'
-#define STORY_CHECK		'*'
-#define STORY_FIGHT		'a'
-#define STORY_ASK		6
 #define S_TREASURE_FLEET	46
 
-/* The script for this career: the "index"th, after -1 separators. */
-static const uint8_t *
-story_script(const struct game *g, size_t *len)
+/* The story of this career: its scenario's index. */
+static int
+story_index(const struct game *g)
 {
-	const uint8_t *p = g->ui.story;
-	int index, n = 0;
-	size_t i = 0, start;
-
-	index = g->career.expedition >= 0 ? SCENARIO_CAREERS +
+	return (g->career.expedition >= 0 ? SCENARIO_CAREERS +
 	    g->career.expedition : scenario_career(g->career.era,
 	    (enum scenario_nation)(g->career.nation == NATION_SPAIN ? 3 :
-	    g->career.nation - 1));
-	for (; i < UI_STORY_MAX && n < index; i++)
-		if (p[i] == 0xFF)
-			n++;
-	start = i;
-	while (i < UI_STORY_MAX && p[i] != 0xFF)
-		i++;
-	*len = i - start;
-	return (p + start);
+	    g->career.nation - 1)));
 }
 
 /*
@@ -1692,31 +1670,25 @@ story_end(struct game *g)
 static void
 story_advance(struct game *g)
 {
-	const uint8_t *p;
-	size_t len;
-	int c;
+	const struct ui_story_step *st;
+	int n = story_index(g);
 
-	if ((p = story_script(g, &len)) == NULL) {
-		story_end(g);
-		return;
-	}
 	g->story_waiting = 0;
-	while (g->story_pos < len) {
-		c = (int8_t)p[g->story_pos++];
-		if (c == STORY_END || c == STORY_ASK)
-			break;
-		if (c == STORY_PAGE || c == STORY_WAIT) {
-			g->story_waiting = c == STORY_PAGE ? 1 : 2;
+	while (n >= 0 && n < UI_STORIES && g->story_pos < g->ui.nstory[n]) {
+		st = &g->ui.story[n][g->story_pos++];
+		switch (st->op) {
+		case UI_STORY_PAGE:
+		case UI_STORY_WAIT:
+			g->story_waiting = st->op == UI_STORY_PAGE ? 1 : 2;
 			return;
-		}
-		if (c == STORY_FIGHT) {
+		case UI_STORY_FIGHT:
 			g->sw_story = 1;
 			game_goto(g, &screen_sword);
 			return;
+		default:
+			g->story_text = st->text;
+			break;
 		}
-		if (c == STORY_CHECK || (c >= '2' && c <= '7'))
-			continue;
-		g->story_text = c < 0 ? -c : c;
 	}
 	story_end(g);
 }

@@ -815,7 +815,7 @@ test_world_export(struct packs *orig)
 	    "scenarios.json", "layout-cabin.json", "layout-tavern.json",
 	    "layout-town.json", "layout-weapons.json", "layout-board.json",
 	    "layout-cave.json", "layout-fleet-panel.json",
-	    "captain-flags.json",
+	    "captain-flags.json", "stories.json",
 	    "map-terrain.pgm", "battle-terrain.pgm",
 	    NULL };
 	static struct era_towns t, tref;
@@ -915,6 +915,11 @@ test_world_export(struct packs *orig)
 		CHECK(world_load(&w, packs, layout, b.data, b.len, 0, err,
 		    sizeof(err)) == -1 && strstr(err, "data/era/1560") !=
 		    NULL);
+	CHECK(write_file(dir, "stories.json", "{\"stories\": [[\"dance\"]]}") ==
+	    0);
+	if (layout != NULL)
+		CHECK(ui_tables_load(&ui, packs, layout, b.data, b.len, err,
+		    sizeof(err)) == -1 && strstr(err, "data/stories") != NULL);
 	CHECK(write_file(dir, "layout-cave.json", "{\"piles\": [[0]]}") == 0);
 	if (layout != NULL)
 		CHECK(ui_tables_load(&ui, packs, layout, b.data, b.len, err,

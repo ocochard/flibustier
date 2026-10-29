@@ -327,6 +327,7 @@ that both the loader and the export use.
 | `data/scenarios` | JSON (`struct scenario`, `scenario.h`) | the 30 start scenarios |
 | `data/layout/<screen>` | JSON (`struct ui_tables`, `uitables.h`) | a screen's hot spots and piece positions |
 | `data/captain-flags` | JSON (`struct ui_tables`) | the named captains' Jolly Rogers |
+| `data/stories` | JSON (`struct ui_story_step`, `uitables.h`) | the career stories, as steps |
 
 - **Shape:** a JSON object whose keys are exactly the fields listed
   below, each an integer or nested arrays of fixed sizes, outer index
@@ -456,6 +457,25 @@ shows his nation's flag instead.
 
 The credits picture's blocks and ink steps stay the executable's: a
 pack gives its credits as text (`text/<lang>/credits`).
+
+### `data/stories`
+
+`{"stories": [...]}`, exactly 30 lists of steps, one per start
+scenario in the order of `data/scenarios`; the list for the unused
+Dutch 1560 career may be empty. A story plays its steps in order
+(game-rules.md, "New career: the story"):
+
+| Step | Meaning |
+|---|---|
+| `{"text": n}` | show CSTR entry `n` (0-1023) alone on the page; its `%s` are the treasure (CSTR 46), the start town, the year and the player's name |
+| `"page"` | wait for a key, then clear the page |
+| `"wait"` | wait for a key, keeping the text |
+| `"fight"` | the story's sword fight; the story goes on after it |
+
+At most 64 steps a story. The story ends after its last step. From the
+original's scripts, the engine keeps the branch for a right answer to
+the copy-protection question: the question's `)` becomes a plain
+`"wait"`, its `*` and the branch for a wrong answer have no step.
 
 ## Open text
 

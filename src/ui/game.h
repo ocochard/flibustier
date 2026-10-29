@@ -178,7 +178,7 @@ struct game {
 						 * portrait, big flag, big skill */
 	int			 id_key;	/* keyboard selection, or -1 */
 	int			 name_default;	/* the name is still the default */
-	size_t			 story_pos;	/* next byte of the story script */
+	size_t			 story_pos;	/* next step of the story */
 	int			 story_text;	/* CSTR on the page, or -1 */
 	int			 story_waiting;	/* a key turns the page */
 	int			 sw_story;	/* the sword fight is the story's */

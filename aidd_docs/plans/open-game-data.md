@@ -92,8 +92,8 @@ Status (2026-10-29): done.
 ### G2: formats, loaders and export
 
 Status (2026-10-29): `data/sword`, `data/era/<year>` and
-`data/sea-battle`, `data/scenarios`, `data/layout/<screen>` and
-`data/captain-flags` done (asset-packs.md, "Open game data");
+`data/sea-battle`, `data/scenarios`, `data/layout/<screen>`,
+`data/captain-flags` and `data/stories` done: G2 is complete (asset-packs.md, "Open game data");
 `test_original` round-trips them and refuses a broken file, and the
 ten-year replay with the export over the original is identical. The
 encounter records are arrays of 7 in a documented order rather than
@@ -116,11 +116,12 @@ For each ID in the table above:
 
 Format notes:
 
-- **`data/stories`:** one script per scenario, a list of steps:
-  `{"text": <CSTR index>}`, `"page"`, `"wait"`, `"fight"`, `"ask"`,
-  `"end"`. The original's copy-protection question (`)` and `*`, and the
-  fail branch) is not part of the format: the engine keeps only the
-  pass branch (game-rules.md, "New career: the story").
+- **`data/stories`:** done, a list of steps per scenario:
+  `{"text": <CSTR index>}`, `"page"`, `"wait"`, `"fight"`; a story ends
+  after its last step, so there is no `"ask"` or `"end"`. The engine
+  converts the original's byte scripts to the same steps: the
+  copy-protection question's `)` stays a plain wait, as before; its `*`
+  and its fail branch are dropped.
 - **`data/scenarios`:** done, with the ship types as numbers in the
   CSTN 8 order, as the other tables' codes. Still from the engine: the
   expeditions' eras (`expedition_era`, screens.c); a pack cannot move

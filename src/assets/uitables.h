@@ -23,7 +23,8 @@
 #define UI_CREDIT_BLOCKS	6
 #define UI_CREDIT_STEPS		20
 #define UI_PANEL_SHIPS		8
-#define UI_STORY_MAX		4096
+#define UI_STORIES		30	/* one per start scenario */
+#define UI_STORY_STEPS		64
 #define UI_CURSOR_MAX		64
 
 /* The fleet panel (VA 0xffae): per ship, its picture's corner, its type
@@ -33,6 +34,19 @@ struct ui_fleet_panel {
 	int16_t		spot[UI_PANEL_SHIPS + 1][5];
 	int16_t		type_x[UI_PANEL_SHIPS], type_y[UI_PANEL_SHIPS];
 	int16_t		damage_x[UI_PANEL_SHIPS], damage_y[UI_PANEL_SHIPS];
+};
+
+/* A step of a career's story (game-rules.md, "New career: the story"). */
+enum ui_story_op {
+	UI_STORY_TEXT,		/* show CSTR "text" alone on the page */
+	UI_STORY_PAGE,		/* wait for a key, then a new page */
+	UI_STORY_WAIT,		/* wait for a key, the text kept */
+	UI_STORY_FIGHT		/* the story's sword fight */
+};
+
+struct ui_story_step {
+	uint8_t		op;		/* enum ui_story_op */
+	int16_t		text;		/* UI_STORY_TEXT: the CSTR index */
 };
 
 /*
@@ -59,8 +73,9 @@ struct ui_tables {
 	 * 6-7, then 3-5. */
 	uint16_t	jolly[4][8];
 	uint8_t		shade[256];	/* a colour's shadow */
-	/* The career stories: byte scripts separated by 0xFF. */
-	uint8_t		story[UI_STORY_MAX];
+	/* The career stories, by scenario (data/stories). */
+	struct ui_story_step story[UI_STORIES][UI_STORY_STEPS];
+	uint8_t		nstory[UI_STORIES];
 	/* The original's mouse pointer; w is 0 when there is none. */
 	int		cursor_w, cursor_h;
 	uint8_t		cursor[UI_CURSOR_MAX * UI_CURSOR_MAX];
@@ -70,7 +85,8 @@ int	ui_tables_load(struct ui_tables *t, struct packs *packs,
 	    const struct exe_layout *layout, const uint8_t *exe, size_t len,
 	    char *err, size_t errlen);
 
-/* Write each table a pack can give: file "name", for ID "id". */
+/* Write each table a pack can give, data/stories included: file
+ * "name", for ID "id". */
 int	ui_tables_export(const struct ui_tables *t,
 	    int (*out)(void *arg, const char *id, const char *name,
 	    struct jbuf *b), void *arg);

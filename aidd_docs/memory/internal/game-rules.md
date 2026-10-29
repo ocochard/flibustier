@@ -2621,6 +2621,8 @@ the oval at (237, 66).
   - '*' prepares the fight, and 'a' fights it (VA `0x16205`).
   - 6 asks a question; 0 ends.
   - '2'-'7' show nothing.
+  - The engine converts each script to steps (asset-packs.md,
+    `data/stories`), which a pack may give instead.
 - **The copy-protection question:**
   - ')' and '*' were the original's question.
   - **Pass:** the standings get their 16 back, and the fight is 200 men
