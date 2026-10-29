@@ -297,6 +297,7 @@ def tile_crests(terrain, tw, tile, n, side):
 
 def compose(terrain_pgm, textures, side, placed, seed, looks=None,
             beach=0.06, shallows=0.22, band=0.25, town_size=0.95,
+            shallow_colour=None, crests_on=True,
             frames=1, drift=2, columns=16):
     """The 256 tiles at "side" pixels as rows of RGBA bytes (16 tiles a
     row), "frames" sets of them one below the other ("placed" maps a
@@ -369,16 +370,16 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
                     else:
                         c = sample("sea", dx, dy)
                         if any_land and to_land[y][x] < shallow_px:
-                            c = mix(c, turquoise,
+                            c = mix(c, shallow_colour or turquoise,
                                     0.6 * (1 - to_land[y][x] / shallow_px))
-                        if crests and crests[y][x]:
+                        if crests_on and crests and crests[y][x]:
                             # Rolling along: brighter where the wave's
                             # phase is.
                             a = 0.55 + 0.4 * math.cos(
                                 2 * math.pi * f / frames - x * 0.35 + roll)
                             c = mix(c, foam, max(0.0, a) * 0.6 *
                                     crests[y][x])
-                        g = glints.get((x, y))
+                        g = glints.get((x, y)) if crests_on else None
                         if g is not None:
                             d = min((f - g) % frames, (g - f) % frames)
                             if d < 2:

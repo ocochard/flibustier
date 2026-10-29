@@ -7774,6 +7774,137 @@ static const struct {
 	[14] = { 2, { { 7, 306, 34 }, { 10, 28, 238 } } },
 };
 
+/*
+ * The map in true colours, for a pack's frame, torn edges and tiles: as
+ * the original's, with the key colour (pure magenta) for its holes.  The
+ * page is composed at the canvas's size: the wood, each held quarter of
+ * the frame, the torn edges, and in every key pixel the world's tile;
+ * then the mark.  NULL when the pieces are not all true colours.
+ */
+#define TMAP_KEY(p)	((p)[0] == 255 && (p)[1] == 0 && (p)[2] == 255)
+
+static const uint8_t *
+tmap_sample(const struct image *img, int cx, int cy, int w, int h)
+{
+	int stride = img->rgba_stride ? img->rgba_stride : img->rgba_w;
+
+	return (img->rgba + ((size_t)((long)cy * img->rgba_h / h) * stride +
+	    (size_t)((long)cx * img->rgba_w / w)) * 4);
+}
+
+static void
+tmap_put(uint8_t *d, const uint8_t *a, const uint8_t *world)
+{
+	int k;
+
+	if (a[3] == 0)
+		return;
+	if (TMAP_KEY(a))
+		a = world;
+	if (a[3] == 255) {
+		memcpy(d, a, 3);
+		return;
+	}
+	for (k = 0; k < 3; k++)
+		d[k] = (uint8_t)((a[k] * a[3] + d[k] * (255 - a[3]) + 127) / 255);
+}
+
+static uint8_t *
+tmap_compose_hd(struct game *g, const struct image *wood,
+    const struct image *frame, const struct sprite_bank *spr,
+    const struct tileset *ts, int held, int mark, int mx, int my)
+{
+	static const uint8_t none[4] = { 238, 222, 180, 255 };
+	const struct sim_map *m = &g->sim.maps[g->tmap_maps[g->tmap_i]];
+	int W = g->fb.out_w, H = g->fb.out_h, cx, cy, k, x0, y0, x1, y1;
+	int ax, ay, wx, wy, cell;
+	const struct frame *f;
+	const uint8_t *p, *world;
+	struct image tile;
+	uint8_t *out, wpx[4];
+
+	if (wood->rgba == NULL || frame->rgba == NULL || ts->rgba == NULL ||
+	    g->world == NULL || (out = malloc((size_t)W * H * 4)) == NULL)
+		return (NULL);
+	for (cy = 0; cy < H; cy++)
+		for (cx = 0; cx < W; cx++) {
+			uint8_t *d = out + ((size_t)cy * W + cx) * 4;
+			int lx = (int)((long)cx * FB_W / W);
+			int ly = (int)((long)cy * FB_H / H);
+			const uint8_t *layers[5];
+			int n = 0, e;
+
+			/* The world under this pixel, should a hole show it. */
+			ax = (int)((long)cx * 40 * ts->art_tile / W);
+			ay = (int)((long)cy * 30 * ts->art_tile / H);
+			wx = m->x - 20 + ax / ts->art_tile;
+			wy = m->y - 15 + ay / ts->art_tile;
+			world = none;
+			if (wx >= 0 && wy >= 0 && wx < WORLD_CELLS_W &&
+			    wy < WORLD_CELLS_H) {
+				cell = g->world->map[wy * WORLD_CELLS_W + wx];
+				tileset_tile(ts, (size_t)cell, 0, &tile);
+				if (tile.rgba != NULL) {
+					memcpy(wpx, tile.rgba +
+					    ((size_t)(ay % ts->art_tile) *
+					    tile.rgba_stride + ax %
+					    ts->art_tile) * 4, 3);
+					wpx[3] = 255;
+					world = wpx;
+				}
+			}
+			p = tmap_sample(wood, cx, cy, W, H);
+			memcpy(d, p, 3);
+			d[3] = 255;
+			for (k = 0; k < 4; k++)
+				if ((held & (1 << k)) && lx >= tmap_quarter[k][0] &&
+				    lx <= tmap_quarter[k][2] &&
+				    ly >= tmap_quarter[k][1] &&
+				    ly <= tmap_quarter[k][3])
+					layers[n++] = tmap_sample(frame, cx, cy,
+					    W, H);
+			for (e = 0; e < tmap_torn[held].n; e++) {
+				if ((size_t)tmap_torn[held].edge[e][0] >=
+				    spr->count)
+					continue;
+				f = &spr->frames[tmap_torn[held].edge[e][0]];
+				x0 = (int)((long)tmap_torn[held].edge[e][1] * W /
+				    FB_W);
+				y0 = (int)((long)tmap_torn[held].edge[e][2] * H /
+				    FB_H);
+				x1 = (int)((long)(tmap_torn[held].edge[e][1] +
+				    f->w) * W / FB_W);
+				y1 = (int)((long)(tmap_torn[held].edge[e][2] +
+				    f->h) * H / FB_H);
+				if (f->rgba == NULL || cx < x0 || cx >= x1 ||
+				    cy < y0 || cy >= y1 || n >= 5)
+					continue;
+				layers[n++] = f->rgba + ((size_t)((long)(cy -
+				    y0) * f->rgba_h / (y1 - y0)) * f->rgba_w +
+				    (size_t)((long)(cx - x0) * f->rgba_w /
+				    (x1 - x0))) * 4;
+			}
+			for (k = 0; k < n; k++)
+				tmap_put(d, layers[k], world);
+		}
+	/* The mark, on the spot. */
+	if ((size_t)mark < spr->count && (f = &spr->frames[mark])->rgba !=
+	    NULL) {
+		x0 = (int)((long)(FB_W / 2 + mx) * W / FB_W);
+		y0 = (int)((long)(FB_H / 2 + my) * H / FB_H);
+		x1 = (int)((long)(FB_W / 2 + mx + f->w) * W / FB_W);
+		y1 = (int)((long)(FB_H / 2 + my + f->h) * H / FB_H);
+		for (cy = y0 < 0 ? 0 : y0; cy < y1 && cy < H; cy++)
+			for (cx = x0 < 0 ? 0 : x0; cx < x1 && cx < W; cx++)
+				tmap_put(out + ((size_t)cy * W + cx) * 4,
+				    f->rgba + ((size_t)((long)(cy - y0) *
+				    f->rgba_h / (y1 - y0)) * f->rgba_w +
+				    (size_t)((long)(cx - x0) * f->rgba_w /
+				    (x1 - x0))) * 4, none);
+	}
+	return (out);
+}
+
 /* A sprite frame into a picture, clipped. */
 static void
 image_frame(struct image *img, const struct frame *f, int x, int y)
@@ -7801,11 +7932,21 @@ tmap_compose(struct game *g)
 	struct blob b;
 	int k, x, y, cx, cy, held = m->pieces & MAP_WHOLE, mark, mx, my;
 
+	struct image wood = { 0 };
+	struct tileset hd = { 0 };
+	uint8_t *rgba;
+
 	game_background(g, "pic/wood");
 	game_portrait(g, NULL);
 	if (g->bg.pixels == NULL || g->bg.w != FB_W || g->bg.h != FB_H)
 		return;
-	/* The map is composed on the indices. */
+	/* The map is composed on the indices; a pack's wood is kept for the
+	 * true colours. */
+	wood.rgba = g->bg.rgba;
+	wood.rgba_w = g->bg.rgba_w;
+	wood.rgba_h = g->bg.rgba_h;
+	wood.rgba_stride = g->bg.rgba_stride;
+	g->bg.rgba = NULL;
 	image_drop_rgba(&g->bg);
 	pic_load(g->packs, "pic/mapframe", &frame);
 	if (frame.pixels != NULL && frame.w == FB_W && frame.h == FB_H)
@@ -7820,7 +7961,6 @@ tmap_compose(struct game *g)
 				    (size_t)(tmap_quarter[k][2] -
 				    tmap_quarter[k][0] + 1));
 		}
-	image_free(&frame);
 	load_bank(g, "spr/treasmap", 0, &spr);
 	for (k = 0; k < tmap_torn[held].n; k++)
 		if ((size_t)tmap_torn[held].edge[k][0] < spr.count)
@@ -7870,8 +8010,23 @@ tmap_compose(struct game *g)
 	if ((size_t)mark < spr.count)
 		image_frame(&g->bg, &spr.frames[mark], FB_W / 2 + mx,
 		    FB_H / 2 + my);
-	bank_free(&spr);
 	memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+	/* A pack's map, in true colours over the indices. */
+	if (tileset_load(g->packs, "tiles/tmap", &hd) == 0 &&
+	    (rgba = tmap_compose_hd(g, &wood, &frame, &spr, &hd, held, mark,
+	    mx, my)) != NULL) {
+		g->bg.rgba = rgba;
+		g->bg.rgba_w = g->fb.out_w;
+		g->bg.rgba_h = g->fb.out_h;
+		g->bg.rgba_stride = 0;
+		g->ink[0] = 240;	/* amber, on the wood */
+		g->ink[1] = 170;
+		g->ink[2] = 60;
+	}
+	tileset_free(&hd);
+	free(wood.rgba);
+	image_free(&frame);
+	bank_free(&spr);
 }
 
 static void

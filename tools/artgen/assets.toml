@@ -3048,3 +3048,79 @@ bank = "lilskls"
 frame = 4
 from = "bigmed"
 size = [81, 116]
+
+# The treasure map (screen_tmap): the wood, the parchment sheet and its
+# torn edges in the original's shapes (tmap.py), the holes filled by the
+# engine with the world's tiles (tiles/tmap below), and the mark.
+[[asset]]
+id = "spr/treasmap"
+file = "art/treasmap.sheet"
+seed = 1660
+source = "the treasure map's pieces, in the original's shapes"
+prompt = ""
+[asset.tmap.paint]
+wood = """
+Photograph taken from directly above, flat with no perspective, of an
+old table top of dark oiled oak planks lying side by side, their grain
+running across the picture from left to right, a few knots and
+scratches, even warm light with no lamp and no glare, filling the whole
+image.
+"""
+paper = """
+Close-up photograph, straight on and flat, of old rough parchment, warm
+cream and tan, stained and mottled with age, its fibres visible, even
+light, no writing, filling the whole image.
+"""
+
+# The treasure map's world, drawn on the parchment: the sea the paper
+# itself, the land in brown ink, the coast a darker wash, the towns
+# sketched, through the original tiles' coastlines (the sea map's).
+[[asset]]
+id = "tiles/tmap"
+file = "art/tmap.tiles"
+atlas = "art/tmap.png"
+seed = 1670
+source = "textures of this pack through the original tiles' coastlines"
+# The coast an ink wash, no waves.
+tiles = { tile = 16, frames = 1, shallows = "#B89060", crests = false, towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 123, 124, 125, 126, 127, 255] }
+prompt = ""
+[[asset.textures]]
+name = "sea"
+size = 192
+colour = "#E8D5A8"
+detail = 0.3
+prompt = """
+Close-up photograph, straight on and flat, of old smooth cream parchment
+with faint light tan stains, even and uniform, low contrast, no writing,
+filling the whole image.
+"""
+[[asset.textures]]
+name = "land"
+size = 192
+colour = "#8A6236"
+detail = 0.45
+prompt = """
+Close-up photograph, straight on and flat, of old parchment covered all
+over with a fine even stipple of tiny dots of brown ink, uniform in
+every direction, no lines, no bands, low contrast, filling the whole
+image.
+"""
+[[asset.textures]]
+name = "sand"
+size = 192
+colour = "#C9A66E"
+detail = 0.5
+prompt = """
+Close-up photograph, straight on and flat, of old parchment washed with
+a light brown ink stain, even and uniform, low contrast, filling the
+whole image.
+"""
+[[asset.textures]]
+name = "town"
+size = 256
+cutout = true
+prompt = """
+A small solid drawing of a single house with a pitched roof, a door and
+two windows, filled in dark brown ink, its windows and door left pale,
+on a plain light grey ground, like a town on an old map, nothing else.
+"""
