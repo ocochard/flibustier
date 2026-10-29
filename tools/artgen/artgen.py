@@ -3690,6 +3690,38 @@ def main():
                 continue
             with open(out, "wb") as f:
                 f.write(png)
+        if a.get("subject"):
+            # The figure cut out and set, smaller, into its strip of the
+            # screen (where the game writes nothing), on an empty wall.
+            sj = a["subject"]
+            kk = height / SCREEN_H
+            free(args.server)
+            try:
+                up = upload(args.server, out, "flibustier-subject.png")
+                cut = render(args.server, cutout_workflow(
+                    up, ow, oh, "flibustier/" + name.replace("/", "-") +
+                    "-subject"))
+                free(args.server)
+                back = render(args.server, texture_workflow(
+                    spec, profile, seed + 7, sj["back"], 1024,
+                    "flibustier/" + name.replace("/", "-") + "-wall"))
+            except RuntimeError as e:
+                print("%s: subject failed: %s" % (a["id"], e),
+                      file=sys.stderr)
+                failed.append(a["id"])
+                continue
+            cpath, bpath = out + ".cut.png", out + ".wall.png"
+            open(cpath, "wb").write(cut)
+            open(bpath, "wb").write(back)
+            x, y, w, h = (round(v * kk) for v in sj["rect"])
+            subprocess.run(["magick", "(", bpath, "-resize", "%dx%d^" % (
+                ow, oh), "-gravity", "center", "-extent", "%dx%d" % (
+                ow, oh), ")", "(", cpath, "-trim", "+repage", "-resize",
+                "%dx%d" % (w, h), ")", "-gravity", "southwest", "-geometry",
+                "+%d+%d" % (x, oh - y - h), "-composite", "-depth", "8",
+                out], check=True)
+            os.remove(cpath)
+            os.remove(bpath)
         if a.get("matte_on"):
             # Its object cut out by the matte and set on a plain colour:
             # the model keeps a backdrop round it however it is asked.

@@ -301,12 +301,19 @@ file = "art/bartenda.png"
 seed = 1660
 source = "layout described from the original screen"
 prompt = """
-Photograph of {bartender}, standing at the far left of the frame, arms
-crossed, looking at the viewer, his skin and clothes worn by hard work
-in a hot tavern. Behind him and across the whole rest of the frame, a
-plain, softly lit pale yellow-green plaster wall, empty and out of
-focus. Warm light. Historical reenactment photography, 50mm lens,
-realistic.
+Photograph of {bartender}, standing, the whole of him from head to
+knees, arms crossed, looking at the viewer, his skin and clothes worn by
+hard work in a hot tavern, in front of a plain softly lit plaster wall.
+Warm light. Historical reenactment photography, 50mm lens, realistic.
+"""
+# The game writes his rumours from x 222: he stands left of that, cut
+# out and set smaller on an empty wall.
+[asset.subject]
+rect = [14, 70, 200, 410]
+back = """
+Photograph, straight on, of a plain softly lit pale yellow-green plaster
+wall in a tavern, empty and slightly out of focus, a little worn, warm
+light from the left, nothing on it, filling the whole image.
 """
 
 # ---------------------------------------------------------------------
