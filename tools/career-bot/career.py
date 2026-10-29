@@ -194,6 +194,7 @@ class Bot:
         self.main_sea = None
         self.fields = {}
         self.no_repair_until = 0
+        self.no_food_until = 0	# after a purchase that fell short
         self.food_town = None
         self.reefs = set()	# cells where a ship was lost on shallows
         self.wrecks = 0	# ships lost on shallows so far
@@ -1161,6 +1162,10 @@ class Bot:
         self.note("food %d -> %d for %d crew (wanted %d, gold %d, room %s, stock %s)" % (
             f["food"], g["food"], g["crew"], f["crew"] // 2 + 20 - f["food"],
             g["gold"], m.get("hold_space"), m.get("stock")))
+        if g["food"] < g["crew"] // FOOD_DIV + 5:
+            # short of gold or hold room: coming straight back in would
+            # buy no more (Spain, friendly with most towns, kept doing so)
+            self.no_food_until = self.refresh()["day"] + 30
         self.sim("merchant", action="close", traded=0, check=False)
 
     def rating(self, ship):
@@ -1737,7 +1742,8 @@ class Bot:
             f = s["fleet"]
             # 1. food and repairs, before any long trip
             hurt = sum(f["damage"]) > 0 and f["gold"] > 1500 and s["day"] >= self.no_repair_until
-            if (self.hungry or f["food"] < f["crew"] // FOOD_DIV + 5 or hurt) and f["gold"] >= 100:
+            short = f["food"] < f["crew"] // FOOD_DIV + 5 and s["day"] >= self.no_food_until
+            if (self.hungry or short or hurt) and f["gold"] >= 100:
                 ti = self.food_town
                 if ti is None:
                     ti = self.nearest_town(lambda t: self.friendly(t) and self.visited.get(
