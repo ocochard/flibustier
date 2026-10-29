@@ -15,18 +15,19 @@ writes.
 
 Tiles used.  Only bare geography: open sea, plain land, and the coast
 tiles.  Left out: the tiles with a building (68-79, 123-127, 255: towns
-belong to the town step, which overlays them per era) and the sea tiles
-with white surf (40-59: their mask is open sea, so they would show
-breakers where a ship sails freely).
+belong to the town step, which overlays them per era) and the spare sea
+tiles with white surf (56-59: their mask is open sea, so they would
+show breakers where a ship sails freely).  Tiles 40-55 are open
+shallows (solid, edges and corners toward the sea) for the shelf away
+from the shore.
 
 Matching.  Each cell's 16 x 16 block of the raster is compared pixel by
 pixel with each tile's mask; a pixel that is land on one side and sea
 on the other costs LAND_SEA, land against shallows LAND_SHALLOWS,
-shallows against sea SEA_SHALLOWS.  A cell with no land in the raster
-takes only a tile with no land (no stray land at sea), a cell with no
-water only a land tile.  The sheet has no tile of open shallows (its
-shallows are the halo along each coast), so the raster's shelf away
-from the shore becomes sea.
+shallows against sea SEA_SHALLOWS.  A cell of open sea only takes a
+plain sea tile, a cell with no water a land tile; a cell with
+shallows but no land is matched like a coast, among the tiles with no
+land (no stray land at sea).
 
 Seams.  A second pass (iterated conditional modes, cells in two
 interleaved halves, until nothing changes) lets each coastal cell take,
@@ -59,7 +60,7 @@ YEARS = (1560, 1600, 1620, 1640, 1660, 1680)
 
 # Tiles kept out of the bare geography.
 BUILDINGS = tuple(range(68, 80)) + tuple(range(123, 128)) + (255,)
-SURF = tuple(range(40, 60))
+SURF = tuple(range(56, 60))
 EXCLUDED = BUILDINGS + SURF
 
 LAND_SEA = 4
@@ -137,19 +138,22 @@ def _solve():
 
     c_land = (blocks == LAND).any(axis=1)
     c_water = (blocks != LAND).any(axis=1)
+    c_shallows = (blocks == SHALLOWS).any(axis=1)
     grid = np.empty(H * W, dtype=np.int64)
-    sea_only = ~c_land
+    sea_only = ~c_land & ~c_shallows
     land_only = ~c_water
     grid[sea_only] = pick(np.nonzero(sea_only)[0], plain_sea)
     grid[land_only] = pick(np.nonzero(land_only)[0], plain_land)
 
     # Coastal cells: cost of every usable tile, one-hot product.
-    coast = np.nonzero(c_land & c_water)[0]
+    coast = np.nonzero(~sea_only & ~land_only)[0]
     onehot = np.stack([blocks[coast] == k for k in range(3)], axis=2) \
         .reshape(len(coast), -1).astype(np.float32)
     # Per tile pixel and raster class: the cost of that pair.
     tcost = COST[tm].reshape(len(usable), -1)          # (n, 256*3)
     data = onehot @ tcost.T                             # (cells, n)
+    # Shallows away from land: no tile with land (no stray land at sea).
+    data[np.ix_(~c_land[coast], t_land)] = np.inf
     best = data.min(axis=1, keepdims=True)
     tol = np.maximum(best * TOLERANCE, TOLERANCE_MIN)
     allowed = data <= best + tol
