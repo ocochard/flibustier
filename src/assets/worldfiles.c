@@ -13,6 +13,7 @@
 
 #include "scenario.h"
 #include "tiled.h"
+#include "uitables.h"
 #include "towns.h"
 #include "world.h"
 #include "worldfiles.h"
@@ -81,13 +82,35 @@ write_terrain(const char *dir, const char *name, const uint8_t *terrain,
 	return (0);
 }
 
+/* Where the screen tables go: the directory, and pack.ini's lines. */
+struct export_ctx {
+	const char	*dir;
+	struct jbuf	*ini;
+	char		*err;
+	size_t		 errlen;
+};
+
+static int
+export_table(void *arg, const char *id, const char *name, struct jbuf *b)
+{
+	struct export_ctx *x = arg;
+
+	jb_raw(x->ini, id);
+	jb_raw(x->ini, " = ");
+	jb_raw(x->ini, name);
+	jb_raw(x->ini, "\n");
+	return (write_file(x->dir, name, b, x->err, x->errlen));
+}
+
 int
 world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 {
 	const struct exe_layout *layout;
 	struct world *w;
 	struct era_towns towns;
-	struct jbuf b = { 0 };
+	struct jbuf b = { 0 }, ini = { 0 };
+	struct export_ctx ctx;
+	struct ui_tables *ui = NULL;
 	struct blob exe;
 	char name[64];
 	int era, rc = -1, i, k;
@@ -190,6 +213,17 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 	if (scenarios_encode(packs, layout, exe.data, exe.len, &b, err,
 	    errlen) != 0 || flush(dir, "scenarios.json", &b, err, errlen) != 0)
 		goto out;
+	if ((ui = malloc(sizeof(*ui))) == NULL) {
+		snprintf(err, errlen, "out of memory");
+		goto out;
+	}
+	ctx.dir = dir;
+	ctx.ini = &ini;
+	ctx.err = err;
+	ctx.errlen = errlen;
+	if (ui_tables_load(ui, packs, layout, exe.data, exe.len, err,
+	    errlen) != 0 || ui_tables_export(ui, export_table, &ctx) != 0)
+		goto out;
 	jb_raw(&b, "# Exported from the original Pirates! Gold data: for local\n"
 	    "# checks only, do not distribute.\n[pack]\n"
 	    "name = World exported from the original\n"
@@ -214,11 +248,14 @@ world_export(struct packs *packs, const char *dir, char *err, size_t errlen)
 		    town_era_years[era], town_era_years[era]);
 		jb_raw(&b, name);
 	}
+	jb_raw(&b, ini.s != NULL ? ini.s : "");
 	if (flush(dir, "pack.ini", &b, err, errlen) != 0)
 		goto out;
 	rc = 0;
 out:
 	jb_free(&b);
+	jb_free(&ini);
+	free(ui);
 	free(w);
 	blob_free(&exe);
 	return (rc);

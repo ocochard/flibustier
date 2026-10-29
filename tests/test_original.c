@@ -26,6 +26,7 @@
 #include "assets/pcx.h"
 #include "assets/rsd.h"
 #include "assets/scenario.h"
+#include "assets/uitables.h"
 #include "assets/sprite.h"
 #include "assets/text.h"
 #include "assets/textfiles.h"
@@ -811,10 +812,14 @@ test_world_export(struct packs *orig)
 	    "battle-sets.json", "sword.json", "sea-battle.json",
 	    "era-1560.json", "era-1600.json", "era-1620.json",
 	    "era-1640.json", "era-1660.json", "era-1680.json",
-	    "scenarios.json",
+	    "scenarios.json", "layout-cabin.json", "layout-tavern.json",
+	    "layout-town.json", "layout-weapons.json", "layout-board.json",
+	    "layout-cave.json", "layout-fleet-panel.json",
+	    "captain-flags.json",
 	    "map-terrain.pgm", "battle-terrain.pgm",
 	    NULL };
 	static struct era_towns t, tref;
+	static struct ui_tables ui, uref;
 	struct scenario scn, sref;
 	const char *data = getenv("FLIBUSTIER_DATA");
 	const struct exe_layout *layout = NULL;
@@ -887,6 +892,14 @@ test_world_export(struct packs *orig)
 			    (int)i, &sref, err, sizeof(err)) == 0);
 			CHECK(memcmp(&scn, &sref, sizeof(scn)) == 0);
 		}
+	/* The screens' tables. */
+	if (layout != NULL) {
+		CHECK(ui_tables_load(&ui, packs, layout, b.data, b.len, err,
+		    sizeof(err)) == 0);
+		CHECK(ui_tables_load(&uref, orig, layout, b.data, b.len, err,
+		    sizeof(err)) == 0);
+		CHECK(memcmp(&ui, &uref, sizeof(ui)) == 0);
+	}
 	/* The pack took over: a broken map is an error, not a fallback. */
 	CHECK(write_file(dir, "map-1660.tmj", "{\"layers\":[]}") == 0);
 	if (layout != NULL)
@@ -901,6 +914,11 @@ test_world_export(struct packs *orig)
 	if (layout != NULL)
 		CHECK(world_load(&w, packs, layout, b.data, b.len, 0, err,
 		    sizeof(err)) == -1 && strstr(err, "data/era/1560") !=
+		    NULL);
+	CHECK(write_file(dir, "layout-cave.json", "{\"piles\": [[0]]}") == 0);
+	if (layout != NULL)
+		CHECK(ui_tables_load(&ui, packs, layout, b.data, b.len, err,
+		    sizeof(err)) == -1 && strstr(err, "data/layout/cave") !=
 		    NULL);
 	CHECK(write_file(dir, "scenarios.json", "{\"scenarios\": []}") == 0);
 	if (layout != NULL)

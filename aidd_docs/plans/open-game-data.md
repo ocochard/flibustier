@@ -92,7 +92,8 @@ Status (2026-10-29): done.
 ### G2: formats, loaders and export
 
 Status (2026-10-29): `data/sword`, `data/era/<year>` and
-`data/sea-battle`, `data/scenarios` done (asset-packs.md, "Open game data");
+`data/sea-battle`, `data/scenarios`, `data/layout/<screen>` and
+`data/captain-flags` done (asset-packs.md, "Open game data");
 `test_original` round-trips them and refuses a broken file, and the
 ten-year replay with the export over the original is identical. The
 encounter records are arrays of 7 in a documented order rather than
@@ -124,11 +125,10 @@ Format notes:
   CSTN 8 order, as the other tables' codes. Still from the engine: the
   expeditions' eras (`expedition_era`, screens.c); a pack cannot move
   an expedition to another era yet.
-- **`data/layout/<screen>`:** rectangles as `[x0, y0, x1, y1]`, with
-  the flags the original keeps beside them (`on`) as named booleans. A
-  pack that replaces a screen's picture with a different composition
-  gives its layout too; otherwise the original's hot spots apply to the
-  new picture.
+- **`data/layout/<screen>`:** done; the original's `on` words stay
+  numbers, unread by the engine. The fleet panel's raw words became
+  named arrays (`struct ui_fleet_panel`), and the captain flags keep
+  only the 4 x 8 entries the game reads.
 
 Size: medium to large; it can land one ID at a time, each with its test.
 

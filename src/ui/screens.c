@@ -7787,25 +7787,16 @@ const struct screen screen_barmaid = {
 #define W_PANEL_BUTTON		87
 
 static int
-panel_word(const struct game *g, uint32_t off, int i)
-{
-	size_t k = off / 2 + (size_t)i;
-
-	return (k < UI_PANEL_WORDS ? g->ui.panel[k] : 0);
-}
-
-static int
 panel_hit(const struct game *g, int x, int y)
 {
+	const int16_t *r;
 	int i;
 
 	for (i = 0; i <= PANEL_DONE; i++) {
 		if (i < PANEL_DONE && i >= g->sim.fleet.nships)
 			continue;
-		if (x >= panel_word(g, 0x20, i * 5) &&
-		    y >= panel_word(g, 0x20, i * 5 + 1) &&
-		    x <= panel_word(g, 0x20, i * 5 + 2) &&
-		    y <= panel_word(g, 0x20, i * 5 + 3))
+		r = g->ui.panel.spot[i];
+		if (x >= r[0] && y >= r[1] && x <= r[2] && y <= r[3])
 			return (i);
 	}
 	return (-1);
@@ -7926,16 +7917,16 @@ panel_draw(struct game *g)
 		lvl = panel_level(f->damage[i]);
 		if ((size_t)lvl < g->panel_spr[i].count)
 			fb_frame(&g->fb, &g->panel_spr[i].frames[lvl],
-			    panel_word(g, 0, i), panel_word(g, 0x10, i));
+			    g->ui.panel.ship_x[i], g->ui.panel.ship_y[i]);
 		memcpy(g->ink, g->panel_marked & (1u << i) ? marked : plain, 3);
 		word = game_word(g, W_SHIP_TYPE, (size_t)(f->ships[i] % 9));
 		w = text_width(&g->font[FONT_TITLE], word);
-		draw(g, FONT_TITLE, panel_word(g, 0x7c, i) - w / 2,
-		    panel_word(g, 0x8c, i), FB_W, word, 0);
+		draw(g, FONT_TITLE, g->ui.panel.type_x[i] - w / 2,
+		    g->ui.panel.type_y[i], FB_W, word, 0);
 		word = game_word(g, W_DAMAGE, (size_t)lvl);
 		w = text_width(&g->font[FONT_BODY], word);
-		draw(g, FONT_BODY, panel_word(g, 0x9c, i) - w / 2,
-		    panel_word(g, 0xac, i), FB_W, word, 0);
+		draw(g, FONT_BODY, g->ui.panel.damage_x[i] - w / 2,
+		    g->ui.panel.damage_y[i], FB_W, word, 0);
 	}
 	memcpy(g->ink, plain, 3);
 	if (g->panel_view)

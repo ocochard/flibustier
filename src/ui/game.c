@@ -187,8 +187,8 @@ game_init(struct game *g, struct packs *packs, const char *lang,
 	}
 	g->exe = b.data;	/* kept for the town and scenario tables */
 	g->exe_len = b.len;
-	if (ui_tables_load(&g->ui, g->layout, g->exe, g->exe_len, g->err,
-	    sizeof(g->err)) != 0)
+	if (ui_tables_load(&g->ui, packs, g->layout, g->exe, g->exe_len,
+	    g->err, sizeof(g->err)) != 0)
 		return (-1);
 	load_cursor(g);
 	load_misc(g);

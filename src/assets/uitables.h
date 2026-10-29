@@ -11,6 +11,8 @@
 #include <stdint.h>
 
 #include "data/exe.h"
+#include "data/pack.h"
+#include "sim/json.h"
 
 #define UI_CABIN_SPOTS		11
 #define UI_TAVERN_SPOTS		10
@@ -20,14 +22,25 @@
 #define UI_CAVE_PILES		8
 #define UI_CREDIT_BLOCKS	6
 #define UI_CREDIT_STEPS		20
-#define UI_PANEL_WORDS		94	/* the fleet panel's layout */
+#define UI_PANEL_SHIPS		8
 #define UI_STORY_MAX		4096
 #define UI_CURSOR_MAX		64
 
+/* The fleet panel (VA 0xffae): per ship, its picture's corner, its type
+ * and damage labels' centre; the ships' and the button's spots. */
+struct ui_fleet_panel {
+	int16_t		ship_x[UI_PANEL_SHIPS], ship_y[UI_PANEL_SHIPS];
+	int16_t		spot[UI_PANEL_SHIPS + 1][5];
+	int16_t		type_x[UI_PANEL_SHIPS], type_y[UI_PANEL_SHIPS];
+	int16_t		damage_x[UI_PANEL_SHIPS], damage_y[UI_PANEL_SHIPS];
+};
+
 /*
- * The tables the screens read, decoded once at game start (see
- * aidd_docs/plans/open-game-data.md).  Hot spots are {x0, y0, x1, y1},
- * plus a fifth word, "on", where the original keeps one.
+ * The tables the screens read, decoded once at game start, each from a
+ * pack's data/layout/<screen> or data/captain-flags when it gives one,
+ * otherwise from the executable (asset-packs.md, "Open game data").
+ * Hot spots are {x0, y0, x1, y1}, plus a fifth word, "on", where the
+ * original keeps one.
  */
 struct ui_tables {
 	int16_t		cabin[UI_CABIN_SPOTS][5];
@@ -41,10 +54,10 @@ struct ui_tables {
 	/* The credits picture's blocks, and its ink steps (RGB). */
 	int16_t		credit_rect[UI_CREDIT_BLOCKS][4];
 	uint8_t		credit_ink[UI_CREDIT_STEPS][3];
-	/* Little-endian words, addressed by byte offset as in screens.c. */
-	int16_t		panel[UI_PANEL_WORDS];
-	/* A named captain's Jolly Roger (1-20), by captain bits. */
-	uint16_t	jolly[4][16];
+	struct ui_fleet_panel panel;
+	/* A named captain's Jolly Roger (1-20), by the captain id's bits
+	 * 6-7, then 3-5. */
+	uint16_t	jolly[4][8];
 	uint8_t		shade[256];	/* a colour's shadow */
 	/* The career stories: byte scripts separated by 0xFF. */
 	uint8_t		story[UI_STORY_MAX];
@@ -53,7 +66,13 @@ struct ui_tables {
 	uint8_t		cursor[UI_CURSOR_MAX * UI_CURSOR_MAX];
 };
 
-int	ui_tables_load(struct ui_tables *t, const struct exe_layout *layout,
-	    const uint8_t *exe, size_t len, char *err, size_t errlen);
+int	ui_tables_load(struct ui_tables *t, struct packs *packs,
+	    const struct exe_layout *layout, const uint8_t *exe, size_t len,
+	    char *err, size_t errlen);
+
+/* Write each table a pack can give: file "name", for ID "id". */
+int	ui_tables_export(const struct ui_tables *t,
+	    int (*out)(void *arg, const char *id, const char *name,
+	    struct jbuf *b), void *arg);
 
 #endif

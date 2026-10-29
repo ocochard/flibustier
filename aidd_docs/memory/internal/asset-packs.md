@@ -325,6 +325,8 @@ that both the loader and the export use.
 | `data/sea-battle` | JSON (`struct world`) | sea battle hit boxes, shot arcs, the bow cross |
 | `data/sword` | JSON (`struct sword_tables`, `world.h`) | the sword fight tables |
 | `data/scenarios` | JSON (`struct scenario`, `scenario.h`) | the 30 start scenarios |
+| `data/layout/<screen>` | JSON (`struct ui_tables`, `uitables.h`) | a screen's hot spots and piece positions |
+| `data/captain-flags` | JSON (`struct ui_tables`) | the named captains' Jolly Rogers |
 
 - **Shape:** a JSON object whose keys are exactly the fields listed
   below, each an integer or nested arrays of fixed sizes, outer index
@@ -423,6 +425,37 @@ Holland.
 
 The expeditions' eras are the engine's (`expedition_era` in
 `src/ui/screens.c`), not part of this file.
+
+### `data/layout/<screen>`
+
+Positions in the 640x480 logical screen. A rectangle is `[x0, y0, x1,
+y1]`, inclusive; where a fifth number follows, it is the original's
+"on" word, which the engine does not read (it decides which spots are
+open from the rules). A pack that redraws a screen's picture with
+another composition gives its layout with it; otherwise the original's
+spots apply to the new picture.
+
+| ID | Field | Size | Content |
+|---|---|---|---|
+| `data/layout/cabin` | `spots` | 11 x 5 | the cabin's spots, in the order of game-rules.md ("The captain's cabin"): continue, treasure maps, cave, log book, map, search, divide, join, save, exit, practice |
+| `data/layout/town` | `spots` | 8 x 4 | the town's buildings: governor, merchant, bank, tavern, shipwright, city information, leave, then one more the engine does not use |
+| `data/layout/tavern` | `spots` | 10 x 4 | the tavern's people: map seller, information seller, seaman, bartender, barmaid, stranger, door, three more seamen |
+| `data/layout/weapons` | `spots` | 3 x 4 | the weapon choice's blades, left to right: rapier, cutlass, longsword |
+| `data/layout/board` | `pieces` | 29 x 4 | the trading board's pieces: frame, highlighted frame, x, y (frames of the board's sprite bank); record 0 is the name tag, whose frames the engine sets by mode |
+| `data/layout/cave` | `piles` | 8 x 3 | the treasure cave's piles (`spr/tcave0` ... 7): x, y, and the fortune past which it shows |
+| `data/layout/fleet-panel` | `ship_x`, `ship_y` | 8 each | each ship's picture, top left |
+| | `spots` | 9 x 5 | the ships' rectangles, then the button's |
+| | `type_x`, `type_y`, `damage_x`, `damage_y` | 8 each | the centre of each ship's type and damage labels |
+
+### `data/captain-flags`
+
+`flags`: 4 x 8 u16, the Jolly Roger (`pic/fjolly01` ... `pic/fjolly20`,
+1-20) a named captain flies, by his id's bits 6-7 and then 3-5 (see
+"Which flag" and "Named captains" in game-rules.md). Another value
+shows his nation's flag instead.
+
+The credits picture's blocks and ink steps stay the executable's: a
+pack gives its credits as text (`text/<lang>/credits`).
 
 ## Open text
 
