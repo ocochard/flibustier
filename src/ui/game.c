@@ -130,6 +130,32 @@ load_misc(struct game *g)
 }
 
 int
+game_set_lang(struct game *g, const char *lang)
+{
+	struct strtab cstr = g->cstr;
+	struct strgroups cstn = g->cstn;
+	char was[sizeof(g->lang)];
+
+	memcpy(was, g->lang, sizeof(was));
+	snprintf(g->lang, sizeof(g->lang), "%s", lang);
+	memset(&g->cstr, 0, sizeof(g->cstr));
+	memset(&g->cstn, 0, sizeof(g->cstn));
+	if (load_text(g) != 0) {
+		strtab_free(&g->cstr);
+		strgroups_free(&g->cstn);
+		g->cstr = cstr;
+		g->cstn = cstn;
+		memcpy(g->lang, was, sizeof(was));
+		return (-1);
+	}
+	strtab_free(&cstr);
+	strgroups_free(&cstn);
+	bank_free(&g->misc);
+	load_misc(g);
+	return (0);
+}
+
+int
 game_init(struct game *g, struct packs *packs, const char *lang,
     const char *save_dir)
 {

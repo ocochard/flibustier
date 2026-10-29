@@ -59,9 +59,7 @@ yes and Escape no *(engine)*.
 | Left / Right (or Up / Down) | Move through the cabin's choices. |
 | Enter | Take the selected one. |
 | Space, Escape | Go back to the voyage. |
-
-The original's L (language menu) is not in the engine: use `--lang`
-instead.
+| L | Change the language: English, French or German. |
 
 ## Sea battles
 

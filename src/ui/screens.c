@@ -2381,6 +2381,52 @@ logbook_draw(struct game *g)
 	}
 }
 
+/*
+ * The language (cabin key L, VA 0xc6bb): shiplog.pcx in ink entry 0,
+ * the menu (CSTR 318: English, French, German, the order of the word
+ * at VA 0x33ef0) at (250, 100) up to x 500.  Another language reloads
+ * the texts and misc.crs (VA 0xba2, 0xcb0); then back to the cabin.
+ * Escape goes back unchanged (an engine choice).
+ */
+#define S_LANG_MENU		318
+
+static const char *const menu_lang[3] = { "eng", "fre", "ger" };
+
+static void
+language_enter(struct game *g)
+{
+	game_background(g, "pic/shiplog");
+	game_portrait(g, NULL);
+	if (g->bg.pixels != NULL)
+		memcpy(g->ink, g->bg.palette, 3);
+	g->selected = 0;
+}
+
+static void
+language_choose(struct game *g, int i)
+{
+	if (strcmp(g->lang, menu_lang[i]) != 0 &&
+	    game_set_lang(g, menu_lang[i]) != 0)
+		snprintf(g->msg, sizeof(g->msg), "%s", g->err);
+	game_goto(g, &screen_cabin);
+}
+
+static void
+language_event(struct game *g, const struct ui_event *ev)
+{
+	menu_event(g, ev, 3, NULL, language_choose, &screen_cabin);
+}
+
+static void
+language_draw(struct game *g)
+{
+	draw(g, FONT_BODY, 250, 100, 250, game_str(g, S_LANG_MENU), 1);
+}
+
+const struct screen screen_language = {
+	"language", language_enter, language_event, NULL, language_draw,
+};
+
 const struct screen screen_logbook = {
 	"logbook", logbook_enter, logbook_event, NULL, logbook_draw,
 };
@@ -2569,9 +2615,12 @@ cabin_event(struct game *g, const struct ui_event *ev)
 			cabin_choose(g, CABIN_CONTINUE);
 		break;
 	case EV_CHAR:
-		/* Space continues too (VA 0xb3a5, keys at VA 0x32a60). */
+		/* Space continues too (VA 0xb3a5, keys at VA 0x32a60); L
+		 * picks the language (VA 0xb3cd). */
 		if (ev->ch == ' ')
 			cabin_choose(g, CABIN_CONTINUE);
+		else if (ev->ch == 'l' || ev->ch == 'L')
+			game_goto(g, &screen_language);
 		break;
 	default:
 		break;

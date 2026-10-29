@@ -360,6 +360,9 @@ void	game_draw(struct game *g);	/* into g->fb */
 /* Strings, "" when missing. */
 const char	*game_str(const struct game *g, size_t i);
 const char	*game_word(const struct game *g, size_t group, size_t i);
+/* Switch to another language's texts and plaques: 0, or -1 with
+ * g->err set and the old language kept. */
+int	game_set_lang(struct game *g, const char *lang);
 /* A Y/N prompt's yes, in the language. */
 int	game_yes(const struct game *g, const struct ui_event *ev);
 

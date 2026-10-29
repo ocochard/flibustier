@@ -2027,8 +2027,15 @@ Bit 8 alone is cleared when the governor's daughter is won over (VA
   rises by 5, to at most 30.
 - **Keys (table at VA `0x32a60`):** Right and Left step through the
   enabled spots, wrapping around; Enter takes the selected one; Escape
-  and Space both continue the travels (VA `0xb3a5`). `L` opens a
-  language menu, which the engine leaves to its own language option.
+  and Space both continue the travels (VA `0xb3a5`).
+- **Language (key `L`, VA `0xb3cd`: choice 99, VA `0xa2a7`, `0xc6bb`):**
+  the screen fades, then `shiplog.pcx` (picture 20) shows CSTR 318 at
+  (250, 100) up to x 500, a menu of English, French and German, the
+  values of the language word at VA `0x33ef0`. Another language than
+  the current one is stored and its texts (`cstr`/`cstn`, VA `0xba2`)
+  and `misc.crs` plaques (VA `0xcb0`) are loaded; then the cabin again.
+  The engine also goes back unchanged on Escape, and keeps the old
+  language when the new one's texts are missing.
 
 ### City information (VA `0x19c62`, text VA `0x196d0`)
 

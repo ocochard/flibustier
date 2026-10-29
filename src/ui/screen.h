@@ -44,6 +44,7 @@ extern const struct screen screen_ability;
 extern const struct screen screen_summary;
 extern const struct screen screen_cabin;
 extern const struct screen screen_logbook;
+extern const struct screen screen_language;
 extern const struct screen screen_slots;
 extern const struct screen screen_retire;
 extern const struct screen screen_hof;

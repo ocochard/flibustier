@@ -554,6 +554,40 @@ test_sailing(void)
 	game_free(g);
 }
 
+/*
+ * The cabin's L (VA 0xc6bb): the language menu, Escape back unchanged;
+ * French reloads the texts and the plaques, English brings them back.
+ */
+static void
+test_language(void)
+{
+	struct game *g;
+	char eng[64];
+
+	g = play_in(saves_tmp, "eng", "enter enter down down down down "
+	    "enter down enter right enter enter type:Ann enter enter esc "
+	    "enter enter click:60,300 wait:40 esc ");	/* to the cabin */
+	if (g == NULL)
+		return;
+	CHECK(g->screen == &screen_cabin && g->misc.count > 4);
+	snprintf(eng, sizeof(eng), "%s", game_str(g, 274));	/* "Yes" */
+	CHECK(game_script(g, "type:l wait:40") == 0 &&
+	    g->screen == &screen_language);
+	CHECK(game_script(g, "esc wait:40") == 0 &&
+	    g->screen == &screen_cabin && strcmp(g->lang, "eng") == 0);
+	CHECK(game_script(g, "type:L wait:40 down enter wait:40") == 0 &&
+	    g->screen == &screen_cabin && strcmp(g->lang, "fre") == 0);
+	CHECK(strcmp(game_str(g, 274), eng) != 0 && g->misc.count > 4);
+	CHECK(game_script(g, "type:l wait:40 enter wait:40") == 0 &&
+	    strcmp(g->lang, "eng") == 0 &&
+	    strcmp(game_str(g, 274), eng) == 0);
+	/* A language no pack has: the old one is kept. */
+	CHECK(game_set_lang(g, "xyz") == -1 &&
+	    strcmp(g->lang, "eng") == 0 &&
+	    strcmp(game_str(g, 274), eng) == 0);
+	game_free(g);
+}
+
 /* The tunes and sounds a pack can replace. */
 static void
 test_tune_ids(void)
@@ -2821,6 +2855,7 @@ main(void)
 	test_languages();
 	test_saves();
 	test_hall_of_fame();
+	test_language();
 	test_sailing();
 	test_encounter_screens();
 	test_encounter_pages();
