@@ -195,6 +195,7 @@ class Bot:
         self.fields = {}
         self.no_repair_until = 0
         self.no_food_until = 0	# after a purchase that fell short
+        self.no_trade = {}	# town -> Spanish rank when its merchant refused
         self.food_town = None
         self.reefs = set()	# cells where a ship was lost on shallows
         self.wrecks = 0	# ships lost on shallows so far
@@ -1146,6 +1147,12 @@ class Bot:
     def merchant(self):
         m = self.sim("merchant", action="open", check=False)
         if not m.get("ok"):
+            if "pirates" in m.get("error", ""):
+                # a rich Spanish town shuts its merchant and shipwright
+                # to a low Spanish rank, a Spaniard's too: no food or
+                # repairs here until that rank rises
+                s = self.refresh()
+                self.no_trade[s["player_town"]] = s["rank"][0]
             return
         f = self.refresh()["fleet"]
         for good in ("goods", "sugar"):
@@ -1747,7 +1754,8 @@ class Bot:
                 ti = self.food_town
                 if ti is None:
                     ti = self.nearest_town(lambda t: self.friendly(t) and self.visited.get(
-                        self.st["towns"].index(t), -99) <= self.st["day"] - 7)
+                        self.st["towns"].index(t), -99) <= self.st["day"] - 7 and
+                        self.no_trade.get(self.st["towns"].index(t), -1) != self.st["rank"][0])
                     self.food_town = ti	# keep to it until reached
                 if ti is not None:
                     res = self.go_town(ti)
