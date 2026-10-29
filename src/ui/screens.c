@@ -82,7 +82,6 @@
 #define S_FORT_SUNSET		317
 #define S_FORT_DRIVES_OFF	196
 #define S_BEACHED		173
-#define BTL_COMMAND		4	/* battle stage: choosing the ship */
 #define S_FOE_ESCAPED		198
 #define S_BOARDING		171	/* "...you spot %s approaching" */
 #define SAILING_RELOADING	0
@@ -3445,6 +3444,13 @@ static int	vnews_offer(struct game *, int, int, const struct screen *);
 static void
 battle_enter(struct game *g)
 {
+	/* Several ships: which one to command, before the battle shows
+	 * (VA 0xf246). */
+	if (g->sim.battle.outcome == BAT_NONE && g->sim.battle.tick == 0 &&
+	    g->sim.fleet.nships > 1 && !g->btl_chosen) {
+		game_goto(g, &screen_fleet_panel);
+		return;
+	}
 	game_background(g, "pic/sbat");
 	game_portrait(g, NULL);
 	battle_sprites(g, 0, g->sim.battle.you.type);
@@ -3459,12 +3465,6 @@ battle_enter(struct game *g)
 	if (g->sim.battle.outcome == BAT_BOARDING &&
 	    g->sim.sword.result == SWORD_WON)
 		prize_show(g);		/* back from the fight: the prize */
-	/* Several ships: which one to command, before the first tick. */
-	if (g->btl_stage == 0 && g->sim.battle.tick == 0 &&
-	    g->sim.fleet.nships > 1 && !g->btl_chosen) {
-		g->btl_stage = BTL_COMMAND;
-		g->selected = 0;
-	}
 	g->turn = 0;
 	g->ink[0] = g->ink[1] = g->ink[2] = 240;
 }
@@ -3754,10 +3754,6 @@ battle_heading_follow(int *shown, int heading)
 static void
 battle_tick(struct game *g)
 {
-	if (g->btl_stage == BTL_COMMAND && g->fading == 0) {
-		game_goto(g, &screen_fleet_panel);	/* VA 0xf246 */
-		return;
-	}
 	if (g->fading != 0 || g->btl_stage != 0)
 		return;
 	sim_battle_tick(&g->sim, g->turn, g->btl_fire, g->btl_sails);

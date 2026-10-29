@@ -809,9 +809,14 @@ test_battle_screen(void)
 		g->sim.fleet.nships = 2;
 		g->sim.fleet.ships[1] = 5;
 		g->sim.battle.tick = 0;
-		game_switch(g, &screen_battle);
-		CHECK(game_script(g, "wait:40") == 0 &&
-		    g->screen == &screen_fleet_panel);
+		game_goto(g, &screen_battle);
+		/* The battle never shows before the choice. */
+		for (i = 0; i < 80; i++) {
+			game_tick(g);
+			game_draw(g);
+			CHECK(g->screen != &screen_battle || g->fading != 1);
+		}
+		CHECK(g->screen == &screen_fleet_panel);
 		/* SELECT does nothing until a ship is marked; the second
 		 * slot, then SELECT. */
 		CHECK(game_script(g, "click:540,450") == 0 &&
