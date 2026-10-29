@@ -366,6 +366,22 @@ class Bot:
                 return False	# ',' cells hide shallows: never cut across them
         return True
 
+    def open_sea(self, x, y):
+        """Is cell (x, y) open sea, and every cell around it?"""
+        return all(0 <= y + dy < self.H and 0 <= x + dx < self.W and
+                   self.grid[y + dy][x + dx] == "."
+                   for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+
+    def land_between(self, a, b):
+        """Does land lie on the straight line between cells a and b?"""
+        n = max(abs(b[0] - a[0]), abs(b[1] - a[1]))
+        for i in range(1, n):
+            x = round(a[0] + (b[0] - a[0]) * i / n)
+            y = round(a[1] + (b[1] - a[1]) * i / n)
+            if self.grid[y][x] == "#":
+                return True
+        return False
+
     def load_pixels(self, era):
         """The exact terrain a ship sails on, as the player sees it: the 256
         map tiles' pixels, and the tile each cell draws."""
@@ -476,17 +492,22 @@ class Bot:
 
     def back_off(self, tries):
         """After a grounding (the ship turned about): sail clear, trying
-        other headings when the way back is closed too."""
+        other headings when the way back is closed too.  Returns the
+        sail reply when it ended in a town, else None."""
         rnd = random.Random(tries)
         for attempt in range(8):
             r = self.sim("sail", turn=0, ticks=24 + 8 * min(tries, 6))
             if r["stop"] == "ticks":
-                return
+                return None
+            if r["stop"] == "town":
+                return r	# in port: missed, the town would not count again
             if r["stop"] != "land":
-                return  # an encounter or the crew: the caller's job
+                return None	# an encounter or the crew: the caller's job
             self.sim("shore", ashore=0)
             turn = rnd.choice((-1, 1))
-            self.sim("sail", turn=turn, ticks=4 * rnd.randrange(1, 5))
+            r = self.sim("sail", turn=turn, ticks=4 * rnd.randrange(1, 5))
+            if r["stop"] == "town":
+                return r
 
     @staticmethod
     def bearing(dx, dy):
@@ -528,6 +549,12 @@ class Bot:
             # advance along the route while we are close to its points
             while idx < len(route) - 1 and max(abs(route[idx][0] - cx), abs(route[idx][1] - cy)) <= 2:
                 idx += 1
+            if self.land_between((cx, cy), route[idx]):
+                # the resync can pick a point beyond a headland (by
+                # Tortuga, the end itself): plan again from here
+                again = self.path((cx, cy), (tx, ty))
+                if again is not None:
+                    route, idx = again, 0
             # look ahead for the farthest visible route point
             j = idx
             for k in range(idx, min(len(route), idx + 14)):
@@ -568,7 +595,9 @@ class Bot:
                 self.st["day"] = r["day"]
                 if stop == "land":
                     self.sim("shore", ashore=0)
-                    self.back_off(bumps)
+                    r = self.back_off(bumps)
+                    if r is not None:
+                        return r
                     f = self.refresh()["fleet"]
                     route = self.path((f["x"] // 16, f["y"] // 16), (tx, ty))
                     idx = 0
@@ -1763,9 +1792,14 @@ class Bot:
                                       abs(s["towns"][i]["sea_y"] - f["y"] // 16)))
             ti = random.Random(loops).choice(sp[:5])
             t = s["towns"][ti]
-            gx, gy = t["sea_x"] + 6, t["sea_y"] + 6
-            if not self.water(gx, gy):
-                gx, gy = t["sea_x"], t["sea_y"]	# the offset fell inland
+            # open sea all round, or the reef guard keeps the ship from it
+            # (beside an islet, as east of Curacao in 1660)
+            gx, gy = next(((cx + dx, cy + dy)
+                           for cx, cy, n in ((t["sea_x"] + 6, t["sea_y"] + 6, 5),
+                                             (t["sea_x"], t["sea_y"], 8))	# else by the harbour
+                           for r in range(n) for dy in range(-r, r + 1) for dx in range(-r, r + 1)
+                           if max(abs(dx), abs(dy)) == r and self.open_sea(cx + dx, cy + dy)),
+                          (t["sea_x"], t["sea_y"]))
             res = self.go(gx, gy, max_days=40)
             if res == "town" and not self.at_war(s["towns"][self.last_town]["nation"]):
                 self.visit(self.last_town)
