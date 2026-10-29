@@ -1324,8 +1324,10 @@ def make_ship(args, spec, a, profile, seed):
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "mkdir -p %s" % work], check=True,
                        stdin=subprocess.DEVNULL)
-        subprocess.run(["scp", "-q", script, "%s:%s/" % (host, work)],
-                       check=True)
+        fetch_library(host)
+        subprocess.run(["scp", "-q", script,
+                        os.path.join(HERE, "materials.py"),
+                        "%s:%s/" % (host, work)], check=True)
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "cd %s && rm -rf out && blender -b -P ship.py -- "
                         "%s --out out --frame %dx%d --blend model.blend "
@@ -2001,6 +2003,43 @@ def portrait_sheet_workflow(sea, ship, mask, k, prefix):
     return g
 
 
+def views_sheet_workflow(views, mask, k, prefix):
+    """A ship portrait's 5 spyglass views from 5 pictures at sea (the
+    waves moving, the ship riding them), each seen through the glass."""
+    side = round(PORTRAIT_VIEW * k)
+    win = round(PORTRAIT_RENDER[0] * 0.9)
+    off = (PORTRAIT_RENDER[0] - win) // 2
+    g = {
+        "glass": {"class_type": "LoadImage", "inputs": {"image": mask}},
+        "gfit": {"class_type": "ImageScale", "inputs": {
+            "image": ["glass", 0], "upscale_method": "bilinear",
+            "width": side, "height": side, "crop": "disabled"}},
+        "gmask": {"class_type": "ImageToMask", "inputs": {
+            "image": ["gfit", 0], "channel": "red"}},
+        "canvas": {"class_type": "EmptyImage", "inputs": {
+            "width": round(SCREEN_W * k), "height": round(SCREEN_H * k),
+            "batch_size": 1, "color": 0}},
+    }
+    last = ["canvas", 0]
+    for n, ((vx, vy), view) in enumerate(zip(PORTRAIT_VIEWS, views)):
+        g["v%d" % n] = {"class_type": "LoadImage", "inputs": {
+            "image": view}}
+        g["c%d" % n] = {"class_type": "ImageCrop", "inputs": {
+            "image": ["v%d" % n, 0], "width": win, "height": win,
+            "x": off, "y": off}}
+        g["s%d" % n] = {"class_type": "ImageScale", "inputs": {
+            "image": ["c%d" % n, 0], "upscale_method": "lanczos",
+            "width": side, "height": side, "crop": "disabled"}}
+        g["p%d" % n] = {"class_type": "ImageCompositeMasked", "inputs": {
+            "destination": last, "source": ["s%d" % n, 0],
+            "x": round(vx * k), "y": round(vy * k), "resize_source": False,
+            "mask": ["gmask", 0]}}
+        last = ["p%d" % n, 0]
+    g["save"] = {"class_type": "SaveImage", "inputs": {
+        "images": last, "filename_prefix": prefix}}
+    return g
+
+
 def make_portrait(args, spec, a, profile, seed):
     """A ship's encounter portrait: its class's model rendered on the
     render host as a lookout sees it, redrawn as a photograph at sea
@@ -2015,16 +2054,19 @@ def make_portrait(args, spec, a, profile, seed):
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "mkdir -p %s" % work], check=True,
                        stdin=subprocess.DEVNULL)
-        subprocess.run(["scp", "-q", script, "%s:%s/" % (host, work)],
-                       check=True)
+        fetch_library(host)
+        subprocess.run(["scp", "-q", script,
+                        os.path.join(HERE, "materials.py"),
+                        "%s:%s/" % (host, work)], check=True)
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "cd %s && rm -rf out && blender -b -P ship.py -- "
-                        "--class '%s' --portrait --out out --frame %dx%d "
-                        "> blender.log 2>&1" % (work, cls,
-                                                 *PORTRAIT_RENDER)],
+                        "--class '%s' --portrait --views %d --out out "
+                        "--frame %dx%d > blender.log 2>&1" % (
+                            work, cls, len(PORTRAIT_VIEWS),
+                            *PORTRAIT_RENDER)],
                        check=True, stdin=subprocess.DEVNULL)
         os.makedirs(local, exist_ok=True)
-        subprocess.run(["scp", "-q", "%s:%s/out/portrait.png" % (host, work),
+        subprocess.run(["scp", "-q", "%s:%s/out/view*.png" % (host, work),
                         local + "/"], check=True)
     except subprocess.CalledProcessError as e:
         print("%s: blender on %s failed: %s" % (a["id"], host, e),
@@ -2032,53 +2074,36 @@ def make_portrait(args, spec, a, profile, seed):
         return None
     free(args.server)
     prefix = "flibustier/" + a["id"].replace("/", "-")
+    redraw = redrawn(spec, a)
     try:
-        redraw = redrawn(spec, a)
-        ppath = os.path.join(local, "photo.png")
-        if redraw:
-            up = upload(args.server, os.path.join(local, "portrait.png"),
-                        "flibustier-portrait-render.png")
-            photo = render(args.server, ship_frame_workflow(
-                spec, profile, seed, up, a["prompt"],
-                a.get("denoise", 0.75), *PORTRAIT_RENDER, prefix,
-                PORTRAIT_RENDER))
-            with open(ppath, "wb") as f:
-                f.write(photo)
-        # The sea and sky behind every portrait: one photograph, the same
-        # seed for all, the ship cut out of her redraw and set on it.
-        sea = render(args.server, texture_workflow(
-            spec, profile, spec["portraits"]["seed"],
-            spec["portraits"]["background"], PORTRAIT_RENDER[0],
-            prefix + "-sea"))
-        spath = os.path.join(local, "sea.png")
-        with open(spath, "wb") as f:
-            f.write(sea)
+        # Each view lightly redrawn, one seed for all, so the waves and
+        # the ship stay the render's and only texture and light come in.
+        views = []
+        for n in range(len(PORTRAIT_VIEWS)):
+            path = os.path.join(local, "view%d.png" % n)
+            if redraw:
+                up = upload(args.server, path, "flibustier-view.png")
+                with open(path, "wb") as f:
+                    f.write(render(args.server, ship_frame_workflow(
+                        spec, profile, seed, up, a["prompt"],
+                        a.get("view_denoise", 0.3), *PORTRAIT_RENDER,
+                        prefix, PORTRAIT_RENDER)))
+            views.append(upload(args.server, path,
+                                "flibustier-view-%d.png" % n))
         free(args.server)
-        cpath = os.path.join(local, "cut.png")
-        if redraw:
-            pup = upload(args.server, ppath, "flibustier-portrait-photo.png")
-            cut = render(args.server, cutout_workflow(
-                pup, PORTRAIT_RENDER[0], PORTRAIT_RENDER[1],
-                prefix + "-cut"))
-            with open(cpath, "wb") as f:
-                f.write(cut)
-        else:		# the render, its water held out, is the cut-out
-            shutil.copy(os.path.join(local, "portrait.png"), cpath)
-        cup = upload(args.server, cpath, "flibustier-portrait-cut.png")
-        sup = upload(args.server, spath, "flibustier-portrait-sea.png")
         mask = upload(args.server, os.path.join(HERE, "layouts",
                                                 "spyglass.png"),
                       "flibustier-spyglass.png")
-        sheet = render(args.server, portrait_sheet_workflow(
-            sup, cup, mask, k, prefix + "-views"))
+        sheet = render(args.server, views_sheet_workflow(
+            views, mask, k, prefix + "-views"))
     except RuntimeError as e:
         print("%s: %s" % (a["id"], e), file=sys.stderr)
         return None
     with open(os.path.join(args.pack, a["file"]), "wb") as f:
         f.write(sheet)
     shutil.rmtree(local)
-    return {"class": cls, "redrawn": redraw,
-            "denoise": a.get("denoise", 0.75) if redraw else None,
+    return {"class": cls, "redrawn": redraw, "views": "at sea, Blender",
+            "denoise": a.get("view_denoise", 0.3) if redraw else None,
             "prompt": a["prompt"].strip() if redraw else None,
             "model_sha256": hashlib.sha256(open(script, "rb").read())
             .hexdigest()}

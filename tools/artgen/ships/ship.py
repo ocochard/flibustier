@@ -34,6 +34,12 @@ import sys
 
 import bpy
 import bmesh
+
+# The photographic materials (../materials.py, copied beside this file
+# on the render host).
+sys.path[:0] = [os.path.dirname(os.path.abspath(__file__)),
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+import materials			# noqa: E402
 from mathutils import Vector
 
 
@@ -76,6 +82,7 @@ CLASSES = {
     "frigate": ship(34.0, 8.2, 2.2, 2.5, 0.30, 1.0, 0.12, 31.8,
                     [(0.22, 0.72, "lateen+1"), (0.52, 1.0, 3),
                      (0.86, 0.88, 3)], spritsail=2, sprit_rake=30,
+                    beakhead=0.06,	# "a short beakhead" (ships.md)
                     paint=("black", "black", "ochre")),
     "war galleon": ship(48.0, 11.7, 4.5, 7.0, 0.33, 3.0, 0.18, 43.0,
                         [(0.22, 0.75, "lateen+1"), (0.52, 1.0, 3),
@@ -98,6 +105,8 @@ SIZES = {0: CLASSES["pinnace"], 1: CLASSES["merchantman"],
          2: CLASSES["galleon"]}
 
 BRACE = 30		# degrees the yards are braced round
+SPRITSAILS = True	# set the sprit sails (see rig())
+SPRIT_SIZE = 0.55	# the spritsail's width, of the beam
 
 # The paints of ships.md, for each class's lower hull, upper works and
 # wales (their "paint"), and its gun ports and gilding.
@@ -199,7 +208,7 @@ def hull(s, mats):
                 t = -1 + 2 * i / n
                 w = half_width(t, B) * 1.02
                 v1 = bm.verts.new((side * w, t * L / 2, z0))
-                v2 = bm.verts.new((side * w, t * L / 2, z0 + 0.25))
+                v2 = bm.verts.new((side * w, t * L / 2, z0 + 0.45))
                 if prev:
                     bm.faces.new((prev[0], v1, v2, prev[1]))
                 prev = (v1, v2)
@@ -220,6 +229,16 @@ def hull(s, mats):
                                      (-0.35, h))]
                 bm.faces.new(vs)
                 mesh_object("port", bm, mats["port"])
+                # Its lid, open: hinged at the port's top, swung out and
+                # up, red inside as the period's were.
+                bm = bmesh.new()
+                out = side * 0.55 * h
+                vs = [bm.verts.new((side * w + dx, y + dy, z0 + h + dz))
+                      for dy, dx, dz in ((-0.37, 0, 0), (0.37, 0, 0),
+                                         (0.37, out, h * 0.55),
+                                         (-0.37, out, h * 0.55))]
+                bm.faces.new(vs)
+                mesh_object("lid", bm, mats["lid"])
     if s.get("gilt"):
         # Gilded carving along the top of the sterncastle and transom.
         aft = -1 + 2 * s["stern_len"]
@@ -251,6 +270,27 @@ def hull(s, mats):
         bm.faces.new((vs[0], vs[2], vs[3]))
         bm.faces.new((vs[1], vs[3], vs[2]))
         mesh_object("beakhead", bm, mats["wale"])
+        # Its knee, the curved timber from the stem out under it; the
+        # head rails sweeping from the bow's sides out to the figure;
+        # the figurehead, a gilded lion, on the knee's end.
+        stem = (0.0, L / 2 - 0.4, z - 2.4)
+        knee = (0.0, tip - 0.3, z + 0.1)
+        cylinder("knee", stem, knee, 0.22, mats["wale"])
+        for side in (-1, 1):
+            for k, dz in enumerate((0.9, 0.35)):
+                a_ = (side * half_width(0.9, B) * 0.9, L / 2 - 2.2,
+                      z + dz + 0.3)
+                mid = (side * 0.45, (L / 2 + tip) / 2, z + dz * 0.6)
+                cylinder("headrail", a_, mid, 0.07, mats["wale"])
+                cylinder("headrail", mid, knee, 0.07, mats["wale"])
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=16,
+                                             ring_count=8,
+                                             location=(0.0, tip - 0.1,
+                                                       z + 0.45))
+        fig = bpy.context.object
+        fig.name = "figurehead"
+        fig.scale = (0.35, 0.6, 0.45)
+        fig.data.materials.append(mats["gilt"])
     return ob
 
 
@@ -389,6 +429,38 @@ def rig(s, mats):
                 square_sails(m, y, base, height, 1, 0.80, s, mats, info)
         else:
             square_sails(m, y, base, height, kind, 0.28, s, mats, info)
+        # Its standing rigging, tarred rope: shrouds from the lower top
+        # down to the hull's sides each side, then from the masthead to
+        # the top's crosstrees, and a stay forward from the top.
+        rope = mats["rope"]
+        tw = half_width(2 * y / L, s["beam"]) * 1.03
+        lower = base + height * 0.55
+        made = []
+        for side in (-1, 1):
+            for k in range(6):
+                dy = -1.1 + 0.44 * k
+                made.append(cylinder("shroud%d" % m, (0, y, lower),
+                                     (side * tw, y + dy, s["sheer"] + 0.2),
+                                     0.035, rope))
+            for k in range(2):
+                made.append(cylinder("topshroud%d" % m,
+                                     (0, top[1], base + height * 0.92),
+                                     (side * 1.1, y - 0.4 + 0.8 * k, lower),
+                                     0.025, rope))
+        # Backstays from the masthead down aft to the hull's sides.
+        for side in (-1, 1):
+            made.append(cylinder("backstay%d" % m,
+                                 (0, top[1], base + height * 0.92),
+                                 (side * tw, y - 2.6, s["sheer"] + 0.2),
+                                 0.025, rope))
+        if pos < 0.95:
+            ahead = -L / 2 + min(1.0, pos + 0.32) * L
+            made.append(cylinder("stay%d" % m, (0, y, lower),
+                                 (0, ahead, s["sheer"] + 0.5), 0.045, rope))
+        if info["levels"]:
+            info["levels"][0].extend(made)
+        else:
+            info["levels"].append(made)
         # A pennant at the masthead.
         bm = bmesh.new()
         vs = [bm.verts.new(p) for p in (top, (0, top[1] - 0.07 * L,
@@ -404,17 +476,27 @@ def rig(s, mats):
     end = (0, root[1] + length * math.cos(rake),
            root[2] + length * math.sin(rake))
     cylinder("bowsprit", root, end, 0.006 * L + 0.1, mats["spar"])
-    for k in range(s.get("spritsail", 0)):
-        at = 0.65 if k == 0 else 1.0
+    # As the period's: the spritsail under the bowsprit, the sprit
+    # topsail standing on its end (jibs came in only about 1700).
+    for k in range(s.get("spritsail", 0) if SPRITSAILS else 0):
+        # Small and well out on the bowsprit, so the bow stays in view.
+        at = 0.85 if k == 0 else 1.0
         y = root[1] + (end[1] - root[1]) * at
         z = root[2] + (end[2] - root[2]) * at
-        w = s["beam"] * (1.0 if k == 0 else 0.6)
+        w = s["beam"] * SPRIT_SIZE * (1.0 if k == 0 else 0.7)
         if k == 0:			# hanging below the bowsprit
-            z0, z1 = z - w * 0.7, z
+            z0, z1 = z - w * 0.55, z
         else:				# standing on its end
             z0, z1 = z, z + w * 0.6
-        sail("spritsail%d" % k, y, z0, z1, w, w * 0.9, w * 0.05,
-             mats["sail"])
+        # Braced round as the masts' yards are: unbraced, the side's
+        # view sees it edge on, a strip hanging from the bowsprit.
+        brace = bpy.data.objects.new("spritbrace%d" % k, None)
+        brace.location = (0, y, 0)
+        brace.rotation_euler = (0, 0, math.radians(BRACE))
+        bpy.context.collection.objects.link(brace)
+        sp = sail("spritsail%d" % k, 0, z0, z1, w, w * 0.9, w * 0.05,
+                  mats["sail"])
+        sp.parent = brace
     return masts
 
 
@@ -500,6 +582,54 @@ def water():
     ob.data.materials.append(m)
 
 
+def ocean(t):
+    """The open sea at time t (seconds): Blender's ocean, a wide field of
+    moving waves, dark blue water lit and reflecting the sky."""
+    ob = bpy.data.objects.get("ocean")
+    if ob is None:
+        bpy.ops.mesh.primitive_plane_add(size=2, location=(0, 0, 0))
+        ob = bpy.context.object
+        ob.name = "ocean"
+        mod = ob.modifiers.new("ocean", "OCEAN")
+        mod.geometry_mode = "GENERATE"
+        mod.spatial_size = 200
+        mod.resolution = 12
+        mod.repeat_x = mod.repeat_y = 12
+        mod.wave_scale = 0.75
+        mod.wind_velocity = 11.0
+        # Whitecaps where the waves break.
+        mod.use_foam = True
+        mod.foam_layer_name = "foam"
+        mod.foam_coverage = 0.25
+        mod.choppiness = 1.1
+        mod.wave_alignment = 0.4
+        mod.wave_direction = math.radians(30)
+        ob.location = (-1200, -1200, 0)
+        m = bpy.data.materials.new("sea")
+        m.use_nodes = True
+        nt = m.node_tree
+        b_ = nt.nodes["Principled BSDF"]
+        b_.inputs["Roughness"].default_value = 0.22
+        b_.inputs["IOR"].default_value = 1.33
+        if "Specular IOR Level" in b_.inputs:
+            b_.inputs["Specular IOR Level"].default_value = 0.35
+        # Deep teal water, white where its foam is.
+        foam = nt.nodes.new("ShaderNodeAttribute")
+        foam.attribute_name = "foam"
+        ramp = nt.nodes.new("ShaderNodeValToRGB")
+        ramp.color_ramp.elements[0].position = 0.35
+        ramp.color_ramp.elements[0].color = (0.004, 0.035, 0.045, 1)
+        ramp.color_ramp.elements[1].position = 0.75
+        ramp.color_ramp.elements[1].color = (0.75, 0.78, 0.78, 1)
+        nt.links.new(foam.outputs["Fac"], ramp.inputs["Fac"])
+        nt.links.new(ramp.outputs["Color"], b_.inputs["Base Color"])
+        ob.data.materials.append(m)
+        for f in ob.data.polygons:
+            f.use_smooth = True
+    ob.modifiers["ocean"].time = t
+    return ob
+
+
 def side_camera(frame_w, frame_h, extent):
     """The sea battle's view: from the ship's port side, nearly level,
     the bow to the left, the waterline near the bottom of the frame."""
@@ -521,7 +651,20 @@ def side_camera(frame_w, frame_h, extent):
 def scene(frame_w, frame_h, extent, mid):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
-    sc.cycles.samples = 64
+    # As the fencers: denoised where Blender has a denoiser, else
+    # enough light paths, adaptively.
+    denoisers = [i.identifier for i in sc.cycles.bl_rna.properties[
+        "denoiser"].enum_items]
+    if denoisers:
+        sc.cycles.samples = 96
+        sc.cycles.use_denoising = True
+        sc.cycles.denoiser = denoisers[0]
+    else:
+        sc.cycles.use_denoising = False
+        sc.cycles.samples = 256
+        sc.cycles.use_adaptive_sampling = True
+        sc.cycles.adaptive_threshold = 0.02
+        sc.cycles.sample_clamp_indirect = 3.0
     sc.cycles.device = "CPU"
     sc.render.film_transparent = True
     sc.render.resolution_x = frame_w
@@ -529,16 +672,12 @@ def scene(frame_w, frame_h, extent, mid):
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_mode = "RGBA"
     sc.view_settings.view_transform = "Standard"
-    world = bpy.data.worlds.new("sky")
-    world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Color"].default_value = \
-        (0.55, 0.65, 0.8, 1)
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = \
-        0.6
-    sc.world = world
+    materials.sky(sc, 0.6, (0.55, 0.65, 0.8))
+    # A warm low sun, late in the day, and a warm sky's light.
     sun = bpy.data.lights.new("sun", "SUN")
-    sun.energy = 2.6
+    sun.energy = 3.2
     sun.angle = 0.2
+    sun.color = (1.0, 0.86, 0.68)
     sob = bpy.data.objects.new("sun", sun)
     sob.rotation_euler = (math.radians(50), math.radians(-25),
                           math.radians(-30))
@@ -573,6 +712,8 @@ def main():
                     help="render the side view from whole to sinking in "
                     "that many steps (DIR/d0.png...), not the headings")
     ap.add_argument("--blend", help="also save the built model there")
+    ap.add_argument("--views", type=int, default=0,
+                    help="with --portrait: N views at sea, DIR/viewN.png")
     ap.add_argument("--portrait", action="store_true",
                     help="render the encounter's portrait, DIR/portrait.png:"
                     " the ship filling the view, low over the water")
@@ -582,17 +723,23 @@ def main():
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     lower, upper, wale = s.get("paint", ("dark oak", "dark oak", "gold"))
+    # Scanned materials (materials.LIBRARY), each tinted to its paint:
+    # planked hulls and decks, wooden spars, sailcloth, gilt; a plain
+    # colour where its file is missing.
+    pbr = materials.pbr
     mats = {
-        "hull": material("hull", PAINTS[lower], 0.8),
-        "upper": material("upper", PAINTS[upper], 0.75),
-        "wale": material("wale", PAINTS[wale], 0.5,
-                         0.4 if wale == "gold" else 0.0),
+        "hull": pbr("hull", "planks", PAINTS[lower], 0.8),
+        "upper": pbr("upper", "planks", PAINTS[upper], 0.75),
+        "wale": pbr("wale", "gilt" if wale == "gold" else "planks",
+                    PAINTS[wale], 0.5, 0.4 if wale == "gold" else 0.0),
         "port": material("port", (0.01, 0.008, 0.006), 0.9),
-        "gilt": material("gilt", PAINTS["gold"], 0.35, 0.8),
-        "deck": material("deck", (0.36, 0.25, 0.15), 0.9),
-        "spar": material("spar", (0.25, 0.16, 0.09), 0.8),
-        "sail": material("sail", (0.86, 0.80, 0.66), 0.95),
-        "flag": material("flag", (0.65, 0.08, 0.06), 0.8),
+        "gilt": pbr("gilt", "gilt", PAINTS["gold"], 0.35, 0.8),
+        "deck": pbr("deck", "planks", (0.36, 0.25, 0.15), 0.9),
+        "spar": pbr("spar", "planks", (0.25, 0.16, 0.09), 0.8),
+        "sail": pbr("sail", "canvas", (0.92, 0.84, 0.66), 0.95),
+        "flag": pbr("flag", "wool", (0.65, 0.08, 0.06), 0.8),
+        "lid": pbr("lid", "planks", (0.45, 0.06, 0.04), 0.8),
+        "rope": pbr("rope", "rope", (0.12, 0.08, 0.05), 0.9),
     }
     hull(s, mats)
     masts = rig(s, mats)
@@ -623,11 +770,83 @@ def main():
         cam.location = (-200 * math.cos(math.radians(4)), 0,
                         200 * math.sin(math.radians(4)) + tall * 0.55)
         cam.rotation_euler = (math.radians(86), 0, -math.pi / 2)
-        water()
-        pivot.rotation_euler = (0, 0, math.radians(48))
-        bpy.context.scene.render.filepath = os.path.join(args.out,
-                                                         "portrait.png")
-        bpy.ops.render.render(write_still=True)
+        if not args.views:
+            water()
+            pivot.rotation_euler = (0, 0, math.radians(48))
+            bpy.context.scene.render.filepath = os.path.join(
+                args.out, "portrait.png")
+            bpy.ops.render.render(write_still=True)
+            return
+        # The glass's views: the real sea and sky, the waves moving on
+        # between views and the ship riding them, rising and falling,
+        # pitching and rolling in time with them.
+        sc = bpy.context.scene
+        sc.render.film_transparent = False
+        # A warm low sun from behind the lookout, late in the day.
+        sun = bpy.data.objects["sun"]
+        sun.data.energy = 3.6
+        sun.data.color = (1.0, 0.8, 0.58)
+        sun.rotation_euler = (math.radians(72), 0, math.radians(-120))
+        # Through a glass: a long lens from a lookout's height a few
+        # hundred metres off, so the sea runs to a true horizon behind
+        # her and the sky fills the top.
+        span = max(s["length"] * 1.6, tall * 1.5)
+        cam.data.type = "PERSP"
+        cam.data.lens = 200
+        cam.data.sensor_width = 36
+        dist = span * 200 / 36
+        cam.location = (-dist, 0, 12.0)
+        cam.rotation_euler = (math.radians(90.0 + math.degrees(
+            math.atan((tall * 0.42 - 12.0) / dist))), 0, -math.pi / 2)
+        cam.data.clip_end = 20000
+        # The far sea out to the horizon, flat, the same water.
+        bpy.ops.mesh.primitive_plane_add(size=40000, location=(0, 0, -0.3))
+        far = bpy.context.object
+        far.name = "far-sea"
+        # A clear sky with a low sun, physically scattered: deep blue
+        # aloft, warm towards the horizon.
+        world = bpy.data.worlds.new("sea-sky")
+        world.use_nodes = True
+        wt = world.node_tree
+        sky = wt.nodes.new("ShaderNodeTexSky")
+        kinds = [i.identifier for i in sky.bl_rna.properties[
+            "sky_type"].enum_items]
+        for k in ("MULTIPLE_SCATTERING", "SINGLE_SCATTERING", "NISHITA"):
+            if k in kinds:
+                sky.sky_type = k
+                break
+        if hasattr(sky, "sun_elevation"):
+            sky.sun_elevation = math.radians(14)
+            sky.sun_rotation = math.radians(210)
+        if hasattr(sky, "air_density"):
+            sky.air_density = 1.2
+        wt.links.new(sky.outputs["Color"],
+                     wt.nodes["Background"].inputs["Color"])
+        wt.nodes["Background"].inputs["Strength"].default_value = 0.08
+        sc.world = world
+        # A film's response, so the sunlit canvas keeps its folds.
+        for vt in ("AgX", "Filmic"):
+            try:
+                sc.view_settings.view_transform = vt
+                break
+            except TypeError:
+                pass
+        sc.world.cycles_visibility.camera = True \
+            if hasattr(sc.world, "cycles_visibility") else None
+        for n in range(args.views):
+            t = n * 1.1
+            sea = ocean(t)
+            if not far.data.materials:
+                far.data.materials.append(sea.data.materials[0])
+            ph = 2 * math.pi * n / args.views
+            # Riding at her waterline: a little up and down with the
+            # swell, never pushed under it.
+            pivot.location.z = 0.2 * math.sin(ph) + 0.15
+            pivot.rotation_euler = (math.radians(2.0 * math.sin(ph + 1.2)),
+                                    math.radians(1.5 * math.cos(ph)),
+                                    math.radians(48))
+            sc.render.filepath = os.path.join(args.out, "view%d.png" % n)
+            bpy.ops.render.render(write_still=True)
         return
     if args.damage:
         # Each class wider with the square root of its length, against

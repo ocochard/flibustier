@@ -1305,7 +1305,11 @@ atlas = "art/ship0.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 ship = { size = 0, headings = 16, frame = [78, 58] }	# the small ships: a pinnace (ships/ships.md)
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a small, slim Dutch three-masted pinnace in dark oiled
 oak: a low single-deck hull with a modest raised stern ending in a flat,
@@ -1338,7 +1342,11 @@ atlas = "art/ship1.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 ship = { size = 1, headings = 16, frame = [78, 58] }	# the medium ships: a merchantman (ships/ships.md)
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sturdy English merchant ship of about 1620 with a broad,
 deep hull, a raised wooden stern two decks high, its poop and
@@ -1372,7 +1380,11 @@ atlas = "art/ship2.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 ship = { size = 2, headings = 16, frame = [78, 58] }	# the large ships: a galleon (ships/ships.md)
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a Spanish treasure galleon of about 1600 with a broad
 hull, a high wooden stern rising three decks, its flat planked transom
@@ -1478,7 +1490,11 @@ atlas = "art/pinnabtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "pinnace", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a small, slim Dutch three-masted pinnace in dark oiled
 oak: a low single-deck hull with a modest raised stern ending in a flat,
@@ -1497,7 +1513,11 @@ atlas = "art/sloopbtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "sloop", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a low, sleek single-masted Caribbean sloop of the 1670s
 with a flush deck and a small square transom: one tall mast raked aft
@@ -1517,7 +1537,11 @@ atlas = "art/barqubtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "barque", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a small three-masted Elizabethan bark with a stout, plain
 wooden hull, a modest raised bow deck and a raised square stern: square
@@ -1536,7 +1560,11 @@ atlas = "art/cargobtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "fluyt", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a Dutch fluyt of the 1650s, a long narrow cargo ship whose
 sides curve sharply inward above the waterline, a rounded stern topped
@@ -1556,7 +1584,11 @@ atlas = "art/merchbtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "merchantman", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sturdy English merchant ship of about 1620 with a broad,
 deep hull, a raised wooden stern two decks high, its poop and
@@ -1577,7 +1609,11 @@ atlas = "art/frigabtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "frigate", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and light
+# added (the pack's redraw_renders is off for the others).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sleek Dutch light frigate of about 1665, a low-slung,
 fine-lined hull with one continuous row of gun ports and a short raised
@@ -1597,7 +1633,11 @@ atlas = "art/wargabtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "war galleon", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a massive war galleon of the 1620s with two full rows of
 red-lidded gun ports, a high wooden stern several decks tall, heavily
@@ -1617,7 +1657,11 @@ atlas = "art/gallebtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "galleon", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a Spanish treasure galleon of about 1600 with a broad
 hull, a high wooden stern rising three decks, its flat planked transom
@@ -1637,7 +1681,11 @@ atlas = "art/fastgbtl.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 damage = { class = "fast galleon", levels = 5, frame = [145, 86] }
-denoise = 0.75
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sleek English race-built galleon of the 1580s, a low,
 long hull with a low stern and bow, a small raised bow deck and a
@@ -2039,7 +2087,12 @@ file = "art/s_pinn.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "pinnace" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a small, slim Dutch three-masted pinnace in dark oiled
 oak: a low single-deck hull with a modest raised stern ending in a flat,
@@ -2059,7 +2112,12 @@ file = "art/s_sloop.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "sloop" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a low, sleek single-masted Caribbean sloop of the 1670s
 with a flush deck and a small square transom: one tall mast raked aft
@@ -2080,7 +2138,12 @@ file = "art/s_barque.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "barque" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a small three-masted Elizabethan bark with a stout, plain
 wooden hull, a modest raised bow deck and a raised square stern: square
@@ -2100,7 +2163,12 @@ file = "art/s_fluyt.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "fluyt" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a Dutch fluyt of the 1650s, a long narrow cargo ship whose
 sides curve sharply inward above the waterline, a rounded stern topped
@@ -2121,7 +2189,12 @@ file = "art/s_merch.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "merchantman" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sturdy English merchant ship of about 1620 with a broad,
 deep hull, a raised wooden stern two decks high, its poop and
@@ -2142,7 +2215,12 @@ file = "art/s_frig.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "frigate" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sleek Dutch light frigate of about 1665, a low-slung,
 fine-lined hull with one continuous row of gun ports and a short raised
@@ -2163,7 +2241,12 @@ file = "art/s_war.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "war galleon" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a massive war galleon of the 1620s with two full rows of
 red-lidded gun ports, a high wooden stern several decks tall, heavily
@@ -2184,7 +2267,12 @@ file = "art/s_gal.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "galleon" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a Spanish treasure galleon of about 1600 with a broad
 hull, a high wooden stern rising three decks, its flat planked transom
@@ -2205,7 +2293,12 @@ file = "art/s_fast.png"
 seed = 1660
 source = "a ship model of this pack, rendered"
 portrait = { class = "fast galleon" }
-denoise = 0.75
+view_denoise = 0.5
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 prompt = """
 Photograph of a sleek English race-built galleon of the 1580s, a low,
 long hull with a low stern and bow, a small raised bow deck and a
@@ -2776,6 +2869,11 @@ left and right, much wider than tall, alone on a plain light grey
 background, seen from the front, studio light, sharp focus, realistic.
 """
 ship = """
+# Its render lightly redrawn: the model's shapes kept, texture and
+# warm light added (redraw_renders is off for the figures).
+redraw = true
+denoise = 0.5
+damage_denoise = 0.5
 Photograph of a single small model of a 17th-century three-masted
 sailing ship under full white sails, seen exactly from the side, her bow
 to the right, alone on a plain light grey background, studio light,
