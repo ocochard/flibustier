@@ -223,12 +223,34 @@ BANK_HARD = [
     [PARRY, S + LOW, PARRY, CUT_ELSE, L + HIGH, PARRY, CUT_ELSE, G + LOW],
 ]
 
-# The flags' height on screen by bar / 8 (0 weakest .. 5 strongest): the
+# The flags' height on screen by bar / 8 (0 weakest .. 5 strongest), the
+# screen y of the flag frame's top (its sheet frames have no offset): the
 # stronger side's flag flies higher, up the narrow side columns of the
-# open pack's bottom panel, measured on its art: the columns' inside runs
-# from y 325 to 472 and a flag frame is 28 high, so the flag's top steps
-# evenly from the column's foot (y 443) to its head (y 328).
-FLAG_Y = [443, 420, 397, 374, 351, 328]
+# open pack's bottom panel (the foe's flag at x 10 in the left column,
+# the player's at x 584 in the right one). Measured on the open pack's
+# art, drawn for a 1080-high screen: the panel is the same on
+# art/shipdeck.png, alley.png and fort.png; the columns' recess starts
+# under its top bevel's highlight (rows 729-738) and ends on its bottom
+# shadow line (from row 1060); the flags of art/miscswrd.sheet (frames
+# 6-53) are 63 high, opaque top to bottom. The flag's top steps evenly
+# from the recess's foot, a frame's height above its bottom, to its head.
+FLAG_ART_HEIGHT = 1080
+FLAG_RECESS_TOP = 739           # first row inside the columns' recess
+FLAG_RECESS_BOTTOM = 1060       # first row of its bottom shadow line
+FLAG_FRAME_HEIGHT = 63
+
+
+def _screen(art):
+    return round(art * 480 / FLAG_ART_HEIGHT)
+
+
+def _flag_heights():
+    top = _screen(FLAG_RECESS_TOP)
+    foot = _screen(FLAG_RECESS_BOTTOM) - _screen(FLAG_FRAME_HEIGHT)
+    return [round(foot - (foot - top) * i / 5) for i in range(6)]
+
+
+FLAG_Y = _flag_heights()
 
 # The edges: the player starts at x 320-340 and is driven back to the
 # right, the opponent starts at 220-240 and is driven off to the left.
