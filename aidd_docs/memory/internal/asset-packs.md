@@ -452,8 +452,9 @@ The expeditions' eras are the engine's (`expedition_era` in
 
 Positions in the 640x480 logical screen. A rectangle is `[x0, y0, x1,
 y1]`, inclusive; where a fifth number follows, it is the original's
-"on" word, which the engine does not read (it decides which spots are
-open from the rules). A pack that redraws a screen's picture with
+"on" word. The cabin reads it: a spot with 0 is off, except save,
+search and treasure maps, which the rules switch (divide and join
+party are 0 in the original's). The fleet panel's is not read. A pack that redraws a screen's picture with
 another composition gives its layout with it; otherwise the original's
 spots apply to the new picture.
 
@@ -467,7 +468,7 @@ spots apply to the new picture.
 | `data/layout/cave` | `piles` | 8 x 3 | the treasure cave's piles (`spr/tcave0` ... 7): x, y, and the fortune past which it shows |
 | `data/layout/fleet-panel` | `ship_x`, `ship_y` | 8 each | each ship's picture, top left |
 | | `spots` | 9 x 5 | the ships' rectangles, then the button's |
-| | `type_x`, `type_y`, `damage_x`, `damage_y` | 8 each | the centre of each ship's type and damage labels |
+| | `type_x`, `type_y`, `damage_x`, `damage_y` | 8 each | each ship's type and damage labels: x their centre, y their top |
 
 ### `data/captain-flags`
 
