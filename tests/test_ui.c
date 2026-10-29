@@ -530,6 +530,25 @@ test_sailing(void)
 		CHECK(game_script(g, "type:Q esc") == 0 && !g->paused &&
 		    g->screen != &screen_cabin);
 	}
+	/* V steps the sound level (VA 0x2f38): 1 stops the music and
+	 * keeps tunes off, 2 the FM effects too; the digitised ones play
+	 * on; back to 0, tunes play again. */
+	CHECK(g->sound_level == 0);
+	CHECK(game_script(g, "type:v") == 0 && g->sound_level == 1 &&
+	    g->music_request == MUS_STOP);
+	game_music(g, MUS_TITLE);
+	game_fm(g, FM_SWING);
+	CHECK(g->music_request == MUS_STOP && g->fm_request == FM_SWING);
+	CHECK(game_script(g, "type:V") == 0 && g->sound_level == 2);
+	g->fm_request = 0;
+	g->sfx_pending = 0;
+	game_fm(g, FM_SWING);
+	g->sfx_packed |= 1u << SFX_HAIL;
+	game_sfx(g, SFX_HAIL);
+	CHECK(g->fm_request == 0 && g->sfx_pending == (1u << SFX_HAIL));
+	CHECK(game_script(g, "type:v") == 0 && g->sound_level == 0);
+	game_music(g, MUS_TITLE);
+	CHECK(g->music_request == MUS_TITLE);
 	CHECK(game_script(g, "esc") == 0);	/* back to the menu */
 	game_free(g);
 }

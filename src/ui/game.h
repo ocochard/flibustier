@@ -270,6 +270,9 @@ struct game {
 	int			 quit_prompt;	/* the cabin's "Quit (Y/N)" */
 	/* Held by a hot key: 'P' "Game Paused", 'Q' "Quit (Y/N)", 0 not. */
 	int			 paused;
+	/* V: 0 music and FM effects, 1 FM effects only, 2 neither
+	 * (VA 0x4c0ec). */
+	int			 sound_level;
 	int			 panel_abandon;	/* the panel picks a ship to leave */
 	int			 panel_replace;	/* ... to make room for a prize */
 	/* After a sea battle, the steps still to show. */

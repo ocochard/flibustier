@@ -2513,13 +2513,23 @@ about 0.1 ms each, and starts the dissolve at cell 0.
   - **Q (VA `0x2db9`):** the same, with the plaque of frame 4 ("Quit
     (Y/N)") and the keys at VA `0x31610`: Y blacks the screen and
     leaves the program (VA `0x737`); N goes on; other keys are dropped.
-  - **V (VA `0x2f38`):** cycles a word at VA `0x4c0ec` through 0, 1, 2.
-    Not traced further.
+  - **V, the sound level (VA `0x2f38`):** steps the word at VA
+    `0x4c0ec` through 0, 1, 2 and back to 0; on 1 and 2 it stops the
+    music (command 1, VA `0x1b8ee`). Only VA `0x1b8cb` and `0x1b8a2`
+    read the word:
+    - 0: music and FM effects;
+    - 1: FM effects only, no tune starts (VA `0x1b8cb`);
+    - 2: neither (VA `0x1b8a2`).
+    - Back to 0, nothing restarts the music: the next tune asked for
+      plays. Nothing reads the word for the digitised effects (VA
+      `0x7d82`), which play on. The keyboard poll does not take V: it
+      works where the game waits for input, not in the fights.
   - A string "Game Paused. (Press space key to resume.)" (VA `0x33c26`)
     has a pointer at VA `0x33c50` that no code reads: the plaque
     replaced it.
-  - The engine takes P and Q anywhere but while a screen fades or a
-    name is typed (where they are letters). Key releases still reach
+  - The engine takes P, Q and V anywhere but while a screen fades or
+    a name is typed (where they are letters), V in the fights too. The
+    level is not saved: each run starts at 0. Key releases still reach
     the screen, so a key let go during the pause does not stay held.
     Q's prompt takes the language's yes like the other prompts, and
     Escape as N; yes fades out and closes the program.

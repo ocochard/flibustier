@@ -357,7 +357,8 @@ game_event(struct game *g, const struct ui_event *ev)
 	 * The hot keys (VA 0x2d60), but not during a fade or while a name
 	 * is typed: P pauses until P again (VA 0x2e91); Q asks "Quit
 	 * (Y/N)" and yes leaves the program (VA 0x2db9).  Each waits for
-	 * its own answer only.
+	 * its own answer only.  V steps the sound level, stopping the
+	 * music unless it comes back to 0 (VA 0x2f38).
 	 */
 	if (ev->type == EV_CHAR && g->fading == 0 &&
 	    g->screen != &screen_name) {
@@ -377,6 +378,12 @@ game_event(struct game *g, const struct ui_event *ev)
 		}
 		if ((ev->ch == 'q' || ev->ch == 'Q') && !g->paused) {
 			g->paused = 'Q';
+			return;
+		}
+		if ((ev->ch == 'v' || ev->ch == 'V') && !g->paused) {
+			g->sound_level = (g->sound_level + 1) % 3;
+			if (g->sound_level != 0)
+				game_music(g, MUS_STOP);
 			return;
 		}
 	}
@@ -640,6 +647,8 @@ game_tune_id(int cmd)
 void
 game_fm(struct game *g, int cmd)
 {
+	if (g->sound_level >= 2)
+		return;		/* VA 0x1b8a2 */
 	g->fm_request = cmd;
 }
 
@@ -652,6 +661,8 @@ game_music(struct game *g, int cmd)
 void
 game_music_as(struct game *g, int cmd, const char *alt)
 {
+	if (cmd > MUS_STOP && g->sound_level != 0)
+		return;		/* VA 0x1b8cb; stopping goes through */
 	g->music_request = cmd;
 	g->music_alt = alt;
 }
