@@ -497,21 +497,22 @@ class Bot:
     def back_off(self, tries):
         """After a grounding (the ship turned about): sail clear, trying
         other headings when the way back is closed too.  Returns the
-        sail reply when it ended in a town, else None."""
+        sail reply when it stopped for something else (a town, an
+        encounter, the crew: a wreck there maroons the captain for
+        months), for the caller to deal with; else None."""
         rnd = random.Random(tries)
         for attempt in range(8):
             r = self.sim("sail", turn=0, ticks=24 + 8 * min(tries, 6))
             if r["stop"] == "ticks":
                 return None
-            if r["stop"] == "town":
-                return r	# in port: missed, the town would not count again
             if r["stop"] != "land":
-                return None	# an encounter or the crew: the caller's job
+                return r
             self.sim("shore", ashore=0)
             turn = rnd.choice((-1, 1))
             r = self.sim("sail", turn=turn, ticks=4 * rnd.randrange(1, 5))
-            if r["stop"] == "town":
+            if r["stop"] not in ("ticks", "land"):
                 return r
+        return None
 
     @staticmethod
     def bearing(dx, dy):
