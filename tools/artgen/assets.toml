@@ -638,6 +638,22 @@ father and son, historical reenactment photography.
 """
 
 [[asset]]
+id = "pic/sail-ho"
+file = "art/sail-ho.png"
+seed = 1660
+source = "layout described from the original screen"
+frame = [209, 5, 225, 242]
+field = "#830000"
+prompt = """
+Photograph of a lookout high on the rigging of a 17th-century sailing
+ship, a lean tanned sailor in his thirties with a red headscarf, a short
+black beard, an open brown leather vest and loose red breeches, holding
+a brass spyglass to his eye and gazing far out to sea, one hand gripping
+the shrouds; behind him a big billowing canvas sail, ropes and a blue
+sky with white clouds, historical reenactment photography.
+"""
+
+[[asset]]
 id = "pic/search"
 file = "art/search.png"
 seed = 1660
