@@ -2909,13 +2909,14 @@ background, studio light, sharp focus, realistic.
 """
 [[asset.bigs]]
 bank = "bignav"
-kind = "plate"
+kind = "object"
 size = [200, 211]
 prompt = """
-Photograph from straight above of an old brass mariner's astrolabe
-lying on a dark blue star chart drawn on old paper, the chart's stars
-and lines faint, the astrolabe's ring and pointer worn and glinting,
-filling the picture, warm candle light, sharp focus, realistic.
+Photograph of a single old brass mariner's astrolabe standing upright,
+hanging from its small ring: a heavy round wheel with four spokes, a
+pointer across it, worn and glinting, seen straight from the front,
+alone on a plain light grey background, studio light, sharp focus,
+realistic.
 """
 [[asset.bigs]]
 bank = "biggun"
@@ -2999,3 +3000,51 @@ broad black hat with a red plume, a rich red velvet coat with gold braid
 and a lace collar, against a stormy red sunset sky, historical
 reenactment photography, sharp focus, realistic.
 """
+# The same pictures, small, to choose from (spr/lilflgs: the flags in
+# the game's slot order, English, French, Dutch, Spanish; spr/lilskls:
+# fencing, navigation, gunnery, charm, medicine).
+[[asset.bigs]]
+bank = "lilflgs"
+frame = 0
+from = "bigeflg"
+size = [130, 134]
+[[asset.bigs]]
+bank = "lilflgs"
+frame = 1
+from = "bigfflg"
+size = [149, 125]
+[[asset.bigs]]
+bank = "lilflgs"
+frame = 2
+from = "bigdflg"
+size = [149, 129]
+[[asset.bigs]]
+bank = "lilflgs"
+frame = 3
+from = "bigsflg"
+size = [159, 129]
+[[asset.bigs]]
+bank = "lilskls"
+frame = 0
+from = "bigfen"
+size = [44, 138]
+[[asset.bigs]]
+bank = "lilskls"
+frame = 1
+from = "bignav"
+size = [78, 75]
+[[asset.bigs]]
+bank = "lilskls"
+frame = 2
+from = "biggun"
+size = [107, 61]
+[[asset.bigs]]
+bank = "lilskls"
+frame = 3
+from = "bigcha"
+size = [32, 84]
+[[asset.bigs]]
+bank = "lilskls"
+frame = 4
+from = "bigmed"
+size = [81, 116]
