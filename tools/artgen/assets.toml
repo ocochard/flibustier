@@ -1862,7 +1862,12 @@ middle of a plain flat light grey ground, nothing else.
 # the panel on the right, where the game writes each side's name (y 14,
 # 358), men and guns (86, 430), sails (116, 460) and the wind (233),
 # and draws the damage pictures, is a board with its boxes at the
-# original's places (layouts/sbat-panel-*.png).
+# original's places (layouts/sbat-panel-*.png).  The game writes the
+# speed at x 584 and "Men: 150  Guns: 40" in one line from x 492, which
+# in the pack's font runs over both the men's and the guns' boxes to
+# near x 590, so the pictures stand clear of the text: the speed
+# strip's ship left of x 576, the guns' picture at the right end of
+# their box, and the men's box left plain.
 [[asset]]
 id = "pic/sbat"
 file = "art/sbat.png"
@@ -1889,20 +1894,14 @@ calm deep blue sea, the sea's horizon low, a little above the bottom
 edge, nothing on the water.
 """
 [[asset.pieces]]
-rect = [488, 48, 147, 24]	# the speed strip
+rect = [488, 48, 88, 24]	# the speed strip's ship, left of the speed
 prompt = """
-Photograph of a long narrow strip of calm blue sea under a pale sky, a
-small sailing ship on it seen from the side sailing to the right, at the
-left of the strip.
+Photograph of a short strip of calm blue sea under a pale sky, a small
+sailing ship on it seen from the side sailing to the right, filling the
+strip's height.
 """
 [[asset.pieces]]
-rect = [490, 79, 24, 21]	# the men
-prompt = """
-Photograph, straight on, of two crossed steel cutlasses with brass hilts
-lying on a polished honey-coloured oak board, filling the image.
-"""
-[[asset.pieces]]
-rect = [566, 79, 26, 21]	# the guns
+rect = [606, 79, 28, 21]	# the guns, right of their text
 prompt = """
 Photograph from the side of a small black iron cannon on a wooden
 carriage, on a polished honey-coloured oak board, filling the image.
@@ -1927,20 +1926,14 @@ calm deep blue sea, the sea's horizon low, a little above the bottom
 edge, nothing on the water.
 """
 [[asset.pieces]]
-rect = [488, 393, 147, 24]	# the speed strip
+rect = [488, 393, 88, 24]	# the speed strip's ship, left of the speed
 prompt = """
-Photograph of a long narrow strip of calm blue sea under a pale sky, a
-small sailing ship on it seen from the side sailing to the right, at the
-left of the strip.
+Photograph of a short strip of calm blue sea under a pale sky, a small
+sailing ship on it seen from the side sailing to the right, filling the
+strip's height.
 """
 [[asset.pieces]]
-rect = [490, 423, 24, 21]	# the men
-prompt = """
-Photograph, straight on, of two crossed steel cutlasses with brass hilts
-lying on a polished honey-coloured oak board, filling the image.
-"""
-[[asset.pieces]]
-rect = [566, 423, 26, 21]	# the guns
+rect = [606, 423, 28, 21]	# the guns, right of their text
 prompt = """
 Photograph from the side of a small black iron cannon on a wooden
 carriage, on a polished honey-coloured oak board, filling the image.
