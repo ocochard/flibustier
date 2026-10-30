@@ -690,6 +690,47 @@ the credits screen of `src/ui/screens.c`.
   4. the ComfyUI and Blender teams, whose tools make the art;
   5. Pieces of 8-bit, for the remade music.
 
+## Languages
+
+The original ships English, French and German (`eng`, `fre`, `ger`).
+A language is a three-letter code; what a new one needs, and what the
+engine does today with a code it does not know:
+
+| Part | IDs | A new language |
+|---|---|---|
+| Prose and words | `text/<lang>/cstr`, `text/<lang>/cstn` | given by the pack; `--lang` accepts any code whose two tables the stack gives ("Open text") |
+| Credits | `text/<lang>/credits` | given by the pack, else `text/eng/credits` ("Open credits") |
+| Trading boards | `spr/buysell`, `spr/buyboard`, `spr/buysell1`; loot board `spr/take-dis`, `spr/takboard`, `spr/takeds1`; French and German under the original's names (`buysellf`, `takbrdg`...) | no ID: the engine picks them by a fixed fre/ger test (`board_files`, `src/ui/screens.c`), so any other code gets the English pieces |
+| Plaques (quit, pause, click to go on, go ashore) | `ui/misc`, `ui/miscf`, `ui/miscg` | no ID: fixed fre/ger test in `src/ui/game.c`, English otherwise |
+| Credits picture | `pic/credtext`, `pic/credtxtf`, `pic/credtxtg` | no ID (`credits_picture()`); unused when the pack gives text credits |
+| Hall of Fame heading | `pic/fame` | the open pack paints "Hall of Fame" into the picture: English in every language |
+| Intro lettering | `spr/and`, `spr/present` | the open pack's sprites read "and" and "present": English in every language |
+
+- **Language menu.** The cabin's menu (key `L`) offers only `eng`,
+  `fre` and `ger` (`menu_lang`, `src/ui/screens.c`); another language
+  is reached with `--lang` only.
+- **Answers.** The Y/N prompts take Y, N and the first letter of the
+  language's `S_YES` (CSTR 274) unless it is N, so they follow the new
+  text with no change.
+- **Titles.** A captain's title is set by the pattern in `W_TITLE`
+  entry 6 (`TITLE_FORMAT`) of `cstn`; empty, the engine writes "title
+  nation", or "nation title" for the Captain title in French.
+- **Characters.** Text fonts hold Mac Roman 0x21-0xFF, which covers
+  the Western European letters and `¿ ¡`. Drop capitals (`font/caps`)
+  are A-Z and À Ä Ç É Ñ Ö Ü only: a paragraph opening on another
+  character gets no drop capital.
+- **Open pack art.** `tools/artgen/assets.toml` sets the words of the
+  boards and plaques per language (`[asset.board.words.<lang>]`,
+  `[asset.uimisc.words.<lang>]`, the IDs in each asset's per-language
+  table) for `eng`, `fre` and `ger`; `pic/fame`, `spr/and` and
+  `spr/present` take a single English text.
+
+So a pack adding a language today brings its text and credits; its
+boards, plaques and the three English pictures show in English, and the
+cabin menu does not list it. Giving it its own art needs a language
+suffix rule for these IDs in the engine (with English as the fall-back)
+and per-language words for every artgen asset that paints them.
+
 ## Per-town assets
 
 Town screens look up their assets per town (`game_town_asset()`,
