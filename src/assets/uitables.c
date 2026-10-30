@@ -27,7 +27,7 @@ static const struct data_field weapon_fields[] = {
 	FIELD("spots", weapon, DATA_I16, UI_WEAPON_SPOTS, 4),
 };
 static const struct data_field board_fields[] = {
-	FIELD("pieces", board, DATA_I16, UI_BOARD_PIECES, 4),
+	FIELD("pieces", board, DATA_I16, UI_BOARD_PIECES, 5),
 };
 static const struct data_field cave_fields[] = {
 	FIELD("piles", cave, DATA_I32, UI_CAVE_PILES, 3),
@@ -318,7 +318,7 @@ exe_tables(struct ui_tables *t, const struct exe_layout *layout,
 	    read_records(layout, exe, len, layout->weapon_spots_va,
 	    &t->weapon[0][0], UI_WEAPON_SPOTS, 4, 10) != 0 ||
 	    read_records(layout, exe, len, layout->board_va, &t->board[0][0],
-	    UI_BOARD_PIECES, 4, 10) != 0 ||
+	    UI_BOARD_PIECES, 5, 10) != 0 ||
 	    read_records(layout, exe, len, layout->credits_va,
 	    &t->credit_rect[0][0], UI_CREDIT_BLOCKS, 4, 8) != 0 ||
 	    load_panel(&t->panel, layout, exe, len) != 0 ||

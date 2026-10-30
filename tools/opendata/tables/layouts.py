@@ -160,16 +160,18 @@ PANEL_BUTTON = [440, 430, 630, 474, 1]
 # frames the engine picks by mode (88 merchant, 89 overboard, 90
 # captured, 91 plundered); the top corners are the sell and buy clicks.
 BOARD_STATIC = [
-    [88, 88, 0, 0],		# 0 the name tag, top left (82x69)
-    [87, 87, 559, 0],		# 1 the player's colours, top right (81x69)
+    [88, 88, 0, 0, 1],		# 0 the name tag, top left (82x69)
+    [87, 87, 559, 0, 1],	# 1 the player's colours, top right (81x69)
     # 2-3 the purses' parchment boxes (77x29), centred on the engine's
     # six small digits at (20, 84) and (576, 84).
-    [84, 84, 6, 74],
-    [84, 84, 561, 74],
-    [78, 78, 0, 0],		# 4 no piece: an empty frame
+    [84, 84, 6, 74, 1],
+    [84, 84, 561, 74, 1],
+    [78, 78, 0, 0, 0],		# 4 no piece: an empty frame
 ]
+# The fifth value: whether the loot board shows the piece too.
 # The rows: food, goods, sugar on both boards, cannon on the loot board
-# only (the merchant draws records 0-22).  Their goods in the bank's
+# only (the merchant draws records 0-22).  Loot has no price, so the
+# loot board leaves out the "pcs" after it.  Their goods in the bank's
 # order (food, goods, sugar, tobacco, hides, cannon), and each good's
 # picture size on screen (its art over 2.25).
 BOARD_GOODS = [0, 1, 2, 5]
@@ -192,12 +194,12 @@ def board_rows():
         w, h = BOARD_ICONS[g]
         icon_y = 125 - h // 2 + dy
         rows += [
-            [53 + g, 59 + g, 6, BOARD_WORD_Y + dy],	# name, merchant's side
-            [65 + g, 71 + g, 169, icon_y],		# picture
-            [85, 86, 92, BOARD_PCS_Y + dy],		# "pcs" after the price
-            [53 + g, 59 + g, 572, BOARD_WORD_Y + dy],	# name, player's side
-            [65 + g, 71 + g, 466 - w, icon_y],		# picture
-            [85, 86, 556, BOARD_PCS_Y + dy],		# "pcs"
+            [53 + g, 59 + g, 6, BOARD_WORD_Y + dy, 1],	# name, merchant's
+            [65 + g, 71 + g, 169, icon_y, 1],		# picture
+            [85, 86, 92, BOARD_PCS_Y + dy, 0],		# "pcs" after the price
+            [53 + g, 59 + g, 572, BOARD_WORD_Y + dy, 1],	# name, player's
+            [65 + g, 71 + g, 466 - w, icon_y, 1],	# picture
+            [85, 86, 556, BOARD_PCS_Y + dy, 0],		# "pcs"
         ]
     return rows
 
@@ -277,7 +279,7 @@ def board():
             "top corners (the sell and buy clicks), parchment boxes "
             "centred under the purses, and each row a ledger line "
             "centred on its large digits: name at the outer edge, price "
-            "with \"pcs\", count, and the good's picture on the row's "
+            "with \"pcs\" (left out on the loot board), count, and the good's picture on the row's "
             "click area. Checked by rendering the merchant and the loot "
             "board headless with the open pack.")
 

@@ -5403,15 +5403,16 @@ static const char *board_files[3][2][3] = {
 #define BOARD_MODE(g)		((g)->jettison ? 1 : (g)->prize_loot ? 2 : \
 				    (g)->looting ? 3 : 0)
 
-/* Layout record "i" (VA 0x348c4): frame, highlighted frame, x, y. */
+/* Layout record "i" (VA 0x348c4): frame, highlighted frame, x, y, and
+ * whether the loot board shows it (VA 0x20229). */
 static int
-board_piece(const struct game *g, int i, int r[4])
+board_piece(const struct game *g, int i, int r[5])
 {
 	int k;
 
 	if (i < 0 || i >= UI_BOARD_PIECES)
 		return (-1);
-	for (k = 0; k < 4; k++)
+	for (k = 0; k < 5; k++)
 		r[k] = g->ui.board[i][k];
 	return (0);
 }
@@ -5638,7 +5639,7 @@ merchant_draw(struct game *g)
 {
 	const struct sim_market *m = &g->sim.market;
 	const struct sim_fleet *f = &g->sim.fleet;
-	int i, r[4], row, sel, held, room;
+	int i, r[5], row, sel, held, room;
 
 	if (g->shop_stage != 1) {
 		/* On the picture, no box, in ink 0 (VA 0x21e56): at (160,
@@ -5656,7 +5657,9 @@ merchant_draw(struct game *g)
 		return;
 	}
 	board_frame(g, 1, 0, 203, 17);
-	if (g->looting) {	/* "... gold pieces plundered!" (CSTN 10.6) */
+	/* "... gold pieces plundered!" (CSTN 10.6), not over cargo thrown
+	 * overboard (VA 0x20229: the line is empty there). */
+	if (g->looting && !g->jettison) {
 		char line[96];
 
 		snprintf(line, sizeof(line), "%ld%s", g->prize_loot ?
@@ -5665,7 +5668,8 @@ merchant_draw(struct game *g)
 		draw_centered(g, FONT_BODY, 400, line);
 	}
 	for (i = 0; i < BOARD_PIECES(g); i++) {
-		if (board_piece(g, i, r) != 0)
+		if (board_piece(g, i, r) != 0 ||
+		    (g->sim.market.plunder && r[4] == 0))
 			continue;
 		row = i < 5 ? -1 : (i - 5) / 6;
 		if (i == 0)
@@ -5678,12 +5682,15 @@ merchant_draw(struct game *g)
 		sel = i == g->selected;
 		held = i == 0 ? f->food : i == 1 ? f->goods : i == 2 ?
 		    f->sugar : f->guns;
-		/* The merchant's stock, the player's cargo, the price on
-		 * both sides (VA 0x207f1, 0x20940). */
+		/* The merchant's stock, the player's cargo, and but on
+		 * the loot board the price on both sides (VA 0x207f1,
+		 * 0x20940). */
 		board_number(g, m->stock[i], 106, 117 + i * BOARD_ROW_H,
 		    GLYPH_BIG + (sel ? 10 : 0), 15, 4, 1);
 		board_number(g, held, 475, 117 + i * BOARD_ROW_H,
 		    GLYPH_BIG + (sel ? 10 : 0), 15, 4, 0);
+		if (g->sim.market.plunder)
+			continue;
 		board_number(g, m->price[i], 71, 119 + i * BOARD_ROW_H,
 		    GLYPH_SMALL + 1 + (sel ? 11 : 0), 7, 3, 1);
 		board_number(g, m->price[i], 534, 119 + i * BOARD_ROW_H,

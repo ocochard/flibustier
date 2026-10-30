@@ -61,8 +61,9 @@ struct ui_tables {
 	int16_t		tavern[UI_TAVERN_SPOTS][4];
 	int16_t		town[UI_TOWN_SPOTS][4];
 	int16_t		weapon[UI_WEAPON_SPOTS][4];
-	/* The trading board: frame, highlighted frame, x, y. */
-	int16_t		board[UI_BOARD_PIECES][4];
+	/* The trading board: frame, highlighted frame, x, y, and whether
+	 * the loot board shows it too. */
+	int16_t		board[UI_BOARD_PIECES][5];
 	/* The treasure cave's piles: x, y, the fortune that shows it. */
 	int32_t		cave[UI_CAVE_PILES][3];
 	/* The credits picture's blocks, and its ink steps (RGB). */
