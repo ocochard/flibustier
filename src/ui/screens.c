@@ -4761,11 +4761,13 @@ sword_flag(struct game *g, int side, int x, int frame, int bar)
 	int target = t->flag_y[bar / 8 < 0 ? 0 : bar / 8 > 5 ? 5 : bar / 8];
 	int *y = &g->sw_flag_y[side];
 
-	if (*y == 0)
+	/* Two pixels a frame, landing on the height even when it is an odd
+	 * distance away (a pack's heights may be), not shaking about it. */
+	if (*y == 0 || abs(target - *y) <= 2)
 		*y = target;
 	else if (*y < target)
 		*y += 2;
-	else if (*y > target)
+	else
 		*y -= 2;
 	if ((size_t)frame < g->sw_misc.count)
 		fb_frame(&g->fb, &g->sw_misc.frames[frame], x, *y);
