@@ -581,6 +581,76 @@ fb_glyph_fade(struct fb *fb, const struct font *f, size_t g, int x_sub,
 	}
 }
 
+/* How far past the ink, in luminance, the picture takes a full halo. */
+#define HALO_RAMP	48
+
+void
+fb_glyph_halo(struct fb *fb, const struct font *f, size_t g, int x_sub,
+    int y, uint8_t ink)
+{
+	const struct hd_glyph *h;
+	const uint8_t *col = fb->pal + 3 * ink, *under;
+	uint8_t halo[3], *d;
+	int r, cx, cy, gx, gy, dx, dy, ox, oy, k, a, best, w, light, lum;
+	size_t o;
+
+	if (g >= f->count || f->hd == NULL || f->hd_height != fb->out_h ||
+	    (h = &f->hd[g])->cov == NULL)
+		return;
+	/* Parchment under dark ink, near black under light ink. */
+	lum = (col[0] * 299 + col[1] * 587 + col[2] * 114) / 1000;
+	if ((light = lum < 128)) {
+		halo[0] = 244; halo[1] = 232; halo[2] = 204;
+	} else {
+		halo[0] = 24; halo[1] = 18; halo[2] = 12;
+	}
+	r = fb->out_h / 360 > 1 ? fb->out_h / 360 : 1;
+	cx = canvas_at(x_sub, fb->out_w, FB_W * FONT_SUB) + h->x;
+	cy = canvas_at(y, fb->out_h, FB_H) + h->y;
+	/* Each canvas pixel near the glyph takes the strongest coverage
+	 * around it, fading with the distance. */
+	for (gy = -r; gy < h->h + r; gy++) {
+		oy = cy + gy;
+		if (oy < 0 || oy >= fb->out_h)
+			continue;
+		for (gx = -r; gx < h->w + r; gx++) {
+			ox = cx + gx;
+			if (ox < 0 || ox >= fb->out_w)
+				continue;
+			best = 0;
+			for (dy = -r; dy <= r; dy++)
+				for (dx = -r; dx <= r; dx++) {
+					if (gy + dy < 0 || gy + dy >= h->h ||
+					    gx + dx < 0 || gx + dx >= h->w ||
+					    dx * dx + dy * dy > r * r)
+						continue;
+					w = h->cov[(size_t)(gy + dy) * h->w +
+					    gx + dx] * (r + 1 - (abs(dx) +
+					    abs(dy)) / 2) / (r + 1);
+					if (w > best)
+						best = w;
+				}
+			if ((a = best * 3 / 4) == 0)
+				continue;
+			o = (size_t)oy * fb->out_w + ox;
+			d = fb->rgb + o * 3;
+			under = fb->tc[o] ? d : fb->pal + 3 * fb->idx[o];
+			/* Only where the picture is already on the halo's
+			 * side of the ink: red on black keeps its black. */
+			w = (under[0] * 299 + under[1] * 587 + under[2] *
+			    114) / 1000 - lum;
+			if ((w = (light ? w : -w) * 255 / HALO_RAMP) <= 0)
+				continue;
+			if (w < 255)
+				a = a * w / 255;
+			for (k = 0; k < 3; k++)
+				d[k] = (uint8_t)((halo[k] * a + under[k] *
+				    (255 - a) + 127) / 255);
+			fb->tc[o] = 1;
+		}
+	}
+}
+
 uint8_t
 fb_nearest(const struct fb *fb, int r, int g, int b)
 {

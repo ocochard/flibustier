@@ -175,16 +175,37 @@ style(const struct game *g, int font, int caps, struct text_style *st)
 	st->line_gap = 2;
 }
 
-/* Draw text into the framebuffer; options are remembered for input. */
+static void
+plot_none(void *arg, int x, int y, uint32_t ink)
+{
+	(void)arg; (void)x; (void)y; (void)ink;
+}
+
+static void
+put_halo(void *arg, const struct font *f, size_t g, int x_sub, int y,
+    uint32_t ink)
+{
+	fb_glyph_halo(arg, f, g, x_sub, y, (uint8_t)ink);
+}
+
+/*
+ * Draw text into the framebuffer; options are remembered for input.
+ * Over a picture, a halo goes under the whole text first, so that it
+ * reads over a pack's photograph.
+ */
 static int
 draw(struct game *g, int font, int x, int y, int w, const char *text,
     int menu)
 {
 	struct text_target t = { plot, &g->fb, put_glyph };
+	struct text_target halo = { plot_none, &g->fb, put_halo };
 	struct text_style st;
 	struct text_layout lay;
 
 	style(g, font, 1, &st);
+	if (g->bg.pixels != NULL)
+		text_draw(&halo, &st, x, y, w, text, menu ? g->selected : -1,
+		    &lay);
 	text_draw(&t, &st, x, y, w, text, menu ? g->selected : -1, &lay);
 	if (menu)
 		g->options = lay;

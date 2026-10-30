@@ -290,6 +290,11 @@ baseline = 19
 - Glyphs are rasterised once for the canvas and blended by coverage in
   the text colour. The 640x480 screen gets 1-bit glyphs (coverage at
   least half), so code reading it still works.
+- Text set on a full-screen picture gets a soft halo first (light under
+  dark ink, dark under light ink), so it reads over a pack's photograph.
+  It shows only where the picture already lies on the halo's side of
+  the ink, so a red option on black keeps its black. Glyphs without a
+  canvas rasterisation (the original's 1-bit fonts) get none.
 - No kerning yet.
 - The open pack's fonts (IM Fell English for `pirate1`-`pirate3`, Pirata
   One for `pirate4` and `caps`, both SIL OFL) are fetched by

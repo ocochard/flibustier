@@ -135,6 +135,16 @@ void	fb_glyph(struct fb *fb, const struct font *f, size_t g, int x_sub,
 void	fb_glyph_fade(struct fb *fb, const struct font *f, size_t g,
 	    int x_sub, int y, uint8_t ink, int opacity);
 
+/*
+ * A soft halo around glyph "g", in a colour that stands out from "ink"
+ * (light under dark ink), where the picture lies on the halo's side of
+ * the ink: drawn under text set on a picture, so that it reads over a
+ * busy one.  Only a replacement font rasterised for this
+ * canvas gets one; the 640x480 screen is left alone.
+ */
+void	fb_glyph_halo(struct fb *fb, const struct font *f, size_t g,
+	    int x_sub, int y, uint8_t ink);
+
 /* Palette index whose colour is closest to (r, g, b). */
 uint8_t	fb_nearest(const struct fb *fb, int r, int g, int b);
 
