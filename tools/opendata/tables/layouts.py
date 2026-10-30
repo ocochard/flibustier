@@ -150,6 +150,57 @@ PANEL_ROWS = [		# [ship y, spot y0, spot y1, type top, damage top]
 ]
 PANEL_BUTTON = [440, 430, 630, 474, 1]
 
+# The trading board (merchant and loot board): pieces of the board's
+# first sprite bank (spr/buysell, spr/take-dis and their French and
+# German twins, which number their frames alike), each [frame,
+# highlighted frame, x, y] by its top left.  The engine draws the board
+# itself at (203, 17), the Sell/Buy sign, the O.K. sign and every number
+# at fixed places (src/ui/screens.c, merchant_draw); these pieces are
+# laid out around them.  Record 0 is the name tag at the top left, whose
+# frames the engine picks by mode (88 merchant, 89 overboard, 90
+# captured, 91 plundered); the top corners are the sell and buy clicks.
+BOARD_STATIC = [
+    [88, 88, 0, 0],		# 0 the name tag, top left (82x69)
+    [87, 87, 559, 0],		# 1 the player's colours, top right (81x69)
+    # 2-3 the purses' parchment boxes (77x29), centred on the engine's
+    # six small digits at (20, 84) and (576, 84).
+    [84, 84, 6, 74],
+    [84, 84, 561, 74],
+    [78, 78, 0, 0],		# 4 no piece: an empty frame
+]
+# The rows: food, goods, sugar on both boards, cannon on the loot board
+# only (the merchant draws records 0-22).  Their goods in the bank's
+# order (food, goods, sugar, tobacco, hides, cannon), and each good's
+# picture size on screen (its art over 2.25).
+BOARD_GOODS = [0, 1, 2, 5]
+BOARD_ICONS = {0: (22, 36), 1: (22, 32), 2: (22, 28), 5: (47, 26)}
+BOARD_ROW_H = 50
+# A row reads as a ledger line, centred on the engine's large digits
+# (y 117-133 in row 0): the good's name at the outer edge, the price
+# (small digits, x 71-91 and 534-554) with "pcs" after it, the stock or
+# the cargo (large digits from x 106 and 475), and the good's picture
+# on the row's click area (x 169-190 and 444-465, y 107-147), centred
+# on it, a wider one held to the area's outer side.
+BOARD_WORD_Y = 116		# 18 high, the digits' middle
+BOARD_PCS_Y = 123		# 6 high, on the small digits' foot (119-128)
+
+
+def board_rows():
+    rows = []
+    for i, g in enumerate(BOARD_GOODS):
+        dy = i * BOARD_ROW_H
+        w, h = BOARD_ICONS[g]
+        icon_y = 125 - h // 2 + dy
+        rows += [
+            [53 + g, 59 + g, 6, BOARD_WORD_Y + dy],	# name, merchant's side
+            [65 + g, 71 + g, 169, icon_y],		# picture
+            [85, 86, 92, BOARD_PCS_Y + dy],		# "pcs" after the price
+            [53 + g, 59 + g, 572, BOARD_WORD_Y + dy],	# name, player's side
+            [65 + g, 71 + g, 466 - w, icon_y],		# picture
+            [85, 86, 556, BOARD_PCS_Y + dy],		# "pcs"
+        ]
+    return rows
+
 
 def cabin():
     return ({"spots": CABIN},
@@ -218,6 +269,19 @@ def fleet_panel():
             "its arrow, below the prompt.")
 
 
+def board():
+    return ({"pieces": BOARD_STATIC + board_rows()},
+            "Designed on the open pack's art/buysell.png (its frames "
+            "scaled by 480/1080) around the engine's fixed board, signs "
+            "and numbers: the name tag and the player's colours in the "
+            "top corners (the sell and buy clicks), parchment boxes "
+            "centred under the purses, and each row a ledger line "
+            "centred on its large digits: name at the outer edge, price "
+            "with \"pcs\", count, and the good's picture on the row's "
+            "click area. Checked by rendering the merchant and the loot "
+            "board headless with the open pack.")
+
+
 TABLES = [
     ("data/layout/cabin", "layout-cabin.json", cabin),
     ("data/layout/town", "layout-town.json", town),
@@ -225,4 +289,5 @@ TABLES = [
     ("data/layout/weapons", "layout-weapons.json", weapons),
     ("data/layout/cave", "layout-cave.json", cave),
     ("data/layout/fleet-panel", "layout-fleet-panel.json", fleet_panel),
+    ("data/layout/board", "layout-board.json", board),
 ]
