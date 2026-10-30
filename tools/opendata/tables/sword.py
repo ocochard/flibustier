@@ -385,7 +385,9 @@ def build():
         "one. Duels are won at the easy and middle levels; at level 3 "
         "random lunges win two in three, at level 4 almost none, the "
         "parrying player two in three. Over eight career bot careers "
-        "the bot won 96% of its sword fights, up from 63%. Clean-room "
+        "the bot won 99.5% of its sword fights (1035 of 1040), up from "
+        "63%, and went to prison 3 times. The pace does not change "
+        "these: the bot plays tick by tick. Clean-room "
         "note: after these values were final, a search of the docs "
         "printed seven lines of the engine's rules spec on the weapons' "
         "reach (no game-data numbers); nothing was changed after it.")
