@@ -96,6 +96,9 @@ battle.c, prison.c, src/ui/screens.c):
   only the cells joined to the open sea without crossing any town's
   arrival cells are taken, so a ship leaving for the open sea does not
   sail straight back into the town it left.
+  Every port must be reached from the open sea without crossing
+  another town's arrival cells (a ship entering them stops at that
+  town), or the build stops.
 - citymap [x, y]: the town's dot on the Map of the Caribbean, which
   shows the whole world at 0.75 from the screen's top-left: the cell
   times 0.75, rounded.
@@ -233,7 +236,10 @@ LINEAGE = {
     # Venezuela and Trinidad
     "coro": (20, -69.62, 11.43, False,
              "Santa Ana de Coro and its landing La Vela"),
-    "maracaibo": (21, -71.61, 10.65, False,
+    # Set a little west of the city, on the shore beside the strait's
+    # lane (tables/_geo.py, CHANNELS), so its arrival cells leave the
+    # lane open to ships bound for the lake.
+    "maracaibo": (21, -71.68, 10.65, False,
                   "Nueva Zamora de Maracaibo (1569, 1574); sacked by "
                   "l'Olonnais 1666, Morgan 1669, Grammont 1678"),
     "gibraltar": (22, -71.05, 9.45, False,
@@ -1000,6 +1006,19 @@ def _era(year):
                                 "cell %d,%d" % (r["key"], HARBOUR, cx, cy))
                 break
     outside = _outside(water, owner)
+    # Every port is reached from the open sea without sailing through
+    # another town's arrival cells: a ship that enters them stops at
+    # that town and leaves by its sea cell, so they would bar the way
+    # (Gibraltar's, past Maracaibo on the strait).
+    for r in rows:
+        key = r["key"]
+        if LINEAGE[key][3]:
+            continue
+        if not any(0 <= cx + dx < W and 0 <= cy + dy < H and
+                   outside[cy + dy, cx + dx]
+                   for cx, cy in arrival[key] for dx, dy in DIRS):
+            problems.append("%s: only reached through another town's "
+                            "arrival cells" % key)
     records = []
     sea_cells = {}
     for r in rows:

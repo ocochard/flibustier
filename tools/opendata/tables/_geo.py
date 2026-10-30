@@ -52,7 +52,10 @@ Belize.)  Distances from a reef's line are Euclidean, from land octagonal
 (alternating square and diamond steps).  Where a channel must stay
 open to large ships whatever the reefs, a CHANNELS line (the real
 navigable channel, in degrees) clears shallows within CHANNEL_PX of it
-(the Maracaibo strait).
+(the Maracaibo strait), and land within CHANNEL_LANE_PX: at this scale
+the coastline draws the strait a cell wide or less, and a town on its
+shore (whose arrival cells are the 3 x 3 around it) would then close
+it to every ship bound past it.
 
     lonlat_to_world(lon, lat) -> (x, y)    world pixels, floats
     world_to_lonlat(x, y) -> (lon, lat)
@@ -82,6 +85,7 @@ MIN_ISLAND_PX = 4
 SHORE_PX = 4
 REEF_MIN_PX = 6
 CHANNEL_PX = 6
+CHANNEL_LANE_PX = 12
 # The reefs and banks: name -> (half-width in pixels, [(lon, lat)...]).
 # Lines follow the reef crest or the bank's rim; a single point is a
 # round spot (an atoll or a cay's reef).
@@ -150,7 +154,7 @@ CHANNELS = {
                   (-71.57, 10.72), (-71.61, 10.82), (-71.60, 11.02),
                   (-71.65, 11.11), (-71.69, 11.29)],
 }
-RASTER_VERSION = 3
+RASTER_VERSION = 4
 
 SHALLOWS, LAND, SEA = 1, 2, 3
 
@@ -394,7 +398,9 @@ def reef_band(name):
 
 
 def _channels(t):
-    """Cut CHANNELS through the shallows."""
+    """Cut CHANNELS through the shallows, and a lane through the land."""
+    lane = _band([(CHANNEL_LANE_PX, line) for line in CHANNELS.values()])
+    t[lane & (t == LAND)] = SEA
     t[channel_band() & (t == SHALLOWS)] = SEA
 
 
@@ -404,7 +410,8 @@ def _key():
                          WORLD_W, WORLD_H, LON_W, LON_E, LAT_S,
                          MIN_ISLAND_PX, SHORE_PX, REEF_MIN_PX,
                          sorted(REEFS.items()),
-                         CHANNEL_PX, sorted(CHANNELS.items()),
+                         CHANNEL_PX, CHANNEL_LANE_PX,
+                         sorted(CHANNELS.items()),
                          RASTER_VERSION]
                         ).encode())
     return h.hexdigest()[:16]
