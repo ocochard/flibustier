@@ -92,6 +92,61 @@ blade and Enter takes it.
 | Arrows, numeric keypad | Move the selected unit. |
 | Space, Enter, click | Select the next unit; held, every unit without a goal follows the arrows. |
 
+## Difficulty
+
+A new career asks for one of four difficulty levels, counted here from
+the easiest (first) to the hardest (fourth). The harder the level:
+
+- **Fights are harder.** Sea battles and sword fights are fought at the
+  difficulty's level (named captains add to it). Your broadsides hit
+  a smaller target, and at the first level they do half again as much
+  damage. In a sword fight your blade must come closer to reach and
+  lands less often, the opponent hesitates less when you close in, and
+  the fight runs faster.
+  A town's soldiers carry more muskets in land battles.
+- **The crew is harder to please.** Its mood drops one step per level,
+  and it sets how fast your guns reload and how well your men fight. In
+  towns, fewer men sign on.
+- **The sea is rougher.** Your ship sails a little slower at the third
+  and fourth levels, and storm clouds catch you from farther away (not
+  at all at the first level).
+- **Ships are less easy to avoid.** A captain you try to hail or leave
+  overtakes you and forces a battle one time in three per level above
+  the first. At the first two levels the lookout also says whose waters
+  you are in.
+- **Villains hide farther.** A villain looks for his next hideout over
+  a wider area.
+- **Treasure maps come whole.** At the first level, any map you get is
+  complete at once; above it, you gather it piece by piece.
+- **But you earn more.** When the plunder is divided, you take more
+  portions, and a bigger share of the gold, the higher the level.
+- **Romance is easier.** A governor's daughter or niece is a little more
+  interested in you.
+
+At the bank, below the fourth level, dividing the plunder also offers to
+raise the difficulty one level. A spell in prison, or being marooned,
+lowers it by one.
+
+## Special abilities
+
+A new career also asks for one special ability. Each gives one small
+edge, for the whole career.
+
+| Ability | Edge |
+| --- | --- |
+| Fencing | Sword fights (boarding, duels, practice) are fought one level easier. |
+| Wit and charm | A governor's daughter or niece is twice as interested in you, so she is likelier to give you news and to accept a proposal. A merchant's daughter will marry you with 200 gold instead of 400. |
+| Navigation | Your ships sail faster at the third difficulty level, and at every level but the first a storm cloud has to be nearer to catch you. |
+| Gunnery | Sea battles are fought one level easier: your broadsides hit a wider target. |
+| Medicine | Your health wears down a quarter more slowly with the years and wounds, so you can sail longer before age ends your career. |
+
+Fencing and gunnery do nothing at the first level against ordinary
+opponents, who are already as weak as they get there; they still help
+against named captains. At the first, second and fourth levels,
+navigation gives no extra speed, only the storms' shorter reach (none at
+the first level). Wit and charm and medicine work the same at every
+level.
+
 ## Debug mode
 
 Started with `--debug` (the original's `RDM` argument). At sea and on
