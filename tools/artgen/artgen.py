@@ -1761,10 +1761,11 @@ def fencer_size(m, f, k, render=False):
 
 
 def fencer_steps(pack):
-    """How many frames of each move the pack's sword fight shows, and how
-    far it moves a fencer forward on each of them in the moves that step
-    (its data/sword table), so the frames walk with it: (frames, steps),
-    None without the table."""
+    """How many frames of each move the pack's sword fight shows, how far
+    it moves a fencer forward on each of them in the moves that step, and
+    on which frame each attack strikes (its data/sword table), so the
+    frames walk and strike with it: (frames, steps, strikes), None
+    without the table."""
     path = os.path.join(pack, "data", "sword.json")
     try:
         with open(path) as fp:
@@ -1778,7 +1779,9 @@ def fencer_steps(pack):
         net = [i - b for i, b in zip(fwd, back)][:frames[m]]
         if any(net):
             steps[m] = net
-    return frames, steps
+    strikes = {m: row.index(next(v for v in row if v))
+               for m, row in enumerate(t["strike"]) if any(row)}
+    return frames, steps, strikes
 
 
 def make_fencer(args, spec, a, profile, seed):
@@ -1798,7 +1801,7 @@ def make_fencer(args, spec, a, profile, seed):
     table = fencer_steps(args.pack)
     if table is None:
         return None
-    shown, steps = table
+    shown, steps, strikes = table
     try:
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "mkdir -p %s" % work], check=True,
@@ -1811,12 +1814,13 @@ def make_fencer(args, spec, a, profile, seed):
         subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                         "cd %s && rm -rf out && blender -b -P fencer.py -- "
                         "--side %s --out out --frame %dx%d --margin %d "
-                        "--steps '%s' --frames '%s' --blend model.blend %s "
+                        "--steps '%s' --frames '%s' --strikes '%s' "
+                        "--blend model.blend %s "
                         "> blender.log 2>&1" % (
                             work, side, *fencer_size(0, 0, k, render=True),
-                            FENCER_MARGIN, json.dumps(steps, separators=(
-                                ",", ":")), json.dumps(shown, separators=(
-                                    ",", ":")),
+                            FENCER_MARGIN,
+                            *(json.dumps(v, separators=(",", ":"))
+                              for v in (steps, shown, strikes)),
                             "--moves " + ",".join(map(str, moves))
                             if moves else "")],
                        check=True, stdin=subprocess.DEVNULL)

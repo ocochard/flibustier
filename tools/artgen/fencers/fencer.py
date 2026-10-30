@@ -14,16 +14,21 @@ legs) and, for the opponent, a head of its own per scene.  Its 16 moves
 (guard, step back, slash, lunge, each in the middle, low and high;
 advance, retreat, fall, and the last) have the frames of BANKS.
 
-A fencer here is a jointed figure, posed frame by frame from the key
-poses of MOVES, seen from the side without perspective.  Each layer is
+A fencer here is a jointed figure, posed frame by frame from key poses
+in a low, wide stance: each attack winds up, strikes on the frame the
+pack's table says and recovers, the whole body going with the blade.
+He is seen from the side, turned a little toward the viewer, without
+perspective.  Each layer is
 rendered alone, the others hiding what they cover (holdouts), so a
 weapon passing behind its fencer is cut as the game's is.
 
     blender -b -P fencer.py -- --side my --out DIR [--frame 317x203]
                             [--blend MODEL.blend] [--moves 0,1,...]
                             [--margin PX] [--steps JSON] [--frames JSON]
+                            [--strikes JSON] [--layers body,...]
 
-writes DIR/LAYER/MOVE.FRAME.png for every layer of that side.
+writes DIR/LAYER/MOVE.FRAME.png for every layer of that side (or only
+those of --layers, to look at).
 """
 
 import argparse
@@ -51,22 +56,28 @@ BANKS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 6, 6, 10, 6]
 # 141x114, 24 lines taller than the others (the game draws them 24
 # higher, so the feet stay where they were).
 TALL_MOVE, TALL_FROM, TALL = 14, 3, 114 / 90
-FRAME_M = 3.08		# the frame's width in metres (141 pixels)
+FRAME_M = 2.75		# the frame's width in metres (141 pixels)
 # Where each fencer stands in his frame, as in the game's: the player
 # right of the middle facing left, the opponent left of it facing right
 # (their bodies' middles at about 110 and 30 of the frame's 141 pixels).
-CAMERA_X = {"my": -0.86, "he": 0.88}
+CAMERA_X = {"my": -0.77, "he": 0.79}
 SIDE = "my"
 
 # The two fencers' clothes: (shirt, sash, breeches, boots, hair).
 LOOKS = {
-    "my": {"shirt": (0.85, 0.83, 0.78), "sash": (0.55, 0.04, 0.03),
-           "breeches": (0.16, 0.09, 0.05), "boots": (0.03, 0.025, 0.02),
+    "my": {"shirt": (0.97, 0.96, 0.93), "sash": (0.55, 0.04, 0.03),
+           "breeches": (0.06, 0.035, 0.02), "boots": (0.03, 0.025, 0.02),
            "hair": (0.22, 0.12, 0.05), "skin": (0.62, 0.40, 0.28)},
     "he": {"shirt": (0.06, 0.30, 0.10), "sash": (0.30, 0.18, 0.06),
            "breeches": (0.02, 0.02, 0.025), "boots": (0.02, 0.018, 0.015),
            "hair": (0.03, 0.025, 0.02), "skin": (0.55, 0.35, 0.24)},
 }
+# The fencers' clothes cut full: a billowing shirt, a wide sash and baggy
+# breeches puffed at the knee (metres off the body, at the fullest), so
+# that they fill their frames.
+BAGGY = {"shirt": 0.05, "sash": 0.055, "breeches": 0.09, "boots": 0.012}
+# The shirt's collar this high (metres): a low one, the neck seen.
+NECKLINE = 1.42
 # The opponent's heads, one per scene (hehead1 the deck's, hehead2 the
 # alley's, hehead3 the fort's): what he wears on it.
 HEADS = {"head1": "kerchief", "head2": "hat", "head3": "morion"}
@@ -523,7 +534,8 @@ class HumanFencer(Fencer):
         self.side = side
         look = LOOKS[side]
         self.layers = {"body": [], "weapon": {}, "wounds": {}, "heads": {}}
-        rob, meshes = human.build(look, kerchief=None)
+        rob, meshes = human.build(look, kerchief=None, loose=BAGGY,
+                                   neckline=NECKLINE)
         body = meshes[0]
         self.rob = self.root = rob
         self.j = {}
@@ -675,7 +687,8 @@ class HumanFencer(Fencer):
 
     def pose(self, p):
         import human
-        human.pose(self.rob, p, 180 if self.side == "my" else 0)
+        human.pose(self.rob, at(p, twist=p.get("twist", 0) + TWIST),
+                   180 if self.side == "my" else 0)
         g = self.rob.pose.bones["grip"]
         axis = g.bone.matrix_local.to_3x3().inverted() @ Vector((1, 0, 0))
         g.rotation_mode = "AXIS_ANGLE"
@@ -683,14 +696,26 @@ class HumanFencer(Fencer):
         human.ground(self.rob)
 
 
-# The key poses.  Angles: hips and knees of each leg, shoulders and
-# elbows of each arm, the spine and neck, and the blade in the hand.
+# The key poses.  Angles: the shoulders and elbows of each arm, the spine
+# and neck, and the blade in the hand.  The legs are not angles but
+# places, resolved by plant(): "_hip" how far the hips have gone forward
+# from the guard's, "_front" and "_back" each foot's, "_drop" how much
+# lower the hips are, "_lift" the front foot's height above the ground
+# (metres), so that a key pose keeps its feet where they stand.
 GUARD = {"hips": 0.86, "spine": 6, "neck": -6,
-         "front-hip": 28, "front-knee": -22, "front-ankle": -6,
-         "back-hip": -26, "back-knee": -24, "back-ankle": 20,
          "front-shoulder": 72, "front-elbow": 18, "front-wrist": 0,
-         "blade": 5, "back-shoulder": -40, "back-elbow": 95,
+         "blade": 5, "back-shoulder": -45, "back-elbow": 25,
          "back-wrist": 20}
+# The guard's stance: the ankles this far ahead of the hips (the back
+# one behind), the hips this share of a straight leg above them: low and
+# wide, so that every move carries the whole body.
+STANCE = {"front": 0.56, "back": -0.56, "height": 0.70}
+# The back foot on its ball, the heel this many degrees up.
+HEEL = 10
+# The fencers' chests turned this many degrees from the side toward the
+# viewer, so that the shirt shows broad; the hips and legs stay side on,
+# the stance spread across the picture.
+TWIST = -40
 
 
 def at(base, **changes):
@@ -706,12 +731,31 @@ def line(base, level):
                        "blade": (5, 10, -20)[level]})
 
 
+def plant(p, origin=0.0):
+    """Pose "p" with its leg places made angles, the game having moved
+    the frame "origin" metres forward by now."""
+    l1, l2 = legs()
+    high = STANCE["height"] * (l1 + l2) - p.get("_drop", 0.0)
+    q = {k: v for k, v in p.items() if not k.startswith("_")}
+    hip = p.get("_hip", 0.0)
+    for leg, lift in (("front", p.get("_lift", 0.0)), ("back", 0.0)):
+        q[leg + "-hip"], q[leg + "-knee"] = reach(
+            STANCE[leg] + p.get("_" + leg, 0.0) - hip, high - lift)
+        q[leg + "-ankle"] = -(q[leg + "-hip"] + q[leg + "-knee"])
+    q["back-ankle"] -= HEEL
+    q["x"] = hip - origin
+    return q
+
+
 def bob(base, n, k):
-    """The guard's breathing: frame k of n."""
-    s = math.sin(2 * math.pi * k / n)
-    return at(base, hips=base["hips"] + 0.012 * s,
-              **{"front-shoulder": base["front-shoulder"] + 3 * s,
-                 "back-elbow": base["back-elbow"] + 5 * s})
+    """The guard's breathing: frame k of n, from settled to risen, so
+    that even two frames differ."""
+    s = -math.cos(2 * math.pi * k / n) if n > 1 else 0.0
+    return at(base, _drop=0.02 - 0.02 * s, spine=base["spine"] + 2 * s,
+              **{"front-shoulder": base["front-shoulder"] + 5 * s,
+                 "blade": base["blade"] - 6 * s,
+                 "back-shoulder": base["back-shoulder"] - 6 * s,
+                 "back-elbow": base["back-elbow"] + 8 * s})
 
 
 def mix(a, b, t):
@@ -729,14 +773,25 @@ def keyed(keys, n, k):
     return mix(keys[i], keys[i + 1], t - i)
 
 
+def strike(lead, hit, back, n, k, s):
+    """Frame k of an attack of n frames striking on frame s: through the
+    "lead" key poses up to the blow, "hit" on it, then back to "back"."""
+    if k < s:
+        return keyed(lead, s, k) if s > 1 else lead[0]
+    if k == s or n - 1 == s:
+        return hit
+    return mix(hit, back, (k - s) / (n - 1 - s))
+
+
 # How far the game moves a stepping fencer on each frame of a move,
-# forward, in the frame's pixels (--steps), and how many frames of each
-# bank it shows (--frames), both from the pack's data/sword table.  The
-# frames carry the body between those moves and plant the feet, so he
-# walks rather than slides; a bank's frames past the shown ones repeat
-# the last.
+# forward, in the frame's pixels (--steps), how many frames of each
+# bank it shows (--frames) and on which one each attack strikes
+# (--strikes), all from the pack's data/sword table.  The frames carry
+# the body between those moves and plant the feet, so he walks rather
+# than slides; a bank's frames past the shown ones repeat the last.
 STEPS = {}
 FRAMES = []
+STRIKES = {}
 
 
 def legs():
@@ -799,47 +854,72 @@ def stride(g, move, n, k):
     return p
 
 
+def origin(move, k):
+    """How far the game has moved the frame by frame k of a move."""
+    return sum(STEPS.get(move, [])[:k + 1]) * FRAME_M / 141
+
+
 def move_pose(move, k):
     """Move "move" (SWM_*), frame k."""
     n = FRAMES[move] if FRAMES else BANKS[move]
     k = min(k, n - 1)
     level = move % 3
     g = line(GUARD, level if move < 12 else 0)
+    if 3 <= move < 6 or move in (12, 13):	# step back, advance, retreat
+        return stride(plant(g), move, n, k)
+    net = origin(move, n - 1)
     if move < 3:				# guard
-        return bob(g, n, k)
-    if move < 6:				# step back
-        return stride(g, move, n, k)
-    if move < 9:				# slash
-        high = (150, 125, 165)[level]
+        p = bob(g, n, k)
+    elif move < 9:				# slash: wind up, cut, recover
+        high = (125, 110, 130)[level]
         low = (55, 25, 85)[level]
-        wind = at(g, spine=-4, **{"front-shoulder": high,
-                                  "front-elbow": -40, "blade": -30})
-        cut = at(g, spine=16, **{"front-shoulder": low, "front-elbow": 10,
-                                 "blade": 20, "front-hip": 40,
-                                 "front-knee": -40, "hips": 0.8})
-        return keyed([g, wind, cut, cut, g], n, k)
-    if move < 12:				# lunge
-        out = at(g, x=0.22, hips=0.72, spine=14, **{
-            "front-hip": 62, "front-knee": -62, "back-hip": -52,
-            "back-knee": -4, "front-shoulder": (88, 62, 112)[level],
-            "front-elbow": 0, "blade": (0, 10, -12)[level],
-            "back-shoulder": -70, "back-elbow": 10})
-        return keyed([g, out, out, g], n, k)
-    if move == 12:				# advance
-        return stride(g, move, n, k)
-    if move == 13:				# retreat
-        return stride(g, move, n, k)
-    if move == 14:				# the fall: struck, then yielding
-        hit = at(g, spine=-22, neck=-15, **{"front-shoulder": 20,
-                                            "front-elbow": 10,
-                                            "blade": 40})
+        fs = g["front-shoulder"]
+        lift = at(g, _hip=-0.05, _drop=0.0, spine=0, **{
+            "front-shoulder": (fs + high) / 2 - 40, "front-elbow": 100,
+            "blade": (100, 135, 100)[level], "back-shoulder": -60,
+            "back-elbow": 70})
+        coil = at(g, _hip=-0.09, _front=-0.03, spine=-8, neck=-2, **{
+            "front-shoulder": high, "front-elbow": 115, "blade": 40,
+            "back-shoulder": -80, "back-elbow": 50})
+        drive = at(g, _hip=0.07, _front=0.10, _lift=0.05, _drop=0.05,
+                   spine=10, **{"front-shoulder": (high + low) / 2 + 10,
+                                "front-elbow": -10, "blade": 0,
+                                "back-shoulder": -70, "back-elbow": 30})
+        cut = at(g, _hip=0.15, _front=0.22, _drop=0.12, spine=20, **{
+            "front-shoulder": low, "front-elbow": 10, "blade": 20,
+            "back-shoulder": -85, "back-elbow": 15})
+        p = strike([g, lift, coil, drive], cut, g, n, k,
+                   STRIKES.get(move, n * 2 // 3))
+    elif move < 12:				# lunge: coil, spring, recover
+        arm = (88, 62, 112)[level]
+        coil = at(g, _hip=-0.05, _drop=0.03, spine=2, **{
+            "front-shoulder": min(g["front-shoulder"] - 25, 70),
+            "front-elbow": 20, "blade": g["blade"] + 60,
+            "back-shoulder": -55})
+        spring = at(g, _hip=0.12, _front=0.26, _lift=0.07, _drop=0.06,
+                    spine=10, **{"front-shoulder": arm - 5,
+                                 "front-elbow": 15,
+                                 "blade": (0, 10, -12)[level],
+                                 "back-shoulder": -70, "back-elbow": 30})
+        out = at(g, _hip=0.26, _front=0.52, _drop=0.17, spine=16, **{
+            "front-shoulder": arm, "front-elbow": 0,
+            "blade": (0, 10, -12)[level], "back-shoulder": -80,
+            "back-elbow": 5})
+        back = at(g, _hip=net, _front=net, _back=net)
+        p = strike([coil, spring], out, back, n, k,
+                   STRIKES.get(move, n // 2))
+    elif move == 14:			# the fall: struck, then yielding
+        hit = at(g, _hip=-0.08, _drop=0.04, spine=-22, neck=-15, **{
+            "front-shoulder": 20, "front-elbow": 10, "blade": 40})
         # Yielding: upright, both hands up by the head, elbows bent (a
         # real shoulder lifted straight up crushes the neck on the body).
-        up = at(hit, spine=0, neck=0, hips=0.84, **{
+        up = at(hit, _drop=-0.06, spine=0, neck=0, **{
             "front-shoulder": 135, "front-elbow": 55, "back-shoulder": 130,
-            "back-elbow": 55, "blade": 60})
-        return keyed([g, hit, hit, up, up, up, up, up, up, up], n, k)
-    return bob(g, n, k)			# the last: back on guard
+            "back-elbow": 55, "blade": 120})	# the sword hanging
+        p = keyed([g, hit, hit, up, up, up, up, up, up, up], n, k)
+    else:
+        p = bob(g, n, k)			# the last: back on guard
+    return plant(p, origin(move, k))
 
 
 def scene(fw, fh, margin=0):
@@ -867,7 +947,7 @@ def scene(fw, fh, margin=0):
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_mode = "RGBA"
     sc.view_settings.view_transform = "Standard"
-    materials.sky(sc, 0.8)
+    materials.sky(sc, 1.3)
     sun = bpy.data.lights.new("sun", "SUN")
     sun.energy = 3.0
     sob = bpy.data.objects.new("sun", sun)
@@ -930,7 +1010,10 @@ def main():
                     "move on each frame, in the frame's pixels")
     ap.add_argument("--frames", help="JSON: the frames the game shows of "
                     "each move")
+    ap.add_argument("--strikes", help="JSON: the frame each attack "
+                    "strikes on")
     ap.add_argument("--moves", help="only these moves, e.g. 0,9")
+    ap.add_argument("--layers", help="only these layers, e.g. body")
     ap.add_argument("--blend")
     ap.add_argument("--sample", action="store_true",
                     help="only each move's middle frame, to look at")
@@ -944,13 +1027,16 @@ def main():
         STEPS.update({int(m): v for m, v in json.loads(args.steps).items()})
     if args.frames:
         FRAMES.extend(json.loads(args.frames))
+    if args.strikes:
+        STRIKES.update({int(m): v for m, v in
+                        json.loads(args.strikes).items()})
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     f = (Fencer if args.mannequin else HumanFencer)(args.side)
     if args.side == "my":
         f.root.scale = (-1, 1, 1)	# facing his opponent, to the left
     scene(fw, fh, args.margin)
-    f.pose(GUARD)
+    f.pose(plant(GUARD))
     if args.blend:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.blend),
                                     compress=True)
@@ -968,6 +1054,8 @@ def main():
         passes.append((name, parts, body + heads))
     for name, parts in f.layers["wounds"].items():
         passes.append((name, parts, []))
+    if args.layers:
+        passes = [q for q in passes if q[0] in args.layers.split(",")]
     moves = range(len(BANKS)) if not args.moves else \
         [int(v) for v in args.moves.split(",")]
     for move in moves:

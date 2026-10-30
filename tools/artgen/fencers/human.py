@@ -24,7 +24,7 @@ import math
 import os
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 import materials
 
@@ -43,6 +43,35 @@ TOE = (0.17, -0.13, 0.02)
 ROOT, CHEST, NECK, CROWN = 0.95, 1.40, 1.52, 1.70
 UPPER, FORE, HAND = 0.30, 0.26, 0.12
 SMOOTH_CHEST = 10	# passes softening the chest under the shirt
+SMOOTH_LEGS = 12	# and the thighs under full breeches
+FOLDS = 0.35		# full breeches' folds, a share of their fullness
+# Full breeches puff out most at this height (metres), gathered into the
+# boots below and at the waist above: (bottom, fullest, top).
+PUFF = (0.42, 0.54, 0.94)
+
+
+def _folds(me, push, index):
+    """Full breeches hang in folds: their cloth standing off further and
+    nearer by turns round each leg, the folds running down it and
+    twisting a little."""
+    on = set()
+    for f in me.polygons:
+        if f.material_index == index:
+            on.update(f.vertices)
+    for i in on:
+        c = me.vertices[i].co
+        a = math.atan2(c.y, abs(c.x) - 0.1)	# round the leg's middle
+        push[i] *= 1 + FOLDS * math.sin(7 * a + 9 * c.z)
+
+
+def _puff(z):
+    """How full breeches are at height z, 1 at their fullest."""
+    lo, mid, hi = PUFF
+    if z <= mid:
+        t = max(0.0, (z - lo) / (mid - lo))
+        return t * t * (3 - 2 * t)
+    t = min(1.0, (z - mid) / (hi - mid))
+    return 1 - 0.7 * t * t * (3 - 2 * t)
 
 # Each joint of the pose (fencer.py's names) and its bone.
 BONES = {"spine": "spine", "neck": "neck",
@@ -103,14 +132,24 @@ def _region(c, n, kerchief=True):
     return "boots"
 
 
-def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
-    """The clothes, by regions of the body, a little loose; the kerchief
-    over the crown, the hair below it."""
+# How far each part of the clothes stands off the body (metres).
+LOOSE = {"shirt": 0.018, "sash": 0.022, "breeches": 0.012, "boots": 0.008,
+         "skin": 0.0, "hair": 0.008, "kerchief": 0.014}
+# Between these heights (metres) a shirt cut fuller than LOOSE's comes
+# back to it, so that it still closes round the neck.
+COLLAR = (1.12, 1.32)
+
+
+def dress(ob, look, kerchief=(0.6, 0.05, 0.04), loose=None,
+          neckline=None):
+    """The clothes, by regions of the body, a little loose (or as far
+    off as "loose" says, by part), the shirt's collar at height
+    "neckline" if given; the kerchief over the crown, the hair below
+    it."""
     me = ob.data
     names = ["skin", "shirt", "sash", "breeches", "boots", "hair",
              "kerchief"]
-    loose = {"shirt": 0.018, "sash": 0.022, "breeches": 0.012,
-             "boots": 0.008, "skin": 0.0, "hair": 0.008, "kerchief": 0.014}
+    loose = dict(LOOSE, **(loose or {}))
     colour = dict(look, kerchief=kerchief or look["hair"])
     fabric = {"kerchief": "wool"}
     from fencer import FABRIC
@@ -122,9 +161,19 @@ def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
     push = [0.0] * len(me.vertices)
     for f in me.polygons:
         r = _region(f.center, f.normal, kerchief is not None)
+        if r == "shirt" and neckline and f.center.z > neckline and \
+                abs(f.center.x) < 0.1:
+            r = "skin"
         f.material_index = names.index(r)
+        off = loose[r]
+        if r == "shirt" and f.center.z > COLLAR[0]:
+            t = min(1.0, (f.center.z - COLLAR[0]) / (COLLAR[1] - COLLAR[0]))
+            off += (min(off, LOOSE["shirt"]) - off) * t
+        if r == "breeches" and off > LOOSE["breeches"]:
+            off = LOOSE["breeches"] + (off - LOOSE["breeches"]) * \
+                _puff(f.center.z)
         for v in f.vertices:
-            push[v] = max(push[v], loose[r])
+            push[v] = max(push[v], off)
     # The shirt hangs loose over the torso, not along its muscles: the
     # chest and belly smoothed flat (the body's sculpted pectorals would
     # read as a woman's), then the cloth pushed off it.
@@ -137,6 +186,14 @@ def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
     for _ in range(SMOOTH_CHEST):
         bmesh.ops.smooth_vert(bm, verts=torso, factor=0.4,
                               use_axis_x=True, use_axis_y=True)
+    # Full breeches hide the legs' muscles too: the thighs smoothed round
+    # before the cloth puffs off them.
+    if loose["breeches"] > LOOSE["breeches"]:
+        legs = [v for v in bm.verts if PUFF[0] < v.co.z < PUFF[2] and
+                abs(v.co.x) < 0.25]
+        for _ in range(SMOOTH_LEGS):
+            bmesh.ops.smooth_vert(bm, verts=legs, factor=0.5,
+                                  use_axis_x=True, use_axis_y=True)
     bm.to_mesh(me)
     bm.free()
     me.update()
@@ -150,6 +207,8 @@ def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
     for _ in range(6):
         push = [(p + sum(push[n] for n in near[i])) / (1 + len(near[i]))
                 for i, p in enumerate(push)]
+    if loose["breeches"] > LOOSE["breeches"]:
+        _folds(me, push, names.index("breeches"))
     for v in me.vertices:
         v.co += v.normal * push[v.index]
     for f in me.polygons:
@@ -159,7 +218,7 @@ def dress(ob, look, kerchief=(0.6, 0.05, 0.04)):
     rest = me.attributes.new("rest", "FLOAT_VECTOR", "POINT")
     for v in me.vertices:
         rest.data[v.index].vector = v.co
-    smooth_edges(me, names)
+    smooth_edges(me, names, neckline or 1.47)
     sub = ob.modifiers.new("smooth", "SUBSURF")
     sub.levels = sub.render_levels = 1
 
@@ -173,12 +232,12 @@ def _rest_z(nt):
     return sep
 
 
-def smooth_edges(me, names):
+def smooth_edges(me, names, collar=1.47):
     """Each piece of clothing's edge drawn in its material, not along the
     mesh's faces: a material shows the next one's fabric past its edge
     (a straight hem, softened, a little ragged), so the faces' steps do
     not show.  Done for the shirt's hem over the sash, the sash's over
-    the breeches, the boots' tops and the collar."""
+    the breeches, the boots' tops and the collar (at height "collar")."""
     def mixin(own, other, axis, edge, below):
         """In material "own", "other" shows where rest[axis] is past
         "edge" (below it when "below")."""
@@ -257,8 +316,8 @@ def smooth_edges(me, names):
     mixin("breeches", "sash", 2, 0.92, False)
     mixin("breeches", "boots", 2, 0.42, True)
     mixin("boots", "breeches", 2, 0.42, False)
-    mixin("shirt", "skin", 2, 1.47, False)	# the collar
-    mixin("skin", "shirt", 2, 1.47, True)
+    mixin("shirt", "skin", 2, collar, False)	# the collar
+    mixin("skin", "shirt", 2, collar, True)
 
 
 def hair(ob, look, kerchief):
@@ -394,11 +453,12 @@ def rig(ob, parts):
     return rob
 
 
-def build(look, kerchief=(0.6, 0.05, 0.04)):
+def build(look, kerchief=(0.6, 0.05, 0.04), loose=None, neckline=None):
     """The dressed, rigged human: (rig, [its meshes]); "kerchief" its
-    colour, or None for bare hair."""
+    colour, or None for bare hair; "loose" and "neckline" as dress()
+    takes them."""
     ob = _load()
-    dress(ob, look, kerchief)
+    dress(ob, look, kerchief, loose, neckline)
     parts = []
     rob = rig(ob, parts)
     # The hair last, on the rigged body, so it follows it.
@@ -425,6 +485,15 @@ def pose(rob, p, heading=0.0):
         axis = pb.bone.matrix_local.to_3x3().inverted() @ Vector((1, 0, 0))
         pb.rotation_mode = "AXIS_ANGLE"
         pb.rotation_axis_angle = (a if up else -a, *axis)
+    # The chest turned about the spine (p["twist"], degrees), the arms
+    # and head with it, the hips and legs staying as they are.
+    if p.get("twist"):
+        pb = rob.pose.bones["spine"]
+        bend = Quaternion(Vector(pb.rotation_axis_angle[1:]),
+                          pb.rotation_axis_angle[0])
+        pb.rotation_mode = "QUATERNION"
+        pb.rotation_quaternion = bend @ Quaternion(
+            (0, 1, 0), math.radians(p["twist"]))
     # The hands closed: the sword hand round its grip, the other loosely;
     # the fingers curl towards the body's middle (about the rig's Y).
     for side, curl in (("R", 100), ("L", 45)):
