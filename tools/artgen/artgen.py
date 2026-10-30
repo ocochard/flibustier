@@ -1519,7 +1519,9 @@ def make_tiles(args, spec, a, profile, seed):
                               shallow_colour=tuple(int(shallow[i:i + 2], 16)
                                                    for i in (1, 3, 5))
                               if shallow else None,
-                              crests_on=t.get("crests", True))
+                              crests_on=t.get("crests", True),
+                              flatten=t.get("flatten", 12),
+                              natural=t.get("natural", False))
     tilemaker.png_write(os.path.join(args.pack, a["atlas"]), columns * side,
                         -(-256 // columns) * side * frames, atlas)
     write_tiles(args.pack, a, side, frames, t.get("period", 4))

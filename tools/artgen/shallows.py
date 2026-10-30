@@ -44,6 +44,8 @@ def classify_safe(c):
     g = max(g, 0.65 * b)
     r = min(r, g - 50)
     return (max(0.0, r), g, b)
+
+
 SAND = (200, 188, 140)
 
 

@@ -295,10 +295,28 @@ def tile_crests(terrain, tw, tile, n, side):
     return out
 
 
+def wobble(x, y, side):
+    """A gentle pattern in [0, 1], periodic on the tile (so a tile's edge
+    meets its neighbour's), the same in every tile."""
+    a = 2 * math.pi / side
+    return 0.5 + 0.25 * math.sin(a * x + 0.6) * math.cos(a * 2 * y + 1.3) \
+        + 0.2 * math.sin(a * 3 * (x + y) + 2.1) * math.sin(a * y + 0.4)
+
+
+def water(c):
+    """A sea pixel kept in tools/opendata's water class (blue > red + 15,
+    blue >= green + 15), so the colour read back never turns to land."""
+    r, g, b = c
+    b = min(255, max(b, g + 16, r + 16))
+    g = min(g, b - 16)
+    r = min(r, b - 16)
+    return (max(0, r), max(0, g), b)
+
+
 def compose(terrain_pgm, textures, side, placed, seed, looks=None,
             beach=0.06, shallows=0.22, band=0.25, town_size=0.95,
             shallow_colour=None, crests_on=True,
-            frames=1, drift=2, columns=16):
+            frames=1, drift=2, columns=16, flatten=12, natural=False):
     """The 256 tiles at "side" pixels as rows of RGBA bytes (16 tiles a
     row), "frames" sets of them one below the other ("placed" maps a
     cut-out texture, a house or a fort, to the tiles it stands on): the
@@ -313,7 +331,7 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
     n = tw // 16
     looks = looks or {}
     tex = {k: Texture(v, 0, 1.0) if k in placed else
-           Texture(v, 12, *looks.get(k, (None, 0.8))[::-1])
+           Texture(v, flatten, *looks.get(k, (None, 0.8))[::-1])
            for k, v in textures.items()}
     shared = {k: periodic(tex[k], side) for k in ("sea", "land", "sand")}
     rng = random.Random(seed)
@@ -362,16 +380,28 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
                         return mix(mid, shared[k][(y + my) % side]
                                    [(x + mx) % side], e)
 
+                    # With "natural", the beach and the shallows vary
+                    # in width along the coast (by a pattern periodic on
+                    # the tile, so the pieces still meet), the wet sand
+                    # darkens at the waterline, and the shallows fade
+                    # smoothly out to sea.
+                    wob = wobble(x, y, side) if natural else 0.5
                     if is_land[y][x]:
                         c = sample("land")
-                        if any_water and to_water[y][x] < beach_px:
-                            c = mix(sample("sand"), c,
-                                    to_water[y][x] / beach_px)
+                        bw = beach_px * (0.6 + 0.8 * wob)
+                        if any_water and to_water[y][x] < bw:
+                            sand = sample("sand")
+                            if natural and to_water[y][x] < bw * 0.35:
+                                sand = mix(sand, (120, 105, 80), 0.35)
+                            c = mix(sand, c, to_water[y][x] / bw)
                     else:
                         c = sample("sea", dx, dy)
-                        if any_land and to_land[y][x] < shallow_px:
+                        sw = shallow_px * (0.7 + 0.6 * wob) if natural \
+                            else shallow_px
+                        if any_land and to_land[y][x] < sw:
+                            u = 1 - to_land[y][x] / sw
                             c = mix(c, shallow_colour or turquoise,
-                                    0.6 * (1 - to_land[y][x] / shallow_px))
+                                    0.72 * u ** 1.3 if natural else 0.6 * u)
                         if crests_on and crests and crests[y][x]:
                             # Rolling along: brighter where the wave's
                             # phase is.
@@ -384,6 +414,8 @@ def compose(terrain_pgm, textures, side, placed, seed, looks=None,
                             d = min((f - g) % frames, (g - f) % frames)
                             if d < 2:
                                 c = mix(c, foam, 0.55 if d == 0 else 0.2)
+                    if natural and not is_land[y][x]:
+                        c = water(c)
                     i = (t % columns * side + x) * 4
                     out[i:i + 4] = bytes((*c, 255))
             for k, tiles in placed.items():

@@ -1457,39 +1457,46 @@ atlas = "art/map.png"
 seed = 1660
 source = "textures of this pack through the original tiles' coastlines"
 # The sea moves as the original's palette shimmer does: 8 frames, one
-# every 4 sailing passes.
-tiles = { tile = 16, frames = 8, period = 4, towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 123, 124, 125, 126, 127, 255] }
+# every 4 sailing passes.  Satellite-scale textures keep their relief
+# ("flatten" 28: only tone wider than that is evened out), and the
+# coasts vary ("natural": the beach and shallows' widths, a wet line,
+# shallows fading out to sea, the sea kept in the water class).
+tiles = { tile = 16, frames = 8, period = 4, flatten = 22, natural = true, shallows = "#2C9AAE", towns = [68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 123, 124, 125, 126, 127, 255] }
 prompt = ""
 [[asset.textures]]
 name = "sea"
-size = 192
-colour = "#123A78"	# its average colour
-detail = 0.45
+size = 384
+colour = "#0F3466"	# its average colour
+detail = 0.32	# more, and its swell repeats tile by tile
 prompt = """
-Aerial photograph taken straight down from very high above of calm deep
-open sea, an even deep blue with a very fine, faint, uniform texture of
-tiny ripples, low contrast, no foam, no glare, no sun reflection,
-nothing else, filling the whole image.
+Satellite photograph from very high altitude of the deep open Caribbean
+Sea: dark navy-blue water with a faint, fine, even texture of distant
+swell lines and a very few tiny scattered whitecaps, a slight variation
+of tone, no glare, no land, no clouds, nothing else, filling the whole
+image.
 """
 [[asset.textures]]
 name = "land"
-size = 192
-colour = "#3C6E28"	# its average colour
-detail = 0.8
+size = 768
+colour = "#2B4724"	# its average colour
+detail = 0.85
 prompt = """
-Satellite photograph taken straight down from very high above of a vast
-tropical rainforest, the canopy seen as a fine, even, uniform texture of
-countless tiny green tree crowns, low contrast, no clearings, no rivers,
-nothing else, filling the whole image.
+Satellite photograph from very high altitude of the hilly interior of a
+tropical Caribbean island: dense dark green rainforest covering steep
+ridges and winding valleys, lit by a low sun from the upper left so the
+relief shows in light and shade, a few lighter green clearings and an
+olive-brown dry slope, no rivers, no roads, no buildings, no clouds,
+filling the whole image.
 """
 [[asset.textures]]
 name = "sand"
-size = 192
-colour = "#D2B478"	# its average colour
-detail = 0.6
+size = 256
+colour = "#CDBE96"	# its average colour
+detail = 0.7
 prompt = """
-Aerial photograph taken straight down of pale golden beach sand, fine,
-even and uniform, low contrast, nothing else, filling the whole image.
+Satellite photograph from high altitude of a pale Caribbean beach: cream
+white sand with faint ripples and a few patches of olive coastal scrub,
+even light, filling the whole image.
 """
 [[asset.textures]]
 name = "town"
