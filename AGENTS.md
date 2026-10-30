@@ -25,8 +25,8 @@ Binaries:
 - `flibustier --data DIR [--lang eng|fre|ger] [--crt] [--smooth] [--viewer] [--list] [--export ID out.png] [--pack DIR] [--saves DIR]`: game and asset viewer.
 - `flibustier --script "enter down enter ..." out.png`: plays the UI headless and saves the last screen (used by tests and bots).
 - `flibustier-sim [--data DIR] [--pack DIR]...`: headless rules engine, JSON lines on stdin/stdout; runs from packs alone when they give the open game data.
-- `flibustier-seamap`: sea map helper for the career bot.
-- `python3 tools/career-bot/career.py --data DIR --seed 3`: plays a full career through `flibustier-sim`, writes `journal-*.txt` (gitignored); `ANOMALY` lines flag sim problems.
+- `flibustier-seamap [--data DIR] [--pack DIR]...`: sea map helper for the career bot.
+- `python3 tools/career-bot/career.py --data DIR [--pack DIR]... --seed 3`: plays a full career through `flibustier-sim`, writes `journal-*.txt` (gitignored); `ANOMALY` lines flag sim problems.
 
 ## Architecture
 

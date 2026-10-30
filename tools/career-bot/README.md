@@ -22,11 +22,13 @@ What it does, roughly in this order of priority:
   suitors.
 
 It needs the build (`flibustier-sim` and `flibustier-seamap`, the sea map
-it plans routes on) and the original game data:
+it plans routes on) and game data: the original's, packs over it
+(`--pack DIR`, repeatable), or a pack with the open game data alone:
 
 ```sh
 cmake --build build
 python3 tools/career-bot/career.py --data ~/games/pirates_gold --seed 3
+python3 tools/career-bot/career.py --pack ~/flibustier-openpack --seed 3
 ```
 
 Options: `--era` (1560 to 1680), `--nation`, `--seed`, `--years` (12 by

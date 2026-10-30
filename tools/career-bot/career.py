@@ -15,6 +15,14 @@ import argparse, collections, heapq, json, math, os, random, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 DATA = os.environ.get("FLIBUSTIER_DATA")
+PACKS = []
+
+
+def sources():
+    """The game data's arguments: the original's, then the packs."""
+    return (["--data", DATA] if DATA else []) + \
+        [a for p in PACKS for a in ("--pack", p)]
+
 BUILD = os.path.join(REPO, "build")
 OUT = "."
 FORT_MARGIN = 8		# hull to spare, by fort_margin, before fighting a fort
@@ -86,8 +94,8 @@ class Retired(Exception):
 
 class Sim:
     def __init__(self, log):
-        self.p = subprocess.Popen([os.path.join(BUILD, "flibustier-sim"),
-                                   "--data", DATA], stdin=subprocess.PIPE,
+        self.p = subprocess.Popen([os.path.join(BUILD, "flibustier-sim")] +
+                                  sources(), stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, text=True, bufsize=1)
         self.log = log
         self.calls = collections.Counter()
@@ -161,7 +169,7 @@ class Bot:
         self.scenario = r["scenario"]
         self.era = era
         self.grid = subprocess.run(
-            [os.path.join(BUILD, "flibustier-seamap"), "--data", DATA,
+            [os.path.join(BUILD, "flibustier-seamap")] + sources() + [
              str(era)], stdout=subprocess.PIPE, text=True,
             check=True).stdout.splitlines()
         self.H, self.W = len(self.grid), len(self.grid[0])
@@ -169,7 +177,7 @@ class Bot:
         # among them
         self.arrivals = collections.defaultdict(list)
         for line in subprocess.run(
-                [os.path.join(BUILD, "flibustier-seamap"), "--data", DATA,
+                [os.path.join(BUILD, "flibustier-seamap")] + sources() + [
                  "--arrivals", str(era)], stdout=subprocess.PIPE, text=True,
                 check=True).stdout.splitlines():
             t, x, y = map(int, line.split())
@@ -393,7 +401,7 @@ class Bot:
         """The exact terrain a ship sails on, as the player sees it: the 256
         map tiles' pixels, and the tile each cell draws."""
         lines = subprocess.run(
-            [os.path.join(BUILD, "flibustier-seamap"), "--data", DATA,
+            [os.path.join(BUILD, "flibustier-seamap")] + sources() + [
              "--pixels", str(era)], stdout=subprocess.PIPE, text=True,
             check=True).stdout.splitlines()
         self.tile_px = lines[:256]
@@ -1901,6 +1909,9 @@ def main():
     global DATA, BUILD, OUT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--data", default=DATA, help="the original game data")
+    ap.add_argument("--pack", action="append", default=[],
+                    help="a pack over it (repeatable; the open pack alone "
+                    "plays without --data)")
     ap.add_argument("--build", default=BUILD, help="where flibustier-sim is")
     ap.add_argument("--out", default=OUT, help="where the journal goes")
     ap.add_argument("--seed", type=int, default=1)
@@ -1909,9 +1920,11 @@ def main():
     ap.add_argument("--years", type=int, default=12)
     ap.add_argument("-v", action="store_true", help="print the journal live")
     a = ap.parse_args()
-    if a.data is None:
-        ap.error("no game data: use --data or set FLIBUSTIER_DATA")
-    DATA, BUILD, OUT = os.path.expanduser(a.data), a.build, a.out
+    if a.data is None and not a.pack:
+        ap.error("no game data: use --data, --pack or set FLIBUSTIER_DATA")
+    DATA = os.path.expanduser(a.data) if a.data else None
+    PACKS[:] = [os.path.expanduser(p) for p in a.pack]
+    BUILD, OUT = a.build, a.out
     b = Bot(a.era, a.nation, a.seed, a.v)
     try:
         out = b.career(a.years)

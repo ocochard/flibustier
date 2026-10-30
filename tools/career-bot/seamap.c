@@ -15,6 +15,9 @@
  *
  * With --arrivals, the cells where a ship reaches a town instead, one
  * "town x y" line each.
+ *
+ * The world comes from the original data and the packs (--pack, repeated,
+ * the last added winning), as flibustier-sim reads it.
  */
 
 #include <stdio.h>
@@ -25,6 +28,8 @@
 #include "data/exe.h"
 #include "data/pack.h"
 
+#define MAX_PACKS	16
+
 static const int years[] = { 1560, 1600, 1620, 1640, 1660, 1680 };
 
 int
@@ -34,13 +39,17 @@ main(int argc, char **argv)
 	struct packs *packs;
 	struct blob b;
 	const struct exe_layout *layout;
-	const char *data = getenv("FLIBUSTIER_DATA");
+	const char *data = getenv("FLIBUSTIER_DATA"), *pack[MAX_PACKS];
 	char err[256];
 	int era = -1, x, y, i, j, t, c, u, pixels = 0, arrivals = 0;
+	int npacks = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--data") == 0 && i + 1 < argc)
 			data = argv[++i];
+		else if (strcmp(argv[i], "--pack") == 0 && i + 1 < argc &&
+		    npacks < MAX_PACKS)
+			pack[npacks++] = argv[++i];
 		else if (strcmp(argv[i], "--pixels") == 0)
 			pixels = 1;
 		else if (strcmp(argv[i], "--arrivals") == 0)
@@ -50,22 +59,29 @@ main(int argc, char **argv)
 				if (atoi(argv[i]) == years[j])
 					era = j;
 	}
-	if (era < 0 || data == NULL) {
-		fprintf(stderr, "usage: flibustier-seamap [--data PATH] [--pixels | --arrivals] YEAR\n");
+	if (era < 0 || (data == NULL && npacks == 0)) {
+		fprintf(stderr, "usage: flibustier-seamap [--data PATH] "
+		    "[--pack DIR]... [--pixels | --arrivals] YEAR\n");
 		return (2);
 	}
 	if ((packs = packs_new()) == NULL ||
-	    packs_add_original(packs, data) != 0 ||
-	    packs_load(packs, "program/main", &b) != 0) {
-		fprintf(stderr, "%s\n", packs != NULL ? packs_error(packs) :
-		    "out of memory");
+	    (data != NULL && packs_add_original(packs, data) != 0))
+		goto bad;
+	for (i = 0; i < npacks; i++)
+		if (packs_add_dir(packs, pack[i]) != 0) {
+bad:
+			fprintf(stderr, "%s\n", packs != NULL ?
+			    packs_error(packs) : "out of memory");
+			return (1);
+		}
+	/* The executable is optional: open game data can stand in. */
+	if (exe_open(packs, &b, &layout) != 0) {
+		fprintf(stderr, "unknown PIRATESG.EXE build\n");
 		return (1);
 	}
-	if ((layout = exe_identify(b.data, b.len)) == NULL ||
-	    world_load(&w, packs, layout, b.data, b.len, era, err,
+	if (world_load(&w, packs, layout, b.data, b.len, era, err,
 	    sizeof(err)) != 0) {
-		fprintf(stderr, "%s\n", layout == NULL ?
-		    "unknown PIRATESG.EXE build" : err);
+		fprintf(stderr, "%s\n", err);
 		return (1);
 	}
 	if (arrivals) {
