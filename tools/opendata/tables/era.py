@@ -148,22 +148,45 @@ SPAIN, ENGLAND, FRANCE, HOLLAND, PIRATE = range(5)
 # again as heavily, the traders swelled the career bot's crews past 300
 # men through the volunteers a capture brings (a share of the taken
 # crew), beyond any town's garrison, and stood to fight it more often.
+#
+# Guns.  A gun wanted four to six men to load, run out and train it,
+# so a ship carried the guns her crew could serve, not those her hull
+# had ports for: a coasting balandra or an aviso a pair of light
+# pieces, an island barque or a fluyt four (the Dutch built the fluyt
+# to sail with the fewest hands, and in the trade she often went
+# unarmed), an armed merchantman eight, a flota nao a dozen on a gun
+# deck crowded with cargo and passengers' baggage.  The rovers fought
+# by boarding with musketry, as Exquemelin tells of the buccaneers, and
+# carried few guns: a sloop six, a barque six, a race-built galleon or
+# a taken frigate a dozen.  The navies' frigates kept their two dozen;
+# a war galleon on a colonial station seldom carried her full
+# establishment (her heavy lower tier landed to arm the forts, her crew
+# short of the muster): some twenty-six, both scaled by the era's
+# navies.  Armed to about two thirds of what each class mounts (the
+# engine's (class + 2) x 4), every prize brought more guns than the
+# career bot's ships could mount, and it sold 800 cannon back to the
+# shipwrights on eight careers.  Now a trader or a rover offers a
+# third to a half of what her class mounts; what the bot still sells
+# (about 40 to 200 cannon on eight careers) comes mostly from the
+# navies' prizes taken late in a career.  The career bot lost fewer
+# ships too (one or two on eight careers, four or five before): with
+# fewer guns aboard it engages fewer frigates.
 SHIPS = {
-    "courier":    (0, 4, 4, 4, 4, 20),      # aviso, dispatch pinnace
-    "coaster":    (1, 4, 4, 3, 5, 50),      # coasting sloop or balandra
-    "trader":     (2, 6, 8, 4, 8, 70),      # barque in the island trade
-    "fluyt":      (3, 5, 6, 3, 10, 120),    # Dutch carrier, small crew
-    "merchant":   (4, 10, 14, 4, 12, 100),  # armed merchantman
-    "carrack":    (7, 30, 20, 5, 30, 150),  # trade galleon of the flota
-    "privateer":  (1, 18, 8, 6, 15, 35),    # sloop under letters of marque
-    "corsair":    (2, 22, 12, 6, 18, 40),   # privateer barque, commissioned
-    "flibustier": (2, 26, 12, 8, 25, 40),   # buccaneers' barque
-    "raider":     (5, 30, 18, 7, 20, 30),   # race-built galleon / frigate
-    "pirate":     (1, 16, 8, 7, 22, 30),    # pirate sloop
-    "rover":      (2, 22, 10, 7, 24, 35),   # pirate barque or brigantine
-    "freebooter": (5, 34, 20, 8, 28, 40),   # pirate in a taken frigate
+    "courier":    (0, 4, 2, 4, 4, 20),      # aviso, dispatch pinnace
+    "coaster":    (1, 4, 2, 3, 5, 50),      # coasting sloop or balandra
+    "trader":     (2, 6, 4, 4, 8, 70),      # barque in the island trade
+    "fluyt":      (3, 5, 4, 3, 10, 120),    # Dutch carrier, small crew
+    "merchant":   (4, 10, 8, 4, 12, 100),   # armed merchantman
+    "carrack":    (7, 30, 12, 5, 30, 150),  # trade galleon of the flota
+    "privateer":  (1, 18, 6, 6, 15, 35),    # sloop under letters of marque
+    "corsair":    (2, 22, 6, 6, 18, 40),    # privateer barque, commissioned
+    "flibustier": (2, 26, 6, 8, 25, 40),    # buccaneers' barque
+    "raider":     (5, 30, 12, 7, 20, 30),   # race-built galleon / frigate
+    "pirate":     (1, 16, 6, 7, 22, 30),    # pirate sloop
+    "rover":      (2, 22, 6, 7, 24, 35),    # pirate barque or brigantine
+    "freebooter": (5, 34, 12, 8, 28, 40),   # pirate in a taken frigate
     "frigate":    (5, 40, 24, 9, 8, 15),    # navy frigate
-    "warship":    (6, 60, 32, 8, 10, 20),  # war galleon / ship of the line
+    "warship":    (6, 60, 26, 8, 10, 20),   # war galleon / ship of the line
 }
 
 # The raiders whose daring grows with the era's "bold".
@@ -355,36 +378,51 @@ ERAS = {
     # a merchant stand and fight).
     # silver: the Spanish ships' gold scale; trade: the goods scale.
     # treasure: the treasure galleon's gold factor.
-    # diplomacy: the range (larger, calmer); wright: the Spanish
-    # shipwrights' tolerance, loosening as the monopoly weakens.
+    # diplomacy: the range (larger, calmer).  Each month the engine
+    # draws below it (src/sim/sim.c, diplomacy()); 21 of the draws under
+    # 28 move one pair of nations a step toward war or peace, so the
+    # politics change about 21 x 12 / range times a year, fewer when a
+    # pair is already at the end the draw pushes toward.  In the
+    # Caribbean the wars and treaties that mattered came once a year or
+    # two (in the stormy 1660s: 1664-65 Holmes and the Anglo-Dutch war,
+    # 1666 France joins it, 1667 Breda, 1668 the Triple Alliance, 1670
+    # Madrid), so the ranges run from 160 (1.6 changes a year) for the
+    # stormiest era to 255, the most the table holds (one a year), for
+    # the truce years.  At 60 to 120 the politics moved every two to
+    # four months and the era's own relations (scenarios.py) were gone
+    # within a year or two, replaced by the engine's random walk, whose
+    # draws lean toward war (12 of the 21 draws, and two war draws to
+    # one peace draw for the pairs with Holland).
+    # wright: the Spanish shipwrights' tolerance, loosening as the
+    # monopoly weakens.
     1560: dict(top={5: -1}, upwind=0.0, navy=0.8, bold=0, nerve=0,
-               silver=1.0, trade=0.8, treasure=70, diplomacy=110,
+               silver=1.0, trade=0.8, treasure=70, diplomacy=220,
                wright=30,
                why="Huguenot raids and Hawkins' voyages under an uneasy "
                "peace; Spain's monopoly strict"),
     1600: dict(top={5: -1}, upwind=0.1, navy=0.85, bold=0, nerve=0,
-               silver=1.2, trade=0.9, treasure=90, diplomacy=200,
+               silver=1.2, trade=0.9, treasure=90, diplomacy=255,
                wright=40,
                why="the Peace of London and the Twelve Years' Truce: "
                "the calmest era; silver at its height"),
     1620: dict(top={}, upwind=0.2, navy=0.9, bold=1, nerve=0,
-               silver=1.0, trade=1.0, treasure=80, diplomacy=90,
+               silver=1.0, trade=1.0, treasure=80, diplomacy=200,
                wright=55,
                why="the Dutch war resumes and the Thirty Years' War "
                "spreads to the colonies"),
     1640: dict(top={1: 1}, upwind=0.3, navy=1.0, bold=1, nerve=1,
-               silver=0.9, trade=1.1, treasure=65, diplomacy=75,
+               silver=0.9, trade=1.1, treasure=65, diplomacy=180,
                wright=75,
                why="Portugal's revolt, the English civil war, Westphalia "
                "at the end; Spain stretched thin"),
     1660: dict(top={1: 1, 4: 1}, upwind=0.4, navy=1.1, bold=2, nerve=1,
-               silver=0.8, trade=1.2, treasure=50, diplomacy=60,
+               silver=0.8, trade=1.2, treasure=50, diplomacy=160,
                wright=95,
                why="the Anglo-Dutch and Franco-Dutch wars: the stormiest "
                "politics, buccaneers at their boldest"),
     1680: dict(top={1: 1, 4: 1, 6: 1}, upwind=0.5, navy=1.2, bold=1,
                nerve=0, silver=0.75, trade=1.3, treasure=45,
-               diplomacy=120, wright=115,
+               diplomacy=240, wright=115,
                why="the truce after Nijmegen and Ratisbon before the "
                "Nine Years' War; navies hunt the pirates"),
 }
@@ -416,19 +454,24 @@ def build(year):
         "(%s); since most sails are met far from a town, where all "
         "twenty records are equally likely, the era's sea traffic is "
         "their census by flag (Spain, England, France, Holland, "
-        "pirates: %s), one pirate per region; navies scaled x%.2f, "
+        "pirates: %s), one pirate per region; each ship carries the "
+        "guns her crew could serve (a trader two to twelve, a rover six "
+        "to twelve, a third to a half of what her class mounts; a navy "
+        "frigate two dozen, a war galleon short of her establishment "
+        "on a colonial station); navies scaled x%.2f, "
         "raiders' role +%d, Spanish gold x%.2f, goods x%.2f; the "
         "treasure galleon's gold factor %d.  Enemy captain: holed, he "
         "runs; else strength = guns + crew comparison + nerve %d, and "
         "at 2 or more he fights, boarding when ahead in men, lying "
         "broadside when ahead in guns; below it he runs whatever the "
-        "hulls.  Diplomacy range %d, Spanish "
+        "hulls.  Diplomacy range %d (about %.1f changes of war or peace "
+        "a year, as the era's wars and treaties came), Spanish "
         "shipwrights' tolerance %d (loosening as Spain's monopoly "
         "weakens)." % (
             era["upwind"], era["why"],
             ", ".join(str(n) for n in census(year)), era["navy"], era["bold"],
             era["silver"], era["trade"], era["treasure"], era["nerve"],
-            era["diplomacy"], era["wright"]))
+            era["diplomacy"], 21.0 * 12 / era["diplomacy"], era["wright"]))
     return value, notes
 
 
