@@ -4674,9 +4674,12 @@ sword_tick(struct game *g)
 	if (--g->sw_wait > 0)
 		return;
 	/* A fight tick lasts 9-12 units of the sound driver's 60.9 Hz
-	 * clock: taken as frames. */
+	 * clock: taken as frames.  The original takes level 4's from
+	 * level 0's (level & 3); the engine gives it level 3's, so the
+	 * hardest level is not the slowest. */
 	t = &g->world->sword;
-	g->sw_wait = t->delay[g->sim.sword.level & 3];
+	g->sw_wait = t->delay[g->sim.sword.level > 3 ? 3 :
+	    g->sim.sword.level];
 	if (g->sw_wait < 1)
 		g->sw_wait = 1;
 	g->sw_period = g->sw_wait;

@@ -176,7 +176,8 @@ FOE_HIT = [232, 192, 148, 108, 64]
 CAUTION = [10, 8, 6, 2, 0]
 
 # Timer units (screen frames at 60 Hz, one per sword screen tick) per
-# fight tick, by level & 3; a tick lasts DELAY/60 s.  Set from how long
+# fight tick, by level (level 4 takes level 3's); a tick lasts
+# DELAY/60 s.  Set from how long
 # a player has to parry: a key is read when his move ends, so a guard
 # must be keyed a tick before the cut, and a slash's blade, raised on
 # its tick 1, gives 2 ticks to see it and press (3 from the draw back
@@ -186,9 +187,8 @@ CAUTION = [10, 8, 6, 2, 0]
 #   middle (2), with attention: 2 ticks >= r, DELAY >= 7.5, so 8;
 #   hard (3), only by anticipating: even the 3 ticks from the raised
 #   blade to the cut under r, DELAY < 5, so 4.
-# Seconds a tick: 0.167, 0.167, 0.133, 0.067.  Level 4 shares entry 0
-# and plays at the easy pace; its thresholds make it the hardest, but
-# its fights last longest (a good fencer's duel takes 1.5 min).
+# Seconds a tick: 0.167, 0.167, 0.133, 0.067.  Level 4 plays at level
+# 3's pace, its thresholds making it the hardest.
 DELAY = [10, 10, 8, 4]
 
 # Far apart (more than 59, or the opponent past the player) an attack
@@ -374,7 +374,7 @@ def build():
         "comfortably at the easy levels (a tick lasts 1/6 s), with "
         "attention at the middle level (2/15 s), and only by "
         "anticipating at level 3 (1/15 s); a lunge is hard to parry by "
-        "reaction at every level. Level 4 shares the easy pace. "
+        "reaction at every level. Level 4 plays at level 3's pace. "
         "Tuned by bot fights through flibustier-sim at every level, "
         "weapon and crew ratio, with random lunges (the career bot's) "
         "and a player who parries the line he sees raised 2 ticks late: "

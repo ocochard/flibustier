@@ -414,7 +414,7 @@ cutlass).
 | `reach_level` | 5, u8 | the player's reach, by level |
 | `reach_weapon` | 3, u8 | the player's reach, by weapon |
 | `foe_reach` | 3, u8 | the opponent's reach, by weapon |
-| `delay` | 4, i16 | the frame time, in timer units, by level `& 3` |
+| `delay` | 4, i16 | the frame time, in timer units, by level (level 4 takes level 3's) |
 | `player_edge`, `foe_edge` | i16 | the x at or past which the player is driven back, and at or below which the opponent is driven off |
 | `hit`, `foe_hit` | 5, u8 | hit thresholds by level, against `rand & 255` |
 | `far_move` | 12, u8 | the move an input becomes at a distance |

@@ -1750,7 +1750,9 @@ move) and `0x38a1a` to `0x38b99`.
   at once (move 14); one beaten by the melee falls at the next hit. The
   same holds the other way for the player.
 - **Speed:** a tick lasts 12, 11, 10 or 9 units of the game clock
-  (60.9 Hz, see the game clock) by `level & 3` (VA `0x389c4`).
+  (60.9 Hz, see the game clock) by `level & 3` (VA `0x389c4`), so level
+  4 plays at level 0's pace. Engine: level 4 takes level 3's (maintainer,
+  2026-10-30), so the hardest level is not the slowest.
 - **Debug mode:** the command-line argument `RDM` (compared exactly
   with the string at VA `0x31fe8`, VA `0x3bd`) sets the debug flag (VA
   `0x45e6c`). Then, while sailing (key table VA `0x33d90`, read by VA
