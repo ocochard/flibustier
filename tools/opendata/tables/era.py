@@ -125,6 +125,20 @@ SPAIN, ENGLAND, FRANCE, HOLLAND, PIRATE = range(5)
 # Archetypes: type, crew (fours of men), guns, role, gold, goods.  The
 # gold rewards risk: raiders carry their takings, a galleon the King's
 # silver; warships carry a pay chest and powder, traders their cargo.
+#
+# The role is both the gunnery (the reload) and the crew's worth.  A
+# navy's drilled gun crews set the top of it: a frigate 9; a war galleon
+# or ship of the line 8, her heavy guns slower to serve than a
+# frigate's, her worth aboard in her crowd of soldiers (at 10 she fired
+# her 30-odd guns every 64 ticks and, with the frigates, sank most of
+# the career bot's ships).  Rovers and privateers fought by boarding,
+# with crowded decks and few, ill-served guns: their strength is their
+# numbers (the crew) and the era's boldness (+0..2), not their gunnery,
+# so their base is 6-8 and at their boldest they are a frigate's equal,
+# the buccaneers a little more.  At 7-9 base (up to 11 with the
+# boldness), the pirate sloops outgunned frigates, sank the career
+# bot's ships twice as often as the game intends, and seldom struck
+# their colours.
 SHIPS = {
     "courier":    (0, 6, 4, 4, 4, 20),      # aviso, dispatch pinnace
     "coaster":    (1, 6, 4, 3, 5, 50),      # coasting sloop or balandra
@@ -132,15 +146,15 @@ SHIPS = {
     "fluyt":      (3, 8, 6, 3, 10, 120),    # Dutch carrier, small crew
     "merchant":   (4, 16, 14, 4, 12, 100),  # armed merchantman
     "carrack":    (7, 40, 20, 5, 30, 150),  # trade galleon of the flota
-    "privateer":  (1, 18, 8, 7, 15, 35),    # sloop under letters of marque
-    "corsair":    (2, 22, 12, 7, 18, 40),   # privateer barque, commissioned
-    "flibustier": (2, 26, 12, 9, 25, 40),   # buccaneers' barque
-    "raider":     (5, 30, 18, 8, 20, 30),   # race-built galleon / frigate
-    "pirate":     (1, 16, 8, 8, 22, 30),    # pirate sloop
-    "rover":      (2, 22, 10, 8, 24, 35),   # pirate barque or brigantine
-    "freebooter": (5, 34, 20, 9, 28, 40),   # pirate in a taken frigate
+    "privateer":  (1, 18, 8, 6, 15, 35),    # sloop under letters of marque
+    "corsair":    (2, 22, 12, 6, 18, 40),   # privateer barque, commissioned
+    "flibustier": (2, 26, 12, 8, 25, 40),   # buccaneers' barque
+    "raider":     (5, 30, 18, 7, 20, 30),   # race-built galleon / frigate
+    "pirate":     (1, 16, 8, 7, 22, 30),    # pirate sloop
+    "rover":      (2, 22, 10, 7, 24, 35),   # pirate barque or brigantine
+    "freebooter": (5, 34, 20, 8, 28, 40),   # pirate in a taken frigate
     "frigate":    (5, 40, 24, 9, 8, 15),    # navy frigate
-    "warship":    (6, 60, 32, 10, 10, 20),  # war galleon / ship of the line
+    "warship":    (6, 60, 32, 8, 10, 20),  # war galleon / ship of the line
 }
 
 # The raiders whose daring grows with the era's "bold".

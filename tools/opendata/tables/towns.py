@@ -63,9 +63,13 @@ battle.c, prison.c, src/ui/screens.c):
   the recruits.  gold: the town's treasure, about a thousand pieces of
   eight each when sacked by surprise; wealth: 0-255, 64 a level (poor,
   modest, prosperous, wealthy), the merchant's prices and the
-  shipwright's purse.  The Spanish treasure ports are rich and strong,
-  the young colonies and the buccaneer havens small and poor; the
-  table below gives every value.
+  shipwright's purse.  Forts never change in play, while the
+  garrison drifts toward the town's size, so the forts are what keeps
+  a small town on the treasure road from being taken every year:
+  Chagres, a hamlet of a few hundred under the castle San Lorenzo and
+  its batteries, counts two from 1600.  The Spanish treasure ports
+  are rich and strong, the young colonies and the buccaneer havens
+  small and poor; the table below gives every value.
 - standing, garrison, family, barmaid: 0 (the player's history with
   the town, and the mark of a villain hiding there); governor: a
   repeatable draw 0-15, as a new governor's (bit 0 a niece rather than
@@ -229,7 +233,9 @@ LINEAGE = {
                 "Portobelo (-79.65, 9.55; Morgan 1668)"),
     "chagres": (19, -79.99, 9.32, False,
                 "Chagres and its castle San Lorenzo (1597-1601), the river "
-                "road to Panama; Morgan 1670"),
+                "road to Panama, on its cliff over the river mouth with the "
+                "batteries below (two forts from 1600); Morgan took it in "
+                "1670 at the cost of a hundred men"),
     "panama": (43, -79.53, 8.95, True,
                "Panama, on the Pacific: the Camino Real's end, reached "
                "overland (Morgan 1671), rebuilt nearby 1673"),
@@ -419,7 +425,7 @@ marta      Santa Marta       spain    1   8  12   30 110 F
 hacha      Rio de la Hacha   spain    1   7  10   45 150 -
 tolu       Tolu              spain    0   3   7   10  80 F
 isthmus    Portobelo         spain    3  25  12  140 230 G
-chagres    Chagres           spain    1   8   6   10  80 -
+chagres    Chagres           spain    2   8   6   10  80 -
 panama     Panama            spain    1  25  40  160 230 G
 coro       Coro              spain    0   6  10   15  80 F
 maracaibo  Maracaibo         spain    1   8  12   30 120 -
@@ -462,7 +468,7 @@ marta      Santa Marta       spain    1   8  12   25 100 F
 hacha      Rio de la Hacha   spain    1   7  10   40 140 -
 tolu       Tolu              spain    0   3   7   10  80 F
 isthmus    Portobelo         spain    3  28  14  150 230 G
-chagres    Chagres           spain    1   8   6   10  80 -
+chagres    Chagres           spain    2   8   6   10  80 -
 panama     Panama            spain    1  28  45  170 230 G
 coro       Coro              spain    0   6  10   15  80 F
 maracaibo  Maracaibo         spain    1  10  14   40 140 -
@@ -506,7 +512,7 @@ marta      Santa Marta       spain    1   8  12   25 100 F
 hacha      Rio de la Hacha   spain    1   7  10   35 130 -
 tolu       Tolu              spain    0   3   7   10  80 F
 isthmus    Portobelo         spain    3  30  14  160 230 G
-chagres    Chagres           spain    1   8   6   10  80 -
+chagres    Chagres           spain    2   8   6   10  80 -
 panama     Panama            spain    1  30  50  180 240 G
 coro       Coro              spain    0   6  10   15  80 F
 maracaibo  Maracaibo         spain    1  12  16   50 160 -
@@ -552,7 +558,7 @@ cartagena  Cartagena         spain    5  55  50  150 230 G
 marta      Santa Marta       spain    1   8  12   20  90 F
 hacha      Rio de la Hacha   spain    1   7  10   30 120 -
 isthmus    Portobelo         spain    3  30  14  170 240 G
-chagres    Chagres           spain    1  10   6   10  80 -
+chagres    Chagres           spain    2  10   6   10  80 -
 panama     Panama            spain    1  30  60  200 245 G
 maracaibo  Maracaibo         spain    1  12  18   60 170 -
 gibraltar  Gibraltar         spain    0   6  12   50 170 -
@@ -1199,8 +1205,8 @@ def sea_steps(year, limit=800):
     """Sea route steps (8-way cells with open sea of the main water)
     between the era's coastal towns: {(a, b): steps}, table keys, from
     any arrival cell of a to the first arrival cell of b.  At the top
-    speed (6 cells per 64 ticks) and data/calendar's day, 18 steps are
-    a day."""
+    speed (6 cells per 64 ticks) and data/calendar's day of 64 ticks,
+    6 steps are a day."""
     from collections import deque
     e = _era(year)
     passable = e["water"] >= 64
