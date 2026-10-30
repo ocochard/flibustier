@@ -731,8 +731,10 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
     arrow tapped and released between two passes still counts on the
     next, as the button does (an engine choice).
   - The selected unit within 32 pixels of the fort wins (VA `0x7885`).
-  - Each unit: exposed unless in cover; speed `(9 / (terrain + 3)) x
-    2` (water counts as clear for the town), +4 for horsemen on clear
+  - Each unit: exposed unless in cover; speed `(9 / (k + 2)) x 2`
+    with `k = terrain + 1`, kept to its low 2 bits for the town's units
+    (slots 4-7): in water the attackers crawl (2) while the town's men
+    run faster than on clear ground (8 against 6), +4 for horsemen on clear
     ground, half again with morale above 16; with a goal it walks to it
     (and joins its unit there), otherwise it follows the arrows at half
     speed. Off the field it is gone. Every 8 passes, staggered, its
