@@ -116,7 +116,13 @@ build-win` runs the tests through it. On Windows, saves go to
 
 ```sh
 ./build/flibustier --data ~/games/pirates_gold [--lang eng|fre|ger, or en|fr|de]
+./build/flibustier --pack ~/flibustier-openpack     # the open game, no original data
 ```
+
+With no `--pack`, the game also looks for an `openpack` directory beside
+its program (or, in a macOS application bundle, in
+`Contents/Resources`): a package ships the program and the open pack
+together and starts with no option.
 
 The mouse works everywhere; the keys are the original's, listed screen
 by screen in [MANUAL.md](MANUAL.md) (P pauses, Q quits, V steps the

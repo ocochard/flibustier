@@ -12,6 +12,7 @@
 
 #include "assets/textfiles.h"
 #include "assets/worldfiles.h"
+#include "data/fsys.h"
 #include "data/pack.h"
 #include "play.h"
 #include "soundexport.h"
@@ -19,6 +20,33 @@
 #include "viewer.h"
 
 #define MAX_PACKS	8
+#define BUNDLED_PACK	"openpack"	/* a package's pack, by the program */
+
+/*
+ * The pack a package ships beside the program: <dir>/openpack, or in a
+ * macOS application bundle Contents/Resources/openpack.  Written to
+ * "out"; 0, or -1 when there is none.
+ */
+static int
+bundled_pack(const char *argv0, char *out, size_t len)
+{
+	static const char *const where[] = { "", "/../Resources" };
+	char dir[1024], ini[1100];
+	FILE *f;
+	size_t i;
+
+	if (fsys_program_dir(argv0, dir, sizeof(dir)) != 0)
+		return (-1);
+	for (i = 0; i < sizeof(where) / sizeof(where[0]); i++) {
+		snprintf(out, len, "%s%s/%s", dir, where[i], BUNDLED_PACK);
+		snprintf(ini, sizeof(ini), "%s/pack.ini", out);
+		if ((f = fopen(ini, "rb")) != NULL) {
+			fclose(f);
+			return (0);
+		}
+	}
+	return (-1);
+}
 
 static void
 usage(void)
@@ -29,7 +57,8 @@ usage(void)
 	    "  --data PATH   GOG DATA.DAT, its install directory, or an\n"
 	    "                extracted CD (default: $FLIBUSTIER_DATA)\n"
 	    "  --pack DIR    asset pack with a pack.ini, over the data;\n"
-	    "                later packs take priority\n"
+	    "                later packs take priority (default: the open\n"
+	    "                pack shipped beside the program, if any)\n"
 	    "  --lang LANG   eng, fre or ger, or en, fr, de, or a language\n"
 	    "                a pack adds (default: eng)\n"
 	    "  --saves DIR   saved games (default: $FLIBUSTIER_SAVES, else\n"
@@ -147,6 +176,7 @@ main(int argc, char **argv)
 	enum { PLAY, SCRIPT, VIEWER, LIST, EXPORT, EXPORT_WORLD,
 	    EXPORT_SOUNDS, EXPORT_TEXT } cmd = PLAY;
 	struct packs *packs;
+	char bundled[1100];
 	size_t npacks = 0, i, frame = 0;
 	unsigned tick = 0;
 	int shot_frames = 30, rc, a, crt = 0, debug = 0, smooth = 0;
@@ -207,6 +237,10 @@ main(int argc, char **argv)
 			usage();
 	}
 
+	/* A package plays on its own pack, with no option. */
+	if (npacks == 0 && bundled_pack(argv[0], bundled,
+	    sizeof(bundled)) == 0)
+		pack[npacks++] = bundled;
 	if ((packs = packs_new()) == NULL)
 		return (1);
 	if (data != NULL && packs_add_original(packs, data) != 0) {
@@ -221,7 +255,8 @@ main(int argc, char **argv)
 			return (1);
 		}
 	if (packs_count(packs) == 0) {
-		fprintf(stderr, "no game data: use --data or set FLIBUSTIER_DATA\n");
+		fprintf(stderr, "no game data: use --data or --pack, or set "
+		    "FLIBUSTIER_DATA\n");
 		packs_free(packs);
 		return (1);
 	}

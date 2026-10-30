@@ -53,22 +53,20 @@ accepted choice.
 
 ### P2. The engine finds its own data
 
-- **Default pack:** with no `--pack` and no `--data`, the game looks for
-  the open pack beside its program, then in the platform's data place:
-  `<prefix>/share/flibustier/openpack` (FreeBSD, Linux),
-  `Flibustier.app/Contents/Resources/openpack` (macOS), `openpack\`
-  next to `flibustier.exe` (Windows). `--data`/`FLIBUSTIER_DATA` keep
-  working, the pack still drawn over the original data when both are
-  there.
-- **Saves and settings** in the platform's place: `$XDG_DATA_HOME`
-  (FreeBSD, Linux), `~/Library/Application Support/Flibustier` (macOS),
-  `%APPDATA%\Flibustier` (Windows); `--saves` and `FLIBUSTIER_SAVES`
-  still win. Path code through `src/data/fsys.h`.
-- **A player's own data:** an in-game "use my Pirates! Gold" choice is
-  out of scope; the README explains `--data`.
+Each package holds the program and the open pack side by side (a zip
+or a self-extracting archive, a macOS application bundle), so the
+program looks for its pack beside itself (maintainer, 2026-10-30).
 
-Done when: a fresh install starts the open game with a double-click on
-every system, and a test covers the search order.
+- **Done:** with no `--pack`, the game adds the `openpack` directory
+  beside its program (`<dir>/openpack/pack.ini`), or in a macOS
+  bundle `Contents/Resources/openpack`. The program's directory comes
+  from the system (`src/data/progdir.c`: Windows, macOS, FreeBSD,
+  Linux), else `argv[0]`. `--data` and `FLIBUSTIER_DATA` still add a
+  player's own data under it; `--pack` replaces it.
+- **Saves:** still `--saves`, `FLIBUSTIER_SAVES`, else
+  `~/.local/share/flibustier/saves`; on Windows and macOS that path is
+  to move to `%APPDATA%\Flibustier` and
+  `~/Library/Application Support/Flibustier` with the packages (P3).
 
 ### P3. Install rules
 

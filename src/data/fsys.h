@@ -7,6 +7,8 @@
 #ifndef FLIBUSTIER_FSYS_H
 #define FLIBUSTIER_FSYS_H
 
+#include <stddef.h>
+
 /*
  * The few file system calls that POSIX and Windows spell differently.
  * Each returns what its POSIX namesake returns and sets errno.
@@ -20,5 +22,11 @@ int	fsys_replace(const char *from, const char *to);
 
 /* mkdtemp(): template ends in XXXXXX, replaced by the new directory's name. */
 char	*fsys_mkdtemp(char *template);
+
+/*
+ * The directory the running program is in, from the system, else from
+ * "argv0" (may be NULL): 0, or -1 when neither says or "len" is too short.
+ */
+int	fsys_program_dir(const char *argv0, char *out, size_t len);
 
 #endif

@@ -23,6 +23,7 @@ endif()
 add_library(flibustier_core STATIC
 	src/data/exe.c
 	src/data/fsys.c
+	src/data/progdir.c
 	src/data/iso9660.c
 	src/data/pack.c
 	src/data/sha256.c
