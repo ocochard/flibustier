@@ -116,7 +116,7 @@ load_screens(struct world *w, struct packs *packs, char *err, size_t errlen)
 	    errlen)) != 1)
 		return (rc);
 	return (load_screen_file(packs, "tiles15/lbtl", &w->land_screens[0][0],
-	    LAND_SCREENS, err, errlen));
+	    LBTL_SCREENS, err, errlen));
 }
 
 /* Terrain of "n" tile pixels: the class of each one's colour. */

@@ -66,7 +66,8 @@ struct sword_tables {
 #define BATTLE_SCREEN	15
 #define BATTLE_SETS	5	/* coast north, east, south, west; open */
 #define BATTLE_PIECES	5	/* four along the coast; open sea */
-#define LAND_SCREENS	61	/* LBTL.BMP: land battle screens */
+#define LAND_SCREENS	108	/* land battle screens, by town id */
+#define LBTL_SCREENS	61	/* LBTL.BMP's: the rest stay empty */
 
 /* Terrain classes of map pixel colours. */
 enum terrain {

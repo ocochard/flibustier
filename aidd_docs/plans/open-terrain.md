@@ -30,7 +30,7 @@ needs them too:
 - towns per era: coordinates, approach points, nation and the other
   fields (`towns.c`, executable era blocks);
 - 256 treasure spots, in cells;
-- the battle screens (108 sea, 61 land) and the 5 x 5 battle sets.
+- the battle screens (108 sea, 108 land: the original fills 61) and the 5 x 5 battle sets.
 
 ## Plan
 

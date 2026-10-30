@@ -72,8 +72,8 @@ battle.c, prison.c, src/ui/screens.c):
   a daughter; the bits 0x20-0x80 are the player's doings).
 - id: the town's battle screens (screens/sea layer id, the land
   battle's screens/land layer id, both indexed by it), the same in every
-  era: 0-60 for the towns that last, 61 and up (sea screens to 107, the
-  land battle on screen 0) for the early footholds only.  Inland towns use the ids the engine nudges toward the right
+  era: 0-60 for the towns that last, 61 and up (screens to 107) for the
+  early footholds only.  Inland towns use the ids the engine nudges toward the right
   coast when the player leaves their prison (src/sim/prison.c): Panama
   43 (20 cells north, to the Caribbean side of the isthmus), Granada 45
   (50 cells east, past Lake Nicaragua); the other inland towns avoid
@@ -325,8 +325,7 @@ LINEAGE = {
                 "STRETCH: Dutch from 1560"),
     "bonaire": (60, -68.27, 12.15, False,
                 "Bonaire, Dutch from 1636: salt and goats"),
-    # The early footholds (ids past the land battle screens: their land
-    # battles use screen 0)
+    # The early footholds (ids past the original's 61 towns)
     "chfort": (61, -80.68, 32.32, False,
                "Charlesfort, Ribault's Huguenot post on Port Royal Sound, "
                "1562-63"),
