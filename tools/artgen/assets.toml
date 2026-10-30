@@ -1996,9 +1996,10 @@ pictures = [
 # The land battle's screen: the battle area is the sea battle's tiles,
 # the panel the sea battle's with a musket for the guns; the game writes
 # the sides' names (y 9, 354), morale (55, 400), men and muskets (85,
-# 429) and ground (113, 457), and draws the terrain pictures.  The men
-# and muskets are numbers written at x 512 and 590, so their pictures
-# end a little before them.
+# 429) and ground (113, 457), and draws the terrain pictures in its two
+# windows; a side without one shows the window's sky, as the original.
+# The men and muskets are numbers written at x 512 and 590, so their
+# pictures end a little before them.
 [[asset]]
 id = "pic/lbat"
 file = "art/lbat.png"
@@ -2017,6 +2018,20 @@ light.
 [[asset.pieces]]
 rect = [480, 0, 8, 480]		# the panel's dark left edge, as the original's
 colour = "#2A1A0C"
+[[asset.pieces]]
+rect = [489, 137, 145, 86]	# a terrain picture's window
+prompt = """
+Photograph of a bright tropical sky with big white cumulus clouds over a
+calm deep blue sea, the sea's horizon low, a little above the bottom
+edge, nothing on the water.
+"""
+[[asset.pieces]]
+rect = [489, 260, 145, 86]	# a terrain picture's window
+prompt = """
+Photograph of a bright tropical sky with big white cumulus clouds over a
+calm deep blue sea, the sea's horizon low, a little above the bottom
+edge, nothing on the water.
+"""
 [[asset.pieces]]
 rect = [490, 79, 19, 21]	# the men, left of their number
 prompt = """
