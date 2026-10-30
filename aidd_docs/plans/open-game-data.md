@@ -203,14 +203,13 @@ original's (decision 1).
   the route targets.
 - **The open world, merged as one** (the map, the towns, the calendar,
   the scenarios, the battle screens, the treasure spots and battle sets
-  and the open-shallows tiles must reach the pack together: each alone,
-  over the original's data, would not match the rest). Checklist for the
-  merge:
-  - merge the pack's `open-shallows` branch (tiles 40-55);
-  - regenerate the tile masks, then every `tools/opendata` table;
-  - the open text's expedition menu (CSTN, "1569: John Hawkins") says
-    1568 in the three languages, as the open scenario's date;
-  - ask the art session to redraw `pic/citymap` from the open map.
+  and the open-shallows tiles had to reach the pack together: each
+  alone, over the original's data, would not match the rest). Merged
+  into the pack (2026-10-30), with the open-shallows tiles, the tile
+  masks and every table regenerated, and the open text's expedition
+  menu dating Hawkins 1568 as his scenario. Left: `pic/citymap`, the
+  Map of the Caribbean, redrawn from the open map (asked of the art
+  session).
 - **Balance:** the career bot (`tools/career-bot`) plays full careers
   on the open data; its `ANOMALY` lines and journals guide tuning.
 - Size: large, and mostly design and play-testing, not code.
