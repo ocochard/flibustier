@@ -1996,7 +1996,9 @@ pictures = [
 # The land battle's screen: the battle area is the sea battle's tiles,
 # the panel the sea battle's with a musket for the guns; the game writes
 # the sides' names (y 9, 354), morale (55, 400), men and muskets (85,
-# 429) and ground (113, 457), and draws the terrain pictures.
+# 429) and ground (113, 457), and draws the terrain pictures.  The men
+# and muskets are numbers written at x 512 and 590, so their pictures
+# end a little before them.
 [[asset]]
 id = "pic/lbat"
 file = "art/lbat.png"
@@ -2016,25 +2018,25 @@ light.
 rect = [480, 0, 8, 480]		# the panel's dark left edge, as the original's
 colour = "#2A1A0C"
 [[asset.pieces]]
-rect = [490, 79, 24, 21]	# the men
+rect = [490, 79, 19, 21]	# the men, left of their number
 prompt = """
 Photograph, straight on, of two crossed steel cutlasses with brass hilts
 lying on a polished honey-coloured oak board, filling the image.
 """
 [[asset.pieces]]
-rect = [566, 79, 26, 21]	# the muskets
+rect = [566, 79, 21, 21]	# the muskets, left of their number
 prompt = """
 Photograph, straight on, of a 17th-century flintlock musket lying
 diagonally on a polished honey-coloured oak board, filling the image.
 """
 [[asset.pieces]]
-rect = [490, 423, 24, 21]	# the men
+rect = [490, 423, 19, 21]	# the men, left of their number
 prompt = """
 Photograph, straight on, of two crossed steel cutlasses with brass hilts
 lying on a polished honey-coloured oak board, filling the image.
 """
 [[asset.pieces]]
-rect = [566, 423, 26, 21]	# the muskets
+rect = [566, 423, 21, 21]	# the muskets, left of their number
 prompt = """
 Photograph, straight on, of a 17th-century flintlock musket lying
 diagonally on a polished honey-coloured oak board, filling the image.
