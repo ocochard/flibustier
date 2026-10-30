@@ -23,16 +23,36 @@ Terrain values are the engine's (src/assets/world.h): 1 shallows, 2
 land, 3 sea.  Land is Natural Earth's 1:10m land plus its minor
 islands, filled at pixel centres with an even-odd scanline rule; an
 island under MIN_ISLAND_PX pixels is stamped as a 2 x 2 block so the
-Keys, the Bahama cays and the Grenadines survive.  Shallows are the
-coastal shoals and reefs a big ship wrecks on (src/sim/sim.c, reef()),
-not the whole shelf: water shallower than 200 m (outside the 1:10m 200 m
-bathymetry polygons) within SHELF_PX of land, plus every water pixel
-within FRINGE_PX of land, so each coast has a fringe.  Distances are
-octagonal (alternating square and diamond steps), close to round.
-Where the shelf band would close a harbour's only approach, a CHANNELS
-line (the real navigable channel, in degrees) is cut through it:
-shallows within CHANNEL_PX of the line become sea, fringe included (the
-Maracaibo strait is narrower than two fringes).
+Keys, the Bahama cays and the Grenadines survive.
+
+Shallows are a rare hazard, not a coastal band: a ship bigger than a
+sloop that touches them is wrecked (src/sim/sim.c, reef()), so they are
+only the famous reefs and banks a careful captain steers around, drawn
+by hand in REEFS (degrees, from the charts' well known positions): the
+Florida reef seaward of the Keys and the Dry Tortugas, the rims of the
+Bahama banks (Cay Sal, the Bimini edge, the Little Bahama Bank's
+corner, the Abaco reef), Hogsty Reef, the Mouchoir, Silver and Navidad
+banks north of Hispaniola, the Colorados off western Cuba, the
+Jardines del Rey and de la Reina reefs, the Campeche Bank's atolls
+(Alacranes, Arenas, Triangulos, Arcas), Chinchorro and Lighthouse Reef
+off Yucatan, the Mosquito Cays, Quita Sueno, Serrana, Serranilla and
+Roncador, the Pedro and Morant cays south of Jamaica, the Grenadines'
+reefs from the Tobago Cays to Mustique, Los Roques and Las Aves, and the
+capes' shoals of Canaveral, Frying Pan and Lookout.  Each is a
+polyline with a half-width in pixels (one point: a round spot), at
+least REEF_MIN_PX so the map's tiles can show it.  A reef keeps
+SHORE_PX off every land pixel: the shore itself is beach and open
+water, sailable up to the land, where a ship lands once its centre
+touches it.  None lies near a harbour: tables/towns.py checks that no
+shallows reach within HARBOUR cells of a town or its arrival cells,
+and every reef sits well clear of the era's ports and their routes in.
+(The Anegada Horseshoe, Bermuda's reefs and the Belize barrier reef
+are left out: they lie across the approaches to Tortola, Bermuda and
+Belize.)  Distances from a reef's line are Euclidean, from land octagonal
+(alternating square and diamond steps).  Where a channel must stay
+open to large ships whatever the reefs, a CHANNELS line (the real
+navigable channel, in degrees) clears shallows within CHANNEL_PX of it
+(the Maracaibo strait).
 
     lonlat_to_world(lon, lat) -> (x, y)    world pixels, floats
     world_to_lonlat(x, y) -> (lon, lat)
@@ -59,9 +79,69 @@ LON_E = -58.0
 LAT_S = 7.0
 
 MIN_ISLAND_PX = 4
-FRINGE_PX = 3
-SHELF_PX = 24
+SHORE_PX = 4
+REEF_MIN_PX = 6
 CHANNEL_PX = 6
+# The reefs and banks: name -> (half-width in pixels, [(lon, lat)...]).
+# Lines follow the reef crest or the bank's rim; a single point is a
+# round spot (an atoll or a cay's reef).
+REEFS = {
+    # The Florida reef tract, a few miles off the Keys from Fowey Rocks
+    # to Sand Key, the Hawk Channel open inside it; the Tortugas.
+    "florida reef": (6, [(-80.10, 25.59), (-80.17, 25.25),
+                         (-80.37, 25.00), (-80.62, 24.84),
+                         (-81.05, 24.62), (-81.40, 24.53),
+                         (-81.88, 24.44)]),
+    "marquesas": (11, [(-82.20, 24.56), (-82.05, 24.55)]),
+    "dry tortugas": (10, [(-82.95, 24.65), (-82.82, 24.62)]),
+    # The Bahama banks' edges.
+    "cay sal bank": (6, [(-80.45, 23.58), (-80.47, 23.80),
+                         (-80.38, 23.98), (-80.12, 24.10),
+                         (-79.95, 24.05)]),
+    "bimini edge": (6, [(-79.30, 25.78), (-79.27, 25.45),
+                        (-79.20, 25.10), (-79.13, 24.90)]),
+    "little bahama bank": (6, [(-79.05, 26.95), (-79.00, 27.25),
+                               (-78.75, 27.35)]),
+    "abaco reef": (6, [(-77.95, 26.98), (-77.55, 26.72),
+                       (-77.25, 26.45)]),
+    "hogsty reef": (12, [(-73.85, 21.68)]),
+    # North of Hispaniola, where the plate fleet's ships were lost.
+    "mouchoir bank": (7, [(-70.95, 21.05), (-70.65, 21.12)]),
+    "silver bank": (7, [(-70.05, 20.40), (-69.85, 20.50),
+                        (-69.55, 20.40)]),
+    "navidad bank": (10, [(-68.95, 20.00), (-68.75, 20.10)]),
+    # Cuba.
+    "colorados": (6, [(-84.40, 22.62), (-84.05, 22.80),
+                      (-83.65, 22.93), (-83.35, 23.00)]),
+    "jardines del rey": (6, [(-79.60, 23.10), (-79.00, 22.85),
+                             (-78.40, 22.62), (-77.80, 22.38)]),
+    "jardines de la reina": (6, [(-79.05, 20.95), (-78.65, 20.78),
+                                 (-78.25, 20.65), (-77.95, 20.60)]),
+    # The Campeche Bank's atolls and Yucatan's.
+    "alacranes": (16, [(-89.76, 22.58), (-89.62, 22.42)]),
+    "cayo arenas": (12, [(-91.40, 22.12)]),
+    "triangulos": (7, [(-92.23, 20.95)]),
+    "cayo arcas": (12, [(-91.98, 20.20)]),
+    "chinchorro": (9, [(-87.40, 18.75), (-87.33, 18.40)]),
+    "lighthouse reef": (6, [(-87.55, 17.50), (-87.53, 17.15)]),
+    # The Mosquito Coast's banks and the cays east of them.
+    "mosquito cays": (10, [(-82.90, 14.50), (-82.70, 14.30)]),
+    "quita sueno": (6, [(-81.15, 14.15), (-81.12, 14.50)]),
+    "serrana": (8, [(-80.30, 14.25), (-80.20, 14.45)]),
+    "serranilla": (8, [(-79.90, 15.80), (-79.75, 15.90)]),
+    "roncador": (12, [(-80.07, 13.57)]),
+    "pedro cays": (8, [(-77.80, 17.00)]),
+    "morant cays": (8, [(-75.98, 17.41)]),
+    # The islands.
+    "grenadines reefs": (8, [(-61.29, 12.70), (-61.17, 12.86)]),
+    "los roques": (10, [(-66.85, 11.88), (-66.62, 11.85)]),
+    "aves de barlovento": (11, [(-67.48, 12.00), (-67.40, 11.99)]),
+    "aves de sotavento": (11, [(-67.63, 12.08), (-67.62, 12.01)]),
+    # The capes' shoals of the mainland coast.
+    "canaveral shoals": (6, [(-80.52, 28.45), (-80.35, 28.30)]),
+    "frying pan shoals": (6, [(-77.98, 33.82), (-77.75, 33.60)]),
+    "lookout shoals": (6, [(-76.53, 34.58), (-76.40, 34.42)]),
+}
 # Navigable channels through the shelf band, as (lon, lat) polylines.
 CHANNELS = {
     # Lake Maracaibo to the Gulf of Venezuela: the strait past
@@ -70,7 +150,7 @@ CHANNELS = {
                   (-71.57, 10.72), (-71.61, 10.82), (-71.60, 11.02),
                   (-71.65, 11.11), (-71.69, 11.29)],
 }
-RASTER_VERSION = 2
+RASTER_VERSION = 3
 
 SHALLOWS, LAND, SEA = 1, 2, 3
 
@@ -83,8 +163,6 @@ SOURCES = {
              "1ac90796408bc6ad6911d69448485d3c4dbf2190370080368a09976e1c9f7416"),
     "minor_islands": (_NE + "ne_10m_minor_islands.geojson",
                       "8c933ca7a4760256bdc46408355706e39764b0fa01c160c28888b90b4faec29f"),
-    "deep": (_NE + "ne_10m_bathymetry_K_200.geojson",
-             "5c6c182da8608153ea2dce22dfb32c987e5390e0bd4a122266143ba181a7b636"),
 }
 
 # Mercator: px per radian of longitude, and the northern edge.
@@ -277,25 +355,42 @@ def _dilate(mask, radius):
     return out
 
 
-def channel_band():
-    """The pixels within CHANNEL_PX of a CHANNELS line."""
+def _band(lines):
+    """The pixels within each (half-width, polyline) of "lines" of the
+    line; a one-point line is a round spot."""
     band = np.zeros((WORLD_H, WORLD_W), dtype=bool)
-    r = CHANNEL_PX
-    for line in CHANNELS.values():
+    for r, line in lines:
         x, y = lonlat_to_world(np.array([p[0] for p in line]),
                                np.array([p[1] for p in line]))
+        x, y = np.atleast_1d(x), np.atleast_1d(y)
+        if len(x) == 1:
+            x, y = np.repeat(x, 2), np.repeat(y, 2)
         for ax, ay, bx, by in zip(x[:-1], y[:-1], x[1:], y[1:]):
             x0 = max(int(min(ax, bx)) - r - 1, 0)
             y0 = max(int(min(ay, by)) - r - 1, 0)
             x1 = min(int(max(ax, bx)) + r + 2, WORLD_W)
             y1 = min(int(max(ay, by)) + r + 2, WORLD_H)
+            if x0 >= x1 or y0 >= y1:
+                continue
             py, px = np.mgrid[y0:y1, x0:x1] + 0.5
             dx, dy = bx - ax, by - ay
             u = np.clip(((px - ax) * dx + (py - ay) * dy) /
-                        (dx * dx + dy * dy), 0, 1)
+                        max(dx * dx + dy * dy, 1e-9), 0, 1)
             d2 = (px - ax - u * dx) ** 2 + (py - ay - u * dy) ** 2
             band[y0:y1, x0:x1] |= d2 <= r * r
     return band
+
+
+def channel_band():
+    """The pixels within CHANNEL_PX of a CHANNELS line."""
+    return _band([(CHANNEL_PX, line) for line in CHANNELS.values()])
+
+
+def reef_band(name):
+    """The pixels a REEFS entry covers, before the shore and channels
+    are cleared."""
+    r, line = REEFS[name]
+    return _band([(r, line)])
 
 
 def _channels(t):
@@ -307,7 +402,8 @@ def _key():
     h = hashlib.sha256()
     h.update(json.dumps([sorted((k, v[1]) for k, v in SOURCES.items()),
                          WORLD_W, WORLD_H, LON_W, LON_E, LAT_S,
-                         MIN_ISLAND_PX, FRINGE_PX, SHELF_PX,
+                         MIN_ISLAND_PX, SHORE_PX, REEF_MIN_PX,
+                         sorted(REEFS.items()),
                          CHANNEL_PX, sorted(CHANNELS.items()),
                          RASTER_VERSION]
                         ).encode())
@@ -316,10 +412,13 @@ def _key():
 
 def _build():
     land, reps = _fill(["land", "minor_islands"], True)
-    deep, _ = _fill(["deep"], False)
+    for name, (r, line) in REEFS.items():
+        if r < REEF_MIN_PX:
+            raise SystemExit("_geo: reef %s narrower than %d pixels"
+                             % (name, REEF_MIN_PX))
+    reefs = _band(REEFS.values())
     t = np.full((WORLD_H, WORLD_W), SEA, dtype=np.uint8)
-    t[~deep & _dilate(land, SHELF_PX)] = SHALLOWS
-    t[_dilate(land, FRINGE_PX)] = SHALLOWS
+    t[reefs & ~_dilate(land, SHORE_PX)] = SHALLOWS
     t[land] = LAND
     _channels(t)
     return t, reps

@@ -30,14 +30,14 @@ Rico's islets (Mona, Desecheo, Vieques, Caja de Muertos), around
 Hispaniola (Saona, Samana, La Isabela, Tortuga's west end, Gonave,
 Ile-a-Vache, the Tiburon peninsula), Cuba's cays and bays (Isla de
 Pinos, Jardines de la Reina, Cayo Romano, the Colorados), Jamaica's
-capes and bays (Negril, Morant Point), the Caymans, San Andres, the Swan
-islands, the Bahamas and the Caicos, and the Atlantic shore from
-Biscayne Bay to Cape Fear.  Bigger or more storied haunts get more spots
+capes and bays (Negril, Morant Point), the Caymans, the Bahamas and the
+Caicos, and the Atlantic shore from Biscayne Bay to Cape Fear.  Bigger or more storied haunts get more spots
 (Isla de Pinos 5, Andros 4). The tiniest islets (the Virgin islands but
 Anegada and St Croix, Saba, Navassa, the lower Keys and the Dry
-Tortugas, Turneffe, Cayo Largo) are left out: the open map's 16-pixel
-cells, about 7 km, draw them as a few pixels of land that no cell can
-hold as a dig site, and their spots went to the larger islands' shores.
+Tortugas, Turneffe, Cayo Largo, Los Testigos, San Andres, the Swan
+islands) are left out: the open map's 16-pixel cells, about 7 km, draw
+them as a few pixels of land that no cell can hold as a dig site, and
+their spots went to the larger islands' shores.
 
 Snapping.  Each anchor goes through _geo.lonlat_to_world() and takes the
 fitting cells of the map nearest to it, up to 7 cells (50 km) away, as
@@ -46,11 +46,12 @@ choose first, so a lone cay keeps its cell before a neighbour's coast
 spreads over it.  A cell fits when, in every era's map (the bare map,
 world_map.base_grid(), with that era's town houses drawn on it,
 tables/towns.py): an eighth of its pixels or more are land a landing
-party can stand on (land 4-connected to water that is itself joined to
-the open sea, so a ship reaches the shore), as the towns' coastal cells
-(the map's tiles draw a small cay as a corner of land, never a whole
-cell), a cell less than half land counting one cell farther, so a bigger
-island's solid ground wins over its fringe; a cell with open sea of the
+party can stand on (land 4-connected to sea that is itself joined to
+the open sea without crossing shallows, so any ship reaches the shore
+without passing a reef), as the towns' coastal cells (the map's tiles
+draw a small cay as a corner of land, never a whole cell), a cell less
+than half land counting one cell farther, so a bigger island's solid
+ground wins over its fringe; a cell with open sea of the
 main water (64 pixels or more, as the towns' reach) lies within 3 cells,
 so the spot is a short walk from where a ship can come in and the map's
 40 x 30 cells always show a shoreline; it is 2 cells or more (Chebyshev)
@@ -129,9 +130,9 @@ ANCHORS = [
     ("Ambergris Caye", -87.95, 18.00, 1),
     ("South Water Caye", -88.08, 16.80, 1),
     ("Punta Gorda", -88.80, 16.10, 1),
-    ("Roatan", -86.55, 16.35, 1),
+    ("Roatan", -86.55, 16.35, 2),
     ("Utila", -86.90, 16.10, 1),
-    ("Guanaja", -85.88, 16.45, 1),
+    ("Guanaja", -85.88, 16.45, 2),
     ("Cayos Cochinos", -86.50, 15.95, 1),
     ("Cabo Tres Puntas", -88.60, 15.97, 1),
     ("Rio Aguan", -85.65, 15.95, 1),
@@ -176,10 +177,9 @@ ANCHORS = [
     ("La Tortuga", -65.30, 10.95, 1),
     ("La Blanquilla", -64.60, 11.85, 1),
     ("Cubagua", -64.20, 10.80, 1),
-    ("Margarita", -63.90, 11.15, 1),
+    ("Margarita", -63.90, 11.15, 2),
     ("Araya", -63.95, 10.55, 1),
     ("Carupano", -63.25, 10.67, 1),
-    ("Los Testigos", -63.10, 11.38, 1),
     ("Paria", -62.50, 10.70, 1),
     ("Chacachacare", -61.75, 10.68, 1),
     ("Icacos Point", -61.92, 10.06, 1),
@@ -280,8 +280,6 @@ ANCHORS = [
     ("Bluefields Bay", -78.03, 18.17, 1),
     ("Grand Cayman", -81.25, 19.32, 2),
     ("Little Cayman", -80.05, 19.69, 1),
-    ("San Andres", -81.70, 12.55, 1),
-    ("Swan Islands", -83.92, 17.40, 1),
     # The Bahamas and the Turks and Caicos.
     ("Grand Bahama", -78.30, 26.65, 2),
     ("Abaco", -77.10, 26.50, 3),
@@ -404,7 +402,7 @@ def era_fit(year):
     ox, oy = (int(v) for v in _geo.lonlat_to_world(*towns.OPEN_SEA))
     seed = np.zeros_like(land)
     seed[oy, ox] = True
-    water = _components(~land, seed)
+    water = _components(t == world_map.SEA, seed)
     stand = _components(land, _shift_or(water))
     stand_n = towns.per_cell(stand)
     near_sea = _grow(e["water"] >= OPEN, REACH)

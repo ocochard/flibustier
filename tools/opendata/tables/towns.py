@@ -91,14 +91,21 @@ battle.c, prison.c, src/ui/screens.c):
   the town's arrival cells, heading 0-7 (x 32) to the open water: of
   the nearest such cells, the first with 16 cells of open sea straight
   ahead (else the longest such run), so a ship sailing straight out
-  meets no shallows; 0, 0 for inland towns.
+  meets no shallows; 0, 0 for inland towns.  Where a town's arrival
+  cells lie across a strait (Maracaibo, between its lake and the Gulf),
+  only the cells joined to the open sea without crossing any town's
+  arrival cells are taken, so a ship leaving for the open sea does not
+  sail straight back into the town it left.
 - citymap [x, y]: the town's dot on the Map of the Caribbean, which
   shows the whole world at 0.75 from the screen's top-left: the cell
   times 0.75, rounded.
 - arrival: the cells where a ship or a party reaches the town: the
   3 x 3 cells around each of its map tiles, and for a coastal town,
   when those hold no open sea joined to the main water, the cells on
-  toward it (at most 16).  No cell belongs to two towns.
+  toward it (at most 16).  No cell belongs to two towns.  No shallows
+  (the map's reefs) lie within HARBOUR (8) cells of a town's tiles or
+  arrival cells, so its approaches are safe for every ship; the build
+  stops otherwise.
 
 Placement.  Each town's real coordinates go through
 _geo.lonlat_to_world() and snap to the nearest fitting cell of the
@@ -153,6 +160,8 @@ CITY = 40               # citizens from which a town gets a second house
 ARRIVALS = 16
 REACH = 4               # cells from a coastal town to open sea, at most
 RUN_OK = 16             # open sea cells straight out of a harbour mouth
+HARBOUR = 8             # cells around a town and its arrival cells kept
+                        # free of shallows
 COAST_TILES = tuple(range(68, 80))
 LAND_TILES = (123, 124, 125, 126, 127, 255)
 # A point of the open Caribbean, in the main water.
@@ -979,6 +988,18 @@ def _era(year):
                 owner[c] = key
         if not any(water[cy, cx] >= 64 for cx, cy in cells):
             problems.append("%s: no open sea at its arrival cells" % key)
+    shoal = per_cell(world_map.terrain_of(grid) == SHALLOWS) > 0
+    for r in rows:
+        near = [(x, y) for x, y, _ in tiles[r["key"]]] + \
+            arrival[r["key"]]
+        for cx, cy in near:
+            win = shoal[max(cy - HARBOUR, 0):cy + HARBOUR + 1,
+                        max(cx - HARBOUR, 0):cx + HARBOUR + 1]
+            if win.any():
+                problems.append("%s: shallows within %d cells of its "
+                                "cell %d,%d" % (r["key"], HARBOUR, cx, cy))
+                break
+    outside = _outside(water, owner)
     records = []
     sea_cells = {}
     for r in rows:
@@ -988,7 +1009,8 @@ def _era(year):
         if inl:
             sea, d = [0, 0, 0], _inland_dir(water, x, y)
         else:
-            sea, d = _sea_cell(water, owner, x, y, arrival[key])
+            sea, d = _sea_cell(water, owner, x, y, arrival[key],
+                               outside)
             if sea is None:
                 problems.append("%s: no open sea to leave by" % key)
                 sea, d = [0, 0, 0], (0, 1)
@@ -1055,7 +1077,30 @@ def _full_sea(water, x, y):
     return 0 <= x < W and 0 <= y < H and water[y, x] == SIDE * SIDE
 
 
-def _sea_cell(water, owner, x, y, mine):
+def _outside(water, owner):
+    """The cells with open sea (64 main water pixels or more, as the
+    sea routes) joined to the open sea, 8-way, without crossing any
+    town's arrival cells."""
+    from collections import deque
+    ox, oy = _geo.lonlat_to_world(*OPEN_SEA)
+    start = (int(ox) // SIDE, int(oy) // SIDE)
+    out = np.zeros((H, W), dtype=bool)
+    out[start[1], start[0]] = True
+    q = deque([start])
+    while q:
+        cx, cy = q.popleft()
+        for dx, dy in DIRS:
+            nx, ny = cx + dx, cy + dy
+            if not (0 <= nx < W and 0 <= ny < H) or out[ny, nx]:
+                continue
+            if water[ny, nx] < 64 or (nx, ny) in owner:
+                continue
+            out[ny, nx] = True
+            q.append((nx, ny))
+    return out
+
+
+def _sea_cell(water, owner, x, y, mine, outside):
     """The nearest cell of open sea outside every arrival cell, reached
     from the town's arrival cells ("mine") through cells with main
     water, and the 8-way heading out from it that keeps longest to open
@@ -1082,6 +1127,9 @@ def _sea_cell(water, owner, x, y, mine):
                               n[1], n[0]))
     if not found:
         return None, None
+    # Toward the open sea, not into a lake behind the town.
+    if any(outside[sy, sx] for _, _, sy, sx in found):
+        found = [f for f in found if outside[f[2], f[3]]]
     # Of the nearest few, the first with a clear run out to sea (a
     # straight course of RUN_OK cells of open sea); else the longest.
     best = None

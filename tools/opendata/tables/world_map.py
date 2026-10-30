@@ -18,8 +18,11 @@ tiles.  Left out: the tiles with a building (68-79, 123-127, 255: towns
 belong to the town step, which overlays them per era) and the spare sea
 tiles with white surf (56-59: their mask is open sea, so they would
 show breakers where a ship sails freely).  Tiles 40-55 are open
-shallows (solid, edges and corners toward the sea) for the shelf away
-from the shore.
+shallows (solid, edges and corners toward the sea) for the reefs and
+banks (tables/_geo.py, REEFS), the map's only shallows: the shore halo
+the coast tiles paint is sea in their terrain (tables/tile_terrain.py),
+so every beach can be sailed up to.  Every reef must show on the map,
+some of its pixels drawn with shallows tiles, or the build stops.
 
 Matching.  Each cell's 16 x 16 block of the raster is compared pixel by
 pixel with each tile's mask; a pixel that is land on one side and sea
@@ -29,7 +32,9 @@ plain sea tile, a cell with no water a land tile; a cell with
 shallows but no land is matched like a coast, among the tiles with no
 land (no stray land at sea).  A cell a navigable channel crosses
 (tables/_geo.py, CHANNELS) takes no tile with shallows, so the channel
-stays open to every ship.
+stays open to every ship, and nor does a cell with no shallows in the
+raster: the shallows are the reefs alone, never a stand-in for a
+sliver of land.
 
 Seams.  A second pass (iterated conditional modes, cells in two
 interleaved halves, until nothing changes) lets each coastal cell take,
@@ -161,6 +166,9 @@ def _solve():
         .any(axis=(1, 3)).ravel()
     t_shallows = (tm == SHALLOWS).any(axis=1)
     data[np.ix_(c_channel[coast], t_shallows)] = np.inf
+    # A cell with no reef: no tile with shallows (else a shallows corner
+    # would stand in for a sliver of land, cheaper than sea).
+    data[np.ix_(~c_shallows[coast], t_shallows)] = np.inf
     best = data.min(axis=1, keepdims=True)
     tol = np.maximum(best * TOLERANCE, TOLERANCE_MIN)
     allowed = data <= best + tol
@@ -232,9 +240,17 @@ def _solve():
             if not allowed[i].any():
                 allowed[i] = t_land
             forced += 1
+    shown = (m[g2] == SHALLOWS).transpose(0, 2, 1, 3) \
+        .reshape(H * SIDE, W * SIDE)
+    hidden = [name for name in _geo.REEFS
+              if not (shown & _geo.reef_band(name)).any()]
+    if hidden:
+        raise SystemExit("world_map: reefs the tiles do not show: %s"
+                         % ", ".join(hidden))
     return {"grid": g2.astype(np.uint8), "masks": m, "raster": raster,
             "forced": forced, "sweeps": sweeps, "coast_n": len(coast),
-            "lost": len(lost_islands())}
+            "lost": len(lost_islands()),
+            "shallows": float(shown.mean())}
 
 
 def solved():
@@ -291,8 +307,10 @@ def notes():
     s = solved()
     parts = __doc__.split("\n\n")[1:]
     text = " ".join(" ".join(p.split()) for p in parts)
-    return "%s %d coastal cells, %d islands restored, %d seam sweeps; %s." \
-        % (text, s["coast_n"], s["forced"], s["sweeps"], fidelity()[1])
+    return ("%s %d coastal cells, %d islands restored, %d seam sweeps, "
+            "%.3f%% of the pixels shallows; %s."
+            % (text, s["coast_n"], s["forced"], s["sweeps"],
+               100.0 * s["shallows"], fidelity()[1]))
 
 
 def era_grid(year):

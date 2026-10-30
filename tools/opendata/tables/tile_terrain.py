@@ -28,6 +28,11 @@ the coastline, so frame 0 stands for all):
 
 The battle sheet's water is all sea: its shore halo is where ships come
 in to land, and shallows there would wreck them in front of every fort.
+On the map sheet only the tiles with no land keep their shallows (the
+open-shallows tiles, which draw the reefs and banks); a coast or town
+tile's halo is sea, so a ship sails up to any beach and lands there
+instead of wrecking on the way, and the reefs (tables/_geo.py) are the
+only shallows of the sailing map.
 
 A terrain pixel (640x480) covers 2.25 x 2.25 art pixels at 1080p; it
 takes the class with the largest covered area, ties going to land, then
@@ -186,9 +191,16 @@ def tiles_of(name, side):
     return _cache[name]
 
 
+def map_tiles():
+    """The map sheet's tiles, shallows kept only where there is no
+    land."""
+    return [(f, np.where((cls == SHALLOWS) & (cls == LAND).any(), SEA, cls))
+            for f, cls in tiles_of("map.png", 16)]
+
+
 def map_terrain():
-    tiles = tiles_of("map.png", 16)
-    return mask_png(tiles, 16), notes(2, 3, 5) + " Map: " + counts(tiles) + "."
+    tiles = map_tiles()
+    return mask_png(tiles, 16), notes(2, 3, 4, 5) + " Map: " + counts(tiles) + "."
 
 
 def battle_terrain():
