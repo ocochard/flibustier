@@ -139,13 +139,22 @@ SPAIN, ENGLAND, FRANCE, HOLLAND, PIRATE = range(5)
 # boldness), the pirate sloops outgunned frigates, sank the career
 # bot's ships twice as often as the game intends, and seldom struck
 # their colours.
+#
+# Traders sailed lean, their owners paying every hand: a coasting
+# balandra or an aviso a dozen or two men, an island barque two dozen,
+# a Dutch fluyt famously a dozen to twenty, an armed merchantman of
+# 200-300 tons thirty to fifty, a great nao of the flota a hundred and
+# more with her passengers.  The crews below are those.  Manned half
+# again as heavily, the traders swelled the career bot's crews past 300
+# men through the volunteers a capture brings (a share of the taken
+# crew), beyond any town's garrison, and stood to fight it more often.
 SHIPS = {
-    "courier":    (0, 6, 4, 4, 4, 20),      # aviso, dispatch pinnace
-    "coaster":    (1, 6, 4, 3, 5, 50),      # coasting sloop or balandra
-    "trader":     (2, 10, 8, 4, 8, 70),     # barque in the island trade
-    "fluyt":      (3, 8, 6, 3, 10, 120),    # Dutch carrier, small crew
-    "merchant":   (4, 16, 14, 4, 12, 100),  # armed merchantman
-    "carrack":    (7, 40, 20, 5, 30, 150),  # trade galleon of the flota
+    "courier":    (0, 4, 4, 4, 4, 20),      # aviso, dispatch pinnace
+    "coaster":    (1, 4, 4, 3, 5, 50),      # coasting sloop or balandra
+    "trader":     (2, 6, 8, 4, 8, 70),      # barque in the island trade
+    "fluyt":      (3, 5, 6, 3, 10, 120),    # Dutch carrier, small crew
+    "merchant":   (4, 10, 14, 4, 12, 100),  # armed merchantman
+    "carrack":    (7, 30, 20, 5, 30, 150),  # trade galleon of the flota
     "privateer":  (1, 18, 8, 6, 15, 35),    # sloop under letters of marque
     "corsair":    (2, 22, 12, 6, 18, 40),   # privateer barque, commissioned
     "flibustier": (2, 26, 12, 8, 25, 40),   # buccaneers' barque
@@ -300,22 +309,33 @@ def treasure_ship(era):
 # --- The enemy captain -------------------------------------------------
 
 def battle_ai(bold):
-    """Per comparison u = 9 a + 3 b + c: the hull counts double, since a
-    shattered ship cannot win whatever she carries.  A captain ahead
-    with a stronger crew closes to board; ahead on guns he lies
-    broadside; behind he runs.  "bold" lowers the bar."""
+    """Per comparison u = 9 a + 3 b + c.  A captain's courage is in his
+    men and his guns: holed (a = 0) he runs to save the ship; else he
+    stands to fight only when ahead in crew or guns (b + c + "bold" of
+    2 or more), closing to board when the crew is his strength and
+    lying broadside when the guns are; ahead in neither he runs, however
+    the hulls compare.  A merchant master's duty was to his owners'
+    cargo and his sailors had no share in a fight's spoils, so a trader
+    outmanned and outgunned put on sail whatever the state of the
+    attacker's hull.  An earlier rule counted the hull double and let a
+    lead in it alone hold a trader to fight: any damage the attacker
+    carried from an earlier fight kept traders from running, so they
+    were boarded where they lay (two captures in three), seldom fled
+    (16 escapes on eight careers, 64 wanted) and seldom struck (231
+    surrenders, 350 wanted); with this rule the same careers see about
+    50 escapes and 300 to 400 surrenders."""
     out = []
     for u in range(27):
         a, b, c = u // 9, u // 3 % 3, u % 3
-        strength = 2 * a + b + c + bold
-        if a == 0 and strength < 6:
+        strength = b + c + bold
+        if a == 0:
             d = 2                       # holed: save the ship
-        elif strength >= 6 and c == 2:
-            d = 0                       # close and board
-        elif strength >= 4:
-            d = 0 if c > b and a >= 1 else 1
+        elif c == 2 and strength >= 3:
+            d = 0                       # far more men: close and board
+        elif strength >= 2:
+            d = 0 if c > b else 1       # board with men, fight with guns
         else:
-            d = 2
+            d = 2                       # outmanned and outgunned: run
         out.append(d)
     return out
 
@@ -398,10 +418,11 @@ def build(year):
         "their census by flag (Spain, England, France, Holland, "
         "pirates: %s), one pirate per region; navies scaled x%.2f, "
         "raiders' role +%d, Spanish gold x%.2f, goods x%.2f; the "
-        "treasure galleon's gold factor %d.  Enemy captain: strength = "
-        "2 x hull + guns + crew comparison + nerve %d; he boards when "
-        "ahead with the stronger crew, lies broadside when ahead, runs "
-        "when behind or holed.  Diplomacy range %d, Spanish "
+        "treasure galleon's gold factor %d.  Enemy captain: holed, he "
+        "runs; else strength = guns + crew comparison + nerve %d, and "
+        "at 2 or more he fights, boarding when ahead in men, lying "
+        "broadside when ahead in guns; below it he runs whatever the "
+        "hulls.  Diplomacy range %d, Spanish "
         "shipwrights' tolerance %d (loosening as Spain's monopoly "
         "weakens)." % (
             era["upwind"], era["why"],

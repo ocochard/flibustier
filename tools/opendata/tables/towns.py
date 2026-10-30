@@ -60,7 +60,20 @@ battle.c, prison.c, src/ui/screens.c):
   growth moves them a step toward (income + citizens) / 2.  citizens:
   hundreds of inhabitants (x 100 in the city information); under 6
   there is no governor; they size the merchant's purse and stock and
-  the recruits.  gold: the town's treasure, about a thousand pieces of
+  the recruits, the garrison the town keeps in the long run, and the
+  crew it takes to hold the town after a sack (10 to 20 men a
+  hundred).  The table's column counts what the histories count, the
+  Spanish vecinos' or the planters' households with their families;
+  the town in the game is its whole district, with the enslaved
+  Africans, the Indians and the free people of colour, the outlying
+  estates and ranches whose men answered the militia's call, about
+  three times as many (CENSUS): Havana and its district held some ten
+  to twenty thousand souls in the later century, Barbados fifty
+  thousand by 1660.  Counted as households alone, a town of 600 was
+  held by a career bot's 90 men and the small towns changed hands
+  every year (58 conquests on eight careers, where about 7 are wanted).
+  The map's second houses and the battle screens keep to the table's
+  count.  gold: the town's treasure, about a thousand pieces of
   eight each when sacked by surprise; wealth: 0-255, 64 a level (poor,
   modest, prosperous, wealthy), the merchant's prices and the
   shipwright's purse.  Forts never change in play, while the
@@ -93,9 +106,16 @@ battle.c, prison.c, src/ui/screens.c):
 - sea [x, y, heading]: the map cell where a ship leaving the town
   starts, on open sea (no shallows, which wreck large ships), outside
   the town's arrival cells, heading 0-7 (x 32) to the open water: of
-  the nearest such cells, the first with 16 cells of open sea straight
+  the nearest such cells at least three steps (MOUTH) from the town's
+  own arrival cells, the first with 16 cells of open sea straight
   ahead (else the longest such run), so a ship sailing straight out
-  meets no shallows; 0, 0 for inland towns.  Where a town's arrival
+  meets no shallows; 0, 0 for inland towns.  The engine forgets the
+  town just left as soon as the ship stands outside its cells, so a
+  mouth beside them sent a ship bound the other way straight back in
+  as it went about (14 of 37 ports in 1620 bounced a career bot back
+  for most destinations, and it lost months re-entering one port):
+  three steps out leave it room to turn.  The battle screens still
+  face the nearest open water, as before.  Where a town's arrival
   cells lie across a strait (Maracaibo, between its lake and the Gulf),
   only the cells joined to the open sea without crossing any town's
   arrival cells are taken, so a ship leaving for the open sea does not
@@ -133,7 +153,7 @@ BUILDINGS): 68-79 a house on a shore, the twelve of them the coast on
 different sides, and 123-127 and 255 a house inland.  Each town cell
 takes the building tile whose terrain best matches the geography there
 and its four neighbours' edges (the costs of world_map's seams), so the
-shore runs on.  A town of 4000 people or more in the era (citizens 40)
+shore runs on.  A town of 40 or more in the table's citizens in the era
 gets a second house on the neighbouring land cell that fits one best,
 so the big ports read as cities.
 
@@ -142,12 +162,18 @@ convoy: in at Puerto Rico and Santo Domingo, the galeones at
 Cartagena, the Isthmus fair (Nombre de Dios, Portobelo from 1597) and
 Cartagena again, the flota at Veracruz and Campeche, all meeting at
 Havana and leaving by the Florida channel past San Agustin.  The silver
-train follows the treasure by land: Peru's silver over the Camino Real
-from Panama (by Chagres) to the Isthmus port, then the Main's treasure
-roads east, Cartagena (New Granada's gold), Santa Marta, Rio de la
-Hacha (pearls), Maracaibo and Gibraltar (cacao), Coro, Caracas and
-Cumana.  A stop missing from an era is left out; the engine passes over
-the towns not Spanish.
+train is the treasure carried by land, and there was little of it: the
+mule trains bringing Peru's silver from Panama over the Isthmus, by the
+Camino de Cruces and the river to Chagres or by the Camino Real, to the
+fair at the Isthmus port, and New Granada's gold coming down the
+Magdalena to Cartagena.  The Main's other towns sent their pearls,
+cacao and hides by sea, not in a guarded train; an earlier route ran
+the train on east through Santa Marta, Rio de la Hacha, Maracaibo,
+Gibraltar, Coro, Caracas and Cumana, small towns with a fort or none,
+and the career bot took the train in 20 of its 125 town assaults on
+eight careers (about 12 are wanted), a third of them once the towns
+were counted by their districts (see "citizens").  A stop missing from
+an era is left out; the engine passes over the towns not Spanish.
 """
 import math
 
@@ -167,6 +193,8 @@ CITY = 40               # citizens from which a town gets a second house
 ARRIVALS = 16
 REACH = 4               # cells from a coastal town to open sea, at most
 RUN_OK = 16             # open sea cells straight out of a harbour mouth
+MOUTH = 3               # cells from a town's arrival cells to its mouth
+CENSUS = 3              # the district's people per head the table counts
 HARBOUR = 8             # cells around a town and its arrival cells kept
                         # free of shallows
 COAST_TILES = tuple(range(68, 80))
@@ -650,8 +678,7 @@ bonaire    Bonaire           holland  0   3   6    5  40 F
 
 FLEET = ["sanjuan", "domingo", "cartagena", "isthmus", "cartagena",
          "veracruz", "campeche", "havana", "agustin"]
-TRAIN = ["panama", "chagres", "isthmus", "tolu", "cartagena", "marta",
-         "hacha", "maracaibo", "gibraltar", "coro", "caracas", "cumana"]
+TRAIN = ["panama", "chagres", "isthmus", "cartagena"]
 
 NATIONS = ("spain", "england", "france", "holland")
 
@@ -1034,8 +1061,11 @@ def _era(year):
         if inl:
             sea, d = [0, 0, 0], _inland_dir(water, x, y)
         else:
-            sea, d = _sea_cell(water, owner, x, y, arrival[key],
-                               outside)
+            # The battle screens face the nearest open water (d); the
+            # ship leaves from MOUTH cells out.
+            _, d = _sea_cell(water, owner, x, y, arrival[key], outside)
+            sea, _ = _sea_cell(water, owner, x, y, arrival[key], outside,
+                               MOUTH)
             if sea is None:
                 problems.append("%s: no open sea to leave by" % key)
                 sea, d = [0, 0, 0], (0, 1)
@@ -1125,11 +1155,11 @@ def _outside(water, owner):
     return out
 
 
-def _sea_cell(water, owner, x, y, mine, outside):
-    """The nearest cell of open sea outside every arrival cell, reached
-    from the town's arrival cells ("mine") through cells with main
-    water, and the 8-way heading out from it that keeps longest to open
-    sea, away from the town."""
+def _sea_cell(water, owner, x, y, mine, outside, gap=1):
+    """The nearest cell of open sea outside every arrival cell, at
+    least "gap" steps from the town's arrival cells ("mine"), reached
+    from them through cells with main water, and the 8-way heading out
+    from it that keeps longest to open sea, away from the town."""
     from collections import deque
     seen = dict.fromkeys(mine, 0)
     q = deque(mine)
@@ -1147,7 +1177,7 @@ def _sea_cell(water, owner, x, y, mine, outside):
                 continue
             seen[n] = d + 1
             q.append(n)
-            if _full_sea(water, *n) and n not in owner:
+            if _full_sea(water, *n) and n not in owner and d + 1 >= gap:
                 found.append((d + 1, math.hypot(n[0] - x, n[1] - y),
                               n[1], n[0]))
     if not found:
@@ -1272,7 +1302,11 @@ def build(year):
     e = _era(year)
     if e["problems"]:
         raise SystemExit("towns %d: %s" % (year, "; ".join(e["problems"])))
-    data = {"towns": e["records"], "treasure_fleet": e["fleet"],
+    # The table counts the households of the histories; the game's
+    # people are the whole district's (see "citizens" above).
+    recs = [dict(rec, citizens=rec["citizens"] * CENSUS)
+            for rec in e["records"]]
+    data = {"towns": recs, "treasure_fleet": e["fleet"],
             "silver_train": e["train"]}
     parts = __doc__.split("\n\n")[1:]
     text = " ".join(" ".join(p.split()) for p in parts)
