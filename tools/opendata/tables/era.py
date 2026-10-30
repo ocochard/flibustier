@@ -17,12 +17,15 @@ How the engine reads them (src/sim/sim.c, battle.c, town.c):
   slowest class in the fleet at sea), the sector the heading relative
   to the wind in 16ths, 0 running before it, 8 head to wind.  At sea the
   ship heads for (v + 0..2 by difficulty) x 3, clamped to 4..12, so 0 to
-  4 is the useful span there; in battle v x 4 (x 1.5 under full sail)
-  is the speed and a negative value drives the ship astern.
+  4 is the useful span there; in battle v x 4 (x 1.5 under full sail,
+  at most 40) is the speed, a fort battle halves it, and a negative
+  value drives the ship astern.
 - encounter[region][k]: the region is the nation of the town nearest
   the sail (0 Spain, 1 England, 2 France, 3 Holland); k grows with the
   player's crew and the region's alert, so the five records run from
-  the least to the most dangerous.  A record is type (0 pinnace, 1
+  the least to the most dangerous.  Far from towns (over 12 cells) and
+  one time in four near them, any of the twenty records comes up
+  instead (see "Ships met at sea").  A record is type (0 pinnace, 1
   sloop, 2 barque, 3 fluyt, 4 merchantman, 5 frigate, shown as a fast
   galleon before 1640, 6 war galleon, 7 galleon), flag (0-3, 4
   pirate), crew in fours of men, guns, role, gold factor, goods factor.
@@ -40,27 +43,47 @@ How the engine reads them (src/sim/sim.c, battle.c, town.c):
 # --- Sailing -----------------------------------------------------------
 
 # A polar per rig, by sector 0 (running) .. 8 (head to wind), as a share
-# of the ship's best speed.  A square rig drives hardest with the wind on
-# the quarter, where every sail draws, and cannot point higher than
-# about six points off the wind; a fore-and-aft rig is best on a beam
-# reach, loses a little dead before the wind (the sails blanket each
-# other) and still makes way four points off it.  Head to wind both are
-# taken aback and drift astern.
-SQUARE = [0.85, 0.95, 1.00, 0.95, 0.80, 0.55, 0.15, -0.20, -0.45]
-FORE_AFT = [0.60, 0.75, 0.90, 1.00, 1.00, 0.90, 0.60, 0.05, -0.30]
+# of the ship's best speed; a sector is two points (22.5 degrees), so
+# sector 6 spans 34 to 56 degrees off the wind and sector 7 11 to 34.  A
+# sector's value is the way made good over a watch on that heading,
+# tacks and leeway included, so a rig that beats to windward makes some
+# way even in sector 8: the engine has no tacking of its own.
+#
+# A square rig drives hardest with the wind on the quarter, where every
+# sail draws, holds most of it on a broad reach, and falls off fast once
+# the yards are braced hard round: six points off (sector 5) is about
+# the best it can lie, so sector 6 is the little it makes by long,
+# leeward-sagging boards, sector 7 next to nothing, and head to wind it
+# is taken aback and drifts astern.  A fore-and-aft rig (gaff, sprit,
+# lateen, with headsails) is best from a beam to a close reach, loses
+# a third dead before the wind (the sails blanket each other, no
+# studding sails), lies four points off the wind at most of its speed,
+# and short tacks make real way into the wind's own sector.
+SQUARE = [0.85, 1.00, 1.00, 0.90, 0.75, 0.55, 0.35, 0.05, -0.20]
+FORE_AFT = [0.65, 0.80, 0.95, 1.00, 1.00, 0.95, 0.85, 0.55, 0.20]
 
 # Per class: best speed and how fore-and-aft the rig is (0 square,
 # 1 fore-and-aft).  Class 0 also carries the fast galleons, which the
-# engine keeps as type 8 (8 & 7 = 0).
+# engine keeps as type 8 (8 & 7 = 0), hence its mixed rig.
+#
+# The scale: at sea the engine sails at (v + 0..2) x 3 clamped to 4..12,
+# so from about 2 up a good sector makes full speed on the map and the
+# classes differ by how near the wind they keep it; in battle v x 4
+# (x 1.5 under full sail, capped at 40) is the speed, so 7 is a full
+# sail's top.  The light fore-and-aft craft are the fastest, as the
+# Jamaica and Bermuda sloops and the dispatch pinnaces were; the great
+# galleons the slowest at five sevenths of a sloop's best and about a
+# third of her way to windward, slow enough to be caught, fast enough
+# to run down on a fort or run before the wind.
 CLASSES = [
-    (5, 0.6),   # 0 pinnace: light, lateen and sprit sails, sweeps
-    (5, 1.0),   # 1 sloop: gaff main and headsails, the weatherliest
-    (5, 0.4),   # 2 barque: small three-master, square fore, lateen mizzen
-    (4, 0.2),   # 3 fluyt: long and lightly sparred, built to carry
-    (4, 0.0),   # 4 merchantman: deep laden square rigger
-    (6, 0.2),   # 5 frigate: fine run, square rigged, good staysails
-    (3, 0.0),   # 6 war galleon: high castles, heavy guns
-    (3, 0.0),   # 7 galleon: deep, broad, castle-built carrier
+    (7, 0.6),   # 0 pinnace: light, lateen and sprit sails, sweeps
+    (7, 1.0),   # 1 sloop: gaff main and headsails, the weatherliest
+    (6, 0.5),   # 2 barque: small three-master, square fore, lateen mizzen
+    (6, 0.2),   # 3 fluyt: long and lightly sparred, built to carry
+    (5, 0.0),   # 4 merchantman: deep laden square rigger
+    (7, 0.25),  # 5 frigate: fine run, square rigged, good staysails
+    (5, 0.0),   # 6 war galleon: high castles, heavy guns
+    (5, 0.0),   # 7 galleon: deep, broad, castle-built carrier
 ]
 
 
@@ -85,6 +108,17 @@ def speeds(era):
 
 
 # --- Ships met at sea --------------------------------------------------
+#
+# How the engine draws them (src/sim/sim.c, pick_ship): within 12 cells
+# of a town, eleven times in fifteen, the record is the region's k-th,
+# k = rand(crew / 50 + alert / 6 - the town's goodwill) / 3, mostly 0
+# or 1 unless sails left alone have alerted the coast or the player has
+# wronged the town; otherwise, and always farther out, it is any of the
+# era's twenty records, all equally likely.  On the open map most
+# sails are met far from a town, so an era's sea traffic is the census
+# of its twenty records: one record is a twentieth of the ships met in
+# open water.  The first record of a region is the commonest ship
+# off its towns, the next ones those a hunted coast sends out.
 
 SPAIN, ENGLAND, FRANCE, HOLLAND, PIRATE = range(5)
 
@@ -92,98 +126,129 @@ SPAIN, ENGLAND, FRANCE, HOLLAND, PIRATE = range(5)
 # gold rewards risk: raiders carry their takings, a galleon the King's
 # silver; warships carry a pay chest and powder, traders their cargo.
 SHIPS = {
-    "courier":   (0, 6, 4, 4, 4, 20),      # dispatch pinnace
-    "coaster":   (1, 6, 4, 3, 5, 50),      # coasting sloop
-    "trader":    (2, 10, 8, 4, 8, 70),     # barque in the island trade
-    "fluyt":     (3, 8, 6, 3, 10, 120),    # Dutch carrier, small crew
-    "merchant":  (4, 16, 14, 4, 12, 100),  # armed merchantman
-    "carrack":   (7, 40, 20, 5, 30, 150),  # trade galleon of the flota
-    "corsair":   (2, 22, 12, 7, 18, 40),   # privateer under commission
-    "raider":    (5, 30, 18, 8, 20, 30),   # race-built galleon / frigate
-    "pirate":    (1, 16, 8, 8, 22, 30),   # pirate sloop
-    "buccaneer": (2, 26, 12, 9, 25, 40),   # buccaneer's prize barque
-    "frigate":   (5, 40, 24, 9, 8, 15),    # navy frigate
-    "warship":   (6, 60, 32, 10, 10, 20),  # war galleon / ship of the line
+    "courier":    (0, 6, 4, 4, 4, 20),      # aviso, dispatch pinnace
+    "coaster":    (1, 6, 4, 3, 5, 50),      # coasting sloop or balandra
+    "trader":     (2, 10, 8, 4, 8, 70),     # barque in the island trade
+    "fluyt":      (3, 8, 6, 3, 10, 120),    # Dutch carrier, small crew
+    "merchant":   (4, 16, 14, 4, 12, 100),  # armed merchantman
+    "carrack":    (7, 40, 20, 5, 30, 150),  # trade galleon of the flota
+    "privateer":  (1, 18, 8, 7, 15, 35),    # sloop under letters of marque
+    "corsair":    (2, 22, 12, 7, 18, 40),   # privateer barque, commissioned
+    "flibustier": (2, 26, 12, 9, 25, 40),   # buccaneers' barque
+    "raider":     (5, 30, 18, 8, 20, 30),   # race-built galleon / frigate
+    "pirate":     (1, 16, 8, 8, 22, 30),    # pirate sloop
+    "rover":      (2, 22, 10, 8, 24, 35),   # pirate barque or brigantine
+    "freebooter": (5, 34, 20, 9, 28, 40),   # pirate in a taken frigate
+    "frigate":    (5, 40, 24, 9, 8, 15),    # navy frigate
+    "warship":    (6, 60, 32, 10, 10, 20),  # war galleon / ship of the line
 }
 
+# The raiders whose daring grows with the era's "bold".
+RAIDERS = ("privateer", "corsair", "flibustier")
+
 # Per era and region (nation of the town near), the five sails from the
-# least to the most dangerous; each list has a pirate so that a
-# governor's pirate hunt finds one.
+# least to the most dangerous.  Each region has exactly one pirate, so
+# that a governor's pirate hunt finds one and pirates are a fifth of
+# the open sea's sails, never more; the other sixteen records share the
+# sea by flag as history had it (the census under each era), and the
+# pirates' hulls vary so that no era is all sloops.  A "flibustier"
+# under the French flag is a buccaneer with a commission from Tortuga
+# or Saint-Domingue, as most of them carried; under no flag, a pirate.
 SEAS = {
-    # The flota years: Spain alone holds the Main; Huguenot corsairs and
-    # English slavers poach on it, the Sea Beggars are just rising.
+    # The flota years (Spain 10, France 3, England 2, Holland 1): Spain
+    # alone holds the Main; Huguenot corsairs raid it every year and are
+    # the commonest sail off French landfalls, Hawkins' slavers come to
+    # trade by force, the Sea Beggars barely reach the Indies.
     1560: [
-        [("courier", SPAIN), ("merchant", SPAIN), ("corsair", FRANCE),
+        [("courier", SPAIN), ("merchant", SPAIN), ("rover", PIRATE),
          ("carrack", SPAIN), ("warship", SPAIN)],
         [("trader", ENGLAND), ("coaster", SPAIN), ("pirate", PIRATE),
          ("raider", ENGLAND), ("warship", SPAIN)],
-        [("trader", FRANCE), ("courier", FRANCE), ("corsair", FRANCE),
-         ("pirate", PIRATE), ("carrack", SPAIN)],
-        [("trader", HOLLAND), ("merchant", SPAIN), ("pirate", PIRATE),
-         ("corsair", HOLLAND), ("warship", SPAIN)],
+        [("corsair", FRANCE), ("trader", FRANCE), ("rover", PIRATE),
+         ("merchant", SPAIN), ("carrack", SPAIN)],
+        [("trader", HOLLAND), ("coaster", SPAIN), ("pirate", PIRATE),
+         ("corsair", FRANCE), ("warship", SPAIN)],
     ],
-    # After the Armada war: Spanish silver at its height, English and
-    # Dutch interlopers trading salt and hides, the Twelve Years' Truce.
+    # After the Armada war (Spain 8, England 3, Holland 3, France 2):
+    # Spanish silver at its height; English privateers and interlopers,
+    # Dutch salt fleets at Araya, French traders in hides and tobacco.
     1600: [
-        [("coaster", SPAIN), ("merchant", SPAIN), ("raider", ENGLAND),
+        [("coaster", SPAIN), ("merchant", SPAIN), ("pirate", PIRATE),
          ("carrack", SPAIN), ("warship", SPAIN)],
-        [("trader", ENGLAND), ("merchant", ENGLAND), ("pirate", PIRATE),
-         ("raider", ENGLAND), ("warship", SPAIN)],
-        [("trader", FRANCE), ("merchant", SPAIN), ("corsair", FRANCE),
-         ("pirate", PIRATE), ("carrack", SPAIN)],
-        [("fluyt", HOLLAND), ("trader", HOLLAND), ("pirate", PIRATE),
+        [("trader", ENGLAND), ("merchant", SPAIN), ("rover", PIRATE),
+         ("privateer", ENGLAND), ("raider", ENGLAND)],
+        [("trader", FRANCE), ("corsair", FRANCE), ("pirate", PIRATE),
+         ("merchant", SPAIN), ("carrack", SPAIN)],
+        [("fluyt", HOLLAND), ("trader", HOLLAND), ("rover", PIRATE),
          ("corsair", HOLLAND), ("warship", SPAIN)],
     ],
-    # The West India Company's war on Spain, the first English and
-    # French islands; Dutch carriers everywhere.
+    # The West India Company's war on Spain (Spain 7, Holland 5,
+    # England 2, France 2): Dutch carriers and raiders everywhere, the
+    # first English and French settlers on St Christopher.
     1620: [
-        [("coaster", SPAIN), ("fluyt", HOLLAND), ("corsair", HOLLAND),
+        [("coaster", SPAIN), ("fluyt", HOLLAND), ("pirate", PIRATE),
          ("carrack", SPAIN), ("warship", SPAIN)],
-        [("trader", ENGLAND), ("fluyt", HOLLAND), ("pirate", PIRATE),
-         ("merchant", ENGLAND), ("raider", HOLLAND)],
-        [("trader", FRANCE), ("fluyt", HOLLAND), ("pirate", PIRATE),
+        [("trader", ENGLAND), ("merchant", SPAIN), ("rover", PIRATE),
+         ("privateer", ENGLAND), ("raider", HOLLAND)],
+        [("trader", FRANCE), ("merchant", SPAIN), ("rover", PIRATE),
          ("corsair", FRANCE), ("frigate", SPAIN)],
         [("fluyt", HOLLAND), ("merchant", HOLLAND), ("pirate", PIRATE),
          ("raider", HOLLAND), ("warship", SPAIN)],
     ],
-    # Tortuga's buccaneers, sugar on Barbados, Spain stretched thin.
+    # Tortuga and the Lesser Antilles (Spain 6, Holland 4, England 3,
+    # France 3): France at war with Spain from 1635, its flibustiers
+    # the commonest sail off French coasts; Barbados sugar in Dutch
+    # hulls; Spain stretched thin.
     1640: [
-        [("coaster", SPAIN), ("merchant", SPAIN), ("buccaneer", PIRATE),
+        [("coaster", SPAIN), ("merchant", SPAIN), ("flibustier", PIRATE),
          ("carrack", SPAIN), ("warship", SPAIN)],
-        [("trader", ENGLAND), ("fluyt", HOLLAND), ("pirate", PIRATE),
-         ("merchant", ENGLAND), ("frigate", ENGLAND)],
-        [("trader", FRANCE), ("fluyt", HOLLAND), ("buccaneer", PIRATE),
-         ("corsair", FRANCE), ("frigate", FRANCE)],
+        [("merchant", ENGLAND), ("fluyt", HOLLAND), ("pirate", PIRATE),
+         ("privateer", ENGLAND), ("frigate", ENGLAND)],
+        [("flibustier", FRANCE), ("trader", FRANCE), ("rover", PIRATE),
+         ("merchant", SPAIN), ("frigate", FRANCE)],
         [("fluyt", HOLLAND), ("merchant", HOLLAND), ("pirate", PIRATE),
-         ("raider", HOLLAND), ("frigate", HOLLAND)],
+         ("raider", HOLLAND), ("frigate", SPAIN)],
     ],
-    # Port Royal's heyday: Anglo-Dutch wars, buccaneers sacking the Main,
-    # navies sending frigates out.
+    # Port Royal and Tortuga at their height (Spain 5, England 4,
+    # France 4, Holland 3): Jamaica's privateers and the flibustiers of
+    # Saint-Domingue sack the Main, the West India Company of 1664
+    # brings French merchantmen, navies send frigates out.
     1660: [
-        [("coaster", SPAIN), ("buccaneer", PIRATE), ("merchant", SPAIN),
+        [("coaster", SPAIN), ("merchant", SPAIN), ("flibustier", PIRATE),
          ("frigate", SPAIN), ("warship", SPAIN)],
-        [("merchant", ENGLAND), ("pirate", PIRATE), ("corsair", ENGLAND),
-         ("frigate", ENGLAND), ("warship", ENGLAND)],
-        [("trader", FRANCE), ("buccaneer", PIRATE), ("corsair", FRANCE),
-         ("frigate", FRANCE), ("warship", FRANCE)],
-        [("fluyt", HOLLAND), ("pirate", PIRATE), ("merchant", HOLLAND),
-         ("frigate", HOLLAND), ("warship", ENGLAND)],
+        [("merchant", ENGLAND), ("privateer", ENGLAND), ("pirate", PIRATE),
+         ("flibustier", FRANCE), ("frigate", ENGLAND)],
+        [("flibustier", FRANCE), ("merchant", FRANCE), ("rover", PIRATE),
+         ("frigate", FRANCE), ("warship", ENGLAND)],
+        [("fluyt", HOLLAND), ("merchant", HOLLAND), ("rover", PIRATE),
+         ("carrack", SPAIN), ("frigate", HOLLAND)],
     ],
-    # Pirates cast out of the treaties, the great navies on station,
-    # sugar and slave ships crowding the lanes.
+    # Sugar and the great navies (England 5, France 5, Spain 4,
+    # Holland 2): French squadrons and Saint-Domingue's flibustiers,
+    # English sloop traders and frigates on station, pirates cast out of
+    # the treaties and taking bigger ships.
     1680: [
-        [("coaster", SPAIN), ("pirate", PIRATE), ("merchant", SPAIN),
-         ("buccaneer", PIRATE), ("frigate", SPAIN)],
-        [("merchant", ENGLAND), ("trader", ENGLAND), ("pirate", PIRATE),
+        [("coaster", SPAIN), ("merchant", SPAIN), ("flibustier", FRANCE),
+         ("freebooter", PIRATE), ("frigate", SPAIN)],
+        [("merchant", ENGLAND), ("coaster", ENGLAND), ("pirate", PIRATE),
          ("frigate", ENGLAND), ("warship", ENGLAND)],
-        [("merchant", FRANCE), ("pirate", PIRATE), ("buccaneer", PIRATE),
+        [("merchant", FRANCE), ("flibustier", FRANCE), ("rover", PIRATE),
          ("frigate", FRANCE), ("warship", FRANCE)],
-        [("fluyt", HOLLAND), ("merchant", HOLLAND), ("pirate", PIRATE),
-         ("frigate", HOLLAND), ("warship", HOLLAND)],
+        [("fluyt", HOLLAND), ("merchant", ENGLAND), ("pirate", PIRATE),
+         ("carrack", SPAIN), ("frigate", HOLLAND)],
     ],
 }
 
 NAVY = ("frigate", "warship", "raider")
+
+
+def census(year):
+    """Records per flag in an era: its share of the open sea's sails."""
+    out = [0] * 5
+    for region in SEAS[year]:
+        for _, flag in region:
+            out[flag] += 1
+    return out
 
 
 def record(name, flag, era):
@@ -193,7 +258,7 @@ def record(name, flag, era):
     if name in NAVY:
         crew = round(crew * era["navy"])
         guns = round(guns * era["navy"])
-    if flag == PIRATE or name in ("corsair", "buccaneer"):
+    if flag == PIRATE or name in RAIDERS:
         role += era["bold"]
     if flag == SPAIN:
         gold = round(gold * era["silver"])
@@ -206,6 +271,9 @@ def record(name, flag, era):
 
 
 def encounters(year, era):
+    for region in SEAS[year]:
+        assert len(region) == 5
+        assert sum(flag == PIRATE for _, flag in region) == 1
     return [[record(n, f, era) for n, f in region] for region in SEAS[year]]
 
 
@@ -300,20 +368,30 @@ def build(year):
     }
     notes = (
         "Designed for the open pack, from history and sailing physics; "
-        "nothing from the original game.  Speeds: a square-rig and a "
-        "fore-and-aft polar (best on the quarter and on the beam, "
-        "astern head to wind) blended per class by its rig and scaled "
-        "by its best speed, square rigs gaining weatherliness by era "
-        "(%.1f here).  Ships met: per region five archetypes from the "
-        "least to the most dangerous, chosen for the era's history (%s), "
-        "navies scaled x%.2f, raiders' role +%d, Spanish gold x%.2f, "
-        "goods x%.2f; the treasure galleon's gold factor %d.  Enemy "
-        "captain: strength = 2 x hull + guns + crew comparison + "
-        "nerve %d; he boards when ahead with the stronger crew, lies "
-        "broadside when ahead, runs when behind or holed.  Diplomacy "
-        "range %d, Spanish shipwrights' tolerance %d (loosening as "
-        "Spain's monopoly weakens)." % (
-            era["upwind"], era["why"], era["navy"], era["bold"],
+        "nothing from the original game.  Speeds: a square-rig polar "
+        "(best on the quarter, lying six points off the wind, taken "
+        "aback head to wind) and a fore-and-aft one (best from the beam "
+        "to a close reach, making some way into the wind by short "
+        "tacks) blended per class by its rig and scaled by its best "
+        "speed, from 7 for the sloops and pinnaces (8 for the Jamaica "
+        "sloops from 1640) to 5 for the galleons, so the fastest class "
+        "outsails the slowest by about half again off the wind and two "
+        "to four times close-hauled; square rigs gain weatherliness by "
+        "era (%.1f here).  Ships met: per region five archetypes from "
+        "the least to the most dangerous, chosen for the era's history "
+        "(%s); since most sails are met far from a town, where all "
+        "twenty records are equally likely, the era's sea traffic is "
+        "their census by flag (Spain, England, France, Holland, "
+        "pirates: %s), one pirate per region; navies scaled x%.2f, "
+        "raiders' role +%d, Spanish gold x%.2f, goods x%.2f; the "
+        "treasure galleon's gold factor %d.  Enemy captain: strength = "
+        "2 x hull + guns + crew comparison + nerve %d; he boards when "
+        "ahead with the stronger crew, lies broadside when ahead, runs "
+        "when behind or holed.  Diplomacy range %d, Spanish "
+        "shipwrights' tolerance %d (loosening as Spain's monopoly "
+        "weakens)." % (
+            era["upwind"], era["why"],
+            ", ".join(str(n) for n in census(year)), era["navy"], era["bold"],
             era["silver"], era["trade"], era["treasure"], era["nerve"],
             era["diplomacy"], era["wright"]))
     return value, notes
