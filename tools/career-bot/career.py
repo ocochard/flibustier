@@ -25,6 +25,7 @@ def sources():
 
 BUILD = os.path.join(REPO, "build")
 OUT = "."
+FORT_WAIT = 30		# days before a fort judged too strong is tried again
 FORT_MARGIN = 8		# hull to spare, by fort_margin, before fighting a fort
 FALLBACK_YEARS = int(os.environ.get("BOT_FALLBACK", 9))	# after this, a governor's daughter will do instead of his niece
 NATIONS = ["spain", "england", "france", "holland"]
@@ -208,6 +209,7 @@ class Bot:
         self.reefs = set()	# cells where a ship was lost on shallows
         self.wrecks = 0	# ships lost on shallows so far
         self.forts_lost = set()	# towns whose fort beat us off
+        self.fort_wait = {}	# town -> day before which its fort is not tried
         self.bad_landings = set()	# dig landings whose voyage wrecked us
         self.dig_fails = collections.Counter()	# failed trips, per map
         self.visited = {}
@@ -1392,6 +1394,12 @@ class Bot:
         return best[1] if best else None
 
     # ------------------------------------------------------------ assault
+    def fort_open(self, ti):
+        """Whether to sail to attack town "ti": not a fort that beat us
+        off, nor one judged too strong in the wind until it may turn."""
+        return ti not in self.forts_lost and \
+            self.fort_wait.get(ti, -1) <= self.st["day"]
+
     def assault(self, ti):
         s = self.refresh()
         t = s["towns"][ti]
@@ -1412,6 +1420,8 @@ class Bot:
                 self.note("the fort at %s is too strong %s (margin %d)" % (
                     t["name"], "for us" if ti in self.forts_lost else "in this wind", margin))
                 self.stats["fort_avoided"] += 1
+                # the wind turns in a few weeks: not before then
+                self.fort_wait[ti] = s["day"] + FORT_WAIT
                 return "fortified"
         self.sim("town", action="attack")
         if fort:
@@ -1827,7 +1837,7 @@ class Bot:
             # 4. the silver train and the treasure fleet, once strong
             convoy = None
             for tt in (s["train_town"], s["fleet_town"]):
-                if 0 <= tt < len(s["towns"]) and tt not in self.unreachable and s["towns"][tt]["sea_x"] and f["crew"] >= 2 * s["towns"][tt]["soldiers"] + 30 \
+                if 0 <= tt < len(s["towns"]) and tt not in self.unreachable and self.fort_open(tt) and s["towns"][tt]["sea_x"] and f["crew"] >= 2 * s["towns"][tt]["soldiers"] + 30 \
                         and s["towns"][tt]["nation"] == 0 and self.at_war(0):
                     convoy = tt
                     break
@@ -1840,7 +1850,7 @@ class Bot:
                 prey = [i for i, t in enumerate(s["towns"])
                         if t["nation"] in self.hunted() and self.at_war(t["nation"]) and
                         t["sea_x"] and i not in self.unreachable and
-                        t["forts"] <= CONQUER_FORTS and f["crew"] >= 2 * t["soldiers"] + 30 and
+                        self.fort_open(i) and t["forts"] <= CONQUER_FORTS and f["crew"] >= 2 * t["soldiers"] + 30 and
                         f["crew"] >= t["citizens"] * CONQUER_MEN]
                 if prey:
                     prey.sort(key=lambda i: max(abs(s["towns"][i]["sea_x"] - f["x"] // 16),
