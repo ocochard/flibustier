@@ -80,6 +80,11 @@ target_include_directories(flibustier_core PUBLIC src)
 target_compile_options(flibustier_core PRIVATE ${FLIBUSTIER_WARNINGS})
 # The vendored stb_image is not ours to keep warning-free.
 set_source_files_properties(src/assets/png.c PROPERTIES COMPILE_OPTIONS -w)
+# A pack's sheets are large pictures, decoded and reduced to the game's
+# colours whenever a screen loads them: optimised even in a Debug build,
+# where a sword fight took seconds to start.
+set_property(SOURCE src/assets/png.c src/assets/image.c src/assets/sheet.c
+	APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-O2>)
 # The vendored ymfm (an OPL3 emulator, C++14) neither: the only C++ in the
 # engine, with its C wrapper.
 set_source_files_properties(src/external/ymfm/ymfm_opl.cpp
