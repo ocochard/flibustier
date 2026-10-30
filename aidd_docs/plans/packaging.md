@@ -34,22 +34,20 @@ pack, with no original data, and still reads a player's own GOG
 
 ### P1. Gaps of the open pack alone
 
-What a player without the original data misses today, from
-`COVERAGE.md` and the engine:
+Done (2026-10-30) but for one tune:
 
-- 7 sound effects (`sound/hail`, `harbour`, `hit-foe`, `hit-you`,
-  `land-battle`, `last-man`, `sail-ho`) and 1 tune (`music/prize`):
-  without the original's sound drivers they are silent. The digitised
-  voices of `driver/digital` have no open replacement.
-- 2 pictures (`pic/baseflag`, `pic/map1560`) and text entry 318 (CSTR)
-  in each language.
-- `tiles15/sbtl` and `lbtl` show "to do" but are replaced by the open
-  `screens/sea` and `screens/land`: `tools/artgen/coverage.py` should
-  count them done.
-
-Done when: a scripted pass through every screen with the open pack
-alone logs no missing asset, and the remaining silences are a listed,
-accepted choice.
+- The 7 spoken sound effects (`sound/hail`, `sail-ho`, `harbour`,
+  `land-battle`, `last-man`, `hit-foe`, `hit-you`) voiced by
+  `tools/sfxgen/voicegen.py` (Dia2) from `voices.toml`; still to be
+  heard by a person (`last-man`, the surrender, may need another take).
+- Text entry 318, the cabin's language menu, in the three languages.
+- `tools/artgen/coverage.py` counts the original assets the pack
+  replaces in another form as done (`tiles15/sbtl`, `lbtl` by the
+  Tiled battle screens, `pic/map1560` by `map/1560`, `pic/baseflag`,
+  whose palette trick true-colour flags do not need).
+- Left: `music/prize` (the capture's tune) has no remake; the music's
+  author would have to record it, or another remade tune stands in.
+  Without it the moment is silent with no original data.
 
 ### P2. The engine finds its own data
 
