@@ -52,6 +52,8 @@ KINDS = {
     "program": "game program",
 }
 NOT_ART = {"patch", "towns", "world", "driver", "program"}
+REPLACED = {"tiles15/sbtl": "screens/sea", "tiles15/lbtl": "screens/land",
+            "pic/map1560": "map/1560", "pic/baseflag": "pic/fjolly01"}
 # The 16-colour copies the installer makes, which the engine never uses,
 # and the cloud picture, which the battle panels paint in their windows
 # instead (pic/sbat, pic/lbat).
@@ -176,6 +178,12 @@ def main():
         for t in ("text/%s/credits" % lang, "text/eng/credits"):
             if i not in have and t in have:
                 have[i] = have[t]
+    # The original's IDs the pack replaces in another form: the battle
+    # screens and the 1560 map grid by Tiled maps, the spyglass's flag
+    # backdrop by true-colour flags, which need none.
+    for i, by in REPLACED.items():
+        if i not in have and by in have:
+            have[i] = have[by]
     rows, counts = [], {}
     for i in ids:
         kind = i.split("/")[0]
@@ -217,9 +225,20 @@ def main():
                 "rows are the IDs the engine plays. The pack also holds "
                 "%d variants of them, played at random." % len(variants)]
     if extra:
-        out += ["", "The pack also holds %d assets the engine does not "
-                "ask for: %s." % (len(extra), ", ".join(
-                    "`%s`" % k for k in extra))]
+        opendata = [k for k in extra if k.split("/")[0] in
+                    ("data", "map", "screens")]
+        other = [k for k in extra if k not in opendata]
+        if opendata:
+            out += ["", "The pack also gives %d tables and maps of open "
+                    "game data, which the engine reads in place of the "
+                    "original program's and world files "
+                    "(aidd_docs/memory/internal/asset-packs.md, \"Open "
+                    "game data\"): %s." % (len(opendata), ", ".join(
+                        "`%s`" % k for k in opendata))]
+        if other:
+            out += ["", "The pack also holds %d assets the engine does "
+                    "not ask for: %s." % (len(other), ", ".join(
+                        "`%s`" % k for k in other))]
     gaps = text_gaps(exe, args.data, args.pack, have)
     if gaps:
         out += ["", "## Text entries", "",
