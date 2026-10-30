@@ -120,37 +120,48 @@ def move_defs():
 
 
 # Reach, in pixels between the fighters' x.  Up close the fighters
-# stand some 6-20 apart: steps in stop under 10, so they come nearer
-# only by a lunge's 10 pixel step or a blow's push.  The rules make the
-# longsword's blows move the bar three times as far as the rapier's and
-# the cutlass's five times, so reach pays for weight: the rapier (28
-# and more) strikes from anywhere in the fight, while a heavy blade
-# (3 and 2 at the easy and middle levels) lands only when the lunge has
-# carried it right in, where the opponent's rapier reaches it too.
-# The arm shortens by a pixel at levels 3 and 4: so close in, each pixel
-# is a large share of the heavy blades' chances.  Weighed by bot duels
-# against a rapier (the duel opponent's blade): the three weapons win
-# alike up to level 2, at level 3 the rapier about half, the longsword
-# three in four, the cutlass three in five (a pixel less makes the
-# longsword win one in four: the step is too coarse to do better), at
-# level 4 all lose most.
-REACH_LEVEL = [2, 2, 2, 1, 0]
-REACH_WEAPON = [28, 1, 0]              # rapier, longsword, cutlass
+# stand some 0-20 apart: steps in stop under 10, so they come nearer
+# only by a lunge's 10 pixel step or a blow's push.  Measured by bot
+# fights, the strikes bunch at 9 apart (where steps in stop) and at 4,
+# the rest spread thinly below.  The rules make the longsword's blows
+# move the bar three times as far as the rapier's and the cutlass's five
+# times, so reach pays for weight: the rapier (30) strikes from anywhere
+# in the fight, while a heavy blade (4 and 3) lands only when the lunge
+# has carried it right in, about a fifth of its strikes, where the
+# opponent's blade reaches it too.  A reach of 5 or more takes in the
+# bunch at 4 and makes the heavy blades far the strongest.
+# The arm is one pixel longer at the easiest level only: a cautious
+# opponent there often stands guarding, and the heavy blades, which
+# then land only from inside 4, dragged on until the crews' melee
+# decided; with it, the apprentice's boarding cutlass wins like the
+# rapier (better when outnumbered).  It does not shorten at the hard
+# levels, as it used to: a pixel is a large share of the heavy blades'
+# chances and none of the rapier's, so it made the hard levels lopsided
+# by weapon; the hit thresholds alone make them hard.
+REACH_LEVEL = [3, 2, 2, 2, 2]
+REACH_WEAPON = [28, 2, 1]              # rapier, longsword, cutlass
 # The opponent's, by its blade.  Its heavy blades keep a long reach: a
 # shorter one mirroring the player's made crew fights against them easy
 # with a rapier and lopsided by weapon.
 FOE_REACH = [26, 22, 18]
 
 # Hit thresholds against rand & 255 (lower hits more often).  From the
-# easiest level to the hardest the player lands 84% down to 44% of the
-# strikes that get through, the opponent 28% up to 75%; at the middle
-# level 66% against 55%.  The player's practice adds to his roll.
-HIT = [40, 64, 88, 116, 144]
-FOE_HIT = [184, 152, 116, 88, 64]
+# easiest level to the hardest the player lands 91% down to 41% of the
+# strikes that get through, the opponent 9% up to 75%; at the middle
+# level 70% against 42%.  The player's practice adds to his roll.
+# Crew fights are much harder than duels at the same thresholds: the
+# crews' opponent swings a longsword or cutlass (two or three times a
+# rapier's blow) and the melee wears the weaker crew down, so the
+# thresholds are set for boarding: at the two easy levels a crew as
+# strong as the enemy's wins nearly every boarding even fighting
+# carelessly, from the middle level on it takes a fencer.
+HIT = [24, 48, 76, 112, 152]
+FOE_HIT = [232, 192, 148, 108, 64]
 
 # Up close the opponent guards low instead of following its script when
-# rand(16) <= caution: an easy opponent hesitates often.
-CAUTION = [8, 6, 4, 2, 0]
+# rand(16) <= caution: an easy opponent hesitates often, which also
+# leaves fewer attacks to the named captains a level or two harder.
+CAUTION = [10, 8, 6, 2, 0]
 
 # Timer units (screen frames at 60 Hz) per fight tick, by level & 3:
 # about 8.5 ticks a second at levels 0, 1 and 4 (level 4 shares entry
@@ -322,22 +333,33 @@ def build():
         "while the blade is raised, time to read and parry it) and moves "
         "the bar twice as far as a lunge, which is quick (4 ticks, a 10 "
         "pixel step in before the point lands). Reach pays for the "
-        "weight the rules give heavy blades: the rapier strikes from 28 "
-        "pixels and more, the longsword and cutlass only from 3 and 2, "
-        "once a lunge has carried them right in, so the three win "
-        "duels about alike. Harder levels shorten the player's reach, "
-        "raise his hit threshold, lower the opponent's and its "
-        "caution. The "
+        "weight the rules give heavy blades: the rapier strikes from 30 "
+        "pixels, the longsword and cutlass only from 4 and 3 (one more "
+        "at the easiest level, where a hesitant opponent would otherwise "
+        "keep them out), once a lunge has carried them right in. Harder "
+        "levels raise the player's hit threshold, lower the opponent's "
+        "and its caution; the arm keeps its length, which would favour "
+        "the rapier. The "
         "opponent's scripts go from plain guard-and-cut patterns (level "
         "0) to parries of the player's line and attacks on the lines he "
         "leaves open (levels 2-4). Attack keys advance from afar and "
         "strike once in reach; a guard is kept until another key, an "
         "attack or step back is one per key press. Edges and flag "
         "heights fit the 640x480 sword screen. "
-        "Tuned by bot duels through flibustier-sim at every level and "
-        "weapon: a player who parries the line he sees raised wins a "
-        "rapier duel at the middle level in about 700 ticks, loses most "
-        "at level 3; mindless attacking loses from level 3.")
+        "Tuned by bot fights through flibustier-sim at every level, "
+        "weapon and crew ratio, with random lunges (the career bot's) "
+        "and a player who parries the line he sees raised 0.2 s late: "
+        "with a crew as strong as the enemy's, random lunges win "
+        "boardings at the two easy levels nearly always and about half "
+        "at the middle level, the parrying player nine in ten there; at "
+        "the easiest level boardings are won even outnumbered three to "
+        "one. Duels are won at the easy and middle levels; at level 3 "
+        "random lunges win two in three, at level 4 almost none, the "
+        "parrying player two in three. Over eight career bot careers "
+        "the bot won 96% of its sword fights, up from 63%. Clean-room "
+        "note: after these values were final, a search of the docs "
+        "printed seven lines of the engine's rules spec on the weapons' "
+        "reach (no game-data numbers); nothing was changed after it.")
     return value, notes
 
 
