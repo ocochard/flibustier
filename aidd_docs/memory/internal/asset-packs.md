@@ -161,6 +161,10 @@ Loaded by `pic_load()` (`src/assets/pic.c`):
     palette (6x6x6 cube plus 40 greys) without original data.
 - Limits:
   - Palette cycling and ink fades do not change true colours.
+  - Screens that take their text ink (entry 2) or highlight (entry 6)
+    from the picture's palette get an engine orange and pale yellow
+    instead when the picture has the fixed palette, whose entries there
+    are dark blues.
   - `fb_image_part` draws indices only, so the credits text blocks stay
     in original resolution.
   - The treasure map is composed on indices, so it drops the true

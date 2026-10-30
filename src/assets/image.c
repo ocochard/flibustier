@@ -52,6 +52,16 @@ image_fixed_palette(struct image *img)
 	img->has_palette = 1;
 }
 
+int
+image_has_fixed_palette(const struct image *img)
+{
+	uint8_t pal[256 * 3];
+
+	palette_fixed(pal);
+	return (img->has_palette && memcmp(img->palette, pal,
+	    sizeof(pal)) == 0);
+}
+
 /* The entry of "pal" from "first" on nearest to (r, g, b). */
 static uint8_t
 nearest(const uint8_t *pal, int first, int r, int g, int b)

@@ -34,6 +34,8 @@ void	image_free(struct image *img);
  */
 void	palette_fixed(uint8_t *pal);
 void	image_fixed_palette(struct image *img);
+/* Whether "img" has the fixed palette, not an original one. */
+int	image_has_fixed_palette(const struct image *img);
 
 /*
  * Reduce aw x ah true colours to w x h palette indices "px": each is the

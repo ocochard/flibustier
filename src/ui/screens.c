@@ -1670,6 +1670,28 @@ const struct screen screen_confirm = {
  */
 #define STORY_TEXT_Y		340
 #define STORY_INK		2
+#define STORY_HIGHLIGHT		6
+
+/*
+ * The colour of palette entry "entry" of the background, for its inks.
+ * A pack's picture without the original has the fixed palette, whose
+ * entries 2 and 6 are dark blues: the engine's own orange ink and pale
+ * yellow highlight stand in for the original's.
+ */
+static const uint8_t *
+bg_colour(const struct game *g, int entry)
+{
+	static const uint8_t ink[3] = { 0xf0, 0x98, 0x38 };
+	static const uint8_t highlight[3] = { 0xff, 0xe8, 0xa0 };
+
+	if (image_has_fixed_palette(&g->bg)) {
+		if (entry == STORY_INK)
+			return (ink);
+		if (entry == STORY_HIGHLIGHT)
+			return (highlight);
+	}
+	return (&g->bg.palette[entry * 3]);
+}
 #define S_TREASURE_FLEET	46
 
 /* The story of this career: its scenario's index. */
@@ -1730,7 +1752,7 @@ story_enter(struct game *g)
 	/* The game's ink here is palette entry 2 (VA 0x159df, table at VA
 	 * 0x3421c), an orange in this picture. */
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
 	if (g->story_pos == 0)
 		g->story_text = -1;
 	story_advance(g);
@@ -3713,7 +3735,7 @@ prize_show(struct game *g)
 	game_background(g, "pic/plunder");
 	if (g->bg.pixels != NULL) {
 		memcpy(g->ink, g->bg.palette, 3);
-		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+		memcpy(g->highlight, bg_colour(g, STORY_HIGHLIGHT), 3);
 	}
 }
 
@@ -4048,7 +4070,7 @@ battle_tick(struct game *g)
 			    battle_end_picture(g->sim.battle.outcome));
 			/* The ink is palette entry 2 (VA 0xe8a9). */
 			if (g->bg.pixels != NULL)
-				memcpy(g->ink, &g->bg.palette[STORY_INK * 3],
+				memcpy(g->ink, bg_colour(g, STORY_INK),
 				    3);
 		}
 	}
@@ -4764,7 +4786,7 @@ sword_draw(struct game *g)
 		/* On the picture (VA 0xf10a; the original boxes it, VA
 		 * 0xf170): at (274, 306) up to x 560, in palette entry 2. */
 		if (g->bg.pixels != NULL)
-			memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+			memcpy(g->ink, bg_colour(g, STORY_INK), 3);
 		/* "...you spot %s approaching": a named captain by his
 		 * name (VA 0xf130), else "the enemy captain". */
 		if (g->sim.encounter.captain != 0)
@@ -4785,7 +4807,7 @@ sword_draw(struct game *g)
 		draw(g, FONT_BODY, 392, 354, 160,
 		    game_str(g, S_CHOOSE_WEAPON), 0);
 		if (g->bg.pixels != NULL)	/* ink entry 1 */
-			memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+			memcpy(g->ink, bg_colour(g, STORY_INK), 3);
 		if (g->sw_named) {	/* PIRATE1, centred on its blade */
 			static const int name_x[SWORD_WEAPONS] = { 426, 506,
 			    464 };
@@ -5904,8 +5926,8 @@ recruit_enter(struct game *g)
 	game_portrait(g, NULL);
 	/* The tavern's inks (VA 0x11867): palette entries 2 and 6. */
 	if (g->bg.pixels != NULL) {
-		memcpy(g->ink, &g->bg.palette[2 * 3], 3);
-		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
+		memcpy(g->highlight, bg_colour(g, STORY_HIGHLIGHT), 3);
 	}
 }
 
@@ -7042,8 +7064,8 @@ arrive_enter(struct game *g)
 	    inland ? "pic/arr_land" : "pic/arr_sea");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL) {
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
-		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
+		memcpy(g->highlight, bg_colour(g, STORY_HIGHLIGHT), 3);
 	}
 	g->selected = 0;
 	g->msg[0] = '\0';
@@ -7200,7 +7222,7 @@ disgrace_enter(struct game *g)
 	load_bank(g, captain_portrait[g->sim.player.difficulty & 3], 0,
 	    &g->id_spr[2]);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
 }
 
 static void
@@ -7247,7 +7269,7 @@ assault_enter(struct game *g)
 	game_background(g, "pic/landpir");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
 }
 
 static void
@@ -7301,8 +7323,8 @@ sack_picture(struct game *g)
 	    t->flags & TOWN_INLAND ? "pic/arr_land" : "pic/arr_sea");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL) {
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
-		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
+		memcpy(g->highlight, bg_colour(g, STORY_HIGHLIGHT), 3);
 	}
 	g->selected = 0;
 }
@@ -7440,7 +7462,7 @@ prison_enter(struct game *g)
 	    "pic/maroon" : "pic/prison");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
 	g->sack_stage = 0;
 }
 
@@ -7539,8 +7561,8 @@ static void
 talk_inks(struct game *g)
 {
 	if (g->bg.pixels != NULL) {
-		memcpy(g->ink, &g->bg.palette[STORY_INK * 3], 3);
-		memcpy(g->highlight, &g->bg.palette[6 * 3], 3);
+		memcpy(g->ink, bg_colour(g, STORY_INK), 3);
+		memcpy(g->highlight, bg_colour(g, STORY_HIGHLIGHT), 3);
 	}
 	g->selected = 0;
 }
@@ -8464,7 +8486,7 @@ tmap_compose(struct game *g)
 	if ((size_t)mark < spr.count)
 		image_frame(&g->bg, &spr.frames[mark], FB_W / 2 + mx,
 		    FB_H / 2 + my);
-	memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+	memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 	/* A pack's map, in true colours over the indices. */
 	if (tileset_load(g->packs, "tiles/tmap", &hd) == 0 &&
 	    (rgba = tmap_compose_hd(g, &wood, &frame, &spr, &hd, held, mark,
@@ -8584,7 +8606,7 @@ dig_page(struct game *g)
 	game_background(g, pic);
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -8677,7 +8699,7 @@ villain_enter(struct game *g)
 	game_background(g, "pic/evilone");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -8772,7 +8794,7 @@ crew_enter(struct game *g)
 	    "pic/smaster");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -8838,7 +8860,7 @@ deserted_enter(struct game *g)
 	    TOWN_INLAND)) ? "pic/arr_land" : "pic/arr_sea");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -9104,7 +9126,7 @@ hostage_enter(struct game *g)
 	game_background(g, "pic/hostage");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -9180,7 +9202,7 @@ merdaugh_page(struct game *g)
 	    g->merdaugh == 299 ? "pic/wedding" : "pic/merdaugh");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 	g->selected = 0;
 }
 
@@ -9284,7 +9306,7 @@ vnews_enter(struct game *g)
 	game_background(g, vnews_at[g->vnews_source].pic);
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -9385,7 +9407,7 @@ ending_enter(struct game *g)
 	game_background(g, sunset[tier]);
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 	g->end_page = END_FURTHER;
 	g->end_phrase = rng_below(&g->sim.rng, 3);	/* VA 0x51c2 */
 	g->selected = 0;
@@ -9570,7 +9592,7 @@ lastship_enter(struct game *g)
 	game_background(g, "pic/plunder");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
@@ -9605,7 +9627,7 @@ volunteers_enter(struct game *g)
 	game_background(g, "pic/crew");
 	game_portrait(g, NULL);
 	if (g->bg.pixels != NULL)
-		memcpy(g->ink, &g->bg.palette[TMAP_INK * 3], 3);
+		memcpy(g->ink, bg_colour(g, TMAP_INK), 3);
 }
 
 static void
