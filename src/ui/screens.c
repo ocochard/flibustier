@@ -4327,12 +4327,21 @@ static const char *sw_weapon_layers[2][SWORD_WEAPONS] = {
 	{ "grp/herapier", "grp/hesword", "grp/hecutlas" },
 };
 
+/*
+ * Fighter layer "id" into a slot that remembers what it holds ("have"):
+ * kept from the last fight when it is the same, so a fight starts at
+ * once unless a weapon or a head changed.
+ */
 static void
-load_group(struct game *g, const char *id, struct sprite_group *out)
+load_group(struct game *g, const char *id, struct sprite_group *out,
+    char *have, size_t size)
 {
+	if (id != NULL && strcmp(have, id) == 0)
+		return;
 	group_free(out);
-	if (id != NULL)
-		group_load(g->packs, id, out);
+	have[0] = '\0';
+	if (id != NULL && group_load(g->packs, id, out) == 0)
+		snprintf(have, size, "%s", id);
 }
 
 /* The story's fight (VA 0x14630): 200 men of factor 32 against 20 of
@@ -4407,17 +4416,21 @@ sword_enter(struct game *g)
 static void
 sword_load(struct game *g)
 {
+	const char *id;
 	int side, i;
 
 	for (side = 0; side < 2; side++)
-		for (i = 0; i < 6; i++)
-			load_group(g, i == 1 ? sw_weapon_layers[side][side == 0 ?
+		for (i = 0; i < 6; i++) {
+			id = i == 1 ? sw_weapon_layers[side][side == 0 ?
 			    g->sim.sword.you.weapon : g->sim.sword.foe.weapon] :
 			    side == 1 && i == 5 && g->sim.sword.scene == 0 ?
 			    "grp/hehead2" : side == 1 && i == 5 &&
 			    (g->sim.sword.scene == 1 || g->sim.sword.scene == 2) ?
-			    "grp/hehead3" :
-			    sw_layers[side][i], &g->sw_parts[side][i]);
+			    "grp/hehead3" : sw_layers[side][i];
+			load_group(g, id, &g->sw_parts[side][i],
+			    g->sw_part_id[side][i],
+			    sizeof(g->sw_part_id[side][i]));
+		}
 	g->sw_flag_y[0] = g->sw_flag_y[1] = 0;
 	g->sw_wait = 1;
 	g->sw_period = 1;

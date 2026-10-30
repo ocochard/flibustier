@@ -138,6 +138,7 @@ struct game {
 	int			 btl_stage;	/* 0 fight, 1 outcome, 2 prize */
 	int			 btl_final;	/* outcome after sim_battle_finish */
 	struct sprite_group	 sw_parts[2][6];	/* [you, foe] fighter layers */
+	char			 sw_part_id[2][6][32];	/* the ID each holds */
 	struct sprite_bank	 sw_misc;	/* flags */
 	struct image		 sw_weapons;	/* weapon choice picture */
 	int			 sw_stage;	/* 0 intro, 1 weapon, 2 fight,

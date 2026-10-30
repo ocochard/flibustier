@@ -2162,6 +2162,7 @@ static void
 test_cabin(void)
 {
 	struct game *g;
+	uint8_t mark;
 	int practice;
 
 	g = play("eng", "enter enter down down down down enter down enter "
@@ -2234,9 +2235,21 @@ test_cabin(void)
 	    g->sim.sword.you.weapon == 0);
 	CHECK(g->sim.sword.kind == SWORD_PRACTICE &&
 	    g->sim.sword.you.men == 200 && g->sim.sword.title == 5);
+	/* A mark on the player's first frame: loading it again would
+	 * erase it. */
+	CHECK(g->sw_parts[0][0].count > 0 &&
+	    g->sw_parts[0][0].banks[0].count > 0);
+	mark = g->sw_parts[0][0].banks[0].frames[0].pixels[0] ^= 0x5a;
 	g->sim.sword.result = SWORD_LOST;
 	CHECK(game_script(g, "wait:40") == 0 &&
 	    g->screen == &screen_cabin && g->sim.practice == practice + 5);
+	/* Another practice, the same weapon: the fighters' layers are kept
+	 * from the last fight, not loaded again. */
+	CHECK(game_script(g, "click:110,120 wait:40 click:418,200") == 0 &&
+	    g->sw_stage == 2 &&
+	    g->sw_parts[0][0].banks[0].frames[0].pixels[0] == mark);
+	g->sim.sword.result = SWORD_LOST;
+	CHECK(game_script(g, "wait:40") == 0 && g->screen == &screen_cabin);
 	/* Escape continues the travels: back in town. */
 	CHECK(game_script(g, "esc wait:40") == 0 &&
 	    g->screen == &screen_town);
