@@ -1253,11 +1253,15 @@ wooden wall, the window, the bare shelf and the floor that were behind
 them.
 """
 [[asset.finish]]
-rect = [126, 160, 90, 62]	# the Logbook spot left of the wall post, the shelf at its bottom
+rect = [116, 136, 100, 86]	# the Logbook spot, over the wall post, the shelf at its bottom
 scene = "a sea captain's cabin, a wooden shelf under the stern windows"
 thing = """
-a thick old leather-bound log book lying closed flat on the shelf,
-wholly resting on it, its worn brown leather and brass corners
+a big old leather-bound log book lying wide open on a slanted wooden
+book stand that rests on the shelf, the book filling most of the width
+of the picture: seen from straight in front, its two pages face the
+camera squarely, turned towards the room, away from the windows; cream
+paper filled with columns of faded brown handwriting, its worn brown
+leather covers spread on each side
 """
 [[asset.finish]]
 rect = [236, 130, 92, 165]	# the Search spot
@@ -1270,6 +1274,15 @@ and brass rings, nearly level, aimed at the sea through the stern window
 on its left. Its thicker objective end is at the left, touching the
 window glass; its thin eyepiece end is at the right, towards the room.
 Nobody is there
+"""
+# The sea chest's lid cleared: the log book is the open one on the shelf.
+[[asset.finish]]
+mask = "layouts/cabin-chest-top.png"
+rect = [20, 215, 220, 105]
+scene = "a sea captain's cabin, an iron-bound sea chest"
+instruction = """
+Remove the book lying on the chest: show the chest's bare wooden lid
+with its iron bands, and the wall behind it.
 """
 
 # The chart frame: while no treasure map is held, the game draws the
