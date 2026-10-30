@@ -40,6 +40,10 @@ INK = {"black": "#1c140c", "red": "#b0180e", "cream": "#f2e2b4"}
 # Behind dark ink on a photograph: a soft cream glow, so the words read
 # on dark wood and shadow as on the original's pale pictures.
 HALO = "#f2e2b4e0"
+# The small digits and "pcs" are a few pixels high, too small for a
+# glow inside their frames: they sit on a cream plate filling the frame,
+# the plates of a number's digits meeting in one label.
+PLATE = "#efdcaaf0"
 GOODS = ["food", "goods", "sugar", "tobacco", "hides", "cannon"]
 
 
@@ -51,10 +55,11 @@ def px(v, k):
     return max(1, round(v * k))
 
 
-def text(path, words, ink, w, h, font, k, halo=None, lines=1):
+def text(path, words, ink, w, h, font, k, halo=None, lines=1, plate=None):
     """Words in "ink", as large as fit w x h (640x480 pixels) with a
-    little margin, centred, on transparency; a soft "halo" behind them
-    keeps dark ink readable on a photograph."""
+    little margin, centred, on transparency, or on a "plate" of a colour
+    filling the frame; a soft "halo" behind them keeps dark ink readable
+    on a photograph."""
     W, H = px(w, k), px(h, k)
     tmp = path + ".t.png"
     magick("-background", "none", "-fill", ink, "-font", font,
@@ -69,7 +74,7 @@ def text(path, words, ink, w, h, font, k, halo=None, lines=1):
                "-gravity", "center", "-composite",
                tmp, "-gravity", "center", "-composite", path)
     else:
-        magick("-size", "%dx%d" % (W, H), "xc:none", tmp,
+        magick("-size", "%dx%d" % (W, H), "xc:" + (plate or "none"), tmp,
                "-gravity", "center", "-composite", path)
     os.remove(tmp)
 
@@ -181,7 +186,7 @@ def compose(src, words, font, k, work, out, take=False):
     {bank: (atlas path, [(w, h), ...])}.  The loot board's set ("take")
     has its sign read Discard and Take, a fourth name tag with a ship
     (frame 92, dividing the squadron) and only the O.K. sign in its
-    third bank."""
+    third bank.  Both sets end with the cannon mirrored (93, lit 94)."""
     os.makedirs(work, exist_ok=True)
     frames = []
 
@@ -200,7 +205,7 @@ def compose(src, words, font, k, work, out, take=False):
     for ink in ("black", "red", "cream"):
         for n, c in enumerate("/0123456789"):
             text(f("small-%s-%d" % (ink, n)), c, INK[ink], *SMALL, font,
-                 k, halo=HALO if ink == "black" else None)
+                 k, plate=None if ink == "cream" else PLATE)
     # 53-64: the goods' names, in black, then in red.
     for ink in ("black", "red"):
         for g in GOODS:
@@ -224,7 +229,8 @@ def compose(src, words, font, k, work, out, take=False):
         os.remove(base)
     panel(f("gold"), src["parchment"], *GOLD, k, rim=src["gilt"])	# 84
     for ink in ("black", "red"):					# 85-86
-        text(f("pcs-%s" % ink), words["pcs"], INK[ink], *PCS, font, k)
+        text(f("pcs-%s" % ink), words["pcs"], INK[ink], *PCS, font, k,
+             plate=PLATE)
     fit(f("colours"), src["colours"], *COLOURS, k)		# 87
     for key in ("merchant", "overboard", "captured", "plundered"):
         base = os.path.join(work, "plaque-%s-base.png" % key)
@@ -243,6 +249,10 @@ def compose(src, words, font, k, work, out, take=False):
     else:
         magick("-size", "%dx%d" % (px(1, k), px(2, k)), "xc:none",
                f("dot"))
+    # 93-94: the cannon (70, lit 76) mirrored, for the board's other side.
+    for bright in (0, 18):
+        magick(os.path.join(work, "good-%d-cannon.png" % bright), "-flop",
+               f("good-%d-cannon-flop" % bright))
 
     banks = {}
     sizes = [identify(p) for p in frames]
