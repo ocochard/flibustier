@@ -130,15 +130,26 @@ def move_defs():
 # has carried it right in, about a fifth of its strikes, where the
 # opponent's blade reaches it too.  A reach of 5 or more takes in the
 # bunch at 4 and makes the heavy blades far the strongest.
-# The arm is one pixel longer at the easiest level only: a cautious
+# The arm is one pixel longer at the two easy levels: a cautious
 # opponent there often stands guarding, and the heavy blades, which
 # then land only from inside 4, dragged on until the crews' melee
 # decided; with it, the apprentice's boarding cutlass wins like the
-# rapier (better when outnumbered).  It does not shorten at the hard
-# levels, as it used to: a pixel is a large share of the heavy blades'
-# chances and none of the rapier's, so it made the hard levels lopsided
-# by weapon; the hit thresholds alone make them hard.
-REACH_LEVEL = [3, 2, 2, 2, 2]
+# rapier (better when outnumbered).  Level 1 is also where an
+# apprentice boards a named captain (a level or two harder): without
+# the pixel, random lunges with a cutlass won only a third of those
+# boardings with a crew two and a half times smaller than the enemy's
+# (the strength bar near 16 of 47), and the career bot lost nearly half
+# its boardings of named captains while outnumbered, each one a prison
+# term and an injury.  With it they win nine in ten there, two in five
+# when outnumbered five to one (bar 13), where a parrying player still
+# wins four in five.
+# The rapier, whose reach does not hang on the pixel, is unchanged: it
+# fares worse outnumbered at level 1, where its light blows move the
+# bar too slowly against the melee.  The arm does not shorten at the
+# hard levels, as it used to: a pixel is a large share of the heavy
+# blades' chances and none of the rapier's, so it made the hard levels
+# lopsided by weapon; the hit thresholds alone make them hard.
+REACH_LEVEL = [3, 3, 2, 2, 2]
 REACH_WEAPON = [28, 2, 1]              # rapier, longsword, cutlass
 # The opponent's, by its blade.  Its heavy blades keep a long reach: a
 # shorter one mirroring the player's made crew fights against them easy
@@ -335,8 +346,9 @@ def build():
         "pixel step in before the point lands). Reach pays for the "
         "weight the rules give heavy blades: the rapier strikes from 30 "
         "pixels, the longsword and cutlass only from 4 and 3 (one more "
-        "at the easiest level, where a hesitant opponent would otherwise "
-        "keep them out), once a lunge has carried them right in. Harder "
+        "at the two easy levels, where a hesitant opponent would otherwise "
+        "keep them out, and where an apprentice boards named captains, "
+        "a level harder), once a lunge has carried them right in. Harder "
         "levels raise the player's hit threshold, lower the opponent's "
         "and its caution; the arm keeps its length, which would favour "
         "the rapier. The "
