@@ -23,11 +23,11 @@ CABIN = [
     # 1 treasure maps: the chart spread on the table (the table sprite,
     # without the chart, is drawn over it while there are none).
     [332, 258, 492, 304, 1],
-    # 2 treasure cave: the iron-bound sea chest on the left, below the
-    # book lying on it, left of the globe standing in front of it.
-    [24, 283, 139, 460, 1],
-    # 3 log book: the leather book lying on the chest.
-    [44, 250, 150, 282, 1],
+    # 2 treasure cave: the iron-bound sea chest on the left, up to its
+    # lid, left of the globe standing in front of it.
+    [24, 255, 139, 460, 1],
+    # 3 log book: the open book on its stand on the window sill.
+    [157, 181, 208, 216, 1],
     # 4 map of the Caribbean: the globe on its stand, in front.
     [140, 318, 330, 479, 1],
     # 5 search: the brass telescope on its tripod, by the porthole, to
@@ -35,7 +35,8 @@ CABIN = [
     [248, 170, 318, 292, 1],
     # 6 divide party: the gilt mirror on the right wall (never open).
     [528, 90, 610, 158, 0],
-    # 7 join party: the book on the window sill (never open).
+    # 7 join party: never open, so it may share the sill with the log
+    # book (closed spots take no clicks).
     [140, 199, 198, 216, 0],
     # 8 save game: the chest of drawers on the right.
     [505, 196, 618, 358, 1],
