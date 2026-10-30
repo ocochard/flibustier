@@ -7936,12 +7936,16 @@ panel_draw(struct game *g)
 {
 	const struct sim_fleet *f = &g->sim.fleet;
 	const char *word;
+	/* A replacement picture's light plaques and dark wood suit neither
+	 * entry 31 nor entry 0: a red marks a ship, a parchment prompt. */
+	static const uint8_t art_marked[3] = { 0xa8, 0x18, 0x10 };
+	static const uint8_t art_prompt[3] = { 0xf2, 0xe4, 0xc0 };
 	uint8_t plain[3], marked[3];
 	int i, lvl, w;
 
 	memcpy(plain, g->bg.pixels != NULL ? g->bg.palette : g->ink, 3);
-	memcpy(marked, g->bg.pixels != NULL ? &g->bg.palette[31 * 3] :
-	    g->ink, 3);
+	memcpy(marked, g->bg.rgba != NULL ? art_marked :
+	    g->bg.pixels != NULL ? &g->bg.palette[31 * 3] : g->ink, 3);
 	for (i = 0; i < f->nships && i < PANEL_SHIPS; i++) {
 		lvl = panel_level(f->damage[i]);
 		if ((size_t)lvl < g->panel_spr[i].count)
@@ -7963,8 +7967,11 @@ panel_draw(struct game *g)
 	word = game_str(g, g->panel_replace ? S_NO_OFFICERS :
 	    g->panel_abandon ? S_TOO_FEW : S_COMMAND);
 	w = text_width(&g->font[FONT_BODY], word);
+	if (g->bg.rgba != NULL)
+		memcpy(g->ink, art_prompt, 3);
 	draw(g, FONT_BODY, 5 + (415 - (w < 415 ? w : 415)) / 2, 400, 415,
 	    word, 0);
+	memcpy(g->ink, plain, 3);
 	word = game_word(g, W_PANEL_BUTTON, 1);
 	w = text_width(&g->font[FONT_TITLE], word);
 	draw(g, FONT_TITLE, 510 - w / 2, 436, FB_W, word, 0);

@@ -165,6 +165,9 @@ Loaded by `pic_load()` (`src/assets/pic.c`):
     from the picture's palette get an engine orange and pale yellow
     instead when the picture has the fixed palette, whose entries there
     are dark blues.
+  - The fleet panel on a replacement picture marks a ship in red, not
+    entry 31, and writes its prompt in light parchment, not entry 0:
+    the open pack's light plaques and dark wood suit neither.
   - `fb_image_part` draws indices only, so the credits text blocks stay
     in original resolution.
   - The treasure map is composed on indices, so it drops the true
