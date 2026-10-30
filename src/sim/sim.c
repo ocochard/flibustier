@@ -21,7 +21,7 @@
 #define FLAG_OBSOLETE		0x20	/* an event made it out of date */
 #define STANDING_FLOOR		(-3)	/* after an amnesty */
 #define TOWN_DAYS		3	/* a pass through the town's menu */
-#define WIND_TICKS		128	/* the wind may shift this often */
+#define WIND_TICKS		128	/* the wind may shift this often, */
 #define WIND_START		0xC0	/* blowing west: the trade winds */
 #define SPEED_MIN		4
 #define SPEED_MAX		12
@@ -29,7 +29,8 @@
 #define EDGE_MAX_X		0x27bf
 #define EDGE_MAX_Y		0x1dbf
 #define START_CELLS		4	/* the start town is within */
-#define SIGHTING_TICKS		32	/* how often a sail may appear */
+#define SIGHTING_TICKS		32	/* a sail may appear this often, */
+					/* both in ticks of a 64-tick day */
 #define HEAT_IGNORED		16	/* added when an encounter is left */
 #define FAR_FROM_TOWNS		12	/* cells: ships from any nation */
 
@@ -784,6 +785,19 @@ day_ticks(const struct sim *s)
 }
 
 /*
+ * A period of "ticks" in a day of the original's length, in this world's
+ * ticks: a longer day stretches the voyages, not how often things happen
+ * in a day.
+ */
+static int
+per_day(const struct sim *s, int ticks)
+{
+	int t = ticks * day_ticks(s) / WORLD_TICKS_PER_DAY;
+
+	return (t > 0 ? t : 1);
+}
+
+/*
  * The crew eats (VA 0x231b8), two passes before each day's: food x 256
  * + fraction loses a 256th a man, floored at 0; the days left are that
  * over the crew (at most 32767).  Under 21 days, on a multiple of 4,
@@ -1050,7 +1064,7 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 			ny = y8 >> 3;
 		}
 		/* Time passes whether or not the ship can move. */
-		if (f->ticks % WIND_TICKS == 0)
+		if (f->ticks % per_day(s, WIND_TICKS) == 0)
 			shift_wind(s);
 		if (eat(s))
 			return (SAIL_CREW);
@@ -1081,7 +1095,8 @@ sim_sail(struct sim *s, int turn, int ticks, int *town)
 			return (SAIL_CREW);
 		if (t >= 0)
 			return (arrive(s, t, town));
-		if (s->encounters && (f->ticks + 4) % SIGHTING_TICKS == 0 &&
+		if (s->encounters &&
+		    (f->ticks + 4) % per_day(s, SIGHTING_TICKS) == 0 &&
 		    sighting(s)) {
 			f->speed = 0;
 			return (SAIL_ENCOUNTER);
@@ -1179,7 +1194,7 @@ sim_march(struct sim *s, int dx, int dy, int ticks, int *town)
 	dy = dy < 0 ? -1 : dy > 0 ? 1 : 0;
 	while (ticks-- > 0) {
 		f->ticks++;
-		if (f->ticks % WIND_TICKS == 0)
+		if (f->ticks % per_day(s, WIND_TICKS) == 0)
 			shift_wind(s);
 		if (eat(s))
 			return (SAIL_CREW);

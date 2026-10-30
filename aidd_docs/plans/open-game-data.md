@@ -200,7 +200,10 @@ original's (decision 1).
   frame cannot bring the far ends closer; a cartogram that empties the
   sea makes coastal routes longer). The day's length became open data
   (`data/calendar`, maintainer 2026-10-29); the open pack sets it from
-  the route targets.
+  the route targets. The wind's shifts and the sightings stretch with
+  the day (maintainer, 2026-10-30): at a fixed tick period a longer day
+  had made each year at sea three times as busy (the career bot took
+  2.5 times the prizes).
 - **The open world, merged as one** (the map, the towns, the calendar,
   the scenarios, the battle screens, the treasure spots and battle sets
   and the open-shallows tiles had to reach the pack together: each

@@ -432,8 +432,11 @@ cutlass).
 ### `data/calendar`
 
 `{"ticks_per_day": n}`, 16 to 1024: the sailing and marching ticks a
-day takes. Each day the calendar moves on and the crew eats; wind,
-sightings and battles count ticks, not days. Not in the original's
+day takes. Each day the calendar moves on and the crew eats. The
+wind's shifts and the sightings of sails keep their pace in days: their
+periods (128 and 32 ticks of a 64-tick day) stretch with the day, so a
+longer day makes voyages take fewer days without making a day at sea
+any busier. Battles and moves within a day count ticks. Not in the original's
 executable: without the ID the engine keeps the original's 64, with or
 without the original data. A pack whose map puts its ports many cells
 apart lengthens the day so that voyages take fewer days (a ship sails at
