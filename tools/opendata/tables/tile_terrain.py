@@ -26,6 +26,9 @@ the coastline, so frame 0 stands for all):
     (they whiten all three channels), so they stay sea.
   - sea: the other water; land: everything that is not water.
 
+The battle sheet's water is all sea: its shore halo is where ships come
+in to land, and shallows there would wreck them in front of every fort.
+
 A terrain pixel (640x480) covers 2.25 x 2.25 art pixels at 1080p; it
 takes the class with the largest covered area, ties going to land, then
 shallows.
@@ -185,13 +188,17 @@ def tiles_of(name, side):
 
 def map_terrain():
     tiles = tiles_of("map.png", 16)
-    return mask_png(tiles, 16), notes(2, 3, 4) + " Map: " + counts(tiles) + "."
+    return mask_png(tiles, 16), notes(2, 3, 5) + " Map: " + counts(tiles) + "."
 
 
 def battle_terrain():
-    tiles = tiles_of("battle.png", 32)
-    return mask_png(tiles, 32), notes(2, 3, 4) + " Battle: " + counts(tiles) + \
-        "."
+    # The battle sheet has no shallows: the halo the art paints along its
+    # shores is sea, so a ship sails straight up to the beach (it lands
+    # only once its centre is on land, and a band of shallows on the way
+    # would scrape it, slowed before a fort, until it sinks).
+    tiles = [(f, np.where(cls == SHALLOWS, SEA, cls))
+             for f, cls in tiles_of("battle.png", 32)]
+    return mask_png(tiles, 32), notes(2, 3, 4, 5) + " Battle: " + counts(tiles) + "."
 
 
 def shore_side(cls):
@@ -217,7 +224,7 @@ def map_sections():
         if side:
             lines.append("%d = %s" % (t, side))
             n[side] += 1
-    text = notes(5) + " %d east, %d south, %d west." % (
+    text = notes(6) + " %d east, %d south, %d west." % (
         n["east"], n["south"], n["west"])
     return "\n".join(lines) + "\n", text
 
@@ -269,7 +276,7 @@ def battle_sections():
         if gr:
             lines.append("%d = %s" % (t, gr))
             n[gr] += 1
-    text = notes(6, 7) + " %d water, %d swamp, %d cover, %d clear." % (
+    text = notes(7, 8) + " %d water, %d swamp, %d cover, %d clear." % (
         n["water"], n["swamp"], n["cover"], 256 - sum(n.values()))
     return "\n".join(lines) + "\n", text
 
