@@ -27,7 +27,7 @@ CABIN = [
     # lid, left of the globe standing in front of it.
     [24, 255, 139, 460, 1],
     # 3 log book: the open book on its stand on the window sill.
-    [157, 181, 208, 216, 1],
+    [137, 166, 206, 215, 1],
     # 4 map of the Caribbean: the globe on its stand, in front.
     [140, 318, 330, 479, 1],
     # 5 search: the brass telescope on its tripod, by the porthole, to
