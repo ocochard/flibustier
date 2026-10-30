@@ -176,6 +176,7 @@ BOARD_STATIC = [
 # picture size on screen (its art over 2.25).
 BOARD_GOODS = [0, 1, 2, 5]
 BOARD_ICONS = {0: (22, 36), 1: (22, 32), 2: (22, 28), 5: (47, 26)}
+BOARD_CANNON_RIGHT = [93, 94]	# frames 70 and 76 mirrored
 BOARD_ROW_H = 50
 # A row reads as a ledger line, centred on the engine's large digits
 # (y 117-133 in row 0): the good's name at the outer edge, the price
@@ -193,12 +194,15 @@ def board_rows():
         dy = i * BOARD_ROW_H
         w, h = BOARD_ICONS[g]
         icon_y = 125 - h // 2 + dy
+        # The cannon on the player's side is the mirrored one, so the
+        # two face each other across the board.
+        right = BOARD_CANNON_RIGHT if g == 5 else [65 + g, 71 + g]
         rows += [
             [53 + g, 59 + g, 6, BOARD_WORD_Y + dy, 1],	# name, merchant's
             [65 + g, 71 + g, 169, icon_y, 1],		# picture
             [85, 86, 92, BOARD_PCS_Y + dy, 0],		# "pcs" after the price
             [53 + g, 59 + g, 572, BOARD_WORD_Y + dy, 1],	# name, player's
-            [65 + g, 71 + g, 466 - w, icon_y, 1],	# picture
+            right + [466 - w, icon_y, 1],		# picture
             [85, 86, 556, BOARD_PCS_Y + dy, 0],		# "pcs"
         ]
     return rows
