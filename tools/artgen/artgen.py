@@ -3012,18 +3012,16 @@ def make_layout(args, spec, a, profile, seed):
 
 
 def make_citymap(args, spec, a, profile, seed):
-    """The Map of the Caribbean: its land the world's own, read from the
-    player's game data by helpers/landmask.c (never stored), painted and
-    laid out with its panels by citymap.py."""
+    """The Map of the Caribbean: its land the world's own, read by
+    helpers/landmask.c from the pack being made (its open map/<year>)
+    over the player's game data (never stored), painted and laid out
+    with its panels by citymap.py."""
     import citymap
     k = spec["pack"]["art_height"] / SCREEN_H
     cm = a["citymap"]
     root = os.path.dirname(os.path.dirname(HERE))
     work = os.path.join(args.pack, "art", "citymap.work")
     os.makedirs(work, exist_ok=True)
-    if not args.data:
-        print("%s: needs --data" % a["id"], file=sys.stderr)
-        return None
     helper = os.path.join(work, "landmask")
     land = os.path.join(work, "land.pgm")
     try:
@@ -3032,9 +3030,10 @@ def make_citymap(args, spec, a, profile, seed):
                         os.path.join(root, "build", "libflibustier_core.a"),
                         "-L/usr/local/lib", "-lfreetype", "-lz", "-lm",
                         "-lc++"], check=True)
-        subprocess.run([helper, os.path.expanduser(args.data), land,
+        subprocess.run([helper, os.path.expanduser(args.data or ""), land,
                         str(round(citymap.MAP_W * k)),
-                        str(round(citymap.MAP_H * k))], check=True)
+                        str(round(citymap.MAP_H * k)), args.pack],
+                       check=True)
     except subprocess.CalledProcessError as e:
         print("%s: land mask: %s" % (a["id"], e), file=sys.stderr)
         return None

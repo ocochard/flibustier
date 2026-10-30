@@ -2,7 +2,10 @@
  * Copyright (c) 2026, Olivier Cochard-Labbé
  *
  * The world's land as a mask (P5), from the player's game data at make
- * time (never stored): helpers for tools/artgen. */
+ * time (never stored) and the pack being made, whose map/<year> wins
+ * when it has one: helpers for tools/artgen.
+ *
+ * landmask DATA|"" OUT [W H [PACK]] */
 #include <stdio.h>
 #include <stdlib.h>
 #include "data/pack.h"
@@ -10,7 +13,9 @@
 #include "ui/script.h"
 #include "sim/internal.h"
 #include "assets/world.h"
-int main(int c, char **v){ static struct game g; struct packs *p=packs_new(); packs_add_original(p,v[1]);
+int main(int c, char **v){ static struct game g; struct packs *p=packs_new();
+ if (v[1][0] != '\0' && packs_add_original(p,v[1])) return 1;
+ if (c > 5 && packs_add_dir(p,v[5])) return 1;
  if (game_init(&g,p,"eng",NULL)) return 1;
  game_script(&g, "enter enter enter enter down down down down enter down enter right enter enter type:Lo enter enter esc enter enter");
  const struct world *w = g.sim.world;

@@ -35,6 +35,20 @@ def compose(land_pgm, src, font, k, work, out):
     # Sampled at the map's own size: only its edge softened.
     magick(land_pgm, "-resize", "%dx%d!" % (mw, mh), "-blur",
            "0x%g" % (k * 0.25), "-level", "30%,70%", land)
+    # Islands of a pixel or two (a town's islet) fade away in that:
+    # those are grown to a dot the eye finds, the larger land kept as is.
+    seen = os.path.join(work, "any.png")
+    big = os.path.join(work, "big.png")
+    magick(land_pgm, "-resize", "%dx%d!" % (mw, mh), "-threshold", "20%",
+           seen)
+    magick(seen, "-define", "connected-components:area-threshold=%d" %
+           round((3 * k) ** 2), "-define",
+           "connected-components:mean-color=true",
+           "-connected-components", "8", big)
+    magick(land, "(", seen, big, "-compose", "minus_src", "-composite",
+           "-morphology", "dilate", "disk:%g" % (k * 1.1), "-blur",
+           "0x%g" % (k * 0.3), ")", "-compose", "lighten", "-composite",
+           land)
     coast = os.path.join(work, "coast.png")
     magick(land, "(", "+clone", "-morphology", "dilate",
            "disk:%d" % max(1, round(k * 0.8)), ")", "-compose",
@@ -72,7 +86,8 @@ def compose(land_pgm, src, font, k, work, out):
         cp = os.path.join(work, "compass.png")
         magick(src["compass"], "-trim", "+repage", "-resize",
                "%dx%d" % (px(64, k), px(64, k)), cp)
-        magick(mp, cp, "-geometry", "+%d+%d" % (px(388, k), px(24, k)),
+        # In the open Atlantic, east of the Bahamas, where no town is.
+        magick(mp, cp, "-geometry", "+%d+%d" % (px(392, k), px(92, k)),
                "-composite", mp)
     # The wood: the town list's column and the figures' panel below.
     magick(src["wood"], "-resize", "%dx%d^" % (W, H), "-gravity", "center",
