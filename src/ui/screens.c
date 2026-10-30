@@ -8995,7 +8995,9 @@ citymap_event(struct game *g, const struct ui_event *ev)
 	}
 	if (ev->type != EV_CLICK)
 		return;
-	if (cm_in(x, y, 348, 315, 479, 359))		/* DONE */
+	/* DONE: the original reaches up to y 315; the engine starts it at
+	 * 326, below the dots of the coast towns it covers. */
+	if (cm_in(x, y, 348, 326, 479, 359))
 		citymap_done(g);
 	else if (cm_in(x, y, 0, 0, 479, 359)) {		/* the map */
 		for (i = 0; i < g->sim.ntowns; i++)

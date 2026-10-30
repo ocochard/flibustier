@@ -13,8 +13,9 @@ the player's game data where the pack is made (a mask of land, a pixel a
 cell, never stored), and painted: a sea texture, a parchment land, a
 raised dark coast.  Beside and below it, the wood panels of the town
 list (x 480-640) and of the selected town's figures (y 360-480), with
-their dividers and arrows, and the DONE plaque (x 348-479, y 315-359),
-its word set in the pack's font.
+their dividers and arrows, and the DONE plaque (x 348-479, y 326-359,
+lower than the original's 315 so the coast towns' dots stay clear of
+it), its word set in the pack's font.
 
 Needs ImageMagick 7 ("magick").
 """
@@ -119,7 +120,7 @@ def compose(land_pgm, src, font, k, work, out):
     magick(out, mp, "-geometry", "+0+0", "-composite", out)
     # DONE, on a brass plaque, on the map's corner.
     done = os.path.join(work, "done.png")
-    panel(done, src["brass"], 128, 40, k, rim=src["brass"])
-    lettered(done, done, "DONE", "#2a1608", 128, 40, font, k, shadow=False)
-    magick(out, done, "-geometry", "+%d+%d" % (px(349, k), px(317, k)),
+    panel(done, src["brass"], 128, 30, k, rim=src["brass"])
+    lettered(done, done, "DONE", "#2a1608", 128, 30, font, k, shadow=False)
+    magick(out, done, "-geometry", "+%d+%d" % (px(349, k), px(328, k)),
            "-composite", "-depth", 8, out)

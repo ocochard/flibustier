@@ -2001,7 +2001,8 @@ Bit 8 alone is cleared when the governor's daughter is won over (VA
     (84, 384), (243, 384), (404, 384), (84, 440), (243, 440), (404,
     440); each value reads "?" (CSTN 92.5) until the town's
     information is known (flag 0x80).
-  - Clicks: DONE (348, 315)-(479, 359) leaves; on the map, the town
+  - Clicks: DONE (348, 315)-(479, 359) leaves (the engine starts it
+    at y 326, below the dots of the coast towns at y 312-319); on the map, the town
     within 2 pixels; in the list, its row. Escape and Space leave; the
     arrow keys move a bar over the list rows (VA `0xb3ef`), which the
     engine replaces by selecting the previous or next town.
