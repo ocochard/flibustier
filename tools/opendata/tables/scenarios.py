@@ -87,10 +87,13 @@ RELATIONS = {
     # Cromwell's Western Design took Jamaica (1655); in the Indies the
     # war goes on until the treaty of Madrid (1670): Myngs, Mansvelt,
     # Morgan.  The Second Anglo-Dutch war (Holmes 1664, 1665-67), France
-    # bound to the Dutch by the alliance of 1662.  Spain at peace with
-    # France (the Pyrenees, 1659) and Holland (Munster).
+    # bound to the Dutch by the alliance of 1662 and at war with England
+    # beside them (1666-67: the French take English St Christopher,
+    # Antigua and Montserrat, Harman burns their fleet off Martinique).
+    # Spain at peace with France (the Pyrenees, 1659) and Holland
+    # (Munster).
     1660: {(SPAIN, ENGLAND): -1, (ENGLAND, HOLLAND): -1,
-           (FRANCE, HOLLAND): 1},
+           (ENGLAND, FRANCE): -1, (FRANCE, HOLLAND): 1},
     # Louis XIV against Spain (the Reunions 1683-84, the Nine Years'
     # War from 1689): Grammont and de Graaf sack Veracruz (1683) and
     # Campeche (1685).  The Dutch, Spain's allies since 1673, allied
