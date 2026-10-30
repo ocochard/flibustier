@@ -52,9 +52,11 @@ KINDS = {
     "program": "game program",
 }
 NOT_ART = {"patch", "towns", "world", "driver", "program"}
-# The 16-colour copies the installer makes, which the engine never uses.
+# The 16-colour copies the installer makes, which the engine never uses,
+# and the cloud picture, which the battle panels paint in their windows
+# instead (pic/sbat, pic/lbat).
 UNUSED = {"ui/misc16", "ui/miscf16", "ui/miscg16", "tiles/16map16",
-          "tiles/16map32", "tiles/tmap16", "img/cloud16"}
+          "tiles/16map32", "tiles/tmap16", "img/cloud16", "img/cloud"}
 # The credits' text pictures, which a pack's credits as text replace,
 # by language (asset-packs.md, "Open credits").
 CREDITS = {"pic/credtext": "eng", "pic/credtxtf": "fre",
