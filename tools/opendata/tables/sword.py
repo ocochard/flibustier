@@ -70,8 +70,9 @@ def slash_move(line):
     # Six ticks: the guard is kept while drawing back (tick 0), the
     # blade is raised and the body open (1-3), it cuts on tick 4, and
     # the guard comes back as it recovers (5).  Slow and readable: the
-    # raised blade shows the line some 0.4 s before the cut, time to
-    # parry it; it moves the bar twice as far as a lunge.
+    # raised blade shows the line three ticks before the cut (0.5 s at
+    # the easy levels, 0.4 s at the middle one, 0.2 s at level 3: see
+    # DELAY), time to parry it; it moves the bar twice as far as a lunge.
     return [frame(guard=BIT[line]), frame(), frame(), frame(),
             frame(strike=BIT[line]), frame(guard=BIT[line])]
 
@@ -174,10 +175,21 @@ FOE_HIT = [232, 192, 148, 108, 64]
 # leaves fewer attacks to the named captains a level or two harder.
 CAUTION = [10, 8, 6, 2, 0]
 
-# Timer units (screen frames at 60 Hz) per fight tick, by level & 3:
-# about 8.5 ticks a second at levels 0, 1 and 4 (level 4 shares entry
-# 0), 10 at levels 2 and 3.  Level 4 is hard enough from its thresholds.
-DELAY = [7, 7, 6, 6]
+# Timer units (screen frames at 60 Hz, one per sword screen tick) per
+# fight tick, by level & 3; a tick lasts DELAY/60 s.  Set from how long
+# a player has to parry: a key is read when his move ends, so a guard
+# must be keyed a tick before the cut, and a slash's blade, raised on
+# its tick 1, gives 2 ticks to see it and press (3 from the draw back
+# on tick 0); a lunge's step in, on its tick 1, gives none.  For a
+# reaction of 0.25 s (r):
+#   easy (0, 1), comfortable: 2 ticks >= 4/3 r = 0.33 s, DELAY >= 10;
+#   middle (2), with attention: 2 ticks >= r, DELAY >= 7.5, so 8;
+#   hard (3), only by anticipating: even the 3 ticks from the raised
+#   blade to the cut under r, DELAY < 5, so 4.
+# Seconds a tick: 0.167, 0.167, 0.133, 0.067.  Level 4 shares entry 0
+# and plays at the easy pace; its thresholds make it the hardest, but
+# its fights last longest (a good fencer's duel takes 1.5 min).
+DELAY = [10, 10, 8, 4]
 
 # Far apart (more than 59, or the opponent past the player) an attack
 # key advances (it keeps advancing while held, then attacks in range);
@@ -357,10 +369,15 @@ def build():
         "leaves open (levels 2-4). Attack keys advance from afar and "
         "strike once in reach; a guard is kept until another key, an "
         "attack or step back is one per key press. Edges and flag "
-        "heights fit the 640x480 sword screen. "
+        "heights fit the 640x480 sword screen. The pace leaves a player "
+        "with a quarter second reaction time to parry a raised blade "
+        "comfortably at the easy levels (a tick lasts 1/6 s), with "
+        "attention at the middle level (2/15 s), and only by "
+        "anticipating at level 3 (1/15 s); a lunge is hard to parry by "
+        "reaction at every level. Level 4 shares the easy pace. "
         "Tuned by bot fights through flibustier-sim at every level, "
         "weapon and crew ratio, with random lunges (the career bot's) "
-        "and a player who parries the line he sees raised 0.2 s late: "
+        "and a player who parries the line he sees raised 2 ticks late: "
         "with a crew as strong as the enemy's, random lunges win "
         "boardings at the two easy levels nearly always and about half "
         "at the middle level, the parrying player nine in ten there; at "
