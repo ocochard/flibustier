@@ -902,8 +902,13 @@ class Bot:
             self.stats["captures"] += 1
             if fin.get("volunteers"):
                 self.sim("crew", action="volunteers", accept=1)
-            loot = fin.get("loot") or [0, 0, 0, 0]
+            loot = list(fin.get("loot") or [0, 0, 0, 0])
             if any(loot):
+                # all the cargo to sell; only the food the crew needs and
+                # the guns the ships can mount, the rest left in her hold
+                f = self.refresh()["fleet"]
+                loot[0] = min(loot[0], max(0, self.food_need(f)))
+                loot[3] = min(loot[3], max(0, self.mountable(f) - f["guns"]))
                 self.sim("merchant", action="loot")
                 for good, n in zip(("food", "goods", "sugar"), loot):
                     if n:
@@ -1188,7 +1193,7 @@ class Bot:
             if f[good]:
                 self.sim("merchant", action="sell", good=good, count=f[good], check=False)
         f = self.refresh()["fleet"]
-        want = f["crew"] // 2 + 20 - f["food"]
+        want = self.food_need(f)
         while want > 0:
             r = self.sim("merchant", action="buy", good="food", count=want, check=False)
             if r.get("ok") and r.get("traded", 1):
@@ -1203,6 +1208,16 @@ class Bot:
             # buy no more (Spain, friendly with most towns, kept doing so)
             self.no_food_until = self.refresh()["day"] + 30
         self.sim("merchant", action="close", traded=0, check=False)
+
+    @staticmethod
+    def food_need(f, more=0):
+        """Food short of what a crew (and "more" men) eats to the next
+        port."""
+        return (f["crew"] + more) // 2 + 20 - f["food"]
+
+    def mountable(self, f):
+        """The guns the fleet's ships can mount, by class."""
+        return sum(self.st["ship_classes"][t & 7]["guns"] for t in f["ships"])
 
     def rating(self, ship):
         """What a ship is worth to a pirate: her fighting power (guns and
@@ -1255,6 +1270,11 @@ class Bot:
             r = self.sim("shipwright", action="sell", ships=idx, check=False)
             self.stats["ships_sold"] += len(idx)
         f = self.refresh()["fleet"]
+        extra = f["guns"] - self.mountable(f)
+        if extra > 0:
+            r = self.sim("shipwright", action="sell_cannon", count=extra, check=False)
+            self.stats["cannon_sold"] += r.get("traded", 0)
+            f = self.refresh()["fleet"]
         dmg = [i for i, d in enumerate(f["damage"]) if d > 0]
         if dmg and f["gold"] > 1000:
             self.sim("shipwright", action="repair", ships=dmg, check=False)
