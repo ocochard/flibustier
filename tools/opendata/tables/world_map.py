@@ -27,7 +27,9 @@ on the other costs LAND_SEA, land against shallows LAND_SHALLOWS,
 shallows against sea SEA_SHALLOWS.  A cell of open sea only takes a
 plain sea tile, a cell with no water a land tile; a cell with
 shallows but no land is matched like a coast, among the tiles with no
-land (no stray land at sea).
+land (no stray land at sea).  A cell a navigable channel crosses
+(tables/_geo.py, CHANNELS) takes no tile with shallows, so the channel
+stays open to every ship.
 
 Seams.  A second pass (iterated conditional modes, cells in two
 interleaved halves, until nothing changes) lets each coastal cell take,
@@ -154,6 +156,11 @@ def _solve():
     data = onehot @ tcost.T                             # (cells, n)
     # Shallows away from land: no tile with land (no stray land at sea).
     data[np.ix_(~c_land[coast], t_land)] = np.inf
+    # A channel's cells: no tile with shallows (open to every ship).
+    c_channel = _geo.channel_band().reshape(H, SIDE, W, SIDE) \
+        .any(axis=(1, 3)).ravel()
+    t_shallows = (tm == SHALLOWS).any(axis=1)
+    data[np.ix_(c_channel[coast], t_shallows)] = np.inf
     best = data.min(axis=1, keepdims=True)
     tol = np.maximum(best * TOLERANCE, TOLERANCE_MIN)
     allowed = data <= best + tol

@@ -277,8 +277,9 @@ def _dilate(mask, radius):
     return out
 
 
-def _channels(t):
-    """Cut CHANNELS through the shallows."""
+def channel_band():
+    """The pixels within CHANNEL_PX of a CHANNELS line."""
+    band = np.zeros((WORLD_H, WORLD_W), dtype=bool)
     r = CHANNEL_PX
     for line in CHANNELS.values():
         x, y = lonlat_to_world(np.array([p[0] for p in line]),
@@ -293,9 +294,13 @@ def _channels(t):
             u = np.clip(((px - ax) * dx + (py - ay) * dy) /
                         (dx * dx + dy * dy), 0, 1)
             d2 = (px - ax - u * dx) ** 2 + (py - ay - u * dy) ** 2
-            win = t[y0:y1, x0:x1]
-            cut = (d2 <= r * r) & (win == SHALLOWS)
-            win[cut] = SEA
+            band[y0:y1, x0:x1] |= d2 <= r * r
+    return band
+
+
+def _channels(t):
+    """Cut CHANNELS through the shallows."""
+    t[channel_band() & (t == SHALLOWS)] = SEA
 
 
 def _key():
