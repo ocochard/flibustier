@@ -77,7 +77,9 @@ def main():
     ap.add_argument("--only", action="append", default=[],
                     help="build only this module (repeatable)")
     args = ap.parse_args()
-    names = args.only or modules()
+    # The tile sheets' terrain first: the map, and so the towns and the
+    # scenarios, are laid on it.
+    names = sorted(args.only or modules(), key=lambda n: n != "tile_terrain")
     for d in ("data", "pack.d", os.path.join("provenance", "data")):
         os.makedirs(os.path.join(args.pack, d), exist_ok=True)
     # Modules that read the pack's own art (the tiles' terrain) find it
