@@ -803,7 +803,8 @@ test_credits(void)
 {
 	static const char good[] = "{\"ink\": \"#10a0Ff\", \"blocks\": ["
 	    "{\"heading\": \"~Thanks\", \"lines\": [\"`A\", \"B ^C\"]},"
-	    "{\"lines\": [\"D\"]}, {\"heading\": \"E\"}]}";
+	    "{\"lines\": [\"D\"], \"needs\": \"music/title\"},"
+	    "{\"heading\": \"E\"}]}";
 	static const char one[] = "{\"blocks\": [{\"heading\": \"x\"}]}";
 	static const char *const bad[] = {
 		"{\"blocks\": []}",
@@ -811,6 +812,7 @@ test_credits(void)
 		"{\"blocks\": [{}]}",				/* empty */
 		"{\"blocks\": [{\"heading\": \"\", \"lines\": []}]}",
 		"{\"blocks\": [{\"heading\": 1}]}",
+		"{\"blocks\": [{\"heading\": \"x\", \"needs\": 1}]}",
 		"{\"blocks\": [{\"lines\": [\"a\\nb\"]}]}",	/* a break */
 		"{\"blocks\": [{\"lines\": [2]}]}",
 		"{\"blocks\": [\"x\"]}",
@@ -836,6 +838,10 @@ test_credits(void)
 	    strcmp(c.blocks[0].lines[1], "B ^C") == 0 &&
 	    strcmp(c.blocks[1].heading, "") == 0 && c.blocks[1].nlines == 1 &&
 	    c.blocks[2].nlines == 0);
+	CHECK(c.blocks[0].needs == NULL &&
+	    strcmp(c.blocks[1].needs, "music/title") == 0);
+	credits_drop(&c, 1);
+	CHECK(c.nblocks == 2 && strcmp(c.blocks[1].heading, "E") == 0);
 	credits_free(&c);
 	CHECK(c.nblocks == 0 && c.blocks == NULL);
 	CHECK(credits_decode((const uint8_t *)one, strlen(one), &c, err,

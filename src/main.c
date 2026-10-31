@@ -21,16 +21,21 @@
 
 #define MAX_PACKS	8
 #define BUNDLED_PACK	"openpack"	/* a package's pack, by the program */
+#ifndef DATA_FROM_BIN			/* an install's data, from its bin */
+#define DATA_FROM_BIN	"../share/flibustier"
+#endif
 
 /*
- * The pack a package ships beside the program: <dir>/openpack, or in a
- * macOS application bundle Contents/Resources/openpack.  Written to
- * "out"; 0, or -1 when there is none.
+ * The pack a package ships beside the program: <dir>/openpack, in a
+ * macOS application bundle Contents/Resources/openpack, or in an
+ * install's data directory (<prefix>/share/flibustier/openpack).
+ * Written to "out"; 0, or -1 when there is none.
  */
 static int
 bundled_pack(const char *argv0, char *out, size_t len)
 {
-	static const char *const where[] = { "", "/../Resources" };
+	static const char *const where[] = { "", "/../Resources",
+	    ("/" DATA_FROM_BIN) };
 	char dir[1024], ini[1100];
 	FILE *f;
 	size_t i;

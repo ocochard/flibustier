@@ -733,6 +733,11 @@ credits_text_load(struct game *g)
 	rc = credits_decode(blob.data, blob.len, &g->cred_text, why,
 	    sizeof(why));
 	blob_free(&blob);
+	/* A block crediting an asset the packs do not give goes. */
+	for (i = g->cred_text.nblocks; rc == 0 && i-- > 0;)
+		if (g->cred_text.blocks[i].needs != NULL &&
+		    !packs_provides(g->packs, g->cred_text.blocks[i].needs))
+			credits_drop(&g->cred_text, i);
 	for (i = 0; rc == 0 && i < g->cred_text.nblocks; i++) {
 		b = &g->cred_text.blocks[i];
 		if (credit_text_height(g, b) > CRED_MAX_H) {

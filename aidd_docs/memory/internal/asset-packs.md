@@ -656,7 +656,11 @@ the credits screen of `src/ui/screens.c`.
 
 - **Blocks:** 1 to 16, shown one at a time, as the original's six. Each
   is a `heading` (a string, may be empty) and `lines` (0 to 12
-  strings). A block with neither is an error.
+  strings). A block with neither is an error. An optional `needs`
+  names the asset ID the block credits: when no pack gives it, the
+  block is left out (the open pack's music credit names
+  `music/title-2`, a remade variant the original data has not, so a
+  package without the remade music does not credit it).
 - **Fonts:** the heading in `font/pirate4`, each line in
   `font/pirate1`, so the pack's fonts apply. Lines are one line each:
   `\n` is not allowed. The text markup of "Open text" otherwise

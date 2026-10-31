@@ -19,11 +19,7 @@ pack, with no original data, and still reads a player's own GOG
 
 ## Blockers outside the code
 
-1. **The art's licence** (maintainer). Nothing may ship before the pack
-   has a licence file. Candidates: CC BY-SA 4.0, CC BY 4.0, CC0. The
-   pictures are machine-generated from text prompts, so their copyright
-   status is uncertain in several countries; CC0 sidesteps that
-   question, CC BY-SA keeps derivatives open where rights exist.
+1. ~~The art's licence~~: CC0 1.0 (maintainer, 2026-10-31).
 2. **The music** belongs to its author (`music/CREDITS.txt`): written
    permission to redistribute it in the packages, or packages without
    it (P1 decides what plays then).
@@ -69,13 +65,29 @@ program looks for its pack beside itself (maintainer, 2026-10-30).
 
 ### P3. Install rules
 
-- CMake `install()` for `flibustier` (and `flibustier-sim` as a tool),
-  the open pack under the data place of P2, the licence files (engine
-  BSD-2-Clause, the pack's, the fonts' OFL, the music's terms) and a
-  short player README.
-- Release build: `-DCMAKE_BUILD_TYPE=Release`, raylib and FreeType
-  linked statically where the platform allows, so the packages carry
-  no library the player must install.
+Done (2026-10-31); README "Installing with the open pack":
+
+- The pack's licence: CC0 1.0 (maintainer, 2026-10-31) for all of it
+  but the remade music (its author's) and the fonts (OFL), in the
+  pack's `LICENSE` and `pack.ini`.
+- CMake `install()` in the `game` component: `flibustier`,
+  `flibustier-sim`, `LICENSE`, `README.md`, `MANUAL.md`, and the pack
+  named by `FLIBUSTIER_OPENPACK` without its provenance and coverage
+  report. A system layout (`bin`, `share/flibustier/openpack`,
+  `share/doc/flibustier`; the game looks there from `bin`, P2) or,
+  with `FLIBUSTIER_PORTABLE` (Windows' default), all in one directory.
+- The remade music is installed by default (maintainer, 2026-10-31);
+  `FLIBUSTIER_OPENPACK_MUSIC=OFF` leaves out its files, its fragment
+  and its credits block: a credits block may name the
+  asset it credits (`needs`), and goes when no pack gives it. The
+  recorded tunes (`pack.d/recordings.ini`, CC0) stay.
+- `FLIBUSTIER_BUNDLED_DEPS` builds raylib and FreeType in statically
+  (the Windows build already links everything but the system DLLs).
+- Checked: Release installs on FreeBSD (system layout, no music;
+  portable, with music) and Windows (portable, under Wine) start with
+  no option and reach the credits from the installed pack; the FreeBSD
+  and Windows screens are identical. The package is 167 MB without
+  the music, 223 MB with it.
 
 ### P4. One package per platform
 
@@ -109,7 +121,7 @@ nothing can be published before.
 
 ## Decisions for the maintainer
 
-1. The art's licence (blocker 1).
+1. ~~The art's licence~~: CC0.
 2. The music: permission from its author, or packages without it.
 3. macOS signing and notarisation: pay for an Apple developer account,
    or ship unsigned.

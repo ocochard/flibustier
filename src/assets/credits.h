@@ -22,6 +22,7 @@ struct credit_block {
 	char	 *heading;	/* UTF-8, "" when none */
 	size_t	  nlines;
 	char	**lines;	/* UTF-8 */
+	char	 *needs;	/* the asset ID it credits, NULL if none */
 };
 
 struct credits {
@@ -34,5 +35,7 @@ struct credits {
 int	credits_decode(const uint8_t *data, size_t len, struct credits *out,
 	    char *err, size_t errlen);
 void	credits_free(struct credits *c);
+/* Takes block "i" out, as when the asset it credits is missing. */
+void	credits_drop(struct credits *c, size_t i);
 
 #endif

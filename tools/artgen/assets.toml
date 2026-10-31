@@ -11,7 +11,7 @@
 
 [pack]
 name = "flibustier open pack (photographic, draft)"
-license = "undecided: draft art, not for release"
+license = "CC0-1.0, but the music and fonts: see LICENSE"
 art_height = 1080
 # The Blender renders (ships, their damage and portraits, the fencers,
 # the landing party) as they are: the image model's redraw blurs them

@@ -57,16 +57,18 @@ static int
 decode_block(const struct json *j, size_t i, struct credit_block *b,
     char *err, size_t errlen)
 {
-	const struct json *h, *lines;
+	const struct json *h, *lines, *needs;
 	char why[96];
 	size_t k;
 
 	h = json_get(j, "heading");
 	lines = json_get(j, "lines");
+	needs = json_get(j, "needs");
 	if (j->type != JSON_OBJECT || (h != NULL && h->type != JSON_STRING) ||
-	    (lines != NULL && lines->type != JSON_ARRAY)) {
-		snprintf(err, errlen, "block %zu: \"heading\" must be a "
-		    "string and \"lines\" an array", i);
+	    (lines != NULL && lines->type != JSON_ARRAY) ||
+	    (needs != NULL && needs->type != JSON_STRING)) {
+		snprintf(err, errlen, "block %zu: \"heading\" and \"needs\" "
+		    "must be strings and \"lines\" an array", i);
 		return (-1);
 	}
 	if ((h == NULL || h->str[0] == '\0') &&
@@ -80,6 +82,9 @@ decode_block(const struct json *j, size_t i, struct credit_block *b,
 		return (-1);
 	}
 	if ((b->heading = credit_line(h != NULL ? h->str : "", why,
+	    sizeof(why))) == NULL)
+		goto fail;
+	if (needs != NULL && (b->needs = credit_line(needs->str, why,
 	    sizeof(why))) == NULL)
 		goto fail;
 	if (lines == NULL || lines->count == 0)
@@ -156,17 +161,36 @@ fail:
 	return (-1);
 }
 
+static void
+block_free(struct credit_block *b)
+{
+	size_t k;
+
+	free(b->heading);
+	for (k = 0; k < b->nlines; k++)
+		free(b->lines[k]);
+	free(b->lines);
+	free(b->needs);
+}
+
 void
 credits_free(struct credits *c)
 {
-	size_t i, k;
+	size_t i;
 
-	for (i = 0; i < c->nblocks; i++) {
-		free(c->blocks[i].heading);
-		for (k = 0; k < c->blocks[i].nlines; k++)
-			free(c->blocks[i].lines[k]);
-		free(c->blocks[i].lines);
-	}
+	for (i = 0; i < c->nblocks; i++)
+		block_free(&c->blocks[i]);
 	free(c->blocks);
 	memset(c, 0, sizeof(*c));
+}
+
+void
+credits_drop(struct credits *c, size_t i)
+{
+	if (i >= c->nblocks)
+		return;
+	block_free(&c->blocks[i]);
+	memmove(&c->blocks[i], &c->blocks[i + 1],
+	    (c->nblocks - i - 1) * sizeof(*c->blocks));
+	c->nblocks--;
 }

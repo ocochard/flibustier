@@ -112,6 +112,29 @@ With [Wine](https://www.winehq.org/) installed, `ctest --test-dir
 build-win` runs the tests through it. On Windows, saves go to
 `%APPDATA%\flibustier\saves`.
 
+### Installing with the open pack
+
+A package carries the program and the open pack together and starts
+with no option. `FLIBUSTIER_OPENPACK` names the pack checkout to
+install, `FLIBUSTIER_BUNDLED_DEPS` builds raylib and FreeType in
+statically, and the `game` component leaves out the headers and
+libraries those two install of their own:
+
+```sh
+cmake -B build-rel -DCMAKE_BUILD_TYPE=Release -DFLIBUSTIER_BUNDLED_DEPS=ON \
+    -DFLIBUSTIER_OPENPACK=$HOME/flibustier-openpack
+cmake --build build-rel
+cmake --install build-rel --component game --prefix /usr/local
+```
+
+This puts the programs in `bin` and the pack in
+`share/flibustier/openpack`, and the documents in `share/doc`.
+`-DFLIBUSTIER_PORTABLE=ON` (the default for Windows) puts everything in
+the prefix itself instead, as a zip holds it. The pack's remade music,
+which belongs to its author, is installed too;
+`-DFLIBUSTIER_OPENPACK_MUSIC=OFF` leaves it out, with its credit. The
+pack's provenance records stay in its repository.
+
 ## Running
 
 ```sh
@@ -120,9 +143,9 @@ build-win` runs the tests through it. On Windows, saves go to
 ```
 
 With no `--pack`, the game also looks for an `openpack` directory beside
-its program (or, in a macOS application bundle, in
-`Contents/Resources`): a package ships the program and the open pack
-together and starts with no option.
+its program, in a macOS application bundle's `Contents/Resources`, or
+in an install's `share/flibustier` (see "Installing with the open
+pack").
 
 The mouse works everywhere; the keys are the original's, listed screen
 by screen in [MANUAL.md](MANUAL.md) (P pauses, Q quits, V steps the

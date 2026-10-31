@@ -95,10 +95,17 @@ set_source_files_properties(src/audio/opl3.cpp PROPERTIES COMPILE_OPTIONS
 	-Wno-unused-parameter)
 set_property(TARGET flibustier_core PROPERTY CXX_STANDARD 14)
 
+# A package links its own raylib and FreeType in, so players need not
+# install them: FLIBUSTIER_BUNDLED_DEPS skips the system's.
+option(FLIBUSTIER_BUNDLED_DEPS "Build raylib and FreeType in, statically"
+    OFF)
+
 # FreeType draws the open pack's fonts: hardened for untrusted font files,
 # which packs from third parties are.  Use a system FreeType when
 # available, otherwise fetch a pinned release.
-find_package(Freetype QUIET)
+if(NOT FLIBUSTIER_BUNDLED_DEPS)
+	find_package(Freetype QUIET)
+endif()
 if(FREETYPE_FOUND)
 	target_link_libraries(flibustier_core PRIVATE Freetype::Freetype)
 else()
@@ -123,11 +130,13 @@ endif()
 # Use a system raylib 5.5 or later when available (CMake config or
 # pkg-config), otherwise fetch a pinned release.
 set(FLIBUSTIER_RAYLIB raylib)
-find_package(raylib QUIET)
+if(NOT FLIBUSTIER_BUNDLED_DEPS)
+	find_package(raylib QUIET)
+endif()
 if(raylib_FOUND AND raylib_VERSION AND raylib_VERSION VERSION_LESS 5.5)
 	set(raylib_FOUND FALSE)
 endif()
-if(NOT raylib_FOUND)
+if(NOT raylib_FOUND AND NOT FLIBUSTIER_BUNDLED_DEPS)
 	find_package(PkgConfig QUIET)
 	if(PKG_CONFIG_FOUND)
 		pkg_check_modules(RAYLIB QUIET IMPORTED_TARGET raylib>=5.5)
@@ -170,6 +179,60 @@ target_compile_options(flibustier-sim PRIVATE ${FLIBUSTIER_WARNINGS})
 add_executable(flibustier-seamap tools/career-bot/seamap.c)
 target_link_libraries(flibustier-seamap PRIVATE flibustier_core)
 target_compile_options(flibustier-seamap PRIVATE ${FLIBUSTIER_WARNINGS})
+
+# Install.  A portable install (a zip: the default on Windows) puts the
+# programs, the open pack and the documents together in the prefix; a
+# system install puts the programs in bin and the pack in
+# share/flibustier/openpack, where the game looks for it from bin.
+# FLIBUSTIER_OPENPACK names an open pack checkout to install (none by
+# default); its remade music, which belongs to its author, goes with it
+# unless FLIBUSTIER_OPENPACK_MUSIC is off.  The
+# fetched raylib and FreeType add their own headers and libraries to a
+# plain install: a package takes the "game" component alone
+# (cmake --install build --component game).
+include(GNUInstallDirs)
+option(FLIBUSTIER_PORTABLE "Install everything in one directory" ${WIN32})
+set(FLIBUSTIER_OPENPACK "" CACHE PATH "Open pack checkout to install")
+option(FLIBUSTIER_OPENPACK_MUSIC
+    "Install the open pack's remade music" ON)
+if(FLIBUSTIER_PORTABLE)
+	set(fl_bin .)
+	set(fl_data .)
+	set(fl_doc .)
+else()
+	set(fl_bin ${CMAKE_INSTALL_BINDIR})
+	set(fl_data ${CMAKE_INSTALL_DATADIR}/flibustier)
+	set(fl_doc ${CMAKE_INSTALL_DOCDIR})
+	file(RELATIVE_PATH fl_rel /${fl_bin} /${fl_data})
+	target_compile_definitions(flibustier PRIVATE
+	    DATA_FROM_BIN="${fl_rel}")
+endif()
+install(TARGETS flibustier flibustier-sim DESTINATION ${fl_bin}
+    COMPONENT game)
+install(FILES LICENSE README.md MANUAL.md DESTINATION ${fl_doc}
+    COMPONENT game)
+if(FLIBUSTIER_OPENPACK)
+	if(NOT EXISTS ${FLIBUSTIER_OPENPACK}/pack.ini)
+		message(FATAL_ERROR
+		    "FLIBUSTIER_OPENPACK: no pack.ini in ${FLIBUSTIER_OPENPACK}")
+	endif()
+	# What playing needs: provenance and the coverage report stay in
+	# the pack's repository.
+	set(fl_skip PATTERN provenance EXCLUDE PATTERN COVERAGE.md EXCLUDE
+	    PATTERN .git* EXCLUDE)
+	if(NOT FLIBUSTIER_OPENPACK_MUSIC)
+		list(APPEND fl_skip PATTERN music.ini EXCLUDE
+		    PATTERN CREDITS.txt EXCLUDE)
+		file(STRINGS ${FLIBUSTIER_OPENPACK}/pack.d/music.ini fl_tunes
+		    REGEX "^music/.*=")
+		foreach(t ${fl_tunes})
+			string(REGEX REPLACE ".*= *music/([^.]*).*" "\\1" t "${t}")
+			list(APPEND fl_skip REGEX "/music/${t}\\.[^/]*$" EXCLUDE)
+		endforeach()
+	endif()
+	install(DIRECTORY ${FLIBUSTIER_OPENPACK}/
+	    DESTINATION ${fl_data}/openpack COMPONENT game ${fl_skip})
+endif()
 
 # Tests.  test_original needs the game data: set FLIBUSTIER_DATA to the GOG
 # DATA.DAT (or an install directory) in the environment, otherwise it is
