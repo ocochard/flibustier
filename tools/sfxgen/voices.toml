@@ -5,7 +5,8 @@
 # original's recordings.  [S1] is the speaker; Dia2 also reads
 # non-verbal cues such as (screams), (groans), (gasps).  "length" is the
 # original's; a take longer than 1.5 times that is cut, a shorter one is
-# kept whole.
+# kept whole.  "recorded" marks a line a person recorded instead (CC0,
+# see its provenance): voicegen.py never renders over it.
 
 # Without a reference, Dia2 picks a new speaker for every take (women,
 # singing...).  "voice", on the GPU host, gives every line one low male
@@ -22,33 +23,40 @@ voice_source = "https://archive.org/download/treasureisland_librivox/treasure_is
 id = "sound/hail"
 length = 0.89
 text = "[S1] Arrgh!"
+recorded = true
 
 [[voice]]
 id = "sound/sail-ho"
 length = 1.15
 text = "[S1] Sail ho!"
+recorded = true
 
 [[voice]]
 id = "sound/harbour"
 length = 1.04
 text = "[S1] (shouts) Laaand hooo!"
+recorded = true
 
 [[voice]]
 id = "sound/land-battle"
 length = 0.81
 text = "[S1] En garde!"
+recorded = true
 
 [[voice]]
 id = "sound/last-man"
 length = 0.97
 text = "[S1] Oh! I surrender!"
+recorded = true
 
 [[voice]]
 id = "sound/hit-foe"
 length = 0.52
 text = "[S1] Argh! (groans)"
+recorded = true
 
 [[voice]]
 id = "sound/hit-you"
 length = 0.37
 text = "[S1] Ugh! (gasps)"
+recorded = true

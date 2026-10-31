@@ -37,9 +37,11 @@ pack, with no original data, and still reads a player's own GOG
 Done (2026-10-30) but for one tune:
 
 - The 7 spoken sound effects (`sound/hail`, `sail-ho`, `harbour`,
-  `land-battle`, `last-man`, `hit-foe`, `hit-you`) voiced by
-  `tools/sfxgen/voicegen.py` (Dia2) from `voices.toml`; still to be
-  heard by a person (`last-man`, the surrender, may need another take).
+  `land-battle`, `last-man`, `hit-foe`, `hit-you`) recorded by the
+  maintainer (CC0, 2026-10-31), cleaned with ffmpeg (trim, EQ, gate,
+  loudness; each provenance file gives the edit). `voices.toml` marks
+  them `recorded`, so `tools/sfxgen/voicegen.py` (Dia2) never renders
+  over them; it stays for any voice added later.
 - Text entry 318, the cabin's language menu, in the three languages.
 - `tools/artgen/coverage.py` counts the original assets the pack
   replaces in another form as done (`tiles15/sbtl`, `lbtl` by the
