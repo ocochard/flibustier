@@ -34,7 +34,7 @@ pack, with no original data, and still reads a player's own GOG
 
 ### P1. Gaps of the open pack alone
 
-Done (2026-10-30) but for one tune:
+Done (2026-10-31):
 
 - The 7 spoken sound effects (`sound/hail`, `sail-ho`, `harbour`,
   `land-battle`, `last-man`, `hit-foe`, `hit-you`) recorded by the
@@ -47,9 +47,8 @@ Done (2026-10-30) but for one tune:
   replaces in another form as done (`tiles15/sbtl`, `lbtl` by the
   Tiled battle screens, `pic/map1560` by `map/1560`, `pic/baseflag`,
   whose palette trick true-colour flags do not need).
-- Left: `music/prize` (the capture's tune) has no remake; the music's
-  author would have to record it, or another remade tune stands in.
-  Without it the moment is silent with no original data.
+- `music/prize` (the capture's tune): a whistled tune the maintainer
+  recorded (CC0, 2026-10-31). The open pack now covers every asset ID.
 
 ### P2. The engine finds its own data
 
