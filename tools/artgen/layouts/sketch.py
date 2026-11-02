@@ -296,6 +296,24 @@ LBAT_BOXES = [b for b in SBAT_BOXES if b != (488, 258, 634, 344)] + \
     [(488, 259, 634, 346)]
 
 
+# The arrow on each speed strip, pointing at the ship, that says the number
+# beside it is the ship's speed: its tail and tip's x, its y on each strip,
+# as measured on the original.
+SPEED_ARROW = (491, 520)
+SPEED_ARROW_Y = (63, 407)
+
+
+def speed_arrows():
+    """The two speed arrows, as polygons."""
+    x0, x1 = SPEED_ARROW
+    head = x1 - 9
+    return ["polygon " + " ".join(
+        "%g,%g" % (x, y + v) for x, v in (
+            (x0, -1.5), (head, -1.5), (head, -4.5), (x1, 0), (head, 4.5),
+            (head, 1.5), (x0, 1.5)))
+            for y in SPEED_ARROW_Y]
+
+
 # Plunder: the game writes on the clear sky in the middle (from (40, 50),
 # 580 wide), so the sails stand at the sides and the pirates and their
 # loot along the bottom, below y 300, as on the original.
@@ -440,6 +458,23 @@ def bevel(name, boxes, arrows):
         subprocess.run(cmd, check=True)
 
 
+def marks(name, polygons):
+    """Polygons to paint on a picture, as two masks at 640x480 times 3:
+    -edge, a dark outline, and -fill, the shape inside it."""
+    m = 3
+    for side, stroke in (("-edge", 3), ("-fill", 0)):
+        cmd = ["magick", "-size", "%dx%d" % (640 * m, 480 * m), "xc:black",
+               "-fill", "white", "-stroke", "white" if stroke else "none",
+               "-strokewidth", str(stroke)]
+        for op in polygons:
+            cmd += ["-draw", "polygon " + " ".join(
+                "%g,%g" % (float(x) * m, float(y) * m)
+                for x, y in (p.split(",") for p in op.split()[1:]))]
+        cmd += ["-blur", "0x1"] + SAME + [os.path.join(HERE, name + side
+                                                         + ".png")]
+        subprocess.run(cmd, check=True)
+
+
 def mask(name, ops, blur=4):
     """White filled shapes on black, edges softened (by "blur" render
     pixels), for an inpaint."""
@@ -476,6 +511,7 @@ if __name__ == "__main__":
     draw("savegame.png", SAVEGAME)
     draw("fame.png", FAME)
     bevel("sbat-panel", SBAT_BOXES, [])
+    marks("sbat-speed-arrow", speed_arrows())
     bevel("lbat-panel", LBAT_BOXES, [])
     # A spyglass's round view, for the ship portraits: white inside,
     # fading to black at its rim.

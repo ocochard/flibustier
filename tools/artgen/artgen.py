@@ -186,6 +186,15 @@ def workflow(asset, profile, seed, out_w, out_h, prefix, spec):
             picture = ["pplace%d" % n, 0]
             g["save"]["inputs"]["images"] = picture
             continue
+        if "same" in piece:
+            # The same picture as an earlier piece (the speed strips, one
+            # for each side, as on the original).
+            m = piece["same"] + (1 if asset.get("plaque") else 0)
+            g["presize%d" % n] = dict(g["presize%d" % m])
+            place_piece(g, n, piece, picture, px, py, pw, ph)
+            picture = ["pplace%d" % n, 0]
+            g["save"]["inputs"]["images"] = picture
+            continue
         if "colour" in piece:
             # A plain field (the panel text is written on), not drawn:
             # the model puts an object on any cloth it is asked for.
@@ -3626,6 +3635,13 @@ def main():
                         + side + ".png"), colour)
                 for side, colour in (("-light", 0xFFE7A8),
                                      ("-dark", 0x241204))]
+        # Shapes painted through a mask, last: what must be exact and the
+        # model will not draw (the speed strip's arrow).
+        a["uploaded_bevel"] = a.get("uploaded_bevel", []) + [
+            (upload(args.server, os.path.join(HERE, mk["mask"]),
+                    "flibustier-mark-" + os.path.basename(mk["mask"])),
+             int(mk["colour"].lstrip("#"), 16))
+            for mk in a.get("marks", [])]
         if a.get("inpaint_mask"):
             a["uploaded_inpaint"] = upload(
                 args.server, os.path.join(HERE, a["inpaint_mask"]),
@@ -4120,6 +4136,10 @@ def main():
                 os.path.join(HERE, a["bevel"] + side + ".png"), "rb")
                 .read()).hexdigest() for side in ("-light", "-dark")]}
             if a.get("bevel") else None,
+            "marks": [{"mask": mk["mask"], "colour": mk["colour"],
+                       "sha256": hashlib.sha256(open(os.path.join(
+                           HERE, mk["mask"]), "rb").read()).hexdigest()}
+                      for mk in a.get("marks", [])] or None,
             "cast": cast or None,
             "finish": [{"mask": f["mask"], "sha256": hashlib.sha256(open(
                 os.path.join(HERE, f["mask"]), "rb").read()).hexdigest(),

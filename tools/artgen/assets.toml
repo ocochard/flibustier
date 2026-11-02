@@ -1958,7 +1958,8 @@ middle of a plain flat light grey ground, nothing else.
 # in the pack's font runs over both the men's and the guns' boxes to
 # near x 590, so the pictures stand clear of the text: the speed
 # strip's ship left of x 576, the guns' picture at the right end of
-# their box, and the men's box left plain.
+# their box, and the men's box left plain.  The arrow on each speed strip
+# says the number is the speed; painted, as the model does not draw it.
 [[asset]]
 id = "pic/sbat"
 file = "art/sbat.png"
@@ -1968,6 +1969,8 @@ scene_area = [480, 0, 160, 480]	# the battle area is drawn over
 trim = 0.15			# the model darkens the board's edges
 bevel = "layouts/sbat-panel"
 grade = false
+marks = [{ mask = "layouts/sbat-speed-arrow-edge.png", colour = "#3A0E06" },
+         { mask = "layouts/sbat-speed-arrow-fill.png", colour = "#B5301C" }]
 prompt = """
 Close-up photograph, straight on and flat, of a tall board of polished
 honey-coloured oak, its fine straight grain running from top to bottom,
@@ -1987,9 +1990,10 @@ edge, nothing on the water.
 [[asset.pieces]]
 rect = [488, 48, 88, 24]	# the speed strip's ship, left of the speed
 prompt = """
-Photograph of a short strip of calm blue sea under a pale sky, a small
-sailing ship on it seen from the side sailing to the right, filling the
-strip's height.
+Photograph of a long narrow strip of calm blue sea under a pale sky.  At
+the right, close up, one large three-masted galleon seen broadside, its
+hull and full sails filling the strip from top to bottom, its bow pointing
+right.  The left half of the strip is empty sea and sky.
 """
 [[asset.pieces]]
 rect = [606, 79, 28, 21]	# the guns, right of their text
@@ -2018,11 +2022,7 @@ edge, nothing on the water.
 """
 [[asset.pieces]]
 rect = [488, 393, 88, 24]	# the speed strip's ship, left of the speed
-prompt = """
-Photograph of a short strip of calm blue sea under a pale sky, a small
-sailing ship on it seen from the side sailing to the right, filling the
-strip's height.
-"""
+same = 2
 [[asset.pieces]]
 rect = [606, 423, 28, 21]	# the guns, right of their text
 prompt = """
