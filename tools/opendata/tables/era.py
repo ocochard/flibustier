@@ -333,30 +333,30 @@ def treasure_ship(era):
 
 def battle_ai(bold):
     """Per comparison u = 9 a + 3 b + c.  A captain's courage is in his
-    men and his guns: holed (a = 0) he runs to save the ship; else he
-    stands to fight only when ahead in crew or guns (b + c + "bold" of
-    2 or more), closing to board when the crew is his strength and
-    lying broadside when the guns are; ahead in neither he runs, however
-    the hulls compare.  A merchant master's duty was to his owners'
-    cargo and his sailors had no share in a fight's spoils, so a trader
-    outmanned and outgunned put on sail whatever the state of the
-    attacker's hull.  An earlier rule counted the hull double and let a
-    lead in it alone hold a trader to fight: any damage the attacker
-    carried from an earlier fight kept traders from running, so they
-    were boarded where they lay (two captures in three), seldom fled
-    (16 escapes on eight careers, 64 wanted) and seldom struck (231
-    surrenders, 350 wanted); with this rule the same careers see about
-    50 escapes and 300 to 400 surrenders."""
+    men and his guns, and the hulls do not count: he stands to fight
+    when ahead in crew or guns (b + c + "bold" of 2 or more), closing to
+    board when the crew is his strength and lying broadside when the
+    guns are; below that, ahead in men alone he lies broadside and ahead
+    in neither he runs.  A merchant master's duty was to his
+    owners' cargo and his sailors had no share in a fight's spoils, so a
+    trader outmanned and outgunned put on sail whatever the state of the
+    attacker's hull.  An earlier rule let a lead in the hull alone hold
+    a trader to fight, so traders were boarded where they lay.  A later
+    one sent every captain running at his first hit (a = 0 comes with
+    one scratch on an undamaged attacker) and any ahead in men alone
+    from the start, so pirates fled too: 65% of their decisions over 120
+    careers, 48% with this rule, while traders flee as much (93.5%) and
+    escape as often (5.2 a career against 5.3)."""
     out = []
     for u in range(27):
-        a, b, c = u // 9, u // 3 % 3, u % 3
+        b, c = u // 3 % 3, u % 3
         strength = b + c + bold
-        if a == 0:
-            d = 2                       # holed: save the ship
-        elif c == 2 and strength >= 3:
+        if c == 2 and strength >= 3:
             d = 0                       # far more men: close and board
         elif strength >= 2:
             d = 0 if c > b else 1       # board with men, fight with guns
+        elif c > 0:
+            d = 1                       # ahead in men alone: trade shots
         else:
             d = 2                       # outmanned and outgunned: run
         out.append(d)
@@ -460,11 +460,11 @@ def build(year):
         "frigate two dozen, a war galleon short of her establishment "
         "on a colonial station); navies scaled x%.2f, "
         "raiders' role +%d, Spanish gold x%.2f, goods x%.2f; the "
-        "treasure galleon's gold factor %d.  Enemy captain: holed, he "
-        "runs; else strength = guns + crew comparison + nerve %d, and "
-        "at 2 or more he fights, boarding when ahead in men, lying "
-        "broadside when ahead in guns; below it he runs whatever the "
-        "hulls.  Diplomacy range %d (about %.1f changes of war or peace "
+        "treasure galleon's gold factor %d.  Enemy captain: strength = "
+        "guns + crew comparison + nerve %d, and at 2 or more he fights, "
+        "boarding when ahead in men, lying broadside when ahead in "
+        "guns; below it, ahead in men alone he lies broadside, ahead in "
+        "neither he runs, whatever the hulls.  Diplomacy range %d (about %.1f changes of war or peace "
         "a year, as the era's wars and treaties came), Spanish "
         "shipwrights' tolerance %d (loosening as Spain's monopoly "
         "weakens)." % (
