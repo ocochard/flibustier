@@ -2880,6 +2880,23 @@ cmd_sword(struct session *ss, const struct json *cmd, struct jbuf *out)
 	jb_raw(out, "}");
 }
 
+/*
+ * The protocol has no cannon board to open: it stays open over the cannon
+ * trades, and a look at the state.  Any other command leaves it, so the
+ * guns sold can no longer be bought back (VA 0x22e12).
+ */
+static int
+cannon_board_stays(const char *name, const struct json *cmd)
+{
+	const char *action = json_get_str(cmd, "action");
+
+	if (strcmp(name, "state") == 0)
+		return (1);
+	return (strcmp(name, "shipwright") == 0 && action != NULL &&
+	    (strcmp(action, "sell_cannon") == 0 ||
+	    strcmp(action, "buy_cannon") == 0));
+}
+
 int
 proto_handle(struct session *ss, const char *line, struct jbuf *out)
 {
@@ -2892,7 +2909,10 @@ proto_handle(struct session *ss, const char *line, struct jbuf *out)
 		reply_error(out, err);
 		return (0);
 	}
-	if ((name = json_get_str(cmd, "cmd")) == NULL)
+	name = json_get_str(cmd, "cmd");
+	if (name != NULL && !cannon_board_stays(name, cmd))
+		ss->sim.wright_cannon = 0;
+	if (name == NULL)
 		reply_error(out, "missing \"cmd\"");
 	else if (strcmp(name, "new_game") == 0)
 		cmd_new_game(ss, cmd, out);

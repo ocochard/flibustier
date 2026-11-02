@@ -2969,6 +2969,51 @@ test_cannon(void)
 	CHECK(sim_trade_cannon(&s, -1) == 0);
 }
 
+/* The protocol's cannon board: left by any command but a trade or "state". */
+static void
+test_cannon_protocol(void)
+{
+	static const char sell[] =
+	    "{\"cmd\":\"shipwright\",\"action\":\"sell_cannon\",\"count\":2}";
+	static const char buy[] =
+	    "{\"cmd\":\"shipwright\",\"action\":\"buy_cannon\"}";
+	struct session ss;
+	struct jbuf out = { 0 };
+
+	memset(&ss, 0, sizeof(ss));
+	ss.load = loader;
+	ss.load_world = world_cb;
+	proto_handle(&ss, "{\"cmd\":\"new_game\",\"era\":1660}", &out);
+	jb_free(&out);
+	ss.sim.towns[1].nation = NATION_ENGLAND;
+	sim_enter_town(&ss.sim, 1);
+	ss.sim.player_town = 1;
+	ss.sim.fleet.guns = 6;
+	ss.sim.fleet.gold = 500;
+	ss.sim.wright_gold = 500;
+	CHECK(!sim_shipwright_refuses(&ss.sim));
+	proto_handle(&ss, sell, &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"traded\":2") != NULL);
+	CHECK(ss.sim.wright_cannon == 2);
+	jb_free(&out);
+	proto_handle(&ss, "{\"cmd\":\"state\"}", &out);
+	CHECK(ss.sim.wright_cannon == 2);
+	jb_free(&out);
+	proto_handle(&ss, buy, &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"traded\":1") != NULL);
+	CHECK(ss.sim.fleet.guns == 5 && ss.sim.wright_cannon == 1);
+	jb_free(&out);
+	/* Leaving the board, even to stay at the shipwright's. */
+	proto_handle(&ss, "{\"cmd\":\"shipwright\",\"action\":\"prices\"}",
+	    &out);
+	CHECK(ss.sim.wright_cannon == 0);
+	jb_free(&out);
+	proto_handle(&ss, buy, &out);
+	CHECK(out.s != NULL && strstr(out.s, "\"traded\":0") != NULL);
+	CHECK(ss.sim.fleet.guns == 5);
+	jb_free(&out);
+}
+
 /* The bank: dividing the plunder, then another expedition. */
 static void
 test_bank(void)
@@ -4379,6 +4424,7 @@ main(void)
 	test_governor();
 	test_bank();
 	test_cannon();
+	test_cannon_protocol();
 	test_arrival();
 	test_command();
 	test_coast();
