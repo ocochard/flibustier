@@ -488,7 +488,7 @@ sim_attack_nation(struct sim *s, int nation, int d)
 			v = 1;
 		else if (v < 2 && s->standing[k] > 1)
 			v = 2;
-		s->standing[k] = (int8_t)v;
+		s->standing[k] = (int8_t)(v < -128 ? -128 : v > 127 ? 127 : v);
 	}
 }
 

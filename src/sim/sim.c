@@ -1534,7 +1534,7 @@ sim_leave_town(struct sim *s)
 	/* Roll call (VA 0x17efb): (3 - mood) x crew / 15 men desert,
 	 * when more than one. */
 	s->deserted = 0;
-	n = (int16_t)((3 - s->fleet.mood) * s->fleet.crew) / 15;
+	n = (3 - s->fleet.mood) * s->fleet.crew / 15;
 	if (n >= s->fleet.crew)
 		n = s->fleet.crew - 1;
 	if (n > 1) {

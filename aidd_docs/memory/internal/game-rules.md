@@ -367,7 +367,8 @@ list holds (x, y, town) triplets, ending in `0xFFFF`.
     up to x 620.
   - The engine stops sailing (`SAIL_CREW`) to show it.
 - **Roll call on leaving town (VA `0x17efb`):** `n = (3 - mood) x crew /
-  15` (16-bit), at most `crew - 1`; when `n > 1` they leave with their
+  15` (16-bit in the original, where a very happy crew wraps round and
+  deserts; the engine does not wrap), at most `crew - 1`; when `n > 1` they leave with their
   share of the gold: "Roll call reveals that %s crew members have
   deserted" (CSTR 109, at (340, 150) up to x 620) on the town's arrival
   picture. Then a random one of the 8 prisoner slots (VA `0x4720a`):
@@ -2386,7 +2387,9 @@ It names the player in the tavern (CSTN 34[`clamp(rep / 4 + 1, 0,
   - N's standing changes by d;
   - every other nation's by `d x relation(N, k)` (+1 alliance, -1 war);
   - but such changes cannot lift a standing above 1, nor drop one that
-    is above 1 below 2.
+    is above 1 below 2;
+  - the engine holds every standing to -128..127, so none wraps round
+    at the ends of the signed byte (the original not checked).
 - **The callers:** capturing a ship of a nation (not pirates), d = -1
   (VA `0xdb7b`); a repelled or beaten assault, -1 (VA `0x18b3f`); a
   sack, -1, and -2 more when it yields 100 gold or more (VA `0x22764`);
