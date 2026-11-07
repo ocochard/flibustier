@@ -23,7 +23,9 @@ land (it beaches the ship, or lands the men when the fort is within
 reach).  Other sea battles take a set by the land seen from the fleet
 (north, east, south, west, or none: open) and a random piece 0-3 of it;
 scrolling along the coast steps to the next piece, (piece + scroll) & 3,
-and scrolling off it to piece 4.  A land battle is fought on the land
+and scrolling off it to piece 4.  A scroll moves the ships 120 pixels
+back but redraws the screen in place, never shifted: piece 4 stays piece
+4, so any land on it would hold still while the ships jump.  A land battle is fought on the land
 screen of the town's id: the town's men stand at its land cell and on
 the clear cells around it, the attackers come ashore at its party cell
 and the cells diagonally beside it.  A tile's ground (clear, cover,
@@ -54,7 +56,7 @@ land screen (Granada its lake), Caracas among rocks, Puerto Principe on
 open plain.  The seed is the town's id, so no two towns look alike.
 
 The sets.  Screens 65-89: north 65-69, east 70-74, south 75-79, west
-80-84 (pieces 0-3 a coast, piece 4 open water with a few cays), open
+80-84 (pieces 0-3 a coast, piece 4 open sea, no land), open
 85-89 (open sea, no land: the set of a fleet out of sight of land).
 Each coast is one strip four screens long, cyclic, drawn and tiled as a
 whole and cut into its pieces, so a piece's edge runs on into the next
@@ -85,7 +87,8 @@ party's three cells are on the field, the party cell clear and the
 others dry, joined to the town over dry ground, and the town's men all
 find clear cells on the field; each coast piece has land along its
 named edge, open sea where the ships start and none on the far half,
-and the four pieces join; the open set has no land nor shallows.
+and the four pieces join; each set's piece 4 and the open set have no
+land nor shallows.
 """
 import json
 import math
@@ -810,6 +813,16 @@ def open_water(tiler, salt, cays, rng):
     return tiler.solve(raster, plan, salt)
 
 
+def open_sea(tiler, sid, salt, rng):
+    """A set's open sea screen, checked to hold no land nor shallows:
+    the screen a scroll redraws in place."""
+    g = open_water(tiler, salt, 0, rng)
+    if (tiler.terrain(g) != SEA).any():
+        raise SystemExit("battle_screens: set screen %d is not open sea" %
+                         sid)
+    return g
+
+
 # --- Checks -------------------------------------------------------------
 
 G = 4                   # pixels a step of the way-finding
@@ -1010,18 +1023,13 @@ def _solve():
             sea[sid] = g
             ids.append(sid)
         sid = SET_BASE + 5 * i + 4
-        sea[sid] = open_water(tiler, 400 + i, 3,
-                              random.Random(5000 + i))
+        sea[sid] = open_sea(tiler, sid, 400 + i, random.Random(5000 + i))
         ids.append(sid)
         sets[name] = ids
     ids = []
     for k in range(5):
         sid = SET_BASE + 20 + k
-        g = open_water(tiler, 450 + k, 0, random.Random(6000 + k))
-        if (tiler.terrain(g) != SEA).any():
-            raise SystemExit("battle_screens: open set screen %d is not "
-                             "open sea" % sid)
-        sea[sid] = g
+        sea[sid] = open_sea(tiler, sid, 450 + k, random.Random(6000 + k))
         ids.append(sid)
     sets["open"] = ids
     for sid in range(SCREENS):
