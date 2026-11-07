@@ -1461,6 +1461,12 @@ After a landing by the fort, or straight away at a town without forts:
    194, on `governor.pcx`): the town's nation, standing 2, governor
    `rand(16)`; for a new nation, the player's standing with it +3 and
    an attack of -2 on the old one (log 22, "Captured %s for %s").
+   The crew is the whole fleet's after the assault: the men left
+   aboard after a fort battle count, though they did not fight, and
+   the fallen do not. Below `citizens x 10` (a tenth of the population
+   shown, `citizens x 100`) there is never a governor; from `citizens
+   x 20 - 1` always. A bigger flagship before a fort helps only by
+   sending more men to the fight, so fewer fall.
 8. Cannon: `forts x 6`, offered on the board's fourth row.
 
 Back to sea afterwards.
