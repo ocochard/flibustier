@@ -1398,6 +1398,13 @@ the fort.
   - The player's hits count in a fort damage counter, with class 8
     in the damage formula and no bonus. The panel shows `fortbtl.cur`
     stage `damage / 20` (at most 3). The fort is never sunk.
+  - Its crew falls by the usual crew loss with class 8:
+    `((rand & 63) + 4 x div16(crew x G, 11)) >> 6`. Losses shrink with
+    the crew left, so the last gunners are hard to kill: with one left,
+    a hit kills him only when `rand & 63 >= 64 - 4 x (G / 11)`, never
+    with fewer than 11 guns (6% a hit at 11-21, 12.5% at 22-32). It
+    does not matter for the assault, where fewer than 10 gunners add
+    no soldier (see "Afterwards").
   - The fort is drawn in its screen, not as a sprite. The panel calls
     it "Fort" (CSTN 8.9), with no speed and no status line (VA
     `0xea3e`, `0xebd7`).
