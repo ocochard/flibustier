@@ -185,7 +185,16 @@ captains who stand and fight, the nations' flags over the towns, the
 speed arrow on the sea battle panel), the packages named
 `flibustier-0.1.1-openpack-0.2-*`. The Flatpak manifest builds the tag
 unpatched, and takes the pack's 0.2 tarballs at the hashes
-`tools/openpack_dist.py` gives on the pack's `openpack-0.2` commit.
+`tools/openpack_dist.py` gives on the pack's `openpack-0.2` commit: the
+archives are dated by that commit, so the tag must sit on the commit the
+tarballs were made from, or the hashes no longer match. Where each
+package is made: the Windows zip cross built on FreeBSD (llvm-mingw,
+`cpack`); the Flatpak on framework2 (Ubuntu), as FreeBSD has no
+flatpak-builder; the dmg on the maintainer's Mac. Checked: the unzipped
+Windows game under Wine and the installed Flatpak on framework2 both
+draw, headless, the same screen byte for byte as the native FreeBSD
+build; the maintainer started the dmg on the Mac. Left: a Flatpak
+window and sound seen on a Linux desktop.
 
 - Versions: the engine and the pack tagged apart (`v0.x`,
   `openpack-0.x`); a package names both.
