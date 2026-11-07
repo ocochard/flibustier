@@ -1218,7 +1218,10 @@ fight computes its level the same way with fencing.
   its battle picture (`*btl.cur`) at its damage stage `min(damage / 16,
   3)`, with its type (CSTN 8) and damage (CSTN 14) centred below.
 - Clicking a ship marks it, its labels in ink entry 3; again unmarks
-  it; no more than the allowed number can be marked. The button at
+  it; no more than the allowed number can be marked. The engine only
+  ever allows one, and a click on another ship moves the mark (an
+  engine choice: the original ignores it until the first is unmarked).
+  The button at
   (437, 429)-(639, 479), labelled from CSTN 87 (SELECT, REPAIR, SELL,
   BUY) centred at (510, 436), ends the choice once enough are marked.
   Two keys step through the ships and the button; Enter acts.

@@ -879,6 +879,7 @@ static void
 test_battle_screen(void)
 {
 	struct game *g;
+	char buf[32];
 	int i;
 
 	g = play("eng", "enter enter down down down down enter down enter "
@@ -995,10 +996,14 @@ test_battle_screen(void)
 			CHECK(g->screen != &screen_battle || g->fading != 1);
 		}
 		CHECK(g->screen == &screen_fleet_panel);
-		/* SELECT does nothing until a ship is marked; the second
-		 * slot, then SELECT. */
+		/* SELECT does nothing until a ship is marked; the first
+		 * slot, then the second moves the mark, then SELECT. */
 		CHECK(game_script(g, "click:540,450") == 0 &&
 		    g->screen == &screen_fleet_panel);
+		snprintf(buf, sizeof(buf), "click:%d,%d",
+		    (g->ui.panel.spot[0][0] + g->ui.panel.spot[0][2]) / 2,
+		    (g->ui.panel.spot[0][1] + g->ui.panel.spot[0][3]) / 2);
+		CHECK(game_script(g, buf) == 0 && g->panel_marked == 1);
 		CHECK(game_script(g, "click:240,120") == 0 &&
 		    g->panel_marked == 2);
 		CHECK(game_script(g, "click:540,450 wait:40") == 0 &&

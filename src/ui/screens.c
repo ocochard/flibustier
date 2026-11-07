@@ -7851,8 +7851,9 @@ const struct screen screen_barmaid = {
  * 0xf246): shipsel.pcx, the ships in two rows of four, each its battle
  * picture at its damage stage, with its type (CSTN 8) and damage (CSTN
  * 14) centred below.  Clicking a ship marks it, in ink entry 3; clicking
- * it again unmarks it; "SELECT" (CSTN 87.1) ends the choice once one is
- * marked.  The keys step through the ships and the button; Enter acts.
+ * it again unmarks it, clicking another moves the mark; "SELECT" (CSTN
+ * 87.1) ends the choice once one is marked.  The keys step through the
+ * ships and the button; Enter acts.
  * The prompt, "Which ship will you command?" (CSTR 286), is centred
  * across x 5..420 at y 400.  The layout is the table at VA 0x32e68.
  */
@@ -7947,9 +7948,11 @@ panel_act(struct game *g, int i)
 	}
 	if (i < 0 || i >= g->sim.fleet.nships)
 		return;
+	/* One ship at most: another click moves the mark (an engine choice,
+	 * the original ignores it until the first is unmarked). */
 	if (g->panel_marked & (1u << i))
 		g->panel_marked &= ~(1u << i);
-	else if (g->panel_marked == 0)		/* one ship at most */
+	else
 		g->panel_marked = 1u << i;
 }
 
